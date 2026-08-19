@@ -1,6 +1,6 @@
 # KORVA OS — Implementation Plan
 
-Statut : PHASE 1 en préparation
+Statut : PHASE 1 (Foundation) terminée et validée — voir section 9. PHASE 2 (CRM) non démarrée.
 Dernière mise à jour : 2026-08-19
 
 ## 1. Résumé du produit
@@ -146,6 +146,19 @@ Règle : chaque phase se termine par tests + typecheck + lint + build avant de d
 - MongoDB partagé avec isolation par `organizationId` sur chaque collection tenant-aware plutôt que base par tenant — coût opérationnel réduit, isolation strictement appliquée au niveau applicatif (TenantContext + tests).
 - Abstractions obligatoires pour tout fournisseur externe (Payment, Email, Storage, Messaging, AI) — évite le couplage et permet le support multi-région (Stripe/CinetPay/Paystack/Flutterwave).
 
-## 9. Prochaine étape
+## 9. Statut PHASE 1 (Foundation) — terminée
 
-Valider ce plan puis démarrer PHASE 1 : scaffolding du monorepo pnpm et des 4 apps.
+Livré et validé (typecheck + lint + build + tests sur tout le monorepo, plus test manuel end-to-end via curl) :
+
+- Monorepo pnpm complet (4 apps + 5 packages partagés), Docker Compose (MongoDB + Redis).
+- API NestJS `/api/v1` : auth (register/login/refresh avec rotation/logout), organizations (create/update/me/members), RBAC (6 rôles système auto-seedés par organisation + permissions `resource.action`), audit log, health checks.
+- TenantContext résolu server-side (header `X-Organization-Id` vérifié contre les memberships réels, jamais fait confiance au client) + guards globaux (auth → tenant → permissions).
+- Dashboard Next.js : login, register, onboarding (création d'organisation + sélection des modules), shell dashboard avec sidebar dynamique, page équipe/paramètres.
+- Suite de tests e2e dédiée à l'isolation tenant (accès croisé refusé, header manquant refusé, accès légitime accepté) + enforcement RBAC + tests unitaires ; voir `apps/api/test/tenant-isolation.e2e-spec.ts`.
+- Deux bugs d'environnement significatifs trouvés et corrigés — documentés dans `docs/architecture-decisions.md` (ADR-001 résolution d'extensions TS sous Node v26, ADR-002 cast explicite `ObjectId` requis pour les queries Mongoose dans cet environnement).
+
+Non fait volontairement en Phase 1 (hors scope, arrive avec les modules concernés) : listing des rôles/permissions via API, gestion des sessions/API keys avancée, custom fields, tout ce qui est CRM/Catalog/Booking/etc.
+
+## 10. Prochaine étape
+
+Démarrer PHASE 2 (CRM) : contacts, leads, pipelines, activities, tasks, notes, tags, custom fields — en réutilisant TenantContext/RBAC/audit déjà en place.
