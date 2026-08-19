@@ -1,0 +1,10 @@
+{
+  "extends": "@korva/config/tsconfig.nestjs.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "outDir": "./dist",
+    "removeComments": true,
+    "noFallthroughCasesInSwitch": true,
+    "rewriteRelativeImportExtensions": true
+  }
+}

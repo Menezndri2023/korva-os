@@ -1,0 +1,23 @@
+export interface User {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  emailVerifiedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+/** Resolved per-request tenant context — never trust an organizationId from the client body. */
+export interface TenantContext {
+  userId: string;
+  organizationId: string;
+  membershipId: string;
+  roleId: string;
+  permissions: string[];
+}

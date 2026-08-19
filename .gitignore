@@ -22,5 +22,12 @@ __pycache__/
 # Build output
 dist/
 build/
+.next/
+.turbo/
+coverage/
 *.o
 *.out
+*.tsbuildinfo
+
+# pnpm
+.pnpm-store/

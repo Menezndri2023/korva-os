@@ -1,0 +1,24 @@
+{
+  "name": "korva-os",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @korva/web dev",
+    "dev:api": "pnpm --filter @korva/api start:dev",
+    "dev:worker": "pnpm --filter @korva/worker dev",
+    "dev:storefront": "pnpm --filter @korva/storefront dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@korva/eslint-config",
+  "private": true,
+  "version": "0.1.0",
+  "main": "base.js",
+  "files": [
+    "base.js"
+  ],
+  "dependencies": {
+    "eslint-config-prettier": "^9.1.0",
+    "typescript-eslint": "^8.15.0"
+  }
+}
