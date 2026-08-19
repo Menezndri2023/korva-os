@@ -1,0 +1,104 @@
+# Database — KORVA OS
+
+## Choix
+
+MongoDB (Atlas-compatible) + Mongoose. Base partagée, collections partagées, isolation par `organizationId` au niveau applicatif (voir [multi-tenancy.md](multi-tenancy.md)).
+
+## Principe tenant-aware
+
+Toute collection contenant des données métier d'une organisation possède un champ `organizationId` obligatoire, jamais fourni par le body utilisateur — toujours dérivé du `TenantContext`.
+
+```json
+{
+  "_id": "...",
+  "organizationId": "...",
+  "...": "..."
+}
+```
+
+## Collections par module (MVP → cible complète)
+
+- **IDENTITY** — `users`, `memberships`, `roles`, `permissions`, `sessions`, `api_keys`
+- **ORGANIZATIONS** — `organizations`
+- **CRM** — `contacts`, `leads`, `pipelines`, `pipeline_stages`, `activities`, `tasks`, `notes`, `tags`, `custom_fields`
+- **CATALOG** — `offers`
+- **BOOKING** — `resources`, `bookings` (+ disponibilité calculée)
+- **COMMERCE** — `carts`, `cart_items`, `orders`, `order_items`, `fulfillments`, `shipments`
+- **FINANCE** — `quotes`, `invoices`, `payments`, `refunds`
+- **WORKFLOW** — `workflows`, `workflow_executions`
+- **COMMUNICATION** — `conversations`, `messages`, `message_templates`, `notifications`
+- **SUBSCRIPTIONS** — `plans`, `subscriptions`, `subscription_items`, `usage`
+- **FILES** — métadonnées fichiers (tenant-aware)
+- **AUDIT** — `audit_logs`
+- **API/WEBHOOKS** — `webhooks`, `api_keys`
+- **DOMAINS** — `custom_domains`
+
+## Index obligatoires
+
+Toute collection tenant-aware :
+
+```
+{ organizationId: 1 }
+```
+
+Exemples spécifiques (à affiner après analyse réelle des requêtes en Phase 1+) :
+
+```
+contacts:   { organizationId: 1, email: 1 }
+leads:      { organizationId: 1, status: 1, createdAt: -1 }
+bookings:   { organizationId: 1, resourceId: 1, startAt: 1 }
+orders:     { organizationId: 1, status: 1, createdAt: -1 }
+```
+
+## Modèles clés (résumé)
+
+**Organization**
+```
+{ name, slug, legalName, type, country, currency, timezone, language, logo, settings, enabledModules, createdAt, updatedAt }
+```
+
+**Membership**
+```
+{ userId, organizationId, roleId, status }
+```
+
+**Contact**
+```
+{ organizationId, type, firstName, lastName, email, phone, company, tags, customFields, createdAt, updatedAt }
+```
+
+**Lead**
+```
+{ organizationId, contactId, source, pipelineId, stageId, ownerId, status, estimatedValue, probability, customFields, createdAt, updatedAt }
+```
+
+**Offer**
+```
+{ organizationId, type, name, description, pricing, status, categories, images, customFields }
+```
+
+**Booking**
+```
+{ organizationId, resourceId, offerId, customerId, startAt, endAt, status, pricing, paymentStatus }
+```
+
+**Audit log**
+```
+{ organizationId, userId, action, entity, entityId, metadata, createdAt }
+```
+
+## Custom fields
+
+Table `custom_fields` générique, applicable à `contacts`, `leads`, `products/offers`, `bookings`, `orders` :
+
+```
+{ organizationId, entity, key, label, type, options, required }
+```
+
+Types supportés : `text, number, boolean, date, datetime, select, multiselect, email, phone, url`.
+
+## Migrations / seeders
+
+Pas de migrations SQL classiques (MongoDB), mais des scripts de seed versionnés dans `infrastructure/scripts/` pour :
+- données de développement (voir section Seed du brief produit — organisation "KORVA Demo", 3 scénarios : service, booking, ecommerce)
+- changements de schéma nécessitant une transformation de données existantes (scripts idempotents, exécutés manuellement ou via job).
