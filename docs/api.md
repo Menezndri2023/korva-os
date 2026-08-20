@@ -53,15 +53,45 @@ POST  /organizations/me/members
 ## CRM
 
 ```
-GET    /contacts
+GET    /contacts               (?page, ?limit, ?search, ?tag)
 POST   /contacts
 GET    /contacts/:id
 PATCH  /contacts/:id
 DELETE /contacts/:id
 
-GET    /leads
+GET    /leads                  (?page, ?limit, ?pipelineId, ?stageId, ?status, ?ownerId)
 POST   /leads
+GET    /leads/:id
 PATCH  /leads/:id
+
+GET    /pipelines
+POST   /pipelines
+GET    /pipelines/:id
+PATCH  /pipelines/:id
+
+GET    /activities             (?entity=contact|lead&entityId=...)
+POST   /activities
+
+GET    /tasks                  (?status, ?assigneeId, ?entity, ?entityId)
+POST   /tasks
+PATCH  /tasks/:id
+
+GET    /notes                  (?entity=contact|lead&entityId=...)
+POST   /notes
+
+GET    /tags
+POST   /tags
+```
+
+## Custom Fields
+
+Générique, réutilisable par plusieurs modules (`contacts`, `leads`, `products`, `services`, `bookings`, `orders` — voir [database.md](database.md)) :
+
+```
+GET    /custom-fields?entity=contacts
+POST   /custom-fields
+PATCH  /custom-fields/:id
+DELETE /custom-fields/:id
 ```
 
 ## Catalog

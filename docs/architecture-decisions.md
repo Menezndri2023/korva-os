@@ -27,3 +27,13 @@ Journal des décisions techniques importantes, au fil de l'implémentation (voir
 **Décision** : dans tous les repositories, toute query Mongoose filtrant sur un champ de type `Types.ObjectId` avec une valeur reçue en `string` doit caster explicitement via `new Types.ObjectId(value)` — ne jamais compter sur le cast automatique de Mongoose dans ce projet. Les lookups par `_id` (`findById`, `findByIdAndUpdate`) restent inchangés (chemin de cast différent, vérifié fonctionnel).
 
 **Tests de non-régression** : voir la suite d'isolation tenant (`docs/multi-tenancy.md`) — les tests d'accès croisé (organisation A ne peut pas lire/modifier/supprimer les données de l'organisation B) couvrent directement ce cas.
+
+## ADR-003 — Suite e2e NestJS forcée en exécution séquentielle (`maxWorkers: 1`)
+
+**Contexte** : chaque fichier `*.e2e-spec.ts` boote sa propre instance `NestApplication` mais tous partagent la **même** base MongoDB de test (`korva_test`, voir `apps/api/test/env.setup.ts`). Par défaut, Jest exécute les fichiers de test en parallèle dans des workers séparés.
+
+**Problème observé** : avec l'exécution parallèle, un fichier appelant `connection.dropDatabase()` dans son `beforeAll` pouvait effacer les données qu'un AUTRE fichier de test venait de créer au même instant (ou ses index fraîchement construits), produisant des échecs non déterministes (`expected 201, got 403`, `text index required for $text query`, `Parse Error: Expected HTTP/...`).
+
+**Décision** : `apps/api/test/jest-e2e.json` fixe `"maxWorkers": 1` — tous les fichiers e2e s'exécutent séquentiellement. En complément, chaque `beforeAll` qui appelle `dropDatabase()` reconstruit explicitement les index via `connection.modelNames().map(name => connection.model(name).syncIndexes())`, car `dropDatabase()` supprime aussi les index qu'autoIndex venait de construire à la connexion, et Mongoose ne les reconstruit pas automatiquement après coup.
+
+**Conséquence** : la suite e2e est plus lente (séquentielle) mais fiable — 24/24 tests stables sur plusieurs exécutions consécutives, contre des échecs aléatoires auparavant. Si la suite grossit significativement, envisager soit une base de données dédiée par fichier de test (nom suffixé par le worker id), soit `mongodb-memory-server` pour une isolation complète par test.

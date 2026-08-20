@@ -20,7 +20,8 @@ Toute collection contenant des données métier d'une organisation possède un c
 
 - **IDENTITY** — `users`, `memberships`, `roles`, `permissions`, `sessions`, `api_keys`
 - **ORGANIZATIONS** — `organizations`
-- **CRM** — `contacts`, `leads`, `pipelines`, `pipeline_stages`, `activities`, `tasks`, `notes`, `tags`, `custom_fields`
+- **CRM** — `contacts`, `leads`, `pipelines` (stages embedded as a subdocument array, not a separate collection), `activities`, `tasks`, `notes`, `tags`
+- **CORE** — `custom_fields` (générique, réutilisé par plusieurs modules — voir section Custom fields ci-dessous)
 - **CATALOG** — `offers`
 - **BOOKING** — `resources`, `bookings` (+ disponibilité calculée)
 - **COMMERCE** — `carts`, `cart_items`, `orders`, `order_items`, `fulfillments`, `shipments`

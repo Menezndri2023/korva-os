@@ -1,0 +1,120 @@
+import { z } from "zod";
+import { CONTACT_TYPES, LEAD_STATUSES, TASK_STATUSES, ACTIVITY_TYPES } from "@korva/types";
+
+const customFieldsSchema = z.record(z.string(), z.unknown()).optional();
+
+export const createContactSchema = z.object({
+  type: z.enum(CONTACT_TYPES).default("person"),
+  firstName: z.string().min(1).max(120).optional(),
+  lastName: z.string().min(1).max(120).optional(),
+  company: z.string().min(1).max(200).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().min(1).max(40).optional(),
+  tags: z.array(z.string().min(1).max(60)).default([]),
+  customFields: customFieldsSchema,
+});
+export type CreateContactInput = z.infer<typeof createContactSchema>;
+
+export const updateContactSchema = createContactSchema.partial();
+export type UpdateContactInput = z.infer<typeof updateContactSchema>;
+
+export const listContactsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().optional(),
+  tag: z.string().optional(),
+});
+export type ListContactsQuery = z.infer<typeof listContactsQuerySchema>;
+
+export const createLeadSchema = z.object({
+  contactId: z.string().min(1),
+  source: z.string().max(120).optional(),
+  pipelineId: z.string().min(1),
+  stageId: z.string().min(1),
+  ownerId: z.string().optional(),
+  estimatedValue: z.number().nonnegative().optional(),
+  probability: z.number().min(0).max(100).optional(),
+  customFields: customFieldsSchema,
+});
+export type CreateLeadInput = z.infer<typeof createLeadSchema>;
+
+export const updateLeadSchema = z.object({
+  source: z.string().max(120).optional(),
+  stageId: z.string().min(1).optional(),
+  ownerId: z.string().optional(),
+  status: z.enum(LEAD_STATUSES).optional(),
+  estimatedValue: z.number().nonnegative().optional(),
+  probability: z.number().min(0).max(100).optional(),
+  customFields: customFieldsSchema,
+});
+export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
+
+export const listLeadsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  pipelineId: z.string().optional(),
+  stageId: z.string().optional(),
+  status: z.enum(LEAD_STATUSES).optional(),
+  ownerId: z.string().optional(),
+});
+export type ListLeadsQuery = z.infer<typeof listLeadsQuerySchema>;
+
+export const pipelineStageInputSchema = z.object({
+  name: z.string().min(1).max(80),
+  order: z.number().int().min(0),
+  probability: z.number().min(0).max(100).optional(),
+});
+
+export const createPipelineSchema = z.object({
+  name: z.string().min(1).max(120),
+  isDefault: z.boolean().default(false),
+  stages: z.array(pipelineStageInputSchema).min(1),
+});
+export type CreatePipelineInput = z.infer<typeof createPipelineSchema>;
+
+export const updatePipelineSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  isDefault: z.boolean().optional(),
+  stages: z.array(pipelineStageInputSchema).min(1).optional(),
+});
+export type UpdatePipelineInput = z.infer<typeof updatePipelineSchema>;
+
+export const createTaskSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  entity: z.enum(["contact", "lead"]).optional(),
+  entityId: z.string().optional(),
+  assigneeId: z.string().optional(),
+  dueAt: z.string().datetime().optional(),
+});
+export type CreateTaskInput = z.infer<typeof createTaskSchema>;
+
+export const updateTaskSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  assigneeId: z.string().optional(),
+  dueAt: z.string().datetime().optional(),
+  status: z.enum(TASK_STATUSES).optional(),
+});
+export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
+
+export const createNoteSchema = z.object({
+  entity: z.enum(["contact", "lead"]),
+  entityId: z.string().min(1),
+  content: z.string().min(1).max(5000),
+});
+export type CreateNoteInput = z.infer<typeof createNoteSchema>;
+
+export const createActivitySchema = z.object({
+  entity: z.enum(["contact", "lead"]),
+  entityId: z.string().min(1),
+  type: z.enum(ACTIVITY_TYPES),
+  content: z.string().max(2000).optional(),
+});
+export type CreateActivityInput = z.infer<typeof createActivitySchema>;
+
+export const createTagSchema = z.object({
+  name: z.string().min(1).max(60),
+  color: z.string().max(20).optional(),
+});
+export type CreateTagInput = z.infer<typeof createTagSchema>;

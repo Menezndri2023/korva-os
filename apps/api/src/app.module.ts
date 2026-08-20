@@ -15,6 +15,8 @@ import { IdentityModule } from './identity/identity.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
+import { CustomFieldsModule } from './custom-fields/custom-fields.module';
+import { CrmModule } from './crm/crm.module';
 
 @Module({
   imports: [
@@ -31,6 +33,8 @@ import { HealthModule } from './health/health.module';
     AuditModule,
     IdentityModule,
     OrganizationsModule,
+    CustomFieldsModule,
+    CrmModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

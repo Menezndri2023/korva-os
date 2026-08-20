@@ -1,7 +1,7 @@
 # KORVA OS — Implementation Plan
 
-Statut : PHASE 1 (Foundation) terminée et validée — voir section 9. PHASE 2 (CRM) non démarrée.
-Dernière mise à jour : 2026-08-19
+Statut : PHASE 1 (Foundation) et PHASE 2 (CRM) terminées et validées — voir section 9. PHASE 3 (Catalog) non démarrée.
+Dernière mise à jour : 2026-08-20
 
 ## 1. Résumé du produit
 
@@ -159,6 +159,23 @@ Livré et validé (typecheck + lint + build + tests sur tout le monorepo, plus t
 
 Non fait volontairement en Phase 1 (hors scope, arrive avec les modules concernés) : listing des rôles/permissions via API, gestion des sessions/API keys avancée, custom fields, tout ce qui est CRM/Catalog/Booking/etc.
 
-## 10. Prochaine étape
+## 10. Statut PHASE 2 (CRM) — terminée
 
-Démarrer PHASE 2 (CRM) : contacts, leads, pipelines, activities, tasks, notes, tags, custom fields — en réutilisant TenantContext/RBAC/audit déjà en place.
+Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le monorepo, plus vérification manuelle via curl et via le serveur de dev Next.js) :
+
+- **Custom Fields Engine** (générique, réutilisable par Catalog/Booking/Commerce plus tard) : CRUD `/custom-fields`, validation stricte des valeurs (clé inconnue rejetée, type vérifié, champs requis appliqués) branchée sur Contacts et Leads.
+- **Contacts** : CRUD complet, recherche plein texte (index Mongo `text`), filtre par tag, tags, custom fields.
+- **Tags** : CRUD simple, unicité par organisation.
+- **Pipelines** : CRUD avec étapes embarquées (subdocuments), un seul pipeline `isDefault` par organisation appliqué automatiquement.
+- **Leads** : CRUD, référence validée vers un contact existant et vers une étape réelle du pipeline choisi, changement de statut/étape.
+- **Activities, Tasks, Notes** : CRUD de base rattaché à un contact ou un lead.
+- **Frontend** : `/dashboard/crm` (liste + création de contacts, recherche, tags) et `/dashboard/crm/leads` (liste + création de leads, sélection pipeline/étape/contact, création d'un pipeline par défaut si aucun n'existe).
+- **Tests** : `apps/api/test/crm.e2e-spec.ts` — validation des custom fields, CRUD contacts, cycle de vie lead à travers un pipeline, isolation tenant sur les contacts (24/24 tests e2e stables, exécution forcée en séquentiel — voir ADR-003).
+
+Un bug de fiabilité des tests a été trouvé et corrigé en cours de route (ADR-003 dans `docs/architecture-decisions.md`) : les fichiers e2e partageaient une base MongoDB de test unique et s'exécutaient en parallèle par défaut, provoquant des échecs non déterministes.
+
+Non fait volontairement en Phase 2 (hors scope) : import/export CSV des contacts, vue kanban drag-and-drop du pipeline, endpoint de listing des rôles (nécessaire pour un vrai sélecteur de rôle dans l'UI d'invitation), notifications de relance automatiques (arrive avec Workflow en Phase 7).
+
+## 11. Prochaine étape
+
+Démarrer PHASE 3 (Catalog) : offers (product/service/booking/digital_product/subscription/package), catégories, pricing — en réutilisant le Custom Fields Engine déjà en place pour `products`/`services`.

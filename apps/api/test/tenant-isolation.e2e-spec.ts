@@ -51,6 +51,13 @@ describe('Multi-tenant isolation (e2e)', () => {
     server = app.getHttpServer();
     connection = app.get(getConnectionToken());
     await connection.dropDatabase();
+    // dropDatabase() also wipes the indexes Mongoose just built at connection
+    // time — rebuild them explicitly (e.g. the unique membership/role indexes).
+    await Promise.all(
+      connection
+        .modelNames()
+        .map((name) => connection.model(name).syncIndexes()),
+    );
   });
 
   afterAll(async () => {
