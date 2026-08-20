@@ -46,6 +46,6 @@ import { AuditModule } from '../audit/audit.module';
     PaymentsService,
     { provide: PAYMENT_PROVIDER, useClass: ManualPaymentProvider },
   ],
-  exports: [InvoicesService],
+  exports: [InvoicesService, QuotesService],
 })
 export class FinanceModule {}

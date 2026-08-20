@@ -31,7 +31,7 @@ Chaque module est isolé : sa propre couche controller → service → repositor
 - **WORKFLOW** — workflows, workflow_executions (trigger/condition/action).
 - **COMMUNICATION** — conversations, messages, templates, notifications. `EmailProvider`/`MessagingProvider` réellement branchés (voir section EventBus ci-dessous) ; `notifications` sont internes à l'organisation, diffusées via `NotificationsService.notifyOrganization()`.
 - **ANALYTICS** — agrégation de KPIs, endpoints `/analytics/*`.
-- **AI** — AI Gateway, orchestrator, agents, tools, memory, RAG.
+- **AI** — `AIProvider` réel (Anthropic), orchestrateur (boucle tool-calling), 4 agents, 19 tools réutilisant les services métier existants, confirmation humaine pour les actions sensibles. RAG non implémenté (architecture-ready seulement, voir [ai.md](ai.md)).
 - **SUBSCRIPTIONS** — plans, subscriptions, EntitlementService, usage.
 - **FILES** — StorageProvider abstraction (upload/download/delete/getPublicUrl).
 - **AUDIT** — audit_logs.
@@ -57,7 +57,7 @@ Règle stricte : un controller n'accède jamais directement à Mongoose/MongoDB.
 | `EmailProvider` | Resend, SMTP |
 | `StorageProvider` | Local (dev), S3-compatible, Cloudinary/R2 (futur) |
 | `MessagingProvider` | WhatsApp Business API, SMS, Email, Push |
-| `AIProvider` | abstrait derrière l'AI Gateway (voir [ai.md](ai.md)) |
+| `AIProvider` | `AnthropicAIProvider` (réel) si `AI_API_KEY` configuré, sinon `NullAIProvider` par défaut — voir [ai.md](ai.md) |
 
 Chaque abstraction expose une interface stable ; le domaine métier n'appelle jamais un SDK tiers directement.
 

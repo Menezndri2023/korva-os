@@ -28,6 +28,7 @@ Toute collection contenant des données métier d'une organisation possède un c
 - **FINANCE** — `quotes`, `invoices`, `payments`, `refunds`
 - **WORKFLOW** — `workflows`, `workflow_executions`
 - **COMMUNICATION** — `conversations`, `messages`, `message_templates`, `notifications`
+- **AI** — `ai_conversations`, `ai_messages`, `ai_pending_actions`
 - **SUBSCRIPTIONS** — `plans`, `subscriptions`, `subscription_items`, `usage`
 - **FILES** — métadonnées fichiers (tenant-aware)
 - **AUDIT** — `audit_logs`
@@ -162,6 +163,24 @@ Collection séparée de `conversations` (pas embarquée) — contrairement aux l
 { organizationId, userId, type, title, body?, link?, read, readAt?, createdAt }
 ```
 Interne à l'organisation — jamais envoyée à un contact. Créée uniquement en interne (aujourd'hui, par l'action de workflow `internal_notification`, diffusée à tous les membres actifs via `MembershipsService`).
+
+**AiConversation**
+```
+{ organizationId, userId, agent: "general_assistant"|"sales_agent"|"booking_agent"|"analytics_agent", title?, createdAt, updatedAt }
+```
+Scopée à l'utilisateur qui l'a créée (pas de conversation IA partagée entre membres d'une organisation) — voir [ai.md](ai.md).
+
+**AiMessage**
+```
+{ organizationId, conversationId, role: "user"|"assistant"|"tool", content?, toolCalls?: [{ id, name, input }], toolCallId?, toolName?, createdAt }
+```
+Collection séparée de `ai_conversations` (même raisonnement que `messages`/`conversations` en Communication) — historique potentiellement long, rejoué intégralement à chaque tour envoyé au modèle.
+
+**AiPendingAction**
+```
+{ organizationId, conversationId, toolName, input, status: "pending"|"confirmed"|"rejected", createdAt }
+```
+Créée à la place d'exécuter un tool marqué `sensitive` (aujourd'hui, seul `cancel_booking`) — voir `POST /ai/actions/:id/confirm` dans [api.md](api.md).
 
 **Audit log**
 ```

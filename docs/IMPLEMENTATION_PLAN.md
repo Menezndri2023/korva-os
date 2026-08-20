@@ -271,6 +271,23 @@ Deux bugs trouvés et corrigés en cours de route, documentés en ADR : [ADR-007
 
 Non fait volontairement en Phase 8 (hors scope, arrive avec les modules concernés) : intégration WhatsApp Business API réelle (abstraction posée, pas de clé/API réelle), templates avec pièces jointes, envoi en masse/campagnes (Marketing n'est pas un module du MVP), messages entrants réels (webhooks entrants pour recevoir des emails/WhatsApp — l'architecture le permettrait via `direction: "inbound"` mais aucun endpoint de réception n'existe encore), badge de notifications non lues dans la sidebar (la page `/dashboard/communication/notifications` existe et fonctionne, l'intégration visuelle globale à la sidebar est un raffinement UI reporté).
 
-## 17. Prochaine étape
+## 17. Statut PHASE 9 (AI) — terminée
 
-Démarrer PHASE 9 (AI) : AI Gateway, orchestrator, context builder, memory, tools sécurisés, Sales Agent, RAG architecture-ready — en s'appuyant sur les services métier de toutes les phases précédentes (les tools IA appellent les services existants, jamais MongoDB directement) et sur `EmailProvider`/`NotificationsService` déjà en place pour toute action IA qui enverrait un message ou notifierait l'équipe.
+Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le monorepo — 92/92 tests e2e stables sur la grande majorité des exécutions complètes, voir addendum Phase 9 de l'ADR-003 ; plus vérification manuelle via curl du cycle complet chat → notification "IA non configurée" contre le serveur de dev réel, sans clé Anthropic) :
+
+- **`AIProvider`** (`apps/api/src/ai/providers/`) : `AnthropicAIProvider` (appel réel à l'API Messages d'Anthropic, tool-calling natif) si `AI_API_KEY` est configuré, sinon `NullAIProvider` par défaut (réponse fixe, aucun tool jamais appelé — même rôle que `LogEmailProvider`/`ManualPaymentProvider`).
+- **Orchestrateur** (`AiOrchestratorService`) : boucle complète (jusqu'à 5 itérations) — appel modèle → exécution des tools demandés (permission métier + permission d'agent vérifiées) → résultat réinjecté dans l'historique → nouvel appel modèle, jusqu'à une réponse texte finale. Historique persisté (`ai_conversations`/`ai_messages`), rejoué intégralement à chaque tour.
+- **19 tools MVP**, chacun un wrapper fin sur un service métier déjà construit dans une phase précédente (jamais d'accès Mongo direct, sauf `get_sales_report` qui fait une agrégation Mongo réelle et minimale sur `orders`, scopée à l'IA — pas de module Analytics complet, hors phase numérotée du brief).
+- **4 agents** avec sous-ensembles de tools distincts (`AiToolsRegistryService`), filtrés en plus par les permissions RBAC réelles de l'utilisateur appelant.
+- **Confirmation humaine pour actions sensibles** : seul `cancel_booking` est marqué sensible dans ce MVP (les 5 tools nommés dans le brief pour ce mécanisme — `refund_payment`, `delete_customer`, etc. — n'existent pas comme tools) ; `AiPendingAction` créée au lieu d'exécuter, `POST /ai/actions/:id/confirm`/`reject`.
+- **RBAC** : `ai.use`/`ai.execute_sensitive_actions` existaient déjà depuis la Phase 1 — confirmés directement exploitables sans modification.
+- **Frontend** : `/dashboard/ai` — sélection d'agent, liste de conversations, fil de messages avec indicateurs d'appel de tool, cartes de confirmation pour les actions en attente.
+- **Tests** : `apps/api/test/ai.e2e-spec.ts` — un `AIProvider` scripté injecté via `.overrideProvider(AI_PROVIDER)` (décide quel tool appeler d'après le seul historique de messages, sans jamais appeler un vrai LLM) exerçant pour de vrai toute la boucle orchestrateur ; plus un test séparé du chemin par défaut `NullAIProvider`.
+
+Ajustement de câblage trouvé en cours de route (pas un ADR à part entière) : `LeadsService`, `AvailabilityService`, `QuotesService`, `OrdersService`, `ConversationsService` manquaient dans les `exports:` de leurs modules respectifs (jamais consommés depuis un autre module jusqu'ici) — corrigé.
+
+Non fait volontairement en Phase 9 (hors scope, cohérent avec "architecture-ready" du brief) : RAG (aucune source de documents/vector store à ce stade), `MessagingProvider` WhatsApp réel, `EntitlementService`/quotas sur l'usage IA (arrive avec la Phase 10 Subscriptions), les tools `refund_payment`/`delete_customer`/`delete_order`/`send_mass_campaign`, agents `SUPPORT_AGENT`/`COMMERCE_AGENT`/`OPERATIONS_AGENT`/`MARKETING_AGENT` (prévus "futurs" dans le brief).
+
+## 18. Prochaine étape
+
+Démarrer PHASE 10 (SaaS) : plans, subscriptions, `EntitlementService`, usage tracking — en exposant dès maintenant un `canUse(module)`/`canUse(feature)` utilisable par les guards existants (dont `ai.use`/`ai.execute_sensitive_actions`, jusqu'ici de simples permissions RBAC sans notion de quota ou de plan).

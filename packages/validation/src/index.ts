@@ -8,3 +8,4 @@ export * from "./booking.ts";
 export * from "./commerce.ts";
 export * from "./workflow.ts";
 export * from "./communication.ts";
+export * from "./ai.ts";

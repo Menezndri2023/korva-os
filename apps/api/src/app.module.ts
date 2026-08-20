@@ -24,6 +24,7 @@ import { CommerceModule } from './commerce/commerce.module';
 import { EventsModule } from './core/events/events.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { CommunicationModule } from './communication/communication.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { CommunicationModule } from './communication/communication.module';
     CommerceModule,
     CommunicationModule,
     WorkflowModule,
+    AiModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

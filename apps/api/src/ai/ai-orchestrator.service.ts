@@ -1,0 +1,383 @@
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Types } from 'mongoose';
+import type { AiAgent } from '@korva/types';
+import { AiConversationsRepository } from './ai-conversations.repository';
+import { AiMessagesRepository } from './ai-messages.repository';
+import { AiPendingActionsRepository } from './ai-pending-actions.repository';
+import { AiConversationDocument } from './schemas/ai-conversation.schema';
+import { AiMessageDocument } from './schemas/ai-message.schema';
+import { AiPendingActionDocument } from './schemas/ai-pending-action.schema';
+import { AiContextBuilderService } from './ai-context-builder.service';
+import { AiToolsRegistryService } from './ai-tools-registry.service';
+import {
+  AI_PROVIDER,
+  type AIProvider,
+  type AiChatMessage,
+  type AiChatToolCall,
+} from './providers/ai-provider.interface';
+import type { AiTool } from './tools/tool.interface';
+import { AuditService } from '../audit/audit.service';
+
+const MAX_TOOL_ITERATIONS = 5;
+
+interface CallingUser {
+  userId: string;
+  permissions: readonly string[];
+}
+
+export interface ChatTurnResult {
+  conversationId: string;
+  reply: string;
+  pendingActions: AiPendingActionDocument[];
+}
+
+function toChatMessage(message: AiMessageDocument): AiChatMessage {
+  if (message.role === 'user') {
+    return { role: 'user', content: message.content ?? '' };
+  }
+  if (message.role === 'tool') {
+    return {
+      role: 'tool',
+      toolCallId: message.toolCallId ?? '',
+      toolName: message.toolName ?? '',
+      content: message.content ?? '',
+    };
+  }
+  if (message.toolCalls && message.toolCalls.length > 0) {
+    return { role: 'assistant', toolCalls: message.toolCalls };
+  }
+  return { role: 'assistant', content: message.content ?? '' };
+}
+
+@Injectable()
+export class AiOrchestratorService {
+  constructor(
+    private readonly conversationsRepository: AiConversationsRepository,
+    private readonly messagesRepository: AiMessagesRepository,
+    private readonly pendingActionsRepository: AiPendingActionsRepository,
+    private readonly contextBuilder: AiContextBuilderService,
+    private readonly toolsRegistry: AiToolsRegistryService,
+    private readonly auditService: AuditService,
+    @Inject(AI_PROVIDER) private readonly aiProvider: AIProvider,
+  ) {}
+
+  private async getOrCreateConversation(
+    organizationId: string,
+    userId: string,
+    conversationId: string | undefined,
+    agent: AiAgent,
+  ): Promise<AiConversationDocument> {
+    if (conversationId) {
+      const existing = await this.conversationsRepository.findById(
+        organizationId,
+        userId,
+        conversationId,
+      );
+      if (!existing) {
+        throw new NotFoundException({
+          code: 'AI_CONVERSATION_NOT_FOUND',
+          message: 'Conversation not found',
+        });
+      }
+      return existing;
+    }
+    return this.conversationsRepository.create({
+      organizationId: new Types.ObjectId(organizationId),
+      userId: new Types.ObjectId(userId),
+      agent,
+    });
+  }
+
+  async chat(
+    organizationId: string,
+    user: CallingUser,
+    input: { conversationId?: string; agent?: AiAgent; message: string },
+  ): Promise<ChatTurnResult> {
+    const conversation = await this.getOrCreateConversation(
+      organizationId,
+      user.userId,
+      input.conversationId,
+      input.agent ?? 'general_assistant',
+    );
+
+    await this.messagesRepository.create({
+      organizationId: new Types.ObjectId(organizationId),
+      conversationId: conversation._id,
+      role: 'user',
+      content: input.message,
+    });
+
+    const history = await this.messagesRepository.findAllForConversation(
+      organizationId,
+      conversation.id as string,
+    );
+    const systemPrompt = await this.contextBuilder.build(
+      organizationId,
+      conversation.agent,
+    );
+    const availableTools = this.toolsRegistry
+      .listForAgent(conversation.agent)
+      .filter((tool) => user.permissions.includes(tool.requiredPermission));
+
+    const chatMessages: AiChatMessage[] = history.map(toChatMessage);
+    const pendingActions: AiPendingActionDocument[] = [];
+
+    for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
+      const result = await this.aiProvider.chat({
+        systemPrompt,
+        messages: chatMessages,
+        tools: availableTools.map((tool) => tool.definition),
+      });
+
+      if (result.type === 'text') {
+        await this.messagesRepository.create({
+          organizationId: new Types.ObjectId(organizationId),
+          conversationId: conversation._id,
+          role: 'assistant',
+          content: result.text,
+        });
+        await this.conversationsRepository.touch(
+          organizationId,
+          conversation.id as string,
+        );
+        return {
+          conversationId: conversation.id as string,
+          reply: result.text,
+          pendingActions,
+        };
+      }
+
+      await this.messagesRepository.create({
+        organizationId: new Types.ObjectId(organizationId),
+        conversationId: conversation._id,
+        role: 'assistant',
+        toolCalls: result.toolCalls,
+      });
+      chatMessages.push({ role: 'assistant', toolCalls: result.toolCalls });
+
+      for (const call of result.toolCalls) {
+        const toolResultContent = await this.executeToolCall(
+          organizationId,
+          user,
+          conversation,
+          call,
+          availableTools,
+          pendingActions,
+        );
+        await this.messagesRepository.create({
+          organizationId: new Types.ObjectId(organizationId),
+          conversationId: conversation._id,
+          role: 'tool',
+          toolCallId: call.id,
+          toolName: call.name,
+          content: toolResultContent,
+        });
+        chatMessages.push({
+          role: 'tool',
+          toolCallId: call.id,
+          toolName: call.name,
+          content: toolResultContent,
+        });
+      }
+    }
+
+    const fallback =
+      "Je n'ai pas pu terminer cette demande (trop d'étapes nécessaires). Peux-tu la reformuler plus simplement ?";
+    await this.messagesRepository.create({
+      organizationId: new Types.ObjectId(organizationId),
+      conversationId: conversation._id,
+      role: 'assistant',
+      content: fallback,
+    });
+    return {
+      conversationId: conversation.id as string,
+      reply: fallback,
+      pendingActions,
+    };
+  }
+
+  private async executeToolCall(
+    organizationId: string,
+    user: CallingUser,
+    conversation: AiConversationDocument,
+    call: AiChatToolCall,
+    availableTools: AiTool[],
+    pendingActions: AiPendingActionDocument[],
+  ): Promise<string> {
+    const tool = availableTools.find((t) => t.definition.name === call.name);
+    if (!tool) {
+      return `Outil "${call.name}" inconnu ou non autorisé pour cet agent.`;
+    }
+    if (!user.permissions.includes(tool.requiredPermission)) {
+      return `Permission refusée pour l'outil "${call.name}".`;
+    }
+
+    if (tool.sensitive) {
+      if (!user.permissions.includes('ai.execute_sensitive_actions')) {
+        return `L'outil "${call.name}" est une action sensible et nécessite une permission supplémentaire (ai.execute_sensitive_actions).`;
+      }
+      const pending = await this.pendingActionsRepository.create({
+        organizationId: new Types.ObjectId(organizationId),
+        conversationId: conversation._id,
+        toolName: call.name,
+        input: call.input,
+        status: 'pending',
+      });
+      pendingActions.push(pending);
+      return `Action "${call.name}" en attente de confirmation humaine (id: ${pending.id as string}).`;
+    }
+
+    try {
+      const parsedInput = tool.parseInput(call.input);
+      const output = await tool.execute(
+        organizationId,
+        user.userId,
+        parsedInput,
+      );
+      await this.auditService.record({
+        organizationId,
+        userId: user.userId,
+        action: 'AI_ACTION',
+        entity: tool.auditEntity,
+        metadata: { tool: call.name, input: call.input },
+      });
+      return JSON.stringify(output);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Erreur inconnue';
+      return `Erreur lors de l'exécution de "${call.name}" : ${message}`;
+    }
+  }
+
+  listConversations(
+    organizationId: string,
+    userId: string,
+  ): Promise<AiConversationDocument[]> {
+    return this.conversationsRepository.findAllForUser(organizationId, userId);
+  }
+
+  async listMessages(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+  ): Promise<AiMessageDocument[]> {
+    const conversation = await this.conversationsRepository.findById(
+      organizationId,
+      userId,
+      conversationId,
+    );
+    if (!conversation) {
+      throw new NotFoundException({
+        code: 'AI_CONVERSATION_NOT_FOUND',
+        message: 'Conversation not found',
+      });
+    }
+    return this.messagesRepository.findAllForConversation(
+      organizationId,
+      conversationId,
+    );
+  }
+
+  async listPendingActions(
+    organizationId: string,
+    userId: string,
+    conversationId: string,
+  ): Promise<AiPendingActionDocument[]> {
+    const conversation = await this.conversationsRepository.findById(
+      organizationId,
+      userId,
+      conversationId,
+    );
+    if (!conversation) {
+      throw new NotFoundException({
+        code: 'AI_CONVERSATION_NOT_FOUND',
+        message: 'Conversation not found',
+      });
+    }
+    return this.pendingActionsRepository.findAllForConversation(
+      organizationId,
+      conversationId,
+    );
+  }
+
+  async confirmAction(
+    organizationId: string,
+    user: CallingUser,
+    actionId: string,
+  ): Promise<unknown> {
+    const pending = await this.getResolvablePendingAction(
+      organizationId,
+      actionId,
+    );
+    if (!user.permissions.includes('ai.execute_sensitive_actions')) {
+      throw new BadRequestException({
+        code: 'AI_ACTION_REQUIRES_CONFIRMATION_PERMISSION',
+        message: 'Missing permission to confirm sensitive AI actions',
+      });
+    }
+    const tool = this.toolsRegistry.getByName(pending.toolName);
+    if (!tool || !user.permissions.includes(tool.requiredPermission)) {
+      throw new BadRequestException({
+        code: 'AI_ACTION_PERMISSION_DENIED',
+        message: `Missing permission for tool "${pending.toolName}"`,
+      });
+    }
+
+    const parsedInput = tool.parseInput(pending.input);
+    const output = await tool.execute(organizationId, user.userId, parsedInput);
+    await this.auditService.record({
+      organizationId,
+      userId: user.userId,
+      action: 'AI_ACTION',
+      entity: tool.auditEntity,
+      metadata: {
+        tool: pending.toolName,
+        input: pending.input,
+        confirmed: true,
+      },
+    });
+    await this.pendingActionsRepository.updateStatus(
+      organizationId,
+      actionId,
+      'confirmed',
+    );
+    return output;
+  }
+
+  async rejectAction(organizationId: string, actionId: string): Promise<void> {
+    await this.getResolvablePendingAction(organizationId, actionId);
+    await this.pendingActionsRepository.updateStatus(
+      organizationId,
+      actionId,
+      'rejected',
+    );
+  }
+
+  private async getResolvablePendingAction(
+    organizationId: string,
+    actionId: string,
+  ): Promise<AiPendingActionDocument> {
+    const pending = await this.pendingActionsRepository.findById(
+      organizationId,
+      actionId,
+    );
+    if (!pending) {
+      throw new NotFoundException({
+        code: 'AI_PENDING_ACTION_NOT_FOUND',
+        message: 'Pending action not found',
+      });
+    }
+    if (pending.status !== 'pending') {
+      throw new BadRequestException({
+        code: 'AI_ACTION_ALREADY_RESOLVED',
+        message: `This action has already been ${pending.status}`,
+      });
+    }
+    return pending;
+  }
+}

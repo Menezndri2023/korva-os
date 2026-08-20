@@ -87,6 +87,6 @@ import { AuditModule } from '../audit/audit.module';
     },
     { provide: MESSAGING_PROVIDER, useClass: LogMessagingProvider },
   ],
-  exports: [EMAIL_PROVIDER, NotificationsService],
+  exports: [EMAIL_PROVIDER, NotificationsService, ConversationsService],
 })
 export class CommunicationModule {}

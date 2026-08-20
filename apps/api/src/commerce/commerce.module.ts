@@ -50,5 +50,6 @@ import { AuditModule } from '../audit/audit.module';
     FulfillmentsRepository,
     FulfillmentsService,
   ],
+  exports: [OrdersService],
 })
 export class CommerceModule {}

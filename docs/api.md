@@ -246,10 +246,15 @@ GET /analytics/orders
 ## AI
 
 ```
-POST /ai/chat
+POST /ai/chat                                  { conversationId?, agent?, message }
 GET  /ai/conversations
+GET  /ai/conversations/:id/messages
+GET  /ai/conversations/:id/pending-actions
 POST /ai/actions/:id/confirm
+POST /ai/actions/:id/reject
 ```
+
+`POST /ai/chat` sans `conversationId` crée une nouvelle conversation (`agent` requis dans ce cas, `general_assistant` par défaut) ; avec `conversationId`, poursuit une conversation existante (le `agent` de la conversation est alors figé, le champ est ignoré). Répond `{ conversationId, reply, pendingActions }` — `pendingActions` liste les tools sensibles (`cancel_booking`) mis en attente de confirmation humaine pendant ce tour, jamais exécutés inline. Voir [ai.md](ai.md) pour le détail de la boucle (tool-calling, permissions, agents, mémoire) et la liste complète des 19 tools MVP.
 
 ## API publique (storefront)
 
