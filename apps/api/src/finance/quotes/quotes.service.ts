@@ -11,7 +11,7 @@ import { QuoteDocument } from './schemas/quote.schema';
 import { ContactsService } from '../../crm/contacts/contacts.service';
 import { CountersService } from '../../core/counters/counters.service';
 import { AuditService } from '../../audit/audit.service';
-import { computeTotals, toLineItemDocs } from '../shared/line-item.schema';
+import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
 import { InvoicesService } from '../invoices/invoices.service';
 import { InvoiceDocument } from '../invoices/schemas/invoice.schema';
 

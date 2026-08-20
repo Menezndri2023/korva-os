@@ -3,7 +3,7 @@ import { HydratedDocument, Types } from 'mongoose';
 import type { QuoteStatus } from '@korva/types';
 import { QUOTE_STATUSES } from '@korva/types';
 import { idToJson } from '../../../core/mongoose/schema-options';
-import { LineItem, LineItemSchema } from '../../shared/line-item.schema';
+import { LineItem, LineItemSchema } from '../../../shared/line-item.schema';
 
 export type QuoteDocument = HydratedDocument<Quote>;
 

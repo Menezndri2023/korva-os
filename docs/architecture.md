@@ -26,7 +26,7 @@ Chaque module est isolé : sa propre couche controller → service → repositor
 - **CRM** — contacts, leads, pipelines, activities, tasks, notes, tags, custom fields.
 - **CATALOG** — offers (product/service/booking/digital_product/subscription/package).
 - **BOOKING** — resources, availability, bookings.
-- **COMMERCE** — carts, orders, fulfillments, shipments.
+- **COMMERCE** — carts, orders, fulfillments. Order Engine unifié (voir section 18 du brief produit) : Cart→Order, Booking→Order et création manuelle convergent tous vers la même entité `Order`, qui génère ensuite une `Invoice` en réutilisant le module Finance.
 - **FINANCE** — quotes, invoices, payments, refunds.
 - **WORKFLOW** — workflows, workflow_executions (trigger/condition/action).
 - **COMMUNICATION** — conversations, messages, templates, notifications.

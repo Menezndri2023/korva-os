@@ -1,6 +1,6 @@
 # KORVA OS — Implementation Plan
 
-Statut : PHASE 1 (Foundation), PHASE 2 (CRM), PHASE 3 (Catalog), PHASE 4 (Finance) et PHASE 5 (Booking) terminées et validées — voir sections 9-14. PHASE 6 (Commerce) non démarrée.
+Statut : PHASE 1 (Foundation) à PHASE 6 (Commerce) terminées et validées — voir sections 9-15. PHASE 7 (Workflow) non démarrée.
 Dernière mise à jour : 2026-08-20
 
 ## 1. Résumé du produit
@@ -223,6 +223,21 @@ Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le mo
 
 Non fait volontairement en Phase 5 (hors scope, arrive avec les modules concernés) : conversion de fuseau horaire (voir ADR-004), acompte/paiement de réservation intégré à Finance (le champ `paymentStatus` existe mais n'est pas encore relié à un vrai paiement — arrivera avec l'Order Engine unifié de la Phase 6), notifications de confirmation/rappel (Phase 8 Communication), vue calendrier visuelle riche côté frontend (l'aperçu du jour actuel est fonctionnel mais minimal).
 
-## 14. Prochaine étape
+## 14. Statut PHASE 6 (Commerce) — terminée
 
-Démarrer PHASE 6 (Commerce) : cart, checkout, orders — en construisant l'Order Engine partagé qui unifiera aussi les Bookings de la Phase 5 (Product/Booking/Service → Order → Payment → Invoice, voir section 18 du brief produit).
+Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le monorepo, plus vérification manuelle via curl du cycle complet panier → commande → facture → livraison, et du cycle réservation → commande) :
+
+- **Order Engine unifié** (section 18 du brief) : une seule entité `Order` alimentée par trois sources (`cart`, `booking`, `manual`), toutes convergeant vers les mêmes actions (`confirm`, `cancel`, `fulfill`, `generate-invoice`). `Order.items` réutilise littéralement le schéma `LineItem` partagé avec Quote/Invoice (déplacé de `finance/shared/` vers `apps/api/src/shared/` pour refléter qu'il est désormais utilisé par Finance ET Commerce).
+- **Carts** : items non figés en prix (résolu depuis l'Offer au checkout, contrairement aux lignes de commande qui sont un instantané), incrémentation automatique en cas d'ajout du même article, `checkout` marque le panier `converted` et empêche une seconde conversion.
+- **Orders** : `pending → confirmed → fulfilled`, `cancel` depuis `pending`/`confirmed` uniquement, `generate-invoice` refuse une commande déjà facturée ou non confirmée, `from-booking` refuse de créer une deuxième commande pour la même réservation.
+- **`InvoicesService.createFromOrder`** ajouté (généralise le pattern déjà utilisé par `createFromQuote` en Phase 4 — `Invoice.orderId` complète `Invoice.quoteId`), sans rien casser du flux Quote → Invoice existant.
+- **Fulfillments** : architecture-ready (statut `pending/shipped/delivered/cancelled`, transporteur, numéro de suivi) — créé automatiquement quand une commande est livrée, sans intégration transporteur réelle.
+- **RBAC** : permissions `orders.*` ajoutées (absentes du brief) et distribuées aux rôles système.
+- **Frontend** : `/dashboard/orders` (liste, création manuelle multi-lignes, confirmer/facturer/livrer/annuler).
+- **Tests** : `apps/api/test/commerce.e2e-spec.ts` — panier → commande avec totaux recalculés côté serveur, cycle de vie complet d'une commande, réservation → commande (avec refus de doublon), isolation tenant. 63/63 tests e2e stables sur 3 exécutions consécutives.
+
+Non fait volontairement en Phase 6 (hors scope, arrive avec les modules concernés) : intégration transporteur réelle pour Fulfillment (Stripe Shipping/autre — architecture-ready seulement), panier public pour un client non authentifié (arrive avec le Storefront en Phase 11, l'API `/carts` actuelle est pensée pour être directement réutilisable par l'API publique de cette phase), gestion de stock/inventaire sur les Offers.
+
+## 15. Prochaine étape
+
+Démarrer PHASE 7 (Workflow) : event bus, triggers, conditions, actions, BullMQ — en s'appuyant sur `apps/worker` déjà scaffoldé en Phase 1 et sur les événements métier déjà identifiables dans chaque module (lead.created, quote.accepted, order.created, payment.completed, booking.created, etc.).

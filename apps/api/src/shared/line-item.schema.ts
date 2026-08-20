@@ -2,6 +2,11 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Types } from 'mongoose';
 import type { LineItemInput } from '@korva/validation';
 
+/**
+ * Shared across Finance (Quote/Invoice) and Commerce (Order) — a quote line,
+ * invoice line, and order line all have the same shape (per spec section 18,
+ * Order is the generic commercial transaction shared by Booking and Commerce).
+ */
 @Schema({ _id: false })
 export class LineItem {
   @Prop({ type: Types.ObjectId, ref: 'Offer' })

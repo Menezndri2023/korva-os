@@ -15,7 +15,7 @@ import { InvoiceDocument } from './schemas/invoice.schema';
 import { ContactsService } from '../../crm/contacts/contacts.service';
 import { CountersService } from '../../core/counters/counters.service';
 import { AuditService } from '../../audit/audit.service';
-import { computeTotals, toLineItemDocs } from '../shared/line-item.schema';
+import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
 
 @Injectable()
 export class InvoicesService {
@@ -66,12 +66,27 @@ export class InvoicesService {
     return this.createInvoiceRecord(organizationId, userId, input);
   }
 
+  /** Used by OrdersService when generating an invoice for a confirmed order. */
+  async createFromOrder(
+    organizationId: string,
+    userId: string,
+    input: {
+      contactId: string;
+      orderId: string;
+      items: LineItemInput[];
+      currency: string;
+    },
+  ): Promise<InvoiceDocument> {
+    return this.createInvoiceRecord(organizationId, userId, input);
+  }
+
   private async createInvoiceRecord(
     organizationId: string,
     userId: string,
     input: {
       contactId: string;
       quoteId?: string;
+      orderId?: string;
       items: LineItemInput[];
       currency: string;
       dueDate?: string;
@@ -89,6 +104,7 @@ export class InvoicesService {
       organizationId: new Types.ObjectId(organizationId),
       contactId: new Types.ObjectId(input.contactId),
       quoteId: input.quoteId ? new Types.ObjectId(input.quoteId) : undefined,
+      orderId: input.orderId ? new Types.ObjectId(input.orderId) : undefined,
       number,
       items: toLineItemDocs(input.items),
       currency: input.currency,

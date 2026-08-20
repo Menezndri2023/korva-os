@@ -128,13 +128,30 @@ La disponibilité (horaires hebdomadaires, créneaux bloqués, capacité, chevau
 
 ## Commerce
 
+Le catalogue produit est servi par `/offers` (voir section Catalog) — pas d'endpoint `/products` séparé, cohérent avec l'entité `Offer` générique.
+
 ```
-GET  /products
-POST /cart
-POST /checkout
-POST /orders
+GET    /carts?contactId=              (récupère ou crée le panier ouvert du contact)
+GET    /carts/:id
+POST   /carts/:id/items
+PATCH  /carts/:id/items/:itemId
+DELETE /carts/:id/items/:itemId
+POST   /carts/:id/checkout            (panier -> commande "pending", panier marqué "converted")
+
+GET  /orders                          (?page, ?limit, ?status, ?contactId)
 GET  /orders/:id
+POST /orders                          (commande manuelle, avec lignes)
+POST /orders/from-booking             (crée une commande à partir d'une réservation confirmée)
+POST /orders/:id/confirm
+POST /orders/:id/cancel
+POST /orders/:id/fulfill              (crée aussi l'enregistrement Fulfillment)
+POST /orders/:id/generate-invoice     (commande confirmée/livrée -> Invoice via Finance)
+
+GET   /fulfillments?orderId=
+PATCH /fulfillments/:id
 ```
+
+**Order Engine unifié** (voir section 18 du brief produit et `docs/architecture.md`) : Cart → Order, Booking → Order, et création manuelle convergent tous vers la même entité `Order`, qui peut ensuite générer une `Invoice` (réutilisant intégralement le module Finance — mêmes règles de calcul des totaux, mêmes endpoints de paiement).
 
 ## Finance
 

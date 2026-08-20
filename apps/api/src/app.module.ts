@@ -20,6 +20,7 @@ import { CrmModule } from './crm/crm.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { FinanceModule } from './finance/finance.module';
 import { BookingModule } from './booking/booking.module';
+import { CommerceModule } from './commerce/commerce.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { BookingModule } from './booking/booking.module';
     CatalogModule,
     FinanceModule,
     BookingModule,
+    CommerceModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

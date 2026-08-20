@@ -24,7 +24,7 @@ Toute collection contenant des données métier d'une organisation possède un c
 - **CATALOG** — `offers` (variants embedded as a subdocument array, pas de collection séparée)
 - **CORE** — `custom_fields` (générique, réutilisé par plusieurs modules — voir section Custom fields ci-dessous), `counters` (générateur atomique de numéros séquentiels par organisation — devis, factures, et plus tard commandes)
 - **BOOKING** — `resources`, `bookings` (+ disponibilité calculée)
-- **COMMERCE** — `carts`, `cart_items`, `orders`, `order_items`, `fulfillments`, `shipments`
+- **COMMERCE** — `carts` (items embarqués, pas de collection `cart_items` séparée), `orders` (lignes embarquées via le même schéma `LineItem` que Quote/Invoice, pas de collection `order_items` séparée), `fulfillments` (pas de collection `shipments` distincte au MVP — architecture-ready, statut de livraison suivi directement sur `fulfillments`)
 - **FINANCE** — `quotes`, `invoices`, `payments`, `refunds`
 - **WORKFLOW** — `workflows`, `workflow_executions`
 - **COMMUNICATION** — `conversations`, `messages`, `message_templates`, `notifications`
@@ -109,6 +109,23 @@ orders:     { organizationId: 1, status: 1, createdAt: -1 }
 **Refund**
 ```
 { organizationId, paymentId, amount, reason, createdAt }
+```
+
+**Cart**
+```
+{ organizationId, contactId, status, items: [{ offerId, quantity }] }
+```
+Le prix n'est pas figé dans le panier (contrairement aux lignes de commande) — il est résolu depuis l'Offer au moment du `checkout`, pour toujours refléter le prix courant.
+
+**Order** (Order Engine unifié — voir `docs/architecture.md`)
+```
+{ organizationId, contactId, number, status, source: "cart"|"booking"|"manual", bookingId?, invoiceId?, items: [...], currency, subtotal, taxTotal, total, notes }
+```
+`items` réutilise le même schéma `LineItem` que Quote/Invoice (`apps/api/src/shared/line-item.schema.ts`), partagé entre Finance et Commerce.
+
+**Fulfillment**
+```
+{ organizationId, orderId, status, carrier, trackingNumber, shippedAt, deliveredAt }
 ```
 
 **Audit log**

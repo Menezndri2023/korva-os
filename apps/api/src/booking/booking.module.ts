@@ -41,5 +41,6 @@ import { AuditModule } from '../audit/audit.module';
     ResourcesService,
     BookingsService,
   ],
+  exports: [BookingsService],
 })
 export class BookingModule {}

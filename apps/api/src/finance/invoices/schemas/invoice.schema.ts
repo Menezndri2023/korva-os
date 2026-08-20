@@ -3,7 +3,7 @@ import { HydratedDocument, Types } from 'mongoose';
 import type { InvoiceStatus } from '@korva/types';
 import { INVOICE_STATUSES } from '@korva/types';
 import { idToJson } from '../../../core/mongoose/schema-options';
-import { LineItem, LineItemSchema } from '../../shared/line-item.schema';
+import { LineItem, LineItemSchema } from '../../../shared/line-item.schema';
 
 export type InvoiceDocument = HydratedDocument<Invoice>;
 
@@ -22,6 +22,9 @@ export class Invoice {
 
   @Prop({ type: Types.ObjectId, ref: 'Quote' })
   quoteId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Order' })
+  orderId?: Types.ObjectId;
 
   @Prop({ required: true })
   number!: string;
