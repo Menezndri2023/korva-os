@@ -35,6 +35,10 @@ export class MembershipsService {
     return this.membershipsRepository.findAllForOrganization(organizationId);
   }
 
+  countForOrganization(organizationId: string): Promise<number> {
+    return this.membershipsRepository.countForOrganization(organizationId);
+  }
+
   listActiveUserIdsForOrganization(organizationId: string): Promise<string[]> {
     return this.membershipsRepository.findActiveUserIdsForOrganization(
       organizationId,

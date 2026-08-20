@@ -256,6 +256,19 @@ POST /ai/actions/:id/reject
 
 `POST /ai/chat` sans `conversationId` crée une nouvelle conversation (`agent` requis dans ce cas, `general_assistant` par défaut) ; avec `conversationId`, poursuit une conversation existante (le `agent` de la conversation est alors figé, le champ est ignoré). Répond `{ conversationId, reply, pendingActions }` — `pendingActions` liste les tools sensibles (`cancel_booking`) mis en attente de confirmation humaine pendant ce tour, jamais exécutés inline. Voir [ai.md](ai.md) pour le détail de la boucle (tool-calling, permissions, agents, mémoire) et la liste complète des 19 tools MVP.
 
+## Subscriptions
+
+```
+GET  /plans                            (catalogue public, tout utilisateur authentifié)
+GET  /subscriptions/me                 { subscription, plan, usage }
+POST /subscriptions/change-plan        { planKey }  (settings.manage)
+```
+
+Chaque organisation reçoit un abonnement `"free"` automatiquement à sa création (voir [ai.md](ai.md) et `docs/IMPLEMENTATION_PLAN.md` Phase 10). `EntitlementsService` est la source de vérité pour trois contrôles réels, tous dérivés du plan actif — jamais codés en dur :
+- **Modules** : `PATCH /organizations/me` avec `enabledModules` est rejeté (`403 MODULE_NOT_IN_PLAN`) si un module demandé n'est pas inclus dans le plan actif.
+- **Sièges** : `POST /organizations/me/members` est rejeté (`403 SEAT_LIMIT_REACHED`) au-delà de la limite `seats` du plan (comptée en direct sur les memberships, pas un compteur périodique).
+- **Usage IA** : `POST /ai/chat` est rejeté (`403 USAGE_LIMIT_REACHED`) au-delà de la limite `ai_messages_per_month` du plan pour la période calendaire en cours ; chaque tour réussi incrémente le compteur.
+
 ## API publique (storefront)
 
 Base séparée, ne devant jamais exposer de données internes de l'organisation (uniquement ce qui est publiable : catalogue, disponibilités, création de réservation/commande).

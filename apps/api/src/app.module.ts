@@ -25,6 +25,7 @@ import { EventsModule } from './core/events/events.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { CommunicationModule } from './communication/communication.module';
 import { AiModule } from './ai/ai.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AiModule } from './ai/ai.module';
     HealthModule,
     AuditModule,
     IdentityModule,
+    SubscriptionsModule,
     OrganizationsModule,
     CustomFieldsModule,
     CrmModule,

@@ -14,6 +14,8 @@ import { RolesService } from '../identity/roles/roles.service';
 import { MembershipsService } from '../identity/memberships/memberships.service';
 import { UsersService } from '../identity/users/users.service';
 import { AuditService } from '../audit/audit.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { EntitlementsService } from '../subscriptions/entitlements.service';
 
 const DIACRITICS_PATTERN = new RegExp('[\\u0300-\\u036f]', 'g');
 
@@ -34,6 +36,8 @@ export class OrganizationsService {
     private readonly membershipsService: MembershipsService,
     private readonly usersService: UsersService,
     private readonly auditService: AuditService,
+    private readonly subscriptionsService: SubscriptionsService,
+    private readonly entitlementsService: EntitlementsService,
   ) {}
 
   async createForOwner(
@@ -72,6 +76,10 @@ export class OrganizationsService {
       ownerRole.id as string,
     );
 
+    await this.subscriptionsService.createDefaultSubscription(
+      organization.id as string,
+    );
+
     await this.auditService.record({
       organizationId: organization.id as string,
       userId: ownerUserId,
@@ -108,6 +116,12 @@ export class OrganizationsService {
     id: string,
     input: UpdateOrganizationInput,
   ): Promise<OrganizationDocument> {
+    if (input.enabledModules) {
+      await this.entitlementsService.assertModulesAllowed(
+        id,
+        input.enabledModules,
+      );
+    }
     if (input.name) {
       const existing = await this.organizationsRepository.findBySlug(
         slugify(input.name),
@@ -138,6 +152,8 @@ export class OrganizationsService {
     actorUserId: string,
     input: AddMemberInput,
   ) {
+    await this.entitlementsService.assertSeatAvailable(organizationId);
+
     const user = await this.usersService.findByEmail(input.email);
     if (!user) {
       throw new NotFoundException({

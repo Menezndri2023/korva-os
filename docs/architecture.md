@@ -32,7 +32,7 @@ Chaque module est isolé : sa propre couche controller → service → repositor
 - **COMMUNICATION** — conversations, messages, templates, notifications. `EmailProvider`/`MessagingProvider` réellement branchés (voir section EventBus ci-dessous) ; `notifications` sont internes à l'organisation, diffusées via `NotificationsService.notifyOrganization()`.
 - **ANALYTICS** — agrégation de KPIs, endpoints `/analytics/*`.
 - **AI** — `AIProvider` réel (Anthropic), orchestrateur (boucle tool-calling), 4 agents, 19 tools réutilisant les services métier existants, confirmation humaine pour les actions sensibles. RAG non implémenté (architecture-ready seulement, voir [ai.md](ai.md)).
-- **SUBSCRIPTIONS** — plans, subscriptions, EntitlementService, usage.
+- **SUBSCRIPTIONS** — catalogue de plans (seed paresseux, voir ADR-009), abonnement par organisation (créé automatiquement à `"free"`), `EntitlementsService` (source de vérité pour l'accès aux modules, les sièges d'équipe et les quotas d'usage — ex. `ai_messages_per_month`), pas d'intégration de facturation réelle au MVP.
 - **FILES** — StorageProvider abstraction (upload/download/delete/getPublicUrl).
 - **AUDIT** — audit_logs.
 - **API/WEBHOOKS** — webhooks sortants, api_keys.

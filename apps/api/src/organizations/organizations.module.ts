@@ -9,6 +9,7 @@ import { OrganizationsService } from './organizations.service';
 import { OrganizationsController } from './organizations.controller';
 import { IdentityModule } from '../identity/identity.module';
 import { AuditModule } from '../audit/audit.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { AuditModule } from '../audit/audit.module';
     ]),
     IdentityModule,
     AuditModule,
+    SubscriptionsModule,
   ],
   controllers: [OrganizationsController],
   providers: [OrganizationsRepository, OrganizationsService],

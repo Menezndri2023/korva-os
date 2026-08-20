@@ -288,6 +288,22 @@ Ajustement de câblage trouvé en cours de route (pas un ADR à part entière) :
 
 Non fait volontairement en Phase 9 (hors scope, cohérent avec "architecture-ready" du brief) : RAG (aucune source de documents/vector store à ce stade), `MessagingProvider` WhatsApp réel, `EntitlementService`/quotas sur l'usage IA (arrive avec la Phase 10 Subscriptions), les tools `refund_payment`/`delete_customer`/`delete_order`/`send_mass_campaign`, agents `SUPPORT_AGENT`/`COMMERCE_AGENT`/`OPERATIONS_AGENT`/`MARKETING_AGENT` (prévus "futurs" dans le brief).
 
-## 18. Prochaine étape
+## 18. Statut PHASE 10 (SaaS) — terminée
 
-Démarrer PHASE 10 (SaaS) : plans, subscriptions, `EntitlementService`, usage tracking — en exposant dès maintenant un `canUse(module)`/`canUse(feature)` utilisable par les guards existants (dont `ai.use`/`ai.execute_sensitive_actions`, jusqu'ici de simples permissions RBAC sans notion de quota ou de plan).
+Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le monorepo — 99/99 tests e2e stables sur la grande majorité des exécutions complètes, voir ADR-003 ; plus vérification manuelle via curl du cycle complet organisation → abonnement "free" → changement de plan → quota IA contre le serveur de dev réel) :
+
+- **Catalogue de plans** (`apps/api/src/subscriptions/`) : 4 plans (`free`/`starter`/`pro`/`business`), semés paresseusement au premier accès plutôt qu'au boot de l'app (voir [ADR-009](architecture-decisions.md#adr-009--ne-jamais-compter-sur-onmoduleinit-pour-semer-des-données-qui-doivent-survivre-à-connectiondropdatabase) — un hook `OnModuleInit` semblait correct mais se faisait effacer par le `dropDatabase()` de chaque fichier e2e, cassant 88 tests d'un coup). `"free"` est délibérément généreux (tous les modules) pour ne jamais casser l'onboarding existant ; `"starter"` exclut `workflow`/`ai` pour démontrer une restriction de palier réelle.
+- **Abonnement automatique** : chaque nouvelle organisation reçoit un `Subscription` sur le plan `"free"` (`SubscriptionsService.createDefaultSubscription`, appelé depuis `OrganizationsService.createForOwner`). Pas d'intégration de facturation réelle (Stripe Billing etc.) — changer de plan (`POST /subscriptions/change-plan`) est un changement instantané et gratuit au MVP, cohérent avec `PaymentProvider` qui n'a lui non plus aucune clé live configurée.
+- **`EntitlementsService`** : source de vérité pour trois contrôles réels, tous branchés à des points d'intégration existants plutôt que via un retrofit large de tous les guards (choix délibéré pour ne casser aucun des 92 tests e2e déjà stables) :
+  - Modules : `OrganizationsService.update()` rejette (`403 MODULE_NOT_IN_PLAN`) tout `enabledModules` contenant un module hors du plan actif.
+  - Sièges : `OrganizationsService.addMember()` rejette (`403 SEAT_LIMIT_REACHED`) au-delà de la limite `seats` du plan (comptage en direct des memberships, pas un compteur périodique).
+  - Usage IA : `AiOrchestratorService.chat()` rejette (`403 USAGE_LIMIT_REACHED`) au-delà de `ai_messages_per_month`, comptée par mois calendaire — ferme la promesse laissée ouverte en Phase 9.
+- **RBAC** : aucun changement — `ai.use`/`ai.execute_sensitive_actions` (posés en Phase 1) suffisaient déjà, `EntitlementsService` est un contrôle orthogonal (quota/plan), pas un remplacement des permissions de rôle.
+- **Frontend** : section "Abonnement" ajoutée à `/dashboard/settings` — plan actuel, barres d'usage, sélecteur de plan.
+- **Tests** : `apps/api/test/subscriptions.e2e-spec.ts` — catalogue de plans, abonnement par défaut, gate de modules après changement de plan, refus d'un non-OWNER à changer de plan, limite de sièges (invitation refusée au-delà de 3 membres), quota IA (5 messages acceptés puis le 6ᵉ refusé), isolation tenant.
+
+Non fait volontairement en Phase 10 (hors scope, cohérent avec le MVP) : intégration de facturation réelle (Stripe Billing/webhooks — aucun `PaymentProvider` de facturation récurrente, distinct du `PaymentProvider` ponctuel de la Phase 4 Finance), essais gratuits (`trialing`)/factures impayées (`past_due`) — seuls `active`/`canceled` existent, `CRUD` de plans par API (le catalogue n'est modifiable qu'en code, pas de `POST/PATCH /plans`), rétrofit du gate de module sur les routes API existantes (le gate ne s'applique qu'à l'activation d'un module via `PATCH /organizations/me`, pas à chaque requête vers ce module — un org sur un plan restrictif qui a déjà activé un module gardera l'accès tant qu'elle ne tente pas de le réactiver après un changement de plan).
+
+## 19. Prochaine étape
+
+Démarrer PHASE 11 (Storefront) : pages publiques par organisation, réservation/e-commerce côté client, checkout, domaines personnalisés architecture-ready — en s'appuyant sur l'API publique déjà pensée pour cet usage (`/carts` réutilisable directement, voir Phase 6) et sur `EntitlementsService` pour n'exposer que les modules réellement activés par l'organisation.

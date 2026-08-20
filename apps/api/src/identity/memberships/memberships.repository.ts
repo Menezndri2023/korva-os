@@ -48,6 +48,12 @@ export class MembershipsRepository {
       .exec();
   }
 
+  countForOrganization(organizationId: string): Promise<number> {
+    return this.membershipModel
+      .countDocuments({ organizationId: new Types.ObjectId(organizationId) })
+      .exec();
+  }
+
   /** Unpopulated, unlike findAllForOrganization — callers only need the raw active member ids (e.g. broadcasting a Notification). */
   async findActiveUserIdsForOrganization(
     organizationId: string,

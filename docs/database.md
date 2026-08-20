@@ -29,7 +29,7 @@ Toute collection contenant des données métier d'une organisation possède un c
 - **WORKFLOW** — `workflows`, `workflow_executions`
 - **COMMUNICATION** — `conversations`, `messages`, `message_templates`, `notifications`
 - **AI** — `ai_conversations`, `ai_messages`, `ai_pending_actions`
-- **SUBSCRIPTIONS** — `plans`, `subscriptions`, `subscription_items`, `usage`
+- **SUBSCRIPTIONS** — `plans`, `subscriptions`, `usage` (pas de `subscription_items` séparée au MVP — un abonnement référence un seul `Plan`, pas de composition à la ligne)
 - **FILES** — métadonnées fichiers (tenant-aware)
 - **AUDIT** — `audit_logs`
 - **API/WEBHOOKS** — `webhooks`, `api_keys`
@@ -181,6 +181,24 @@ Collection séparée de `ai_conversations` (même raisonnement que `messages`/`c
 { organizationId, conversationId, toolName, input, status: "pending"|"confirmed"|"rejected", createdAt }
 ```
 Créée à la place d'exécuter un tool marqué `sensitive` (aujourd'hui, seul `cancel_booking`) — voir `POST /ai/actions/:id/confirm` dans [api.md](api.md).
+
+**Plan**
+```
+{ key, name, priceAmount, priceCurrency, interval: "month"|"year", modules: KorvaModule[], limits: Record<string, number>, createdAt, updatedAt }
+```
+Catalogue global (pas tenant-aware — pas de `organizationId`). Semé paresseusement au premier accès plutôt qu'au boot de l'app (voir ADR-009). `limits` : `-1` signifie illimité ; clés actuellement utilisées : `seats`, `ai_messages_per_month`.
+
+**Subscription**
+```
+{ organizationId, planId, status: "active"|"canceled", currentPeriodStart, currentPeriodEnd, createdAt, updatedAt }
+```
+Une par organisation (`organizationId` unique), créée automatiquement sur le plan `"free"` à la création de l'organisation. Pas d'intégration de facturation réelle au MVP (`docs/IMPLEMENTATION_PLAN.md` Phase 10) — changer de plan via `POST /subscriptions/change-plan` est un changement instantané, sans paiement.
+
+**Usage**
+```
+{ organizationId, metric, period: "YYYY-MM", count }
+```
+Un document par `(organizationId, metric, period)`, incrémenté via `$inc` upsert. `seats` n'est PAS suivi ici — c'est un comptage en direct des memberships (voir `EntitlementsService`), pas une métrique périodique.
 
 **Audit log**
 ```

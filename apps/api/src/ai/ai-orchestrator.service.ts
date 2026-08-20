@@ -22,6 +22,7 @@ import {
 } from './providers/ai-provider.interface';
 import type { AiTool } from './tools/tool.interface';
 import { AuditService } from '../audit/audit.service';
+import { EntitlementsService } from '../subscriptions/entitlements.service';
 
 const MAX_TOOL_ITERATIONS = 5;
 
@@ -63,6 +64,7 @@ export class AiOrchestratorService {
     private readonly contextBuilder: AiContextBuilderService,
     private readonly toolsRegistry: AiToolsRegistryService,
     private readonly auditService: AuditService,
+    private readonly entitlementsService: EntitlementsService,
     @Inject(AI_PROVIDER) private readonly aiProvider: AIProvider,
   ) {}
 
@@ -98,6 +100,11 @@ export class AiOrchestratorService {
     user: CallingUser,
     input: { conversationId?: string; agent?: AiAgent; message: string },
   ): Promise<ChatTurnResult> {
+    await this.entitlementsService.checkAndRecordUsage(
+      organizationId,
+      'ai_messages_per_month',
+    );
+
     const conversation = await this.getOrCreateConversation(
       organizationId,
       user.userId,

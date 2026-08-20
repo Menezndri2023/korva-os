@@ -56,6 +56,7 @@ import { CommerceModule } from '../commerce/commerce.module';
 import { CommunicationModule } from '../communication/communication.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuditModule } from '../audit/audit.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { AuditModule } from '../audit/audit.module';
     CommunicationModule,
     OrganizationsModule,
     AuditModule,
+    SubscriptionsModule,
   ],
   controllers: [AiController],
   providers: [
