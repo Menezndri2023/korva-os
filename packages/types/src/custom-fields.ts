@@ -12,14 +12,8 @@ export const CUSTOM_FIELD_TYPES = [
 ] as const;
 export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
 
-export const CUSTOM_FIELD_ENTITIES = [
-  "contacts",
-  "leads",
-  "products",
-  "services",
-  "bookings",
-  "orders",
-] as const;
+/** "offers" covers the whole Catalog entity (product/service/booking/digital_product/subscription/package — see Offer in catalog.ts), superseding the separate "products"/"services" entities named in the original spec. */
+export const CUSTOM_FIELD_ENTITIES = ["contacts", "leads", "offers", "bookings", "orders"] as const;
 export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
 
 export interface CustomField {

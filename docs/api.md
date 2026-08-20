@@ -97,7 +97,7 @@ DELETE /custom-fields/:id
 ## Catalog
 
 ```
-GET    /offers
+GET    /offers               (?page, ?limit, ?search, ?type, ?status, ?category)
 POST   /offers
 GET    /offers/:id
 PATCH  /offers/:id

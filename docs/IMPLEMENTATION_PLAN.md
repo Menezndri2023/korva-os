@@ -1,6 +1,6 @@
 # KORVA OS — Implementation Plan
 
-Statut : PHASE 1 (Foundation) et PHASE 2 (CRM) terminées et validées — voir section 9. PHASE 3 (Catalog) non démarrée.
+Statut : PHASE 1 (Foundation), PHASE 2 (CRM) et PHASE 3 (Catalog) terminées et validées — voir sections 9-12. PHASE 4 (Finance) non démarrée.
 Dernière mise à jour : 2026-08-20
 
 ## 1. Résumé du produit
@@ -176,6 +176,21 @@ Un bug de fiabilité des tests a été trouvé et corrigé en cours de route (AD
 
 Non fait volontairement en Phase 2 (hors scope) : import/export CSV des contacts, vue kanban drag-and-drop du pipeline, endpoint de listing des rôles (nécessaire pour un vrai sélecteur de rôle dans l'UI d'invitation), notifications de relance automatiques (arrive avec Workflow en Phase 7).
 
-## 11. Prochaine étape
+## 11. Statut PHASE 3 (Catalog) — terminée
 
-Démarrer PHASE 3 (Catalog) : offers (product/service/booking/digital_product/subscription/package), catégories, pricing — en réutilisant le Custom Fields Engine déjà en place pour `products`/`services`.
+Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le monorepo, plus vérification manuelle via curl) :
+
+- **Entité générique Offer** : les 6 types (`product`, `service`, `booking`, `digital_product`, `subscription`, `package`) partagent un seul modèle — pricing (montant, devise, taux de taxe), catégories (tags libres), variantes embarquées (chacune avec son propre id), SKU, statut (`draft`/`active`/`archived`).
+- **CRUD complet** `/offers` : recherche plein texte (index Mongo `text` sur nom/description/SKU), filtres par type/statut/catégorie, pagination.
+- **Custom Fields** : nouvelle entité `offers` ajoutée au moteur générique (remplace les entités `products`/`services` du brief d'origine, incompatibles avec le modèle Offer unifié — voir le commentaire dans `packages/types/src/custom-fields.ts`) ; validation stricte réutilisée telle quelle.
+- **RBAC** : permissions `offers.read/create/update/delete` ajoutées à `packages/types/src/rbac.ts` (absentes du brief d'origine) et distribuées aux rôles système (OWNER/ADMIN: tout, MANAGER: read/create/update, SALES/FINANCE/STAFF: read seul).
+- **Frontend** : `/dashboard/catalog` — liste filtrable par type, création d'offre (nom, type, SKU, description, prix/devise).
+- **Tests** : `apps/api/test/catalog.e2e-spec.ts` — validation custom fields, CRUD avec variantes (ids assignés), filtre par type, recherche plein texte, isolation tenant.
+
+Un deuxième bug de fiabilité des tests e2e a été trouvé et corrigé pendant cette phase (complète l'ADR-003) : même avec `maxWorkers: 1`, les 4 fichiers e2e tournant dans le même processus Node pouvaient se réutiliser des sockets HTTP keep-alive entre applications NestJS différentes, produisant des réponses corrompues de façon intermittente — fixé en désactivant `http.globalAgent.keepAlive` dans `env.setup.ts`. 4 exécutions complètes consécutives à 30/30 tests stables après le correctif.
+
+Non fait volontairement en Phase 3 (hors scope, arrive avec les modules concernés) : upload réel d'images (StorageProvider arrive en Phase "Files"), taxonomie de catégories structurée (actuellement des tags libres, cohérent avec le choix fait pour les tags CRM), gestion de stock/inventaire (Commerce, Phase 6).
+
+## 12. Prochaine étape
+
+Démarrer PHASE 4 (Finance) : quotes, invoices, abstraction PaymentProvider — en réutilisant Contacts (client du devis/facture) et Offers (lignes de devis/facture) déjà en place.

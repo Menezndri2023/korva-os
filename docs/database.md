@@ -21,6 +21,7 @@ Toute collection contenant des données métier d'une organisation possède un c
 - **IDENTITY** — `users`, `memberships`, `roles`, `permissions`, `sessions`, `api_keys`
 - **ORGANIZATIONS** — `organizations`
 - **CRM** — `contacts`, `leads`, `pipelines` (stages embedded as a subdocument array, not a separate collection), `activities`, `tasks`, `notes`, `tags`
+- **CATALOG** — `offers` (variants embedded as a subdocument array, pas de collection séparée)
 - **CORE** — `custom_fields` (générique, réutilisé par plusieurs modules — voir section Custom fields ci-dessous)
 - **CATALOG** — `offers`
 - **BOOKING** — `resources`, `bookings` (+ disponibilité calculée)
@@ -75,7 +76,7 @@ orders:     { organizationId: 1, status: 1, createdAt: -1 }
 
 **Offer**
 ```
-{ organizationId, type, name, description, pricing, status, categories, images, customFields }
+{ organizationId, type, name, description, images, categories, pricing: { amount, currency, taxRate }, sku, variants: [{ name, sku, priceOverride }], status, customFields }
 ```
 
 **Booking**
@@ -90,7 +91,7 @@ orders:     { organizationId: 1, status: 1, createdAt: -1 }
 
 ## Custom fields
 
-Table `custom_fields` générique, applicable à `contacts`, `leads`, `products/offers`, `bookings`, `orders` :
+Table `custom_fields` générique, applicable à `contacts`, `leads`, `offers`, `bookings`, `orders` :
 
 ```
 { organizationId, entity, key, label, type, options, required }

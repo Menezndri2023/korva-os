@@ -4,3 +4,4 @@ export * from "./identity.ts";
 export * from "./api.ts";
 export * from "./custom-fields.ts";
 export * from "./crm.ts";
+export * from "./catalog.ts";
