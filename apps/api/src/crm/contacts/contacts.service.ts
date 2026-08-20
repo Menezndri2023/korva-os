@@ -10,6 +10,7 @@ import { ContactsRepository } from './contacts.repository';
 import { ContactDocument } from './schemas/contact.schema';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
+import { EventBusService } from '../../core/events/event-bus.service';
 
 @Injectable()
 export class ContactsService {
@@ -17,6 +18,7 @@ export class ContactsService {
     private readonly contactsRepository: ContactsRepository,
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async create(
@@ -48,6 +50,10 @@ export class ContactsService {
       action: 'CREATE',
       entity: 'contact',
       entityId: contact.id as string,
+    });
+
+    await this.eventBus.publish(organizationId, 'customer.created', {
+      contactId: contact.id as string,
     });
 
     return contact;

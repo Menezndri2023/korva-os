@@ -63,7 +63,11 @@ Chaque abstraction expose une interface stable ; le domaine métier n'appelle ja
 
 ## EventBus & asynchrone
 
-Toute action métier significative émet un événement (`lead.created`, `order.created`, `payment.completed`, ...). Les traitements longs (emails, PDF, IA, webhooks) sont déportés vers `apps/worker` via BullMQ/Redis — jamais bloquants sur la requête HTTP.
+Toute action métier significative émet un événement (`customer.created`, `lead.created`, `quote.created`, `quote.accepted`, `order.created`, `payment.completed`, `booking.created`, `booking.cancelled`, ...) via `EventBusService.publish(organizationId, name, payload)` (`apps/api/src/core/events/`, module `@Global()`). `publish()` pousse uniquement un job sur une queue BullMQ/Redis (`events`) et ne fait jamais attendre la requête HTTP qui l'a émis — une erreur de publication est loguée mais n'échoue jamais l'opération métier.
+
+Le module **WORKFLOW** (`apps/api/src/workflow/`) est le premier consommateur de cette queue : `EventsProcessor` (un `Worker` BullMQ) reçoit chaque événement, `WorkflowEngineService` retrouve les workflows actifs déclenchés par ce nom d'événement, évalue leurs `conditions` (AND, dot-path dans le payload) puis exécute leurs `actions` (`create_task`, `send_email` — stub en attendant l'`EmailProvider` de la Phase 8, `webhook`), et journalise le résultat dans `workflow_executions`.
+
+**Note d'architecture** : ce `Worker` tourne aujourd'hui *dans le processus `apps/api`* plutôt que dans `apps/worker`, pour réutiliser directement les services Nest existants (ex. `TasksService`) sans dupliquer de modules métier entre les deux process. Voir [ADR-005](architecture-decisions.md#adr-005--eventsprocessor-worker-bullmq-du-workflow-engine-colocalisé-dans-appsapi-pas-dans-appsworker) pour le compromis et le chemin de migration vers `apps/worker`. Les autres traitements longs (emails, PDF, IA) suivront le placement `apps/worker` par défaut.
 
 ## Frontend
 

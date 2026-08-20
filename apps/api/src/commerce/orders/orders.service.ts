@@ -17,6 +17,7 @@ import { InvoiceDocument } from '../../finance/invoices/schemas/invoice.schema';
 import { FulfillmentsService } from '../fulfillments/fulfillments.service';
 import { CountersService } from '../../core/counters/counters.service';
 import { AuditService } from '../../audit/audit.service';
+import { EventBusService } from '../../core/events/event-bus.service';
 import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
 
 @Injectable()
@@ -31,6 +32,7 @@ export class OrdersService {
     private readonly fulfillmentsService: FulfillmentsService,
     private readonly countersService: CountersService,
     private readonly auditService: AuditService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async create(
@@ -192,6 +194,13 @@ export class OrdersService {
       entity: 'order',
       entityId: order.id as string,
       metadata: { source: input.source },
+    });
+
+    await this.eventBus.publish(organizationId, 'order.created', {
+      orderId: order.id as string,
+      contactId: input.contactId,
+      total: order.total,
+      source: input.source,
     });
 
     return order;

@@ -79,6 +79,6 @@ import { AuditModule } from '../audit/audit.module';
     TagsRepository,
     TagsService,
   ],
-  exports: [ContactsService],
+  exports: [ContactsService, TasksService],
 })
 export class CrmModule {}

@@ -12,6 +12,7 @@ import { ContactsService } from '../contacts/contacts.service';
 import { PipelinesService } from '../pipelines/pipelines.service';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
+import { EventBusService } from '../../core/events/event-bus.service';
 
 @Injectable()
 export class LeadsService {
@@ -21,6 +22,7 @@ export class LeadsService {
     private readonly pipelinesService: PipelinesService,
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async create(
@@ -67,6 +69,12 @@ export class LeadsService {
       action: 'CREATE',
       entity: 'lead',
       entityId: lead.id as string,
+    });
+
+    await this.eventBus.publish(organizationId, 'lead.created', {
+      leadId: lead.id as string,
+      contactId: input.contactId,
+      estimatedValue: input.estimatedValue,
     });
 
     return lead;

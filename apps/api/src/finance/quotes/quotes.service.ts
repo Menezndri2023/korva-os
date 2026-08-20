@@ -14,6 +14,7 @@ import { AuditService } from '../../audit/audit.service';
 import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
 import { InvoicesService } from '../invoices/invoices.service';
 import { InvoiceDocument } from '../invoices/schemas/invoice.schema';
+import { EventBusService } from '../../core/events/event-bus.service';
 
 @Injectable()
 export class QuotesService {
@@ -23,6 +24,7 @@ export class QuotesService {
     private readonly countersService: CountersService,
     private readonly auditService: AuditService,
     private readonly invoicesService: InvoicesService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async create(
@@ -65,6 +67,12 @@ export class QuotesService {
       action: 'CREATE',
       entity: 'quote',
       entityId: quote.id as string,
+    });
+
+    await this.eventBus.publish(organizationId, 'quote.created', {
+      quoteId: quote.id as string,
+      contactId: input.contactId,
+      total: quote.total,
     });
 
     return quote;
@@ -235,6 +243,14 @@ export class QuotesService {
       entityId: id,
       metadata: { status: to },
     });
+
+    if (to === 'accepted') {
+      await this.eventBus.publish(organizationId, 'quote.accepted', {
+        quoteId: id,
+        contactId: updated.contactId.toString(),
+        total: updated.total,
+      });
+    }
 
     return updated;
   }

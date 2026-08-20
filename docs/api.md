@@ -182,11 +182,31 @@ Les totaux (`subtotal`/`taxTotal`/`total`) sont toujours recalculés côté serv
 ## Workflow
 
 ```
-GET   /workflows
-POST  /workflows
-PATCH /workflows/:id
-POST  /workflows/:id/test
+GET    /workflows
+POST   /workflows
+GET    /workflows/:id
+PATCH  /workflows/:id
+DELETE /workflows/:id
+GET    /workflows/:id/executions
+POST   /workflows/:id/test          (dry-run : évalue les conditions sur un payload donné, n'exécute aucune action)
 ```
+
+Un workflow associe un `trigger` (un des [événements système](#event-bus--événements-système)), une liste de `conditions` (AND, dot-path dans le payload de l'événement, opérateurs `equals`/`not_equals`/`greater_than`/`less_than`/`contains`) et une liste d'`actions` (`create_task`, `send_email`, `webhook`). Les publications d'événements (`EventBusService.publish`) ne font que pousser un job sur la queue Redis `events` — jamais de traitement synchrone avec la requête HTTP qui a déclenché l'événement. Voir [architecture.md](architecture.md) (Event Bus) et [ADR-005](architecture-decisions.md#adr-005--eventsprocessor-worker-bullmq-du-workflow-engine-colocalisé-dans-appsapi-pas-dans-appsworker).
+
+### Event Bus — événements système
+
+Événements actuellement publiés par les modules métier (déclencheurs valides pour un workflow) :
+```
+customer.created
+lead.created
+quote.created
+quote.accepted
+order.created
+payment.completed
+booking.created
+booking.cancelled
+```
+`quote.expired` et `invoice.overdue` sont des déclencheurs valides côté validation mais ne sont pas encore émis (pas de scheduler/cron en Phase 7 — ces deux événements en dépendent).
 
 ## Analytics
 

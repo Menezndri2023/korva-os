@@ -49,3 +49,27 @@ Journal des décisions techniques importantes, au fil de l'implémentation (voir
 **Pourquoi accepté pour le MVP** : implémenter une conversion de fuseau horaire correcte (DST inclus) est un chantier à part entière (bibliothèque type `date-fns-tz`/`luxon`, tests dédiés) sans valeur ajoutée immédiate pour valider le moteur de réservation lui-même (fenêtres, blocages, capacité, chevauchement — tous corrects indépendamment du fuseau).
 
 **À corriger avant un usage production réel** : convertir `weeklyAvailability`/`blockedSlots`/`startAt`/`endAt` via le fuseau de l'organisation avant comparaison, dans `AvailabilityService` uniquement (le stockage MongoDB en UTC natif ne change pas).
+
+## ADR-005 — `EventsProcessor` (worker BullMQ du Workflow Engine) colocalisé dans `apps/api`, pas dans `apps/worker`
+
+**Contexte** : le Event Bus (Phase 7) publie les événements métier (`lead.created`, `quote.accepted`, `order.created`, ...) sur une queue BullMQ (`events`, Redis). Un consommateur doit exister pour traiter ces jobs de façon asynchrone et déclencher le Workflow Engine. Le monorepo prévoit `apps/worker` comme processus dédié aux jobs asynchrones (voir `docs/architecture.md`).
+
+**Décision (Phase 7, MVP)** : le `Worker` BullMQ qui consomme la queue `events` (`apps/api/src/workflow/events.processor.ts`) tourne **dans le processus `apps/api`** (démarré via `OnModuleInit`), et non dans `apps/worker`.
+
+**Pourquoi** : le `WorkflowActionsService` réutilise directement des services Nest existants (`TasksService` pour l'action `create_task`, et bientôt un `EmailProvider` pour `send_email`). Faire tourner ce worker dans `apps/api` permet de les injecter tels quels via le même `AppModule`/DI container, sans dupliquer ces modules métier dans `apps/worker` ni exposer leur logique via une API interne HTTP entre les deux process.
+
+**Compromis accepté** : cela va à l'encontre du principe "API = requêtes HTTP uniquement, `apps/worker` = tout le traitement asynchrone" énoncé dans le brief produit. Le traitement des workflows n'est plus synchrone avec la requête HTTP qui publie l'événement (`EventBusService.publish` ne fait que pousser un job, jamais attendre son traitement), donc aucune requête n'est ralentie par un workflow lent — mais le process API porte désormais une charge de travail asynchrone en plus de servir le trafic HTTP, et les deux ne peuvent plus scaler indépendamment.
+
+**Chemin de migration** (si la charge des workflows le justifie) : déplacer `EventsProcessor` + `WorkflowActionsService` + `WorkflowEngineService` vers `apps/worker`, qui importerait alors les modules métier nécessaires (`CrmModule` pour `TasksService`, etc.) exactement comme `WorkflowModule` le fait aujourd'hui dans `apps/api`. Le contrat public de `EventBusService.publish()` ne change pas — seul le process qui consomme la queue change, ce qui rend cette migration non-bréquante pour tous les appelants.
+
+## ADR-006 — `@Prop({ type: String, ... })` explicite requis sur tout champ Mongoose dont le type TypeScript est une union de littéraux
+
+**Contexte** : `WorkflowConditionDoc.operator` (`WorkflowConditionOperator`, une union de string littéraux) et `WorkflowActionDoc.type` (`WorkflowAction['type']`) étaient déclarés avec `@Prop({ required: true })` seul, sans `type` explicite — comme c'est le cas pour tous les champs `string` simples ailleurs dans le projet.
+
+**Problème observé** : `@nestjs/mongoose` infère le type Mongoose d'un `@Prop` via `reflect-metadata` (le type TypeScript compilé du champ, `design:type`). Pour un champ typé `string` classique, `design:type` vaut `String` et l'inférence fonctionne. Pour un champ typé comme une **union de littéraux** (`"equals" | "not_equals" | ...`), TypeScript émet `design:type: Object` (les unions n'ont pas de représentation runtime propre) — ce que `@nestjs/mongoose` refuse avec `Cannot determine a type for the "WorkflowConditionDoc.operator" field (union/intersection/ambiguous type was used)`.
+
+**Piège** : cette erreur n'apparaît **ni** à `tsc --noEmit`, **ni** à `nest build` (webpack) — les deux ignorent la réflexion runtime des décorateurs. Elle n'explose qu'à l'instanciation réelle du module Nest (donc seulement au lancement de l'app ou d'un test e2e qui compile `AppModule`), ce qui l'a fait passer inaperçue jusqu'à l'écriture de `workflow.e2e-spec.ts`.
+
+**Décision** : tout champ de schéma Mongoose dont le type TypeScript est une union de littéraux (`string | number | boolean` compris) doit porter un `@Prop({ type: ... })` explicite (`String`, `Object`, etc.) — ne jamais compter sur l'inférence `reflect-metadata` pour un type non-primitif simple.
+
+**À surveiller** : vérifier ce point en priorité lors de la revue de tout nouveau schéma Mongoose introduisant un champ à valeurs discrètes (statuts, enums, unions discriminées) — le typecheck et le build ne l'attraperont pas, seul le boot réel de `AppModule` (donc au minimum un test e2e) le révèle.

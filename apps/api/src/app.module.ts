@@ -21,6 +21,8 @@ import { CatalogModule } from './catalog/catalog.module';
 import { FinanceModule } from './finance/finance.module';
 import { BookingModule } from './booking/booking.module';
 import { CommerceModule } from './commerce/commerce.module';
+import { EventsModule } from './core/events/events.module';
+import { WorkflowModule } from './workflow/workflow.module';
 
 @Module({
   imports: [
@@ -33,6 +35,7 @@ import { CommerceModule } from './commerce/commerce.module';
       }),
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    EventsModule,
     HealthModule,
     AuditModule,
     IdentityModule,
@@ -43,6 +46,7 @@ import { CommerceModule } from './commerce/commerce.module';
     FinanceModule,
     BookingModule,
     CommerceModule,
+    WorkflowModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

@@ -128,6 +128,18 @@ Le prix n'est pas figé dans le panier (contrairement aux lignes de commande) �
 { organizationId, orderId, status, carrier, trackingNumber, shippedAt, deliveredAt }
 ```
 
+**Workflow**
+```
+{ organizationId, name, trigger, active, conditions: [{ field, operator, value }], actions: [{ type, config }], createdAt, updatedAt }
+```
+`conditions`/`actions` sont des sous-documents embarqués (`_id: false`), pas de collections séparées. `trigger` référence un [événement système](api.md#event-bus--événements-système) ; `actions[].type` est `create_task`|`send_email`|`webhook`, `config` variant selon le type (union discriminée, voir `packages/types/src/workflow.ts`).
+
+**WorkflowExecution**
+```
+{ organizationId, workflowId, eventName, payload, status: "success"|"failed", actionResults: [{ type, success, error? }], error?, createdAt }
+```
+Une exécution est enregistrée uniquement quand les `conditions` du workflow ont matché le payload de l'événement (sinon rien n'est journalisé). `status` est `"failed"` si au moins une action a échoué — les autres actions du même workflow s'exécutent quand même (pas d'interruption en cascade).
+
 **Audit log**
 ```
 { organizationId, userId, action, entity, entityId, metadata, createdAt }

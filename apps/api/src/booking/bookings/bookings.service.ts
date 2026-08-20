@@ -17,6 +17,7 @@ import { AvailabilityService } from '../availability/availability.service';
 import { ContactsService } from '../../crm/contacts/contacts.service';
 import { OffersService } from '../../catalog/offers/offers.service';
 import { AuditService } from '../../audit/audit.service';
+import { EventBusService } from '../../core/events/event-bus.service';
 
 @Injectable()
 export class BookingsService {
@@ -26,6 +27,7 @@ export class BookingsService {
     private readonly contactsService: ContactsService,
     private readonly offersService: OffersService,
     private readonly auditService: AuditService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async create(
@@ -77,6 +79,13 @@ export class BookingsService {
       action: 'BOOKING',
       entity: 'booking',
       entityId: booking.id as string,
+    });
+
+    await this.eventBus.publish(organizationId, 'booking.created', {
+      bookingId: booking.id as string,
+      resourceId: input.resourceId,
+      contactId: input.contactId,
+      startAt: input.startAt,
     });
 
     return booking;
@@ -222,6 +231,12 @@ export class BookingsService {
       entity: 'booking',
       entityId: id,
       metadata: { status: 'cancelled' },
+    });
+
+    await this.eventBus.publish(organizationId, 'booking.cancelled', {
+      bookingId: id,
+      resourceId: updated.resourceId.toString(),
+      contactId: updated.contactId.toString(),
     });
 
     return updated;

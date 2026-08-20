@@ -11,6 +11,7 @@ import { PaymentDocument } from './schemas/payment.schema';
 import { RefundDocument } from './schemas/refund.schema';
 import { InvoicesService } from '../invoices/invoices.service';
 import { AuditService } from '../../audit/audit.service';
+import { EventBusService } from '../../core/events/event-bus.service';
 import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
@@ -22,6 +23,7 @@ export class PaymentsService {
     private readonly paymentsRepository: PaymentsRepository,
     private readonly invoicesService: InvoicesService,
     private readonly auditService: AuditService,
+    private readonly eventBus: EventBusService,
     @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
   ) {}
 
@@ -87,6 +89,14 @@ export class PaymentsService {
         status: result.status,
       },
     });
+
+    if (result.status === 'completed') {
+      await this.eventBus.publish(organizationId, 'payment.completed', {
+        paymentId: payment.id as string,
+        invoiceId: input.invoiceId,
+        amount: input.amount,
+      });
+    }
 
     return payment;
   }
