@@ -140,6 +140,29 @@ Le prix n'est pas figé dans le panier (contrairement aux lignes de commande) �
 ```
 Une exécution est enregistrée uniquement quand les `conditions` du workflow ont matché le payload de l'événement (sinon rien n'est journalisé). `status` est `"failed"` si au moins une action a échoué — les autres actions du même workflow s'exécutent quand même (pas d'interruption en cascade).
 
+**MessageTemplate**
+```
+{ organizationId, name, channel: "email"|"whatsapp"|"sms"|"internal", subject?, body, createdAt, updatedAt }
+```
+`body`/`subject` supportent des placeholders `{{contact.firstName}}` etc., interpolés à l'usage (envoi d'un message, action de workflow).
+
+**Conversation**
+```
+{ organizationId, contactId, channel: "email"|"whatsapp"|"sms"|"internal", subject?, status: "open"|"closed", lastMessageAt?, createdAt, updatedAt }
+```
+
+**Message**
+```
+{ organizationId, conversationId, direction: "inbound"|"outbound", to?, from?, subject?, body, status: "queued"|"sent"|"failed", providerReference?, createdAt }
+```
+Collection séparée de `conversations` (pas embarquée) — contrairement aux lignes de devis/facture/commande ou aux conditions/actions de workflow, une conversation peut accumuler un nombre non borné de messages, et ceux-ci doivent pouvoir être requêtés indépendamment.
+
+**Notification**
+```
+{ organizationId, userId, type, title, body?, link?, read, readAt?, createdAt }
+```
+Interne à l'organisation — jamais envoyée à un contact. Créée uniquement en interne (aujourd'hui, par l'action de workflow `internal_notification`, diffusée à tous les membres actifs via `MembershipsService`).
+
 **Audit log**
 ```
 { organizationId, userId, action, entity, entityId, metadata, createdAt }

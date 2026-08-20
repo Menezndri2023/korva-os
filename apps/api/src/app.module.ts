@@ -23,6 +23,7 @@ import { BookingModule } from './booking/booking.module';
 import { CommerceModule } from './commerce/commerce.module';
 import { EventsModule } from './core/events/events.module';
 import { WorkflowModule } from './workflow/workflow.module';
+import { CommunicationModule } from './communication/communication.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { WorkflowModule } from './workflow/workflow.module';
     FinanceModule,
     BookingModule,
     CommerceModule,
+    CommunicationModule,
     WorkflowModule,
   ],
   providers: [

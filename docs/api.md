@@ -191,7 +191,7 @@ GET    /workflows/:id/executions
 POST   /workflows/:id/test          (dry-run : évalue les conditions sur un payload donné, n'exécute aucune action)
 ```
 
-Un workflow associe un `trigger` (un des [événements système](#event-bus--événements-système)), une liste de `conditions` (AND, dot-path dans le payload de l'événement, opérateurs `equals`/`not_equals`/`greater_than`/`less_than`/`contains`) et une liste d'`actions` (`create_task`, `send_email`, `webhook`). Les publications d'événements (`EventBusService.publish`) ne font que pousser un job sur la queue Redis `events` — jamais de traitement synchrone avec la requête HTTP qui a déclenché l'événement. Voir [architecture.md](architecture.md) (Event Bus) et [ADR-005](architecture-decisions.md#adr-005--eventsprocessor-worker-bullmq-du-workflow-engine-colocalisé-dans-appsapi-pas-dans-appsworker).
+Un workflow associe un `trigger` (un des [événements système](#event-bus--événements-système)), une liste de `conditions` (AND, dot-path dans le payload de l'événement, opérateurs `equals`/`not_equals`/`greater_than`/`less_than`/`contains`) et une liste d'`actions` (`create_task`, `send_email`, `webhook`, `internal_notification` — diffuse une [Notification](#communication) à tous les membres actifs de l'organisation). Les publications d'événements (`EventBusService.publish`) ne font que pousser un job sur la queue Redis `events` — jamais de traitement synchrone avec la requête HTTP qui a déclenché l'événement. Voir [architecture.md](architecture.md) (Event Bus) et [ADR-005](architecture-decisions.md#adr-005--eventsprocessor-worker-bullmq-du-workflow-engine-colocalisé-dans-appsapi-pas-dans-appsworker).
 
 ### Event Bus — événements système
 
@@ -207,6 +207,33 @@ booking.created
 booking.cancelled
 ```
 `quote.expired` et `invoice.overdue` sont des déclencheurs valides côté validation mais ne sont pas encore émis (pas de scheduler/cron en Phase 7 — ces deux événements en dépendent).
+
+## Communication
+
+```
+GET    /message-templates
+POST   /message-templates
+GET    /message-templates/:id
+PATCH  /message-templates/:id
+DELETE /message-templates/:id
+
+GET    /conversations                        (?page, ?limit, ?contactId, ?status, ?channel)
+POST   /conversations
+GET    /conversations/:id
+PATCH  /conversations/:id                     (status: open|closed)
+GET    /conversations/:id/messages
+POST   /conversations/:id/messages            (envoie un message sortant réel via EmailProvider/MessagingProvider selon le canal)
+
+GET    /notifications                         (?page, ?limit, ?read) — notifications de l'utilisateur courant uniquement
+PATCH  /notifications/:id/read
+POST   /notifications/read-all
+```
+
+Une `Conversation` est rattachée à un `Contact` et à un canal (`email`, `whatsapp`, `sms`, `internal`). `POST /conversations/:id/messages` accepte soit un `body` libre, soit un `templateId` (le corps/objet du `MessageTemplate` est alors interpolé avec les champs du contact — `{{contact.firstName}}`, `{{contact.lastName}}`, `{{contact.email}}`, `{{contact.phone}}` — et complète tout `body` fourni). L'envoi appelle réellement `EmailProvider`/`MessagingProvider` (voir ci-dessous) et échoue avec `CONTACT_HAS_NO_EMAIL`/`CONTACT_HAS_NO_PHONE` si le contact n'a pas la coordonnée requise pour le canal choisi.
+
+`EmailProvider` (abstraction, voir [architecture.md](architecture.md)) : `ResendEmailProvider` (réel, via l'API REST Resend) si `RESEND_API_KEY` est configuré, sinon `LogEmailProvider` (par défaut — logue l'email au lieu de l'envoyer, comme `ManualPaymentProvider` en Finance). `MessagingProvider` (WhatsApp/SMS) n'a qu'une implémentation `LogMessagingProvider` au MVP — architecture-ready, pas d'intégration WhatsApp Business API réelle (voir section 8 du brief produit).
+
+Une `Notification` est interne à l'organisation (jamais envoyée à un contact) — `POST` n'est volontairement pas exposé publiquement ; elles sont créées uniquement en interne, aujourd'hui via l'action de workflow `internal_notification` (diffusion à tous les membres actifs de l'organisation).
 
 ## Analytics
 

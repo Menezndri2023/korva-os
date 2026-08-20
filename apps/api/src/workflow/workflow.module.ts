@@ -15,6 +15,7 @@ import { WorkflowEngineService } from './workflow-engine.service';
 import { EventsProcessor } from './events.processor';
 
 import { CrmModule } from '../crm/crm.module';
+import { CommunicationModule } from '../communication/communication.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { CrmModule } from '../crm/crm.module';
       { name: WorkflowExecution.name, schema: WorkflowExecutionSchema },
     ]),
     CrmModule,
+    CommunicationModule,
   ],
   controllers: [WorkflowsController],
   providers: [

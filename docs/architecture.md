@@ -29,7 +29,7 @@ Chaque module est isolé : sa propre couche controller → service → repositor
 - **COMMERCE** — carts, orders, fulfillments. Order Engine unifié (voir section 18 du brief produit) : Cart→Order, Booking→Order et création manuelle convergent tous vers la même entité `Order`, qui génère ensuite une `Invoice` en réutilisant le module Finance.
 - **FINANCE** — quotes, invoices, payments, refunds.
 - **WORKFLOW** — workflows, workflow_executions (trigger/condition/action).
-- **COMMUNICATION** — conversations, messages, templates, notifications.
+- **COMMUNICATION** — conversations, messages, templates, notifications. `EmailProvider`/`MessagingProvider` réellement branchés (voir section EventBus ci-dessous) ; `notifications` sont internes à l'organisation, diffusées via `NotificationsService.notifyOrganization()`.
 - **ANALYTICS** — agrégation de KPIs, endpoints `/analytics/*`.
 - **AI** — AI Gateway, orchestrator, agents, tools, memory, RAG.
 - **SUBSCRIPTIONS** — plans, subscriptions, EntitlementService, usage.
@@ -65,7 +65,7 @@ Chaque abstraction expose une interface stable ; le domaine métier n'appelle ja
 
 Toute action métier significative émet un événement (`customer.created`, `lead.created`, `quote.created`, `quote.accepted`, `order.created`, `payment.completed`, `booking.created`, `booking.cancelled`, ...) via `EventBusService.publish(organizationId, name, payload)` (`apps/api/src/core/events/`, module `@Global()`). `publish()` pousse uniquement un job sur une queue BullMQ/Redis (`events`) et ne fait jamais attendre la requête HTTP qui l'a émis — une erreur de publication est loguée mais n'échoue jamais l'opération métier.
 
-Le module **WORKFLOW** (`apps/api/src/workflow/`) est le premier consommateur de cette queue : `EventsProcessor` (un `Worker` BullMQ) reçoit chaque événement, `WorkflowEngineService` retrouve les workflows actifs déclenchés par ce nom d'événement, évalue leurs `conditions` (AND, dot-path dans le payload) puis exécute leurs `actions` (`create_task`, `send_email` — stub en attendant l'`EmailProvider` de la Phase 8, `webhook`), et journalise le résultat dans `workflow_executions`.
+Le module **WORKFLOW** (`apps/api/src/workflow/`) est le premier consommateur de cette queue : `EventsProcessor` (un `Worker` BullMQ) reçoit chaque événement, `WorkflowEngineService` retrouve les workflows actifs déclenchés par ce nom d'événement, évalue leurs `conditions` (AND, dot-path dans le payload) puis exécute leurs `actions` (`create_task`, `send_email` — réel via `EmailProvider` depuis la Phase 8, `webhook`, `internal_notification` — diffuse une Notification à toute l'organisation via `CommunicationModule`), et journalise le résultat dans `workflow_executions`.
 
 **Note d'architecture** : ce `Worker` tourne aujourd'hui *dans le processus `apps/api`* plutôt que dans `apps/worker`, pour réutiliser directement les services Nest existants (ex. `TasksService`) sans dupliquer de modules métier entre les deux process. Voir [ADR-005](architecture-decisions.md#adr-005--eventsprocessor-worker-bullmq-du-workflow-engine-colocalisé-dans-appsapi-pas-dans-appsworker) pour le compromis et le chemin de migration vers `apps/worker`. Les autres traitements longs (emails, PDF, IA) suivront le placement `apps/worker` par défaut.
 

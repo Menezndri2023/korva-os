@@ -35,6 +35,12 @@ export class MembershipsService {
     return this.membershipsRepository.findAllForOrganization(organizationId);
   }
 
+  listActiveUserIdsForOrganization(organizationId: string): Promise<string[]> {
+    return this.membershipsRepository.findActiveUserIdsForOrganization(
+      organizationId,
+    );
+  }
+
   /**
    * The single source of truth for tenant isolation: resolves whether `userId` genuinely
    * belongs to `organizationId`, and if so builds the TenantContext from their real role.

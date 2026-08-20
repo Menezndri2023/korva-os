@@ -7,3 +7,4 @@ export * from "./finance.ts";
 export * from "./booking.ts";
 export * from "./commerce.ts";
 export * from "./workflow.ts";
+export * from "./communication.ts";

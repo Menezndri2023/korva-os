@@ -47,4 +47,18 @@ export class MembershipsRepository {
       .populate('roleId', 'name systemKey')
       .exec();
   }
+
+  /** Unpopulated, unlike findAllForOrganization — callers only need the raw active member ids (e.g. broadcasting a Notification). */
+  async findActiveUserIdsForOrganization(
+    organizationId: string,
+  ): Promise<string[]> {
+    const memberships = await this.membershipModel
+      .find({
+        organizationId: new Types.ObjectId(organizationId),
+        status: 'active',
+      })
+      .select('userId')
+      .exec();
+    return memberships.map((membership) => membership.userId.toString());
+  }
 }

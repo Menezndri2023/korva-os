@@ -19,11 +19,19 @@ const sendEmailConfigSchema = z.object({
 const webhookConfigSchema = z.object({
   url: z.string().url(),
 });
+const internalNotificationConfigSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().max(2000).optional(),
+});
 
 export const workflowActionInputSchema = z.union([
   z.object({ type: z.literal("create_task"), config: createTaskConfigSchema }),
   z.object({ type: z.literal("send_email"), config: sendEmailConfigSchema }),
   z.object({ type: z.literal("webhook"), config: webhookConfigSchema }),
+  z.object({
+    type: z.literal("internal_notification"),
+    config: internalNotificationConfigSchema,
+  }),
 ]);
 
 export const createWorkflowSchema = z.object({

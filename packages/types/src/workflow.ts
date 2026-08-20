@@ -35,7 +35,12 @@ export interface WorkflowCondition {
   value: string | number | boolean;
 }
 
-export const WORKFLOW_ACTION_TYPES = ["create_task", "send_email", "webhook"] as const;
+export const WORKFLOW_ACTION_TYPES = [
+  "create_task",
+  "send_email",
+  "webhook",
+  "internal_notification",
+] as const;
 export type WorkflowActionType = (typeof WORKFLOW_ACTION_TYPES)[number];
 
 export interface CreateTaskActionConfig {
@@ -50,11 +55,17 @@ export interface SendEmailActionConfig {
 export interface WebhookActionConfig {
   url: string;
 }
+/** Broadcasts a Notification to every active member of the organization (see Communication module). */
+export interface InternalNotificationActionConfig {
+  title: string;
+  body?: string;
+}
 
 export type WorkflowAction =
   | { type: "create_task"; config: CreateTaskActionConfig }
   | { type: "send_email"; config: SendEmailActionConfig }
-  | { type: "webhook"; config: WebhookActionConfig };
+  | { type: "webhook"; config: WebhookActionConfig }
+  | { type: "internal_notification"; config: InternalNotificationActionConfig };
 
 export interface Workflow {
   id: string;

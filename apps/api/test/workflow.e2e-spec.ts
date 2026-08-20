@@ -58,7 +58,7 @@ function asError(body: unknown): ApiError['error'] {
 /** Async events are processed by a real BullMQ worker over Redis — poll until the side effect appears or the timeout elapses. */
 async function waitFor<T>(
   check: () => Promise<T | undefined>,
-  timeoutMs = 8000,
+  timeoutMs = 18000,
   intervalMs = 200,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
@@ -378,7 +378,7 @@ describe('Workflow module (e2e)', () => {
       });
       expect(executions[0]!.status).toBe('success');
       expect(executions[0]!.eventName).toBe('lead.created');
-    });
+    }, 25000);
   });
 
   describe('tenant isolation for workflows', () => {

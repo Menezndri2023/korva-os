@@ -32,6 +32,7 @@ const ACTION_TYPE_LABELS: Record<WorkflowActionType, string> = {
   create_task: "Créer une tâche",
   send_email: "Envoyer un e-mail",
   webhook: "Appeler un webhook",
+  internal_notification: "Notifier l'équipe",
 };
 
 interface ConditionFormValue {
@@ -76,6 +77,11 @@ function buildActionPayload(action: ActionFormValue) {
       };
     case "webhook":
       return { type: "webhook" as const, config: { url: action.url } };
+    case "internal_notification":
+      return {
+        type: "internal_notification" as const,
+        config: { title: action.title, body: action.body || undefined },
+      };
   }
 }
 
@@ -392,6 +398,20 @@ function ActionRow({
           className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
           {...register(`actions.${index}.url`, { required: true })}
         />
+      )}
+      {type === "internal_notification" && (
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            placeholder="Titre (ex: Nouveau lead {{leadId}})"
+            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+            {...register(`actions.${index}.title`, { required: true })}
+          />
+          <input
+            placeholder="Message (optionnel)"
+            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+            {...register(`actions.${index}.body`)}
+          />
+        </div>
       )}
     </div>
   );
