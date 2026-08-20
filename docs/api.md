@@ -300,7 +300,7 @@ Chaque webhook est signé (vérification de signature obligatoire côté récept
 
 ## API keys
 
-`api_keys` supporte des clés `test` et `live`. Seul le hash du secret est stocké — jamais le secret en clair (voir [../docs/security.md](security.md), créé en Phase 12 / Hardening).
+**Non implémenté au MVP** — voir [security.md](security.md) pour le détail de cette lacune assumée. L'authentification programmatique se fait aujourd'hui uniquement par JWT (comme un utilisateur humain).
 
 ## Health
 

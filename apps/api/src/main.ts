@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -9,7 +10,18 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   app.use(helmet());
-  app.enableCors({ origin: true, credentials: true });
+  app.use(compression());
+
+  // Reflecting any Origin with credentials:true would let any site make authenticated
+  // requests on a logged-in user's behalf — always resolve to an explicit allowlist.
+  const corsOrigins = (
+    configService.get<string>('CORS_ORIGINS') ?? 'http://localhost:3000'
+  )
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({ origin: corsOrigins, credentials: true });
+
   app.setGlobalPrefix('api/v1');
 
   if (configService.get<string>('NODE_ENV') !== 'production') {

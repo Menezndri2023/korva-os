@@ -80,4 +80,4 @@ Endpoints `/health`, `/health/database`, `/health/redis`. Logs structurés parto
 
 ## Documents liés
 
-[database.md](database.md) · [multi-tenancy.md](multi-tenancy.md) · [api.md](api.md) · [ai.md](ai.md) · [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+[database.md](database.md) · [multi-tenancy.md](multi-tenancy.md) · [api.md](api.md) · [ai.md](ai.md) · [security.md](security.md) · [deployment.md](deployment.md) · [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
