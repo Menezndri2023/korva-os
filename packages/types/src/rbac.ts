@@ -36,6 +36,7 @@ export const CORE_PERMISSIONS = [
   "payments.refund",
   "bookings.read",
   "bookings.create",
+  "bookings.update",
   "bookings.cancel",
   "settings.manage",
   "ai.use",
@@ -69,6 +70,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "payments.create",
     "bookings.read",
     "bookings.create",
+    "bookings.update",
     "bookings.cancel",
     "ai.use",
   ],
@@ -86,6 +88,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "invoices.read",
     "bookings.read",
     "bookings.create",
+    "bookings.update",
     "ai.use",
   ],
   FINANCE: [

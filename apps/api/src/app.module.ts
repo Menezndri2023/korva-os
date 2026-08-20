@@ -19,6 +19,7 @@ import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { CrmModule } from './crm/crm.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { FinanceModule } from './finance/finance.module';
+import { BookingModule } from './booking/booking.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { FinanceModule } from './finance/finance.module';
     CrmModule,
     CatalogModule,
     FinanceModule,
+    BookingModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

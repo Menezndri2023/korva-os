@@ -78,10 +78,17 @@ orders:     { organizationId: 1, status: 1, createdAt: -1 }
 { organizationId, type, name, description, images, categories, pricing: { amount, currency, taxRate }, sku, variants: [{ name, sku, priceOverride }], status, customFields }
 ```
 
+**Resource**
+```
+{ organizationId, name, type, capacity, description, active, weeklyAvailability: [{ dayOfWeek, startTime, endTime }], blockedSlots: [{ startAt, endAt, reason }] }
+```
+`type` est libre (personne, véhicule, salle, équipement, ...) — jamais un enum fermé propre à un secteur.
+
 **Booking**
 ```
-{ organizationId, resourceId, offerId, customerId, startAt, endAt, status, pricing, paymentStatus }
+{ organizationId, resourceId, offerId, contactId, startAt, endAt, status, pricing: { amount, currency }, paymentStatus, notes }
 ```
+`contactId` (et non `customerId`) pour rester cohérent avec CRM/Finance qui référencent tous la même collection `contacts`.
 
 **Quote**
 ```

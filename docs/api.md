@@ -107,12 +107,24 @@ DELETE /offers/:id
 ## Booking
 
 ```
-GET  /availability
+GET    /resources                          (?active=true)
+POST   /resources
+GET    /resources/:id
+PATCH  /resources/:id
+POST   /resources/:id/blocked-slots
+DELETE /resources/:id/blocked-slots/:slotId
+
+GET  /availability?resourceId=&date=       (vue jour : horaires, réservations, créneaux bloqués)
+
+GET  /bookings                             (?page, ?limit, ?resourceId, ?status, ?contactId, ?from, ?to)
 POST /bookings
 GET  /bookings/:id
-PATCH /bookings/:id
+PATCH /bookings/:id                        (notes uniquement)
+POST /bookings/:id/reschedule
 POST /bookings/:id/cancel
 ```
+
+La disponibilité (horaires hebdomadaires, créneaux bloqués, capacité, chevauchement avec les réservations actives) est vérifiée côté serveur à la création et à la reprogrammation — jamais fait confiance au client.
 
 ## Commerce
 

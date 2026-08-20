@@ -1,6 +1,6 @@
 # KORVA OS — Implementation Plan
 
-Statut : PHASE 1 (Foundation), PHASE 2 (CRM), PHASE 3 (Catalog) et PHASE 4 (Finance) terminées et validées — voir sections 9-13. PHASE 5 (Booking) non démarrée.
+Statut : PHASE 1 (Foundation), PHASE 2 (CRM), PHASE 3 (Catalog), PHASE 4 (Finance) et PHASE 5 (Booking) terminées et validées — voir sections 9-14. PHASE 6 (Commerce) non démarrée.
 Dernière mise à jour : 2026-08-20
 
 ## 1. Résumé du produit
@@ -207,6 +207,22 @@ Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le mo
 
 Non fait volontairement en Phase 4 (hors scope, arrive avec les modules concernés) : génération de PDF pour devis/factures (Phase Workflow/Communication), envoi automatique par email (Phase 8), intégration réelle d'un fournisseur de paiement en ligne (l'abstraction est prête, aucune clé API configurée), relances automatiques sur factures en retard (Phase 7 Workflow).
 
-## 13. Prochaine étape
+## 13. Statut PHASE 5 (Booking) — terminée
 
-Démarrer PHASE 5 (Booking) : resources, availability, bookings — en réutilisant Contacts (client de la réservation), Offers (type `booking`), et potentiellement Quotes/Invoices pour la facturation d'une réservation.
+Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le monorepo, plus vérification manuelle via curl : horaires hebdomadaires, chevauchement, capacité multiple, créneaux bloqués, reprogrammation, annulation) :
+
+- **Resources** génériques (`type` libre — personne, véhicule, salle, équipement... jamais un enum fermé propre à un secteur), avec horaires hebdomadaires récurrents (`weeklyAvailability`) et créneaux bloqués ponctuels (`blockedSlots`, ajout/suppression individuels).
+- **AvailabilityService** : moteur central de vérification — resource active, dans les horaires hebdomadaires, hors créneaux bloqués, sous la capacité (réservations actives qui se chevauchent comptées et comparées à `capacity`). Un seul point de vérité utilisé à la fois par la création et la reprogrammation d'une réservation.
+- **`GET /availability`** : vue jour pour une ressource (horaires du jour, réservations existantes, créneaux bloqués) — pensée pour alimenter un calendrier côté frontend.
+- **Bookings** : création (prix copié depuis l'offre au moment de la réservation, comme un instantané), reprogrammation (re-vérifie la disponibilité en excluant la réservation elle-même), annulation (idempotence refusée — une réservation déjà annulée ne peut pas l'être une seconde fois).
+- **RBAC** : permission manquante du brief ajoutée (`bookings.update`, nécessaire pour la reprogrammation) et distribuée aux rôles système. Les ressources sont gérées sous `settings.manage` (tâche de configuration), leur lecture sous `bookings.read`.
+- **Frontend** : `/dashboard/bookings` (réservations — création avec sélection ressource/offre/client/date/heure, aperçu de la disponibilité du jour, annulation) et `/dashboard/bookings/resources` (ressources — création avec constructeur d'horaires hebdomadaires).
+- **Tests** : `apps/api/test/booking.e2e-spec.ts` — horaires respectés/rejetés, chevauchement rejeté puis autorisé après annulation, capacité multiple, créneaux bloqués, reprogrammation, isolation tenant. 53/53 tests e2e stables sur 3 exécutions consécutives.
+
+**Limitation connue documentée** (ADR-004) : la disponibilité est calculée en UTC brut, pas dans le fuseau horaire de l'organisation (`Organization.timezone` existe mais n'est pas encore utilisé pour cette conversion) — acceptable pour valider le moteur de réservation lui-même en MVP, à corriger avant un usage production réel avec des organisations hors UTC.
+
+Non fait volontairement en Phase 5 (hors scope, arrive avec les modules concernés) : conversion de fuseau horaire (voir ADR-004), acompte/paiement de réservation intégré à Finance (le champ `paymentStatus` existe mais n'est pas encore relié à un vrai paiement — arrivera avec l'Order Engine unifié de la Phase 6), notifications de confirmation/rappel (Phase 8 Communication), vue calendrier visuelle riche côté frontend (l'aperçu du jour actuel est fonctionnel mais minimal).
+
+## 14. Prochaine étape
+
+Démarrer PHASE 6 (Commerce) : cart, checkout, orders — en construisant l'Order Engine partagé qui unifiera aussi les Bookings de la Phase 5 (Product/Booking/Service → Order → Payment → Invoice, voir section 18 du brief produit).

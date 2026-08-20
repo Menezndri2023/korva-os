@@ -39,3 +39,13 @@ Journal des décisions techniques importantes, au fil de l'implémentation (voir
 **Deuxième cause trouvée en Phase 3** (`maxWorkers: 1` seul ne suffisait pas — un run à 4 fichiers e2e restait occasionnellement flaky avec `Parse Error: Expected HTTP/...` ou des 400 inattendus, alors que chaque fichier passait systématiquement en isolation) : chaque fichier crée sa propre `NestApplication` (donc son propre `http.Server` éphémère), mais tous tournent dans le **même processus Node** (un seul worker Jest). Le `http.globalAgent` de Node garde ses sockets en keep-alive par défaut — une socket ouverte pour le serveur éphémère d'un fichier pouvait être réutilisée par `supertest` pour une requête vers le serveur (différent) du fichier suivant après `app.close()`, produisant une réponse illisible/mal formée. Fix : `apps/api/test/env.setup.ts` force `globalAgent.keepAlive = false`, obligeant chaque requête à ouvrir une socket fraîche.
 
 **Conséquence** : la suite e2e est plus lente (séquentielle, pas de keep-alive) mais fiable — 4 exécutions complètes consécutives à 30/30 tests stables, contre des échecs aléatoires et à symptômes différents à chaque fois auparavant. Si la suite grossit significativement, envisager soit une base de données dédiée par fichier de test (nom suffixé par le worker id), soit `mongodb-memory-server` pour une isolation complète par test.
+
+## ADR-004 — Disponibilité des ressources calculée en UTC, pas dans le fuseau de l'organisation
+
+**Contexte** : `Organization.timezone` existe (Phase 1), et un créneau de réservation "9h-18h le lundi" a un sens différent selon qu'on l'interprète dans le fuseau de l'organisation ou en UTC brut.
+
+**Décision (Phase 5, MVP)** : `AvailabilityService` compare `dayOfWeek`/heures directement sur les composantes UTC des `Date` JavaScript stockées, sans conversion vers `Organization.timezone`. Une organisation dont le fuseau n'est pas UTC verra donc ses horaires hebdomadaires décalés par rapport à l'heure locale affichée dans l'UI si celle-ci ne compense pas elle-même.
+
+**Pourquoi accepté pour le MVP** : implémenter une conversion de fuseau horaire correcte (DST inclus) est un chantier à part entière (bibliothèque type `date-fns-tz`/`luxon`, tests dédiés) sans valeur ajoutée immédiate pour valider le moteur de réservation lui-même (fenêtres, blocages, capacité, chevauchement — tous corrects indépendamment du fuseau).
+
+**À corriger avant un usage production réel** : convertir `weeklyAvailability`/`blockedSlots`/`startAt`/`endAt` via le fuseau de l'organisation avant comparaison, dans `AvailabilityService` uniquement (le stockage MongoDB en UTC natif ne change pas).
