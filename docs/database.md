@@ -120,9 +120,9 @@ Le prix n'est pas figé dans le panier (contrairement aux lignes de commande) �
 
 **Order** (Order Engine unifié — voir `docs/architecture.md`)
 ```
-{ organizationId, contactId, number, status, source: "cart"|"booking"|"manual", bookingId?, invoiceId?, items: [...], currency, subtotal, taxTotal, total, notes }
+{ organizationId, contactId, number, status, source: "cart"|"booking"|"manual"|"storefront", bookingId?, invoiceId?, items: [...], currency, subtotal, taxTotal, total, notes }
 ```
-`items` réutilise le même schéma `LineItem` que Quote/Invoice (`apps/api/src/shared/line-item.schema.ts`), partagé entre Finance et Commerce.
+`items` réutilise le même schéma `LineItem` que Quote/Invoice (`apps/api/src/shared/line-item.schema.ts`), partagé entre Finance et Commerce. `source: "storefront"` (Phase 11) identifie une commande créée par un visiteur anonyme via l'API publique — mêmes lignes recalculées côté serveur que les autres sources, sans utilisateur authentifié à auditer (`OrdersService.createFromStorefront`).
 
 **Fulfillment**
 ```

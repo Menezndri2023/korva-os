@@ -271,14 +271,18 @@ Chaque organisation reçoit un abonnement `"free"` automatiquement à sa créati
 
 ## API publique (storefront)
 
-Base séparée, ne devant jamais exposer de données internes de l'organisation (uniquement ce qui est publiable : catalogue, disponibilités, création de réservation/commande).
+Base séparée (`@Public()`, aucune authentification), ne devant jamais exposer de données internes de l'organisation (uniquement ce qui est publiable : catalogue, disponibilités, création de réservation/commande). `organizationId` n'est jamais résolu via un `TenantContext` ici — il est dérivé du slug dans l'URL, revalidé à chaque appel (voir [multi-tenancy.md](multi-tenancy.md)).
 
 ```
-GET  /public/:organizationSlug/offers
-GET  /public/:organizationSlug/availability
-POST /public/:organizationSlug/bookings
-POST /public/:organizationSlug/orders
+GET  /public/:organizationSlug                          (nom, devise, langue, logo, modules activés)
+GET  /public/:organizationSlug/offers                    (?type) — offres actives uniquement
+GET  /public/:organizationSlug/resources                 — ressources actives (pour construire un sélecteur de réservation)
+GET  /public/:organizationSlug/availability?resourceId=&date=
+POST /public/:organizationSlug/bookings                  { resourceId, offerId, startAt, endAt, notes?, contact: { email, firstName?, lastName?, phone? } }
+POST /public/:organizationSlug/orders                    { items: [{ offerId, quantity }], currency, notes?, contact }
 ```
+
+Chaque route commence par résoudre l'organisation via son slug puis vérifie que le module concerné (`catalog`/`booking`/`commerce`) est dans `enabledModules` — sinon `404 MODULE_NOT_AVAILABLE` (jamais `403`, pour ne pas laisser deviner qu'un module existe mais est désactivé). `contact` identifie ou crée un `Contact` par email (`ContactsService.findOrCreateByEmail`) — pas de compte utilisateur, pas de session, pas de panier multi-étapes au MVP (`POST /orders` est un "achat immédiat", pas un ajout progressif à un panier serveur — le panier vit côté client jusqu'à la commande). Le prix n'est **jamais** accepté depuis le client : chaque `offerId` est re-résolu côté serveur (`OffersService.getById`) pour construire les lignes de la commande.
 
 ## Webhooks (sortants)
 

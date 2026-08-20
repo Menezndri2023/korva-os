@@ -72,7 +72,7 @@ Le module **WORKFLOW** (`apps/api/src/workflow/`) est le premier consommateur de
 ## Frontend
 
 - `apps/web` : dashboard SaaS, App Router, sidebar dynamique n'affichant que les modules activés par l'organisation.
-- `apps/storefront` : site public par organisation (`company.korva.app`, puis domaines custom), alimenté uniquement par l'API publique (jamais d'accès direct aux données internes).
+- `apps/storefront` : site public par organisation, alimenté uniquement par l'API publique (jamais d'accès direct aux données internes). Routage MVP par chemin (`/:organizationSlug`, voir Phase 11) — routage par sous-domaine (`company.korva.app`) puis domaines personnalisés restent architecture-ready mais non implémentés (aucun middleware de résolution d'hôte).
 
 ## Observabilité
 

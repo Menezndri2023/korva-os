@@ -32,7 +32,7 @@ export class BookingsService {
 
   async create(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     input: CreateBookingInput,
   ): Promise<BookingDocument> {
     const contactExists = await this.contactsService.existsById(

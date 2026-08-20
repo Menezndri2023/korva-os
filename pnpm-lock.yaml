@@ -162,12 +162,21 @@ importers:
 
   apps/storefront:
     dependencies:
+      '@hookform/resolvers':
+        specifier: ^3.9.1
+        version: 3.10.0(react-hook-form@7.85.0(react@19.2.8))
       '@korva/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@korva/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@korva/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
+      '@tanstack/react-query':
+        specifier: ^5.59.20
+        version: 5.101.4(react@19.2.8)
       next:
         specifier: 16.3.1
         version: 16.3.1(@babel/core@7.29.7(supports-color@8.1.1))(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -177,6 +186,12 @@ importers:
       react-dom:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
+      react-hook-form:
+        specifier: ^7.53.2
+        version: 7.85.0(react@19.2.8)
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4

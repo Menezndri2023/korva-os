@@ -23,7 +23,7 @@ export class ContactsService {
 
   async create(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     input: CreateContactInput,
   ): Promise<ContactDocument> {
     const customFields = await this.customFieldsService.validateValues(
@@ -72,6 +72,32 @@ export class ContactsService {
 
   existsById(organizationId: string, id: string): Promise<boolean> {
     return this.contactsRepository.existsById(organizationId, id);
+  }
+
+  /** Used by the public storefront API: matches an existing contact by email within the organization, or creates one. */
+  async findOrCreateByEmail(
+    organizationId: string,
+    input: {
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+    },
+  ): Promise<ContactDocument> {
+    const existing = await this.contactsRepository.findByEmail(
+      organizationId,
+      input.email,
+    );
+    if (existing) return existing;
+
+    return this.create(organizationId, undefined, {
+      type: 'person',
+      firstName: input.firstName,
+      lastName: input.lastName,
+      email: input.email,
+      phone: input.phone,
+      tags: [],
+    });
   }
 
   async list(

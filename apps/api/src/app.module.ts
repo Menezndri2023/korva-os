@@ -26,6 +26,7 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { CommunicationModule } from './communication/communication.module';
 import { AiModule } from './ai/ai.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { PublicModule } from './public/public.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     CommunicationModule,
     WorkflowModule,
     AiModule,
+    PublicModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

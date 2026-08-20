@@ -39,6 +39,15 @@ export class ContactsRepository {
       .exec();
   }
 
+  findByEmail(
+    organizationId: string,
+    email: string,
+  ): Promise<ContactDocument | null> {
+    return this.contactModel
+      .findOne({ organizationId: new Types.ObjectId(organizationId), email })
+      .exec();
+  }
+
   existsById(organizationId: string, id: string): Promise<boolean> {
     if (!Types.ObjectId.isValid(id)) return Promise.resolve(false);
     return this.contactModel

@@ -154,9 +154,28 @@ export class OrdersService {
     return order;
   }
 
+  /** Called by the public storefront API only — no authenticated user, so no userId to audit. */
+  createFromStorefront(
+    organizationId: string,
+    input: {
+      contactId: string;
+      items: LineItemInput[];
+      currency: string;
+      notes?: string;
+    },
+  ): Promise<OrderDocument> {
+    return this.createOrderRecord(organizationId, undefined, {
+      contactId: input.contactId,
+      items: input.items,
+      currency: input.currency,
+      notes: input.notes,
+      source: 'storefront',
+    });
+  }
+
   private async createOrderRecord(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     input: {
       contactId: string;
       items: LineItemInput[];

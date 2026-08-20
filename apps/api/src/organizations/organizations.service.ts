@@ -92,6 +92,17 @@ export class OrganizationsService {
     return organization;
   }
 
+  async getBySlug(slug: string): Promise<OrganizationDocument> {
+    const organization = await this.organizationsRepository.findBySlug(slug);
+    if (!organization) {
+      throw new NotFoundException({
+        code: 'ORGANIZATION_NOT_FOUND',
+        message: 'Organization not found',
+      });
+    }
+    return organization;
+  }
+
   async getById(id: string): Promise<OrganizationDocument> {
     const organization = await this.organizationsRepository.findById(id);
     if (!organization) {

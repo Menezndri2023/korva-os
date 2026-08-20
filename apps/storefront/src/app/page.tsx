@@ -5,9 +5,11 @@ export default function Home() {
         KORVA OS — Storefront
       </h1>
       <p className="max-w-md text-sm text-zinc-600 dark:text-zinc-400">
-        Application publique par organisation. Le contenu (catalogue,
-        réservation, checkout) sera construit en Phase 11 à partir de l&apos;API
-        publique.
+        Chaque organisation a sa propre boutique publique, accessible sur{" "}
+        <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-900">
+          /votre-organisation
+        </code>{" "}
+        (domaines personnalisés à venir).
       </p>
     </div>
   );
