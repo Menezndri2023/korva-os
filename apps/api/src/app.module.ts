@@ -18,6 +18,7 @@ import { HealthModule } from './health/health.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { CrmModule } from './crm/crm.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { FinanceModule } from './finance/finance.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { CatalogModule } from './catalog/catalog.module';
     CustomFieldsModule,
     CrmModule,
     CatalogModule,
+    FinanceModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

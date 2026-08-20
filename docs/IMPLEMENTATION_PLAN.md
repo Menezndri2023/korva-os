@@ -1,6 +1,6 @@
 # KORVA OS — Implementation Plan
 
-Statut : PHASE 1 (Foundation), PHASE 2 (CRM) et PHASE 3 (Catalog) terminées et validées — voir sections 9-12. PHASE 4 (Finance) non démarrée.
+Statut : PHASE 1 (Foundation), PHASE 2 (CRM), PHASE 3 (Catalog) et PHASE 4 (Finance) terminées et validées — voir sections 9-13. PHASE 5 (Booking) non démarrée.
 Dernière mise à jour : 2026-08-20
 
 ## 1. Résumé du produit
@@ -191,6 +191,22 @@ Un deuxième bug de fiabilité des tests e2e a été trouvé et corrigé pendant
 
 Non fait volontairement en Phase 3 (hors scope, arrive avec les modules concernés) : upload réel d'images (StorageProvider arrive en Phase "Files"), taxonomie de catégories structurée (actuellement des tags libres, cohérent avec le choix fait pour les tags CRM), gestion de stock/inventaire (Commerce, Phase 6).
 
-## 12. Prochaine étape
+## 12. Statut PHASE 4 (Finance) — terminée
 
-Démarrer PHASE 4 (Finance) : quotes, invoices, abstraction PaymentProvider — en réutilisant Contacts (client du devis/facture) et Offers (lignes de devis/facture) déjà en place.
+Livré et validé (typecheck + lint + build + tests unitaires/e2e sur tout le monorepo, plus vérification manuelle via curl du cycle complet devis → facture → paiement partiel/total → remboursement partiel/total) :
+
+- **Quotes** : cycle de vie complet `draft → sent → accepted/rejected`, numérotation séquentielle atomique par organisation (`DEV-0001`), lignes éditables uniquement en `draft`, conversion en facture (`accepted → Invoice`).
+- **Invoices** : `draft → issued → partially_paid/paid`, numérotation séquentielle (`FAC-0001`), `amountPaid`/statut recalculés automatiquement à chaque paiement ou remboursement, `cancel`.
+- **Totaux toujours recalculés côté serveur** à partir des lignes (`subtotal`/`taxTotal`/`total`) — jamais acceptés depuis le client, testé explicitement en e2e.
+- **Payments/Refunds** : paiements partiels et multiples supportés, refus si le montant dépasse le solde restant ; remboursements partiels et multiples supportés, refus si le montant dépasse le solde remboursable.
+- **Abstraction `PaymentProvider`** (`createPayment`/`verifyPayment`/`getPaymentStatus`/`refundPayment`) — le domaine métier ne connaît jamais un fournisseur concret. Provider par défaut du MVP : `ManualPaymentProvider` (encaissement enregistré manuellement — espèces, virement), injecté via le token `PAYMENT_PROVIDER`. Stripe/CinetPay/Paystack/Flutterwave pourront être ajoutés plus tard en implémentant la même interface, sans toucher aux services métier.
+- **`CountersService`** générique (`apps/api/src/core/counters/`) : génération atomique de numéros séquentiels par organisation, réutilisable pour les futures commandes (Phase 6).
+- **RBAC** : permissions manquantes du brief ajoutées (`quotes.read`, `quotes.update`, `invoices.update`, `payments.create`) et distribuées aux rôles système.
+- **Frontend** : `/dashboard/finance` (devis — création multi-lignes, envoi, acceptation, conversion) et `/dashboard/finance/invoices` (factures — émission, encaissement).
+- **Tests** : `apps/api/test/finance.e2e-spec.ts` — recalcul serveur des totaux, transitions de statut valides/invalides, paiements/remboursements partiels et dépassement de solde, isolation tenant. 42/42 tests e2e stables sur 3 exécutions consécutives.
+
+Non fait volontairement en Phase 4 (hors scope, arrive avec les modules concernés) : génération de PDF pour devis/factures (Phase Workflow/Communication), envoi automatique par email (Phase 8), intégration réelle d'un fournisseur de paiement en ligne (l'abstraction est prête, aucune clé API configurée), relances automatiques sur factures en retard (Phase 7 Workflow).
+
+## 13. Prochaine étape
+
+Démarrer PHASE 5 (Booking) : resources, availability, bookings — en réutilisant Contacts (client de la réservation), Offers (type `booking`), et potentiellement Quotes/Invoices pour la facturation d'une réservation.

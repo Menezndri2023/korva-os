@@ -22,8 +22,7 @@ Toute collection contenant des données métier d'une organisation possède un c
 - **ORGANIZATIONS** — `organizations`
 - **CRM** — `contacts`, `leads`, `pipelines` (stages embedded as a subdocument array, not a separate collection), `activities`, `tasks`, `notes`, `tags`
 - **CATALOG** — `offers` (variants embedded as a subdocument array, pas de collection séparée)
-- **CORE** — `custom_fields` (générique, réutilisé par plusieurs modules — voir section Custom fields ci-dessous)
-- **CATALOG** — `offers`
+- **CORE** — `custom_fields` (générique, réutilisé par plusieurs modules — voir section Custom fields ci-dessous), `counters` (générateur atomique de numéros séquentiels par organisation — devis, factures, et plus tard commandes)
 - **BOOKING** — `resources`, `bookings` (+ disponibilité calculée)
 - **COMMERCE** — `carts`, `cart_items`, `orders`, `order_items`, `fulfillments`, `shipments`
 - **FINANCE** — `quotes`, `invoices`, `payments`, `refunds`
@@ -82,6 +81,27 @@ orders:     { organizationId: 1, status: 1, createdAt: -1 }
 **Booking**
 ```
 { organizationId, resourceId, offerId, customerId, startAt, endAt, status, pricing, paymentStatus }
+```
+
+**Quote**
+```
+{ organizationId, contactId, number, status, items: [{ offerId?, description, quantity, unitPrice, taxRate }], currency, subtotal, taxTotal, total, validUntil, notes }
+```
+`subtotal`/`taxTotal`/`total` sont toujours recalculés côté serveur à partir de `items` — jamais acceptés depuis le client.
+
+**Invoice**
+```
+{ organizationId, contactId, quoteId?, number, status, items: [...], currency, subtotal, taxTotal, total, amountPaid, dueDate, issuedAt, notes }
+```
+
+**Payment**
+```
+{ organizationId, invoiceId, amount, currency, status, provider, providerReference, method, createdAt }
+```
+
+**Refund**
+```
+{ organizationId, paymentId, amount, reason, createdAt }
 ```
 
 **Audit log**

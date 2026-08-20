@@ -127,12 +127,28 @@ GET  /orders/:id
 ## Finance
 
 ```
-GET  /quotes
+GET  /quotes                       (?page, ?limit, ?status, ?contactId)
 POST /quotes
-GET  /invoices
+GET  /quotes/:id
+PATCH /quotes/:id                  (draft only)
+POST /quotes/:id/send              (draft -> sent)
+POST /quotes/:id/accept            (sent|viewed -> accepted)
+POST /quotes/:id/reject            (sent|viewed -> rejected)
+POST /quotes/:id/convert-to-invoice (accepted -> creates an Invoice)
+
+GET  /invoices                     (?page, ?limit, ?status, ?contactId)
 POST /invoices
-POST /payments
+GET  /invoices/:id
+PATCH /invoices/:id                (draft only)
+POST /invoices/:id/issue           (draft -> issued)
+POST /invoices/:id/cancel
+
+GET  /payments                     (?invoiceId)
+POST /payments                     (records a payment against an invoice)
+POST /payments/refunds             (partial or full refund of a payment)
 ```
+
+Les totaux (`subtotal`/`taxTotal`/`total`) sont toujours recalculés côté serveur à partir des lignes — jamais acceptés depuis le client. Les paiements passent par l'abstraction `PaymentProvider` (voir [architecture.md](architecture.md)) ; le provider par défaut du MVP (`manual`) représente un encaissement enregistré manuellement (espèces, virement).
 
 ## Workflow
 
