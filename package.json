@@ -9,7 +9,6 @@
   "scripts": {
     "dev:web": "pnpm --filter @korva/web dev",
     "dev:api": "pnpm --filter @korva/api start:dev",
-    "dev:worker": "pnpm --filter @korva/worker dev",
     "dev:storefront": "pnpm --filter @korva/storefront dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",

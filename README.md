@@ -17,7 +17,6 @@ korva-os/
 ├── apps/
 │   ├── web/          # Dashboard SaaS (Next.js)
 │   ├── api/           # Backend NestJS
-│   ├── worker/         # Workers BullMQ
 │   └── storefront/     # Site public par organisation
 ├── packages/
 │   ├── ui/             # Composants partagés
