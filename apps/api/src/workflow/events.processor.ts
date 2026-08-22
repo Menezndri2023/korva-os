@@ -16,9 +16,7 @@ import { WorkflowEngineService } from './workflow-engine.service';
  * request/response cycle (jobs are processed on Redis's own schedule, not
  * synchronously with the publishing request) but colocated with the API so
  * action handlers (e.g. create_task) can reuse existing Nest services
- * directly. See docs/architecture-decisions.md for the tradeoff and the
- * path to moving this into apps/worker later without changing the
- * EventBus's public contract.
+ * directly. See docs/architecture-decisions.md for the tradeoff.
  */
 @Injectable()
 export class EventsProcessor implements OnModuleInit, OnModuleDestroy {

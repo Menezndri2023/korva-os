@@ -9,6 +9,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
+  // Without this, Nest never forwards SIGTERM to module lifecycle hooks (OnModuleDestroy) —
+  // EventsProcessor/EventBusService's Redis connections never close cleanly, and `docker stop`
+  // has to wait out its full grace period and SIGKILL the process instead of exiting promptly.
+  app.enableShutdownHooks();
+
   app.use(helmet());
   app.use(compression());
 
