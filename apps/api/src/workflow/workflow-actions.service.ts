@@ -14,6 +14,7 @@ import {
   type EmailProvider,
 } from '../communication/providers/email-provider.interface';
 import { interpolate } from '../shared/template';
+import { safeFetch } from '../shared/safe-fetch';
 
 @Injectable()
 export class WorkflowActionsService {
@@ -71,9 +72,9 @@ export class WorkflowActionsService {
     payload: Record<string, unknown>,
   ): Promise<void> {
     const result = await this.emailProvider.send({
-      to: interpolate(config.to, payload),
-      subject: interpolate(config.subject, payload),
-      body: interpolate(config.body, payload),
+      to: interpolate(config.to, payload, { escapeHtml: true }),
+      subject: interpolate(config.subject, payload, { escapeHtml: true }),
+      body: interpolate(config.body, payload, { escapeHtml: true }),
     });
     if (result.status === 'failed') {
       throw new Error(`Email provider failed to send the workflow email`);
@@ -84,7 +85,10 @@ export class WorkflowActionsService {
     config: WebhookActionConfig,
     payload: Record<string, unknown>,
   ): Promise<void> {
-    const response = await fetch(config.url, {
+    // safeFetch validates config.url (and every redirect hop) against internal/private/
+    // reserved addresses before making any request — see shared/safe-fetch.ts. Never call
+    // fetch() directly here with a user-supplied URL.
+    const response = await safeFetch(config.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
