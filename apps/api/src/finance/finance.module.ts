@@ -16,6 +16,8 @@ import { InvoicesController } from './invoices/invoices.controller';
 
 import { PaymentsRepository } from './payments/payments.repository';
 import { PaymentsService } from './payments/payments.service';
+import { PaymentReconciliationService } from './payments/payment-reconciliation.service';
+import { ReconciliationSchedulerService } from './payments/reconciliation-scheduler.service';
 import { PaymentsController } from './payments/payments.controller';
 import { PAYMENT_PROVIDER } from './payments/providers/payment-provider.interface';
 import { ManualPaymentProvider } from './payments/providers/manual-payment.provider';
@@ -44,8 +46,10 @@ import { AuditModule } from '../audit/audit.module';
     InvoicesService,
     PaymentsRepository,
     PaymentsService,
+    PaymentReconciliationService,
+    ReconciliationSchedulerService,
     { provide: PAYMENT_PROVIDER, useClass: ManualPaymentProvider },
   ],
-  exports: [InvoicesService, QuotesService],
+  exports: [InvoicesService, QuotesService, PaymentReconciliationService],
 })
 export class FinanceModule {}
