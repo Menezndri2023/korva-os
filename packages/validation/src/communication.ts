@@ -33,6 +33,18 @@ export const updateConversationSchema = z.object({
 });
 export type UpdateConversationInput = z.infer<typeof updateConversationSchema>;
 
+export const listNotificationsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  // z.coerce.boolean() would treat the string "false" as truthy — enumerate the two
+  // accepted literal query values explicitly instead.
+  read: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => (value === undefined ? undefined : value === 'true')),
+});
+export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
+
 export const createMessageSchema = z.object({
   body: z.string().min(1).max(5000),
   subject: z.string().max(300).optional(),
