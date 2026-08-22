@@ -67,6 +67,7 @@ export class OrganizationsController {
     return this.organizationsService.addMember(
       tenant.organizationId,
       tenant.userId,
+      tenant.roleId,
       body,
     );
   }

@@ -62,6 +62,20 @@ export const CORE_PERMISSIONS = [
 
 export type CorePermission = (typeof CORE_PERMISSIONS)[number];
 
+/**
+ * Privilege rank of each system role, used only for role-assignment hierarchy checks (e.g. an
+ * ADMIN must not be able to grant OWNER) — independent of SYSTEM_ROLE_PERMISSIONS, which still
+ * grants OWNER and ADMIN the same day-to-day permissions. Lower number = higher privilege.
+ */
+export const SYSTEM_ROLE_RANK: Record<SystemRole, number> = {
+  OWNER: 0,
+  ADMIN: 1,
+  MANAGER: 2,
+  SALES: 3,
+  FINANCE: 3,
+  STAFF: 4,
+};
+
 /** Default permission set granted to each system role. Organizations may layer custom roles on top. */
 export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> = {
   OWNER: CORE_PERMISSIONS,

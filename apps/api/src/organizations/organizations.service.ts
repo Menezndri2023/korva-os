@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,14 +9,32 @@ import type {
   CreateOrganizationInput,
   UpdateOrganizationInput,
 } from '@korva/validation';
+import { SYSTEM_ROLE_RANK } from '@korva/types';
 import { OrganizationsRepository } from './organizations.repository';
 import { OrganizationDocument } from './schemas/organization.schema';
 import { RolesService } from '../identity/roles/roles.service';
+import { RoleDocument } from '../identity/schemas/role.schema';
 import { MembershipsService } from '../identity/memberships/memberships.service';
 import { UsersService } from '../identity/users/users.service';
 import { AuditService } from '../audit/audit.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EntitlementsService } from '../subscriptions/entitlements.service';
+
+/**
+ * Rank of a role for role-assignment hierarchy purposes only (see addMember). Custom roles
+ * (no systemKey, or an unrecognized one) have no known rank and must never be assumed to
+ * outrank anything — callers must fail closed rather than fall back to a permissive default.
+ */
+function requireSystemRoleRank(role: RoleDocument): number {
+  const rank = role.systemKey ? SYSTEM_ROLE_RANK[role.systemKey] : undefined;
+  if (rank === undefined) {
+    throw new ForbiddenException({
+      code: 'ROLE_HIERARCHY_UNKNOWN',
+      message: 'You cannot assign a role with higher privileges than your own.',
+    });
+  }
+  return rank;
+}
 
 const DIACRITICS_PATTERN = new RegExp('[\\u0300-\\u036f]', 'g');
 
@@ -161,6 +180,7 @@ export class OrganizationsService {
   async addMember(
     organizationId: string,
     actorUserId: string,
+    actorRoleId: string,
     input: AddMemberInput,
   ) {
     await this.entitlementsService.assertSeatAvailable(organizationId);
@@ -178,6 +198,22 @@ export class OrganizationsService {
       throw new NotFoundException({
         code: 'ROLE_NOT_FOUND',
         message: 'Role not found in this organization',
+      });
+    }
+
+    const actorRole = await this.rolesService.getRoleById(actorRoleId);
+    if (!actorRole) {
+      throw new ForbiddenException({
+        code: 'ROLE_HIERARCHY_UNKNOWN',
+        message:
+          'You cannot assign a role with higher privileges than your own.',
+      });
+    }
+    if (requireSystemRoleRank(actorRole) > requireSystemRoleRank(role)) {
+      throw new ForbiddenException({
+        code: 'ROLE_HIERARCHY_VIOLATION',
+        message:
+          'You cannot assign a role with higher privileges than your own.',
       });
     }
 

@@ -277,4 +277,59 @@ describe('Multi-tenant isolation (e2e)', () => {
       expect(asError(res.body).code).toBe('PERMISSION_DENIED');
     });
   });
+
+  describe('role-hierarchy enforcement on addMember', () => {
+    it('blocks an ADMIN from assigning OWNER over the real HTTP endpoint, and creates no membership', async () => {
+      const owner = await registerAndLogin('hier-owner@korva.test');
+      const admin = await registerAndLogin('hier-admin@korva.test');
+      const victim = await registerAndLogin('hier-victim@korva.test');
+      const orgId = await createOrganization(
+        owner.accessToken,
+        'Hierarchy Org',
+      );
+
+      const adminRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(orgId),
+        systemKey: 'ADMIN',
+      });
+      const ownerRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(orgId),
+        systemKey: 'OWNER',
+      });
+      expect(adminRole).not.toBeNull();
+      expect(ownerRole).not.toBeNull();
+
+      // OWNER promotes hier-admin to ADMIN — this must keep working.
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .set('X-Organization-Id', orgId)
+        .send({
+          email: 'hier-admin@korva.test',
+          roleId: String(adminRole?._id),
+        })
+        .expect(201);
+
+      // ADMIN attempts to add hier-victim as OWNER — must be rejected.
+      const res = await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('X-Organization-Id', orgId)
+        .send({
+          email: 'hier-victim@korva.test',
+          roleId: String(ownerRole?._id),
+        })
+        .expect(403);
+      expect(asError(res.body).code).toBe('ROLE_HIERARCHY_VIOLATION');
+
+      // No membership should have been created for hier-victim at all.
+      const victimMembership = await connection
+        .collection('memberships')
+        .findOne({
+          organizationId: new Types.ObjectId(orgId),
+          userId: new Types.ObjectId(victim.user.id),
+        });
+      expect(victimMembership).toBeNull();
+    });
+  });
 });
