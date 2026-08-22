@@ -13,7 +13,6 @@ import { useAuthStore } from "@/lib/auth-store";
 interface LoginResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
   accessToken: string;
-  refreshToken: string;
 }
 
 export default function LoginPage() {

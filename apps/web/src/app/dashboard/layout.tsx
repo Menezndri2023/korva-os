@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { KorvaModule } from "@korva/types";
+import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 
@@ -24,16 +25,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeOrganizationId = useAuthStore((state) => state.activeOrganizationId);
+  const bootstrapped = useAuthStore((state) => state.bootstrapped);
   const clear = useAuthStore((state) => state.clear);
   const { data: organization } = useActiveOrganization();
 
   useEffect(() => {
+    // Wait for useAuthBootstrap's silent /auth/refresh to resolve before deciding the user
+    // is logged out — accessToken is always null for an instant on every fresh page load.
+    if (!bootstrapped) return;
     if (!accessToken) {
       router.replace("/login");
     } else if (!activeOrganizationId) {
       router.replace("/onboarding");
     }
-  }, [accessToken, activeOrganizationId, router]);
+  }, [bootstrapped, accessToken, activeOrganizationId, router]);
 
   const enabledModules = new Set(organization?.enabledModules ?? []);
 
@@ -54,9 +59,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
 
         <button
-          onClick={() => {
-            clear();
-            router.replace("/login");
+          onClick={async () => {
+            try {
+              // Revokes the session server-side and clears the HttpOnly refresh cookie —
+              // clearing local state alone would leave that cookie valid.
+              await apiClient.post("/auth/logout", undefined, { withOrganization: false });
+            } catch {
+              // Still log out locally even if the network call failed.
+            } finally {
+              clear();
+              router.replace("/login");
+            }
           }}
           className="mt-8 w-full rounded-md px-3 py-2 text-left text-sm text-zinc-500 hover:bg-zinc-100"
         >

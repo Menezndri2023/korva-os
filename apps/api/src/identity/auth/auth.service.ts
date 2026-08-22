@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -32,6 +33,7 @@ function toPublicUser(user: UserDocument) {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly refreshTtlMs: number;
 
   constructor(
@@ -88,10 +90,20 @@ export class AuthService {
     return { user: toPublicUser(user), ...tokens };
   }
 
+  /**
+   * `revokeActiveByTokenHash` finds-and-revokes the session in one atomic MongoDB write, so
+   * two concurrent requests presenting the same token can never both see it as active — only
+   * one gets the session back (and rotates into a new one below); the other gets `null` and
+   * falls straight into the reuse-detection path, exactly as if the token had already been
+   * rotated away by a prior legitimate request (see SessionsRepository.revokeActiveByTokenHash
+   * and detectRefreshTokenReuse).
+   */
   async refresh(refreshToken: string): Promise<AuthTokens> {
     const tokenHash = hashToken(refreshToken);
-    const session = await this.sessionsService.findActiveByTokenHash(tokenHash);
+    const session =
+      await this.sessionsService.revokeActiveByTokenHash(tokenHash);
     if (!session) {
+      await this.detectRefreshTokenReuse(tokenHash);
       throw new UnauthorizedException({
         code: 'INVALID_REFRESH_TOKEN',
         message: 'Refresh token is invalid or expired',
@@ -106,13 +118,46 @@ export class AuthService {
       });
     }
 
-    await this.sessionsService.revoke(session.id as string);
     return this.issueTokens(user);
   }
 
   async logout(refreshToken: string): Promise<void> {
     const tokenHash = hashToken(refreshToken);
     await this.sessionsService.revokeByTokenHash(tokenHash);
+  }
+
+  /**
+   * Rotation never deletes a session row, it only sets `revokedAt` — so a hash that isn't
+   * found "active" is ambiguous by itself: it could be a token that never existed, one that
+   * simply expired without ever being used again, or one that was already rotated away and is
+   * now being presented a second time (a strong signal the refresh token was stolen, since a
+   * legitimate client only ever uses each refresh token once). This distinguishes those cases
+   * by re-querying without the active-only filter, and only the "known but revoked" case is
+   * treated as a compromise signal — an expired-but-never-used or entirely unknown token is
+   * left exactly as it was handled before this method existed.
+   *
+   * Known false-positive: a `refresh` racing a `logout` of the SAME token can see it as
+   * "known but revoked" (revoked by the legitimate logout, not theft) and trigger this same
+   * global revocation. The `Session` schema has no field recording *why* a session was
+   * revoked, so this method cannot distinguish "revoked by rotation/logout" from "revoked,
+   * then presented again" — closing that gap would need a schema change (e.g. a
+   * `revokedReason` field), not a fix that fits within this method. Left as a documented,
+   * accepted risk rather than an undocumented one.
+   */
+  private async detectRefreshTokenReuse(tokenHash: string): Promise<void> {
+    const knownSession = await this.sessionsService.findByTokenHash(tokenHash);
+    if (!knownSession || knownSession.revokedAt === null) {
+      return;
+    }
+    this.logger.warn(
+      `Refresh token reuse detected for user ${knownSession.userId.toString()} — revoking all active sessions`,
+    );
+    await this.sessionsService.revokeAllForUser(knownSession.userId.toString());
+  }
+
+  /** Exposes the already-computed refresh TTL so the controller can set a matching cookie maxAge. */
+  getRefreshTtlMs(): number {
+    return this.refreshTtlMs;
   }
 
   private async issueTokens(user: UserDocument): Promise<AuthTokens> {

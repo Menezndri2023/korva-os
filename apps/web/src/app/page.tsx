@@ -8,8 +8,10 @@ export default function Home() {
   const router = useRouter();
   const accessToken = useAuthStore((state) => state.accessToken);
   const activeOrganizationId = useAuthStore((state) => state.activeOrganizationId);
+  const bootstrapped = useAuthStore((state) => state.bootstrapped);
 
   useEffect(() => {
+    if (!bootstrapped) return;
     if (!accessToken) {
       router.replace("/login");
     } else if (!activeOrganizationId) {
@@ -17,7 +19,7 @@ export default function Home() {
     } else {
       router.replace("/dashboard");
     }
-  }, [accessToken, activeOrganizationId, router]);
+  }, [bootstrapped, accessToken, activeOrganizationId, router]);
 
   return null;
 }

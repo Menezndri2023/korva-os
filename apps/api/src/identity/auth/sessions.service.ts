@@ -22,17 +22,21 @@ export class SessionsService {
     });
   }
 
-  findActiveByTokenHash(
+  revokeActiveByTokenHash(
     refreshTokenHash: string,
   ): Promise<SessionDocument | null> {
-    return this.sessionsRepository.findActiveByTokenHash(refreshTokenHash);
+    return this.sessionsRepository.revokeActiveByTokenHash(refreshTokenHash);
   }
 
-  revoke(id: string): Promise<void> {
-    return this.sessionsRepository.revoke(id);
+  findByTokenHash(refreshTokenHash: string): Promise<SessionDocument | null> {
+    return this.sessionsRepository.findByTokenHash(refreshTokenHash);
   }
 
   revokeByTokenHash(refreshTokenHash: string): Promise<void> {
     return this.sessionsRepository.revokeByTokenHash(refreshTokenHash);
+  }
+
+  revokeAllForUser(userId: string): Promise<void> {
+    return this.sessionsRepository.revokeAllForUser(userId);
   }
 }

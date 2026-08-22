@@ -5,10 +5,13 @@ import { useAuthStore } from "./auth-store";
 
 export function useActiveOrganization() {
   const activeOrganizationId = useAuthStore((state) => state.activeOrganizationId);
+  const bootstrapped = useAuthStore((state) => state.bootstrapped);
 
   return useQuery({
     queryKey: ["organizations", "me", activeOrganizationId],
     queryFn: () => apiClient.get<Organization>("/organizations/me"),
-    enabled: Boolean(activeOrganizationId),
+    // Wait for useAuthBootstrap to recover an access token first, otherwise this fires with
+    // no Authorization header and 401s on every fresh page load.
+    enabled: bootstrapped && Boolean(activeOrganizationId),
   });
 }

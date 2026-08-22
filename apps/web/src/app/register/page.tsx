@@ -12,7 +12,6 @@ import { useAuthStore } from "@/lib/auth-store";
 interface RegisterResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
   accessToken: string;
-  refreshToken: string;
 }
 
 export default function RegisterPage() {
