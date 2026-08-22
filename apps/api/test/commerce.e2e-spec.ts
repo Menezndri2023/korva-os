@@ -5,6 +5,7 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { OrdersRepository } from '../src/commerce/orders/orders.repository';
 
 interface ApiSuccess<T> {
   success: true;
@@ -362,6 +363,214 @@ describe('Commerce module (e2e)', () => {
         .send({ bookingId })
         .expect(400);
       expect(asError(res.body).code).toBe('ORDER_ALREADY_EXISTS');
+    });
+  });
+
+  describe('generateInvoice() Order/Invoice MongoDB transaction integrity', () => {
+    async function createConfirmedOrder(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+    ): Promise<string> {
+      const orderRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Service', quantity: 1, unitPrice: 150 }],
+        })
+        .expect(201);
+      const orderId = asSuccess<OrderPayload>(orderRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/orders/${orderId}/confirm`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      return orderId;
+    }
+
+    async function listInvoices(
+      accessToken: string,
+      organizationId: string,
+    ): Promise<InvoicePayload[]> {
+      const res = await request(server)
+        .get('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      // ResponseInterceptor flattens paginated results to { success, data: [...], pagination }
+      // rather than nesting — data IS the array directly, not { data: { data: [...] } }.
+      return asSuccess<InvoicePayload[]>(res.body);
+    }
+
+    it('two concurrent generateInvoice() calls for the same order: exactly one Invoice is created, Order.invoiceId points to it, the loser gets ORDER_ALREADY_INVOICED', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgContact(
+          'invoice-race-owner@korva.test',
+          'Invoice Race Org',
+        );
+      const orderId = await createConfirmedOrder(
+        accessToken,
+        organizationId,
+        contactId,
+      );
+
+      // Dispatched before either is awaited — a genuine race against the same order, not two
+      // sequential calls. Before this fix, both could read invoiceId=undefined via the same
+      // stale Order snapshot and both create an Invoice, leaving one orphaned and/or the Order
+      // pointing at only one of the two.
+      const [resA, resB] = await Promise.all([
+        request(server)
+          .post(`/api/v1/orders/${orderId}/generate-invoice`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId),
+        request(server)
+          .post(`/api/v1/orders/${orderId}/generate-invoice`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId),
+      ]);
+
+      const results = [resA, resB];
+      const succeeded = results.filter((r) => r.status === 201);
+      const rejected = results.filter((r) => r.status === 400);
+      expect(succeeded).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(asError(rejected[0]!.body).code).toBe('ORDER_ALREADY_INVOICED');
+
+      const winningInvoice = asSuccess<InvoicePayload>(succeeded[0]!.body);
+      expect(winningInvoice.orderId).toBe(orderId);
+
+      const invoices = await listInvoices(accessToken, organizationId);
+      expect(invoices).toHaveLength(1);
+      expect(invoices[0]!.id).toBe(winningInvoice.id);
+
+      const orderRes = await request(server)
+        .get(`/api/v1/orders/${orderId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<OrderPayload>(orderRes.body).invoiceId).toBe(
+        winningInvoice.id,
+      );
+    });
+
+    it('retrying generateInvoice() after a successful generation does not create a second invoice', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgContact(
+          'invoice-retry-owner@korva.test',
+          'Invoice Retry Org',
+        );
+      const orderId = await createConfirmedOrder(
+        accessToken,
+        organizationId,
+        contactId,
+      );
+
+      const firstRes = await request(server)
+        .post(`/api/v1/orders/${orderId}/generate-invoice`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      const invoice = asSuccess<InvoicePayload>(firstRes.body);
+
+      const secondRes = await request(server)
+        .post(`/api/v1/orders/${orderId}/generate-invoice`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(400);
+      expect(asError(secondRes.body).code).toBe('ORDER_ALREADY_INVOICED');
+
+      const invoices = await listInvoices(accessToken, organizationId);
+      expect(invoices).toHaveLength(1);
+
+      const orderRes = await request(server)
+        .get(`/api/v1/orders/${orderId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<OrderPayload>(orderRes.body).invoiceId).toBe(invoice.id);
+    });
+
+    it('aborts the whole transaction when attaching the Invoice to the Order fails after the Invoice was staged — no Invoice persists, Order.invoiceId stays unset, and a retry succeeds normally', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgContact(
+          'invoice-rollback-owner@korva.test',
+          'Invoice Rollback Org',
+        );
+      const orderId = await createConfirmedOrder(
+        accessToken,
+        organizationId,
+        contactId,
+      );
+
+      // Real MongoDB transaction, real HTTP layer, real atomic Order guard — the only thing
+      // faked is a failure injected at the "attach invoice to order" step, i.e. AFTER the
+      // Invoice was created inside the transaction but BEFORE commit.
+      const ordersRepository = app.get(OrdersRepository);
+      const spy = jest
+        .spyOn(ordersRepository, 'attachInvoiceIfUnset')
+        .mockImplementationOnce(() => {
+          throw new Error(
+            'deliberate failure to prove generateInvoice transaction rollback',
+          );
+        });
+
+      try {
+        const res = await request(server)
+          .post(`/api/v1/orders/${orderId}/generate-invoice`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId);
+        expect(res.status).toBe(500);
+        expect(asError(res.body).code).toBe('INTERNAL_SERVER_ERROR');
+      } finally {
+        spy.mockRestore();
+      }
+
+      // The staged Invoice insert must have been rolled back with the rest of the
+      // transaction — not left as an orphan with no Order pointing to it.
+      const invoicesAfterAbort = await listInvoices(
+        accessToken,
+        organizationId,
+      );
+      expect(invoicesAfterAbort).toHaveLength(0);
+
+      const orderAfterAbortRes = await request(server)
+        .get(`/api/v1/orders/${orderId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const orderAfterAbort = asSuccess<OrderPayload>(orderAfterAbortRes.body);
+      expect(orderAfterAbort.invoiceId).toBeUndefined();
+      expect(orderAfterAbort.status).toBe('confirmed');
+
+      // And a retry right after proves the order wasn't left in some corrupted intermediate
+      // state by the aborted attempt.
+      const retryRes = await request(server)
+        .post(`/api/v1/orders/${orderId}/generate-invoice`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      const invoice = asSuccess<InvoicePayload>(retryRes.body);
+
+      const invoicesAfterRetry = await listInvoices(
+        accessToken,
+        organizationId,
+      );
+      expect(invoicesAfterRetry).toHaveLength(1);
+      expect(invoicesAfterRetry[0]!.id).toBe(invoice.id);
+
+      const finalOrderRes = await request(server)
+        .get(`/api/v1/orders/${orderId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<OrderPayload>(finalOrderRes.body).invoiceId).toBe(
+        invoice.id,
+      );
     });
   });
 

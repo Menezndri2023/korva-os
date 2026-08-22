@@ -8,7 +8,7 @@ import { globalAgent } from 'node:http';
  */
 process.env.NODE_ENV ??= 'test';
 process.env.MONGODB_URI ??=
-  'mongodb://korva:korva@localhost:27017/korva_test?authSource=admin';
+  'mongodb://korva:korva@localhost:27017/korva_test?authSource=admin&replicaSet=rs0';
 process.env.REDIS_URL ??= 'redis://localhost:6380';
 process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.JWT_REFRESH_SECRET ??= 'test-jwt-refresh-secret';

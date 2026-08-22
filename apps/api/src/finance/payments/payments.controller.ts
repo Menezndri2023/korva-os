@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   createPaymentSchema,
@@ -34,11 +34,16 @@ export class PaymentsController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(createPaymentSchema)) body: CreatePaymentInput,
+    // Optional — legacy callers that don't send it keep today's exact (non-idempotent)
+    // behavior. Standard HTTP header, not a body field, so retries/proxies/clients can attach
+    // it uniformly without touching the request payload.
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.paymentsService.create(
       tenant.organizationId,
       user.userId,
       body,
+      idempotencyKey,
     );
   }
 
@@ -48,11 +53,15 @@ export class PaymentsController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(createRefundSchema)) body: CreateRefundInput,
+    // Optional — legacy callers that don't send it keep today's exact (non-idempotent)
+    // behavior, mirroring PaymentsController.create.
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.paymentsService.refund(
       tenant.organizationId,
       user.userId,
       body,
+      idempotencyKey,
     );
   }
 }

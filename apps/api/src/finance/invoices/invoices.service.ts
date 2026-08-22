@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { ClientSession, Types } from 'mongoose';
 import type {
   CreateInvoiceInput,
   LineItemInput,
@@ -42,7 +42,7 @@ export class InvoicesService {
       });
     }
 
-    return this.createInvoiceRecord(organizationId, userId, {
+    const invoice = await this.createInvoiceRecord(organizationId, {
       contactId: input.contactId,
       quoteId: input.quoteId,
       items: input.items,
@@ -50,6 +50,16 @@ export class InvoicesService {
       dueDate: input.dueDate,
       notes: input.notes,
     });
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'CREATE',
+      entity: 'invoice',
+      entityId: invoice.id as string,
+    });
+
+    return invoice;
   }
 
   /** Used by QuotesService when converting an accepted quote — the contact and items are already known-good. */
@@ -63,56 +73,7 @@ export class InvoicesService {
       currency: string;
     },
   ): Promise<InvoiceDocument> {
-    return this.createInvoiceRecord(organizationId, userId, input);
-  }
-
-  /** Used by OrdersService when generating an invoice for a confirmed order. */
-  async createFromOrder(
-    organizationId: string,
-    userId: string,
-    input: {
-      contactId: string;
-      orderId: string;
-      items: LineItemInput[];
-      currency: string;
-    },
-  ): Promise<InvoiceDocument> {
-    return this.createInvoiceRecord(organizationId, userId, input);
-  }
-
-  private async createInvoiceRecord(
-    organizationId: string,
-    userId: string,
-    input: {
-      contactId: string;
-      quoteId?: string;
-      orderId?: string;
-      items: LineItemInput[];
-      currency: string;
-      dueDate?: string;
-      notes?: string;
-    },
-  ): Promise<InvoiceDocument> {
-    const totals = computeTotals(input.items);
-    const number = await this.countersService.nextFormatted(
-      organizationId,
-      'invoice',
-      'FAC',
-    );
-
-    const invoice = await this.invoicesRepository.create({
-      organizationId: new Types.ObjectId(organizationId),
-      contactId: new Types.ObjectId(input.contactId),
-      quoteId: input.quoteId ? new Types.ObjectId(input.quoteId) : undefined,
-      orderId: input.orderId ? new Types.ObjectId(input.orderId) : undefined,
-      number,
-      items: toLineItemDocs(input.items),
-      currency: input.currency,
-      ...totals,
-      amountPaid: 0,
-      dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
-      notes: input.notes,
-    });
+    const invoice = await this.createInvoiceRecord(organizationId, input);
 
     await this.auditService.record({
       organizationId,
@@ -123,6 +84,67 @@ export class InvoicesService {
     });
 
     return invoice;
+  }
+
+  /**
+   * Used by OrdersService when generating an invoice for a confirmed order. `session`, when
+   * given, ties the Invoice write to the caller's MongoDB transaction (see
+   * OrdersService.generateInvoice) so it commits/aborts together with the Order.invoiceId
+   * update. Deliberately does NOT record an audit entry itself, unlike create()/
+   * createFromQuote() above — OrdersService.generateInvoice does that after its transaction
+   * commits (same "commit, then audit" pattern as PaymentsService.create/refund), so a
+   * transaction that aborts (a concurrent loser, or ORDER_ALREADY_INVOICED on retry) never
+   * leaves behind an audit entry for an Invoice that was rolled back.
+   */
+  async createFromOrder(
+    organizationId: string,
+    input: {
+      contactId: string;
+      orderId: string;
+      items: LineItemInput[];
+      currency: string;
+    },
+    session?: ClientSession,
+  ): Promise<InvoiceDocument> {
+    return this.createInvoiceRecord(organizationId, input, session);
+  }
+
+  private async createInvoiceRecord(
+    organizationId: string,
+    input: {
+      contactId: string;
+      quoteId?: string;
+      orderId?: string;
+      items: LineItemInput[];
+      currency: string;
+      dueDate?: string;
+      notes?: string;
+    },
+    session?: ClientSession,
+  ): Promise<InvoiceDocument> {
+    const totals = computeTotals(input.items);
+    const number = await this.countersService.nextFormatted(
+      organizationId,
+      'invoice',
+      'FAC',
+    );
+
+    return this.invoicesRepository.create(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        contactId: new Types.ObjectId(input.contactId),
+        quoteId: input.quoteId ? new Types.ObjectId(input.quoteId) : undefined,
+        orderId: input.orderId ? new Types.ObjectId(input.orderId) : undefined,
+        number,
+        items: toLineItemDocs(input.items),
+        currency: input.currency,
+        ...totals,
+        amountPaid: 0,
+        dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
+        notes: input.notes,
+      },
+      session,
+    );
   }
 
   async getById(organizationId: string, id: string): Promise<InvoiceDocument> {
@@ -265,28 +287,24 @@ export class InvoicesService {
     return updated;
   }
 
-  /** Called by PaymentsService after a completed payment/refund to keep amountPaid and status in sync. */
+  /**
+   * Called by PaymentsService after a completed payment/refund to keep amountPaid and status
+   * in sync. Applies `delta` (positive for a payment, negative for a refund) atomically in
+   * MongoDB — see InvoicesRepository.incrementAmountPaid — so two concurrent calls for the
+   * same invoice can never overwrite each other's result.
+   */
   async applyPaymentDelta(
     organizationId: string,
     id: string,
     delta: number,
+    session?: ClientSession,
   ): Promise<InvoiceDocument> {
-    const invoice = await this.getById(organizationId, id);
-    const amountPaid = Math.max(
-      0,
-      Math.round((invoice.amountPaid + delta) * 100) / 100,
+    const updated = await this.invoicesRepository.incrementAmountPaid(
+      organizationId,
+      id,
+      delta,
+      session,
     );
-    const status =
-      amountPaid <= 0
-        ? 'issued'
-        : amountPaid >= invoice.total
-          ? 'paid'
-          : 'partially_paid';
-
-    const updated = await this.invoicesRepository.update(organizationId, id, {
-      amountPaid,
-      status,
-    });
     if (!updated) {
       throw new NotFoundException({
         code: 'INVOICE_NOT_FOUND',
@@ -294,5 +312,29 @@ export class InvoicesService {
       });
     }
     return updated;
+  }
+
+  /**
+   * Payment-specific: applies a positive amount to amountPaid only if doing so would not
+   * exceed `total` — the balance check and the write happen in the same MongoDB operation
+   * (see InvoicesRepository.incrementAmountPaidWithinLimit), so two concurrent payments can
+   * never both succeed past the invoice's total. Returns null when the guard rejects the
+   * update; unlike every other method here, this never throws NotFoundException itself —
+   * PaymentsService already confirms the invoice exists moments earlier, so a null result at
+   * this point means the balance guard rejected it, which is for the caller to interpret
+   * (as PAYMENT_EXCEEDS_BALANCE) rather than for this method to assume.
+   */
+  applyPaymentIfWithinBalance(
+    organizationId: string,
+    id: string,
+    amount: number,
+    session?: ClientSession,
+  ): Promise<InvoiceDocument | null> {
+    return this.invoicesRepository.incrementAmountPaidWithinLimit(
+      organizationId,
+      id,
+      amount,
+      session,
+    );
   }
 }

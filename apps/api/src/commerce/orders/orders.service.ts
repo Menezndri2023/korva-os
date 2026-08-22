@@ -3,7 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection, Types } from 'mongoose';
 import type { CreateOrderInput, LineItemInput } from '@korva/validation';
 import type { Pagination } from '@korva/types';
 import { OrdersRepository, FindOrdersOptions } from './orders.repository';
@@ -33,6 +34,7 @@ export class OrdersService {
     private readonly countersService: CountersService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    @InjectConnection() private readonly connection: Connection,
   ) {}
 
   async create(
@@ -355,27 +357,112 @@ export class OrdersService {
       });
     }
 
-    const invoice = await this.invoicesService.createFromOrder(
+    const invoice = await this.generateInvoiceAtomically(organizationId, id, {
+      contactId: order.contactId.toString(),
+      orderId: order.id as string,
+      currency: order.currency,
+      items: order.items.map((item) => ({
+        offerId: item.offerId?.toString(),
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        taxRate: item.taxRate,
+      })),
+    });
+
+    await this.auditService.record({
       organizationId,
       userId,
-      {
-        contactId: order.contactId.toString(),
-        orderId: order.id as string,
-        currency: order.currency,
-        items: order.items.map((item) => ({
-          offerId: item.offerId?.toString(),
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          taxRate: item.taxRate,
-        })),
-      },
-    );
-
-    await this.ordersRepository.update(organizationId, id, {
-      invoiceId: new Types.ObjectId(invoice.id as string),
+      action: 'CREATE',
+      entity: 'invoice',
+      entityId: invoice.id as string,
+      metadata: { orderId: id },
     });
 
     return invoice;
   }
+
+  /**
+   * Invoice.create() + Order.invoiceId update, in a single MongoDB transaction: either both
+   * writes commit, or neither does — closing the crash-between-writes gap identified by the
+   * audit (Invoice created with Order.invoiceId left empty, or a retry creating a second
+   * Invoice for the same order).
+   *
+   * Concurrency: the Order update is conditioned on `invoiceId: { $exists: false }` (see
+   * OrdersRepository.attachInvoiceIfUnset) — evaluated by MongoDB at write time, not from the
+   * `order` snapshot read moments earlier by the caller. But that guard runs AFTER the Invoice
+   * insert, so it alone cannot stop two concurrent transactions from each successfully
+   * inserting their own Invoice before either reaches it — which is exactly what the partial
+   * unique index on Invoice.orderId is for: it's the mechanism that actually stops the second
+   * insert (confirmed by e2e testing against real concurrent requests — the second attempt
+   * fails at the Invoice insert with a MongoDB duplicate-key error, not at the Order update).
+   * That duplicate-key error is caught below and mapped to the same ORDER_ALREADY_INVOICED the
+   * Order guard produces, so both race outcomes converge on one API contract. The Order guard
+   * remains necessary in its own right for the case where the index doesn't fire — i.e. the
+   * Invoice insert succeeds (no conflict) but a second transaction is already mid-flight for
+   * the same order.
+   */
+  private async generateInvoiceAtomically(
+    organizationId: string,
+    orderId: string,
+    input: {
+      contactId: string;
+      orderId: string;
+      currency: string;
+      items: LineItemInput[];
+    },
+  ): Promise<InvoiceDocument> {
+    const session = await this.connection.startSession();
+    try {
+      return await session.withTransaction(async () => {
+        let invoice: InvoiceDocument;
+        try {
+          invoice = await this.invoicesService.createFromOrder(
+            organizationId,
+            input,
+            session,
+          );
+        } catch (error) {
+          if (isDuplicateOrderIdError(error)) {
+            throw new BadRequestException({
+              code: 'ORDER_ALREADY_INVOICED',
+              message: 'An invoice already exists for this order',
+            });
+          }
+          throw error;
+        }
+
+        const updatedOrder = await this.ordersRepository.attachInvoiceIfUnset(
+          organizationId,
+          orderId,
+          invoice.id as string,
+          session,
+        );
+        if (!updatedOrder) {
+          throw new BadRequestException({
+            code: 'ORDER_ALREADY_INVOICED',
+            message: 'An invoice already exists for this order',
+          });
+        }
+
+        return invoice;
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+}
+
+/**
+ * True for the MongoDB duplicate-key error (code 11000) raised by the partial unique index on
+ * Invoice.orderId specifically — narrowed by index name in the driver's error message so an
+ * unrelated unique-index collision (e.g. the invoice `number` sequence, practically impossible
+ * given its atomic counter, but not a case this should silently swallow) is rethrown as-is.
+ */
+function isDuplicateOrderIdError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const { code, message } = error as Record<string, unknown>;
+  return (
+    code === 11000 && typeof message === 'string' && message.includes('orderId')
+  );
 }

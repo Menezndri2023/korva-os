@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import { Invoice, InvoiceDocument } from './schemas/invoice.schema';
 import type { Paginated } from '../../crm/contacts/contacts.repository';
 
@@ -18,8 +18,19 @@ export class InvoicesRepository {
     private readonly invoiceModel: Model<InvoiceDocument>,
   ) {}
 
-  create(data: Partial<Invoice>): Promise<InvoiceDocument> {
-    return this.invoiceModel.create(data);
+  /**
+   * `session`, when given, must be honored via the array form of `create()` — Mongoose only
+   * attaches a session to the write when docs are passed as an array; `create(doc, { session })`
+   * silently ignores it (same caveat as PaymentsRepository.createPayment). Passed by
+   * OrdersService.generateInvoice so this write commits/aborts together with the
+   * Order.invoiceId update in the same MongoDB transaction.
+   */
+  async create(
+    data: Partial<Invoice>,
+    session?: ClientSession,
+  ): Promise<InvoiceDocument> {
+    const [invoice] = await this.invoiceModel.create([data], { session });
+    return invoice!;
   }
 
   findById(
@@ -74,6 +85,117 @@ export class InvoicesRepository {
         },
         data,
         { new: true },
+      )
+      .exec();
+  }
+
+  /**
+   * Atomically applies `delta` to `amountPaid` and recomputes `status` from the
+   * post-increment value — both in the same MongoDB pipeline update, so there is no
+   * read-calculate-write window for two concurrent payments/refunds to race each other.
+   * Mirrors the exact clamp/rounding/status rules `applyPaymentDelta` used to apply in JS:
+   * clamp to >=0, round to 2 decimals, status = issued/paid/partially_paid.
+   *
+   * `session`, when given, ties this atomic update to the caller's MongoDB transaction (see
+   * PaymentsService.refund) — the $max clamp and status pipeline are unchanged; only the
+   * commit/abort boundary moves to the caller.
+   */
+  async incrementAmountPaid(
+    organizationId: string,
+    id: string,
+    delta: number,
+    session?: ClientSession,
+  ): Promise<InvoiceDocument | null> {
+    if (!Types.ObjectId.isValid(id)) return null;
+    return this.invoiceModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+        },
+        [
+          {
+            $set: {
+              amountPaid: {
+                $max: [0, { $round: [{ $add: ['$amountPaid', delta] }, 2] }],
+              },
+            },
+          },
+          {
+            $set: {
+              status: {
+                $switch: {
+                  branches: [
+                    { case: { $lte: ['$amountPaid', 0] }, then: 'issued' },
+                    { case: { $gte: ['$amountPaid', '$total'] }, then: 'paid' },
+                  ],
+                  default: 'partially_paid',
+                },
+              },
+            },
+          },
+        ],
+        { new: true, session },
+      )
+      .exec();
+  }
+
+  /**
+   * Payment-specific variant of incrementAmountPaid: the accept/reject decision for
+   * "does amountPaid + delta stay within total" is made by MongoDB itself, as part of the
+   * SAME atomic findOneAndUpdate, via $expr in the match filter — not by a value read
+   * earlier. Two concurrent calls that would together exceed `total` can therefore never
+   * both match: only one findAndModify wins the document at a time, and by the time the
+   * second one evaluates its filter, amountPaid already reflects the first one's write.
+   * Resolves to null if the filter didn't match — either the invoice doesn't exist, or
+   * (the case this method exists for) applying `delta` would exceed `total`; the caller,
+   * which is expected to have already confirmed the invoice exists, treats null as the
+   * latter. Left as a separate method rather than folded into incrementAmountPaid so that
+   * unbounded callers (refunds) are entirely unaffected by this guard.
+   *
+   * `session`, when given, ties this atomic update to the caller's MongoDB transaction (see
+   * PaymentsService.create) — the $expr balance guard still runs, unchanged, as part of the
+   * same findOneAndUpdate; only the commit/abort boundary moves to the caller.
+   */
+  async incrementAmountPaidWithinLimit(
+    organizationId: string,
+    id: string,
+    delta: number,
+    session?: ClientSession,
+  ): Promise<InvoiceDocument | null> {
+    if (!Types.ObjectId.isValid(id)) return null;
+    return this.invoiceModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          $expr: {
+            $lte: [{ $round: [{ $add: ['$amountPaid', delta] }, 2] }, '$total'],
+          },
+        },
+        [
+          {
+            $set: {
+              amountPaid: {
+                $max: [0, { $round: [{ $add: ['$amountPaid', delta] }, 2] }],
+              },
+            },
+          },
+          {
+            $set: {
+              status: {
+                $switch: {
+                  branches: [
+                    { case: { $lte: ['$amountPaid', 0] }, then: 'issued' },
+                    { case: { $gte: ['$amountPaid', '$total'] }, then: 'paid' },
+                  ],
+                  default: 'partially_paid',
+                },
+              },
+            },
+          },
+        ],
+        { new: true, session },
       )
       .exec();
   }

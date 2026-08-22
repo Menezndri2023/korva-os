@@ -63,3 +63,15 @@ export class Invoice {
 export const InvoiceSchema = SchemaFactory.createForClass(Invoice);
 InvoiceSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 InvoiceSchema.index({ organizationId: 1, number: 1 }, { unique: true });
+// `orderId` is optional — invoices from quotes/manual creation never set it. A partial unique
+// index enforces "at most one invoice per order" only among documents that DO have an
+// orderId, leaving every orderId-less invoice unaffected (MongoDB 7 / Mongoose 8: standard
+// partialFilterExpression support). This is defense-in-depth alongside the conditional
+// Order.invoiceId update in OrdersService.generateInvoice — see the transaction there for why
+// that conditional update is already sufficient on its own under MongoDB's write-conflict
+// semantics; this index guards every other path that could ever insert an Invoice with an
+// orderId (direct repository use, future code, manual writes).
+InvoiceSchema.index(
+  { orderId: 1 },
+  { unique: true, partialFilterExpression: { orderId: { $exists: true } } },
+);

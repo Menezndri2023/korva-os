@@ -5,6 +5,11 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { PaymentsRepository } from '../src/finance/payments/payments.repository';
+import {
+  PAYMENT_PROVIDER,
+  type PaymentProvider,
+} from '../src/finance/payments/providers/payment-provider.interface';
 
 interface ApiSuccess<T> {
   success: true;
@@ -351,6 +356,1510 @@ describe('Finance module (e2e)', () => {
         .send({ paymentId, amount: 1 })
         .expect(400);
       expect(asError(res.body).code).toBe('PAYMENT_NOT_REFUNDABLE');
+    });
+  });
+
+  describe('concurrent payments do not race on Invoice.amountPaid', () => {
+    it('fires two payments at the same invoice simultaneously and sums both correctly (no lost update)', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'concurrency-owner@korva.test',
+          'Concurrency Org',
+        );
+
+      const invoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Service', quantity: 1, unitPrice: 300 }],
+        })
+        .expect(201);
+      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/invoices/${invoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      // Both requests are dispatched before either is awaited — a genuine concurrent race
+      // against the same invoice, not two sequential calls. Before the fix, both would read
+      // amountPaid=0 and the second write would silently overwrite the first (final=200
+      // instead of 300, per the scenario in the audit).
+      const [resA, resB] = await Promise.all([
+        request(server)
+          .post('/api/v1/payments')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ invoiceId, amount: 100, method: 'cash' }),
+        request(server)
+          .post('/api/v1/payments')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ invoiceId, amount: 200, method: 'transfer' }),
+      ]);
+      expect(resA.status).toBe(201);
+      expect(resB.status).toBe(201);
+
+      const finalRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(finalRes.body);
+      expect(invoice.amountPaid).toBe(300); // 100 + 200, not one clobbering the other
+      expect(invoice.status).toBe('paid');
+    });
+  });
+
+  describe('PAYMENT_EXCEEDS_BALANCE is enforced atomically, not just on a stale read', () => {
+    async function createIssuedInvoice(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+      total: number,
+    ): Promise<string> {
+      const invoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Service', quantity: 1, unitPrice: total }],
+        })
+        .expect(201);
+      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/invoices/${invoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      return invoiceId;
+    }
+
+    it('two concurrent 200 payments on a 300 invoice: exactly one succeeds, the other gets PAYMENT_EXCEEDS_BALANCE, amountPaid never exceeds 300', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'balance-race-owner@korva.test',
+          'Balance Race Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      // Dispatched before either is awaited — a genuine race, not two sequential calls. Before
+      // this fix, both could read amountPaid=0 via the same stale snapshot and both succeed,
+      // landing on amountPaid=400 (per the scenario in the audit).
+      const [resA, resB] = await Promise.all([
+        request(server)
+          .post('/api/v1/payments')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ invoiceId, amount: 200, method: 'cash' }),
+        request(server)
+          .post('/api/v1/payments')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ invoiceId, amount: 200, method: 'transfer' }),
+      ]);
+
+      const results = [resA, resB];
+      const succeeded = results.filter((r) => r.status === 201);
+      const rejected = results.filter((r) => r.status === 400);
+      expect(succeeded).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(asError(rejected[0]!.body).code).toBe('PAYMENT_EXCEEDS_BALANCE');
+
+      const finalRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(finalRes.body);
+      expect(invoice.amountPaid).toBe(200); // never 400
+      expect(invoice.status).toBe('partially_paid');
+
+      // The rejected request must not have created a "completed" Payment record — a lost
+      // race must never look like a successful charge.
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payments = asSuccess<PaymentPayload[]>(paymentsRes.body);
+      expect(payments).toHaveLength(1);
+      expect(payments[0]!.status).toBe('completed');
+    });
+
+    it('normal case: 300 invoice paid as 200 then 100 (not concurrent) reaches amountPaid=300, status=paid', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'balance-normal-owner@korva.test',
+          'Balance Normal Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: 200 })
+        .expect(201);
+      await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: 100 })
+        .expect(201);
+
+      const res = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(res.body);
+      expect(invoice.amountPaid).toBe(300);
+      expect(invoice.status).toBe('paid');
+    });
+
+    it('exact-amount case: a single 300 payment on a 300 invoice is accepted, amountPaid=300, status=paid', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'balance-exact-owner@korva.test',
+          'Balance Exact Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: 300 })
+        .expect(201);
+
+      const res = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(res.body);
+      expect(invoice.amountPaid).toBe(300);
+      expect(invoice.status).toBe('paid');
+    });
+
+    it('sequential overpayment: 200 then 200 on a 300 invoice — first accepted, second rejected, amountPaid=200', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'balance-sequential-owner@korva.test',
+          'Balance Sequential Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: 200 })
+        .expect(201);
+
+      const secondRes = await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: 200 })
+        .expect(400);
+      expect(asError(secondRes.body).code).toBe('PAYMENT_EXCEEDS_BALANCE');
+
+      const res = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(res.body);
+      expect(invoice.amountPaid).toBe(200);
+      expect(invoice.status).toBe('partially_paid');
+    });
+  });
+
+  describe('Payment/Invoice MongoDB transaction integrity', () => {
+    async function createIssuedInvoice(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+      total: number,
+    ): Promise<string> {
+      const invoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Service', quantity: 1, unitPrice: total }],
+        })
+        .expect(201);
+      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/invoices/${invoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      return invoiceId;
+    }
+
+    it('commits Invoice.amountPaid and the Payment document together for a successful payment', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'tx-success-owner@korva.test',
+          'Tx Success Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentRes = await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: 300, method: 'cash' })
+        .expect(201);
+      const payment = asSuccess<PaymentPayload & { amount: number }>(
+        paymentRes.body,
+      );
+      expect(payment.status).toBe('completed');
+      expect(payment.amount).toBe(300);
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(invoiceRes.body);
+      expect(invoice.amountPaid).toBe(300);
+      expect(invoice.status).toBe('paid');
+    });
+
+    it('aborts the whole transaction when Payment creation fails after the Invoice update was staged — amountPaid stays unchanged and no Payment is created', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'tx-rollback-owner@korva.test',
+          'Tx Rollback Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      // Real MongoDB transaction, real HTTP layer, real invoice balance guard — the only thing
+      // faked is a failure injected at the "create Payment" step, i.e. AFTER
+      // incrementAmountPaidWithinLimit has staged the Invoice write inside the same
+      // transaction but BEFORE commit. This is exactly the "erreur volontaire entre l'update
+      // Invoice et le commit" scenario the audit asked to prove.
+      const paymentsRepository = app.get(PaymentsRepository);
+      const spy = jest
+        .spyOn(paymentsRepository, 'createPayment')
+        .mockImplementationOnce(() => {
+          throw new Error('deliberate failure to prove transaction rollback');
+        });
+
+      try {
+        const res = await request(server)
+          .post('/api/v1/payments')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ invoiceId, amount: 100, method: 'cash' });
+        expect(res.status).toBe(500);
+        expect(asError(res.body).code).toBe('INTERNAL_SERVER_ERROR');
+      } finally {
+        spy.mockRestore();
+      }
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(invoiceRes.body);
+      // The staged amountPaid increment must have been rolled back with the rest of the
+      // transaction — not left at some partially-applied value.
+      expect(invoice.amountPaid).toBe(0);
+      expect(invoice.status).toBe('issued');
+
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payments = asSuccess<PaymentPayload[]>(paymentsRes.body);
+      expect(payments).toHaveLength(0);
+
+      // And the transaction being retried cleanly afterwards proves the invoice wasn't left in
+      // some corrupted intermediate state by the aborted attempt.
+      await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: 100, method: 'cash' })
+        .expect(201);
+
+      const finalInvoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<InvoicePayload>(finalInvoiceRes.body).amountPaid).toBe(
+        100,
+      );
+    });
+  });
+
+  describe('Idempotency-Key protects PaymentsService.create() against retries and concurrency', () => {
+    async function createIssuedInvoice(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+      total: number,
+    ): Promise<string> {
+      const invoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Service', quantity: 1, unitPrice: total }],
+        })
+        .expect(201);
+      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/invoices/${invoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      return invoiceId;
+    }
+
+    function pay(
+      accessToken: string,
+      organizationId: string,
+      invoiceId: string,
+      amount: number,
+      idempotencyKey?: string,
+    ) {
+      const req = request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId);
+      if (idempotencyKey) req.set('Idempotency-Key', idempotencyKey);
+      return req.send({ invoiceId, amount, method: 'cash' });
+    }
+
+    it('TEST 1 — same key, two sequential requests: single provider call, same Payment returned both times', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'idem-sequential-owner@korva.test',
+          'Idem Sequential Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'createPayment');
+      const callsBefore = spy.mock.calls.length;
+
+      const firstRes = await pay(
+        accessToken,
+        organizationId,
+        invoiceId,
+        100,
+        'idem-key-sequential-1',
+      ).expect(201);
+      const secondRes = await pay(
+        accessToken,
+        organizationId,
+        invoiceId,
+        100,
+        'idem-key-sequential-1',
+      ).expect(201);
+
+      const first = asSuccess<PaymentPayload>(firstRes.body);
+      const second = asSuccess<PaymentPayload>(secondRes.body);
+      expect(second.id).toBe(first.id);
+      expect(second.status).toBe('completed');
+      expect(spy.mock.calls.length - callsBefore).toBe(1);
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      // Credited once (100), not twice (200) — the retry must not re-credit the invoice.
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(100);
+
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<PaymentPayload[]>(paymentsRes.body)).toHaveLength(1);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 2 — same key, two genuinely concurrent requests: single provider call, single Payment, single Invoice credit', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'idem-concurrent-owner@korva.test',
+          'Idem Concurrent Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'createPayment');
+      const callsBefore = spy.mock.calls.length;
+
+      // Dispatched before either is awaited — a genuine race on the same Idempotency-Key, not
+      // two sequential calls. The atomic unique index on (organizationId, idempotencyKey) is
+      // what guarantees only one of the two claim-inserts can win; the loser must never call
+      // the provider at all.
+      const [resA, resB] = await Promise.all([
+        pay(
+          accessToken,
+          organizationId,
+          invoiceId,
+          150,
+          'idem-key-concurrent-1',
+        ),
+        pay(
+          accessToken,
+          organizationId,
+          invoiceId,
+          150,
+          'idem-key-concurrent-1',
+        ),
+      ]);
+
+      expect(resA.status).toBe(201);
+      expect(resB.status).toBe(201);
+      const a = asSuccess<PaymentPayload>(resA.body);
+      const b = asSuccess<PaymentPayload>(resB.body);
+      expect(b.id).toBe(a.id);
+      expect(spy.mock.calls.length - callsBefore).toBe(1);
+
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payments = asSuccess<PaymentPayload[]>(paymentsRes.body);
+      expect(payments).toHaveLength(1);
+      expect(payments[0]!.status).toBe('completed');
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      // Credited exactly once (150), never twice (300) — proves MongoDB's unique index, not a
+      // racy in-memory check, is what arbitrated the two concurrent claims.
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(150);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 3 — same key with different parameters is refused, without a second provider call', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'idem-mismatch-owner@korva.test',
+          'Idem Mismatch Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'createPayment');
+      const callsBefore = spy.mock.calls.length;
+
+      await pay(
+        accessToken,
+        organizationId,
+        invoiceId,
+        100,
+        'idem-key-mismatch-1',
+      ).expect(201);
+
+      const mismatchRes = await pay(
+        accessToken,
+        organizationId,
+        invoiceId,
+        200, // different amount, same key
+        'idem-key-mismatch-1',
+      );
+      expect(mismatchRes.status).toBe(400);
+      expect(asError(mismatchRes.body).code).toBe('IDEMPOTENCY_KEY_MISMATCH');
+
+      // Only the first (accepted) call reached the provider — the mismatched retry must be
+      // rejected before ever calling it again.
+      expect(spy.mock.calls.length - callsBefore).toBe(1);
+
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<PaymentPayload[]>(paymentsRes.body)).toHaveLength(1);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 4 — retrying after a completed payment never creates a second Payment or re-credits the Invoice', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'idem-retry-owner@korva.test',
+          'Idem Retry Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const completedRes = await pay(
+        accessToken,
+        organizationId,
+        invoiceId,
+        300,
+        'idem-key-retry-1',
+      ).expect(201);
+      const completed = asSuccess<PaymentPayload>(completedRes.body);
+      expect(completed.status).toBe('completed');
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'createPayment');
+      const callsBefore = spy.mock.calls.length;
+
+      const retryRes = await pay(
+        accessToken,
+        organizationId,
+        invoiceId,
+        300,
+        'idem-key-retry-1',
+      ).expect(201);
+      expect(asSuccess<PaymentPayload>(retryRes.body).id).toBe(completed.id);
+      expect(spy.mock.calls.length - callsBefore).toBe(0);
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(invoiceRes.body);
+      expect(invoice.amountPaid).toBe(300);
+      expect(invoice.status).toBe('paid');
+
+      spy.mockRestore();
+    });
+
+    it('TEST 5 — provider failure leaves a resolved, non-fantom Payment; retrying with the same key never calls the provider again or credits the Invoice', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'idem-provider-failure-owner@korva.test',
+          'Idem Provider Failure Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest
+        .spyOn(paymentProvider, 'createPayment')
+        .mockRejectedValueOnce(new Error('simulated provider outage'));
+
+      const failedRes = await pay(
+        accessToken,
+        organizationId,
+        invoiceId,
+        100,
+        'idem-key-provider-failure-1',
+      );
+      expect(failedRes.status).toBe(500);
+
+      const paymentsAfterFailureRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const paymentsAfterFailure = asSuccess<PaymentPayload[]>(
+        paymentsAfterFailureRes.body,
+      );
+      // The claim must resolve to a terminal 'failed' state — never left stuck 'processing'.
+      expect(paymentsAfterFailure).toHaveLength(1);
+      expect(paymentsAfterFailure[0]!.status).toBe('failed');
+
+      const invoiceAfterFailureRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<InvoicePayload>(invoiceAfterFailureRes.body).amountPaid,
+      ).toBe(0);
+
+      // Retry with the SAME key — by design, a key is permanently bound to its first resolved
+      // outcome (even a failure); the provider must not be called a second time for it. A
+      // genuinely new attempt requires a new Idempotency-Key, which is a separate, deliberately
+      // simple contract documented in PaymentsService.create.
+      const callsBeforeRetry = spy.mock.calls.length;
+      const retryRes = await pay(
+        accessToken,
+        organizationId,
+        invoiceId,
+        100,
+        'idem-key-provider-failure-1',
+      ).expect(201);
+      expect(asSuccess<PaymentPayload>(retryRes.body).status).toBe('failed');
+      expect(spy.mock.calls.length - callsBeforeRetry).toBe(0);
+
+      const invoiceAfterRetryRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<InvoicePayload>(invoiceAfterRetryRes.body).amountPaid,
+      ).toBe(0);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 6 — legacy callers without an Idempotency-Key keep working exactly as before', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'idem-legacy-owner@korva.test',
+          'Idem Legacy Org',
+        );
+      const invoiceId = await createIssuedInvoice(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      // No Idempotency-Key header at all — two independent payments, both must succeed and
+      // both must be recorded, exactly like before this feature existed.
+      await pay(accessToken, organizationId, invoiceId, 100).expect(201);
+      await pay(accessToken, organizationId, invoiceId, 100).expect(201);
+
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<PaymentPayload[]>(paymentsRes.body)).toHaveLength(2);
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(200);
+    });
+  });
+
+  describe('Refund/Payment/Invoice MongoDB transaction integrity', () => {
+    async function createFullyPaidInvoiceAndPayment(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+      total: number,
+    ): Promise<{ invoiceId: string; paymentId: string }> {
+      const invoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Service', quantity: 1, unitPrice: total }],
+        })
+        .expect(201);
+      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/invoices/${invoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const paymentRes = await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: total, method: 'cash' })
+        .expect(201);
+      const paymentId = asSuccess<PaymentPayload>(paymentRes.body).id;
+
+      return { invoiceId, paymentId };
+    }
+
+    it('two concurrent 200 refunds on a 300 payment: exactly one succeeds, the other gets REFUND_EXCEEDS_PAYMENT, refundedAmount never exceeds 300', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-race-owner@korva.test',
+          'Refund Race Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      // Dispatched before either is awaited — a genuine race against the same Payment, not two
+      // sequential calls. Before this fix, both could read alreadyRefunded=0 via the same
+      // stale sumRefundsForPayment() snapshot and both succeed, landing on 400 refunded out of
+      // a 300 payment (per the scenario in the audit).
+      const [resA, resB] = await Promise.all([
+        request(server)
+          .post('/api/v1/payments/refunds')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ paymentId, amount: 200 }),
+        request(server)
+          .post('/api/v1/payments/refunds')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ paymentId, amount: 200 }),
+      ]);
+
+      const results = [resA, resB];
+      const succeeded = results.filter((r) => r.status === 201);
+      const rejected = results.filter((r) => r.status === 400);
+      expect(succeeded).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(asError(rejected[0]!.body).code).toBe('REFUND_EXCEEDS_PAYMENT');
+
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payments = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentsRes.body);
+      expect(payments).toHaveLength(1);
+      // 200 of 300 refunded — not fully refunded, so the payment stays 'completed', never a
+      // second, unguarded refund landing on top of it.
+      expect(payments[0]!.refundedAmount).toBe(200);
+      expect(payments[0]!.status).toBe('completed');
+
+      // Invoice.amountPaid must have been decremented exactly once (by the single winning
+      // refund), not zero times and not twice.
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(invoiceRes.body);
+      expect(invoice.amountPaid).toBe(100); // 300 - 200, never 300 - 400
+      expect(invoice.status).toBe('partially_paid');
+    });
+
+    it('successive valid refunds: 100 then 200 on a 300 payment reach refundedAmount=300, status=refunded, Invoice.amountPaid=0', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-successive-owner@korva.test',
+          'Refund Successive Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      await request(server)
+        .post('/api/v1/payments/refunds')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ paymentId, amount: 100 })
+        .expect(201);
+
+      await request(server)
+        .post('/api/v1/payments/refunds')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ paymentId, amount: 200 })
+        .expect(201);
+
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payments = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentsRes.body);
+      expect(payments[0]!.refundedAmount).toBe(300);
+      expect(payments[0]!.status).toBe('refunded');
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(invoiceRes.body);
+      expect(invoice.amountPaid).toBe(0);
+      expect(invoice.status).toBe('issued');
+    });
+
+    it('sequential overpayment: 200 then 200 refunded on a 300 payment — first accepted, second rejected, refundedAmount=200', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-sequential-owner@korva.test',
+          'Refund Sequential Org',
+        );
+      const { paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      await request(server)
+        .post('/api/v1/payments/refunds')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ paymentId, amount: 200 })
+        .expect(201);
+
+      const secondRes = await request(server)
+        .post('/api/v1/payments/refunds')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ paymentId, amount: 200 })
+        .expect(400);
+      expect(asError(secondRes.body).code).toBe('REFUND_EXCEEDS_PAYMENT');
+    });
+
+    it('aborts the whole transaction when Invoice decrement fails after the Payment refundedAmount update was staged — refundedAmount and Invoice.amountPaid stay unchanged and no Refund is created', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-rollback-owner@korva.test',
+          'Refund Rollback Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      // Real MongoDB transaction, real HTTP layer, real atomic refund guard — the only thing
+      // faked is a failure injected at the "create Refund" step, i.e. AFTER
+      // incrementRefundedAmountWithinLimit has staged the Payment write inside the same
+      // transaction but BEFORE commit.
+      const paymentsRepository = app.get(PaymentsRepository);
+      const spy = jest
+        .spyOn(paymentsRepository, 'createRefund')
+        .mockImplementationOnce(() => {
+          throw new Error(
+            'deliberate failure to prove refund transaction rollback',
+          );
+        });
+
+      try {
+        const res = await request(server)
+          .post('/api/v1/payments/refunds')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ paymentId, amount: 100 });
+        expect(res.status).toBe(500);
+        expect(asError(res.body).code).toBe('INTERNAL_SERVER_ERROR');
+      } finally {
+        spy.mockRestore();
+      }
+
+      const paymentsRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payments = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentsRes.body);
+      // The staged refundedAmount increment must have been rolled back with the rest of the
+      // transaction — not left at some partially-applied value.
+      expect(payments[0]!.refundedAmount).toBe(0);
+      expect(payments[0]!.status).toBe('completed');
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(invoiceRes.body);
+      expect(invoice.amountPaid).toBe(300);
+      expect(invoice.status).toBe('paid');
+
+      // And a valid refund attempted right after proves the payment/invoice weren't left in
+      // some corrupted intermediate state by the aborted attempt.
+      await request(server)
+        .post('/api/v1/payments/refunds')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ paymentId, amount: 100 })
+        .expect(201);
+
+      const finalInvoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<InvoicePayload>(finalInvoiceRes.body).amountPaid).toBe(
+        200,
+      );
+    });
+  });
+
+  describe('Idempotency-Key protects PaymentsService.refund() against retries and concurrency', () => {
+    async function createFullyPaidInvoiceAndPayment(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+      total: number,
+    ): Promise<{ invoiceId: string; paymentId: string }> {
+      const invoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Service', quantity: 1, unitPrice: total }],
+        })
+        .expect(201);
+      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/invoices/${invoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const paymentRes = await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: total, method: 'cash' })
+        .expect(201);
+      const paymentId = asSuccess<PaymentPayload>(paymentRes.body).id;
+
+      return { invoiceId, paymentId };
+    }
+
+    function refundReq(
+      accessToken: string,
+      organizationId: string,
+      paymentId: string,
+      amount: number,
+      idempotencyKey?: string,
+    ) {
+      const req = request(server)
+        .post('/api/v1/payments/refunds')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId);
+      if (idempotencyKey) req.set('Idempotency-Key', idempotencyKey);
+      return req.send({ paymentId, amount, reason: 'goodwill' });
+    }
+
+    it('TEST 1 — same key, two sequential requests: single provider call, same Refund returned both times', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-idem-sequential-owner@korva.test',
+          'Refund Idem Sequential Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'refundPayment');
+      const callsBefore = spy.mock.calls.length;
+
+      const firstRes = await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        100,
+        'refund-idem-key-sequential-1',
+      ).expect(201);
+      const secondRes = await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        100,
+        'refund-idem-key-sequential-1',
+      ).expect(201);
+
+      const first = asSuccess<{ id: string; amount: number }>(firstRes.body);
+      const second = asSuccess<{ id: string; amount: number }>(secondRes.body);
+      expect(second.id).toBe(first.id);
+      expect(spy.mock.calls.length - callsBefore).toBe(1);
+
+      const paymentRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payment = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentRes.body)[0]!;
+      // Decremented once (100), not twice (200) — the retry must not double-refund.
+      expect(payment.refundedAmount).toBe(100);
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(200);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 2 — same key, two genuinely concurrent requests: single provider call, single Refund, single Payment/Invoice adjustment', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-idem-concurrent-owner@korva.test',
+          'Refund Idem Concurrent Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'refundPayment');
+      const callsBefore = spy.mock.calls.length;
+
+      // Dispatched before either is awaited — a genuine race on the same Idempotency-Key. The
+      // atomic unique index on (organizationId, idempotencyKey) on Refund is what guarantees
+      // only one claim-insert can win; the loser must never call the provider, and must never
+      // trip REFUND_EXCEEDS_PAYMENT artificially.
+      const [resA, resB] = await Promise.all([
+        refundReq(
+          accessToken,
+          organizationId,
+          paymentId,
+          150,
+          'refund-idem-key-concurrent-1',
+        ),
+        refundReq(
+          accessToken,
+          organizationId,
+          paymentId,
+          150,
+          'refund-idem-key-concurrent-1',
+        ),
+      ]);
+
+      expect(resA.status).toBe(201);
+      expect(resB.status).toBe(201);
+      const a = asSuccess<{ id: string }>(resA.body);
+      const b = asSuccess<{ id: string }>(resB.body);
+      expect(b.id).toBe(a.id);
+      expect(spy.mock.calls.length - callsBefore).toBe(1);
+
+      const paymentRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payment = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentRes.body)[0]!;
+      // Decremented exactly once (150), never twice (300) — proves MongoDB's unique index,
+      // not a racy in-memory check, arbitrated the two concurrent claims.
+      expect(payment.refundedAmount).toBe(150);
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(150);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 3 — same key with a different amount is refused, without a second provider call', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-idem-mismatch-owner@korva.test',
+          'Refund Idem Mismatch Org',
+        );
+      const { paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'refundPayment');
+      const callsBefore = spy.mock.calls.length;
+
+      await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        100,
+        'refund-idem-key-mismatch-1',
+      ).expect(201);
+
+      const mismatchRes = await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        200, // different amount, same key
+        'refund-idem-key-mismatch-1',
+      );
+      expect(mismatchRes.status).toBe(400);
+      expect(asError(mismatchRes.body).code).toBe('IDEMPOTENCY_KEY_MISMATCH');
+      expect(spy.mock.calls.length - callsBefore).toBe(1);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 4 — retrying after a completed refund never creates a second Refund or double-adjusts Payment/Invoice', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-idem-retry-owner@korva.test',
+          'Refund Idem Retry Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const completedRes = await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        300,
+        'refund-idem-key-retry-1',
+      ).expect(201);
+      const completed = asSuccess<{ id: string }>(completedRes.body);
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'refundPayment');
+      const callsBefore = spy.mock.calls.length;
+
+      const retryRes = await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        300,
+        'refund-idem-key-retry-1',
+      ).expect(201);
+      expect(asSuccess<{ id: string }>(retryRes.body).id).toBe(completed.id);
+      expect(spy.mock.calls.length - callsBefore).toBe(0);
+
+      const paymentRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payment = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentRes.body)[0]!;
+      expect(payment.refundedAmount).toBe(300);
+      expect(payment.status).toBe('refunded');
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(0);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 5 — provider failure leaves no successful Refund; Payment/Invoice stay unchanged; retrying with the same key never calls the provider again', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-idem-provider-failure-owner@korva.test',
+          'Refund Idem Provider Failure Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest
+        .spyOn(paymentProvider, 'refundPayment')
+        .mockRejectedValueOnce(new Error('simulated provider outage'));
+
+      const failedRes = await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        100,
+        'refund-idem-key-provider-failure-1',
+      );
+      expect(failedRes.status).toBe(500);
+
+      const paymentAfterFailureRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const paymentAfterFailure = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentAfterFailureRes.body)[0]!;
+      // No "successful" Refund was created — the failed claim is not visible as a real refund,
+      // and refundedAmount is untouched (the transaction never ran).
+      expect(paymentAfterFailure.refundedAmount).toBe(0);
+      expect(paymentAfterFailure.status).toBe('completed');
+
+      const invoiceAfterFailureRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<InvoicePayload>(invoiceAfterFailureRes.body).amountPaid,
+      ).toBe(300);
+
+      // Retry with the SAME key — documented behavior: a key is permanently bound to its first
+      // resolved outcome (even a failure), so the provider is never called a second time for
+      // it. A genuinely new attempt requires a new Idempotency-Key.
+      const callsBeforeRetry = spy.mock.calls.length;
+      // The retry returns the resolved (failed) claim, not a fresh attempt — no `amount` field
+      // guarantees success; what matters is no provider call and no Payment/Invoice mutation.
+      await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        100,
+        'refund-idem-key-provider-failure-1',
+      ).expect(201);
+      expect(spy.mock.calls.length - callsBeforeRetry).toBe(0);
+
+      const invoiceAfterRetryRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<InvoicePayload>(invoiceAfterRetryRes.body).amountPaid,
+      ).toBe(300);
+
+      spy.mockRestore();
+    });
+
+    it('TEST 6 — legacy callers without an Idempotency-Key keep working exactly as before', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-idem-legacy-owner@korva.test',
+          'Refund Idem Legacy Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      // No Idempotency-Key header at all — two independent partial refunds, both must succeed.
+      await refundReq(accessToken, organizationId, paymentId, 100).expect(201);
+      await refundReq(accessToken, organizationId, paymentId, 100).expect(201);
+
+      const paymentRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const payment = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentRes.body)[0]!;
+      expect(payment.refundedAmount).toBe(200);
+
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(100);
+    });
+
+    it('TEST 7 — aborts the whole idempotent transaction when finalizing the Refund fails after the Payment increment was staged — no successful Refund persists, Payment/Invoice stay unchanged, and a retry succeeds normally', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgAndContact(
+          'refund-idem-rollback-owner@korva.test',
+          'Refund Idem Rollback Org',
+        );
+      const { invoiceId, paymentId } = await createFullyPaidInvoiceAndPayment(
+        accessToken,
+        organizationId,
+        contactId,
+        300,
+      );
+
+      // Real MongoDB transaction, real HTTP layer, real atomic refund guard — the only thing
+      // faked is a failure injected at the transactional "finalize claimed Refund to
+      // completed" step specifically (matched by `status: 'completed'` in the write), i.e.
+      // AFTER incrementRefundedAmountWithinLimit staged the Payment write inside the
+      // transaction but BEFORE commit. finalizeRefund is also called once earlier, outside any
+      // transaction, to persist the provider reference (persistRefundProviderReference) — that
+      // call must succeed normally, so the mock only targets the completion write, not just
+      // "the next call".
+      const paymentsRepository = app.get(PaymentsRepository);
+      const realFinalizeRefund =
+        paymentsRepository.finalizeRefund.bind(paymentsRepository);
+      const spy = jest
+        .spyOn(paymentsRepository, 'finalizeRefund')
+        .mockImplementation(
+          (...args: Parameters<typeof realFinalizeRefund>) => {
+            if (args[2]?.status === 'completed') {
+              throw new Error(
+                'deliberate failure to prove idempotent refund transaction rollback',
+              );
+            }
+            return realFinalizeRefund(...args);
+          },
+        );
+
+      try {
+        const res = await refundReq(
+          accessToken,
+          organizationId,
+          paymentId,
+          100,
+          'refund-idem-key-rollback-1',
+        );
+        expect(res.status).toBe(500);
+        expect(asError(res.body).code).toBe('INTERNAL_SERVER_ERROR');
+      } finally {
+        spy.mockRestore();
+      }
+
+      const paymentAfterAbortRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const paymentAfterAbort = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(paymentAfterAbortRes.body)[0]!;
+      // The staged refundedAmount increment must have been rolled back with the rest of the
+      // transaction — not left at some partially-applied value.
+      expect(paymentAfterAbort.refundedAmount).toBe(0);
+      expect(paymentAfterAbort.status).toBe('completed');
+
+      const invoiceAfterAbortRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<InvoicePayload>(invoiceAfterAbortRes.body).amountPaid,
+      ).toBe(300);
+
+      // A retry right after — same key, since the claim itself resolved to 'failed' via the
+      // outer catch block's cleanup — proves the payment wasn't left in a corrupted state.
+      // Because the previous attempt's claim is now terminally 'failed', this retry is treated
+      // as returning that same resolved (failed) outcome, not a fresh charge — consistent with
+      // TEST 5's documented "one key, one permanent outcome" behavior. A genuinely fresh retry
+      // uses a NEW key instead, which must succeed normally.
+      await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        100,
+        'refund-idem-key-rollback-2',
+      ).expect(201);
+
+      const finalPaymentRes = await request(server)
+        .get(`/api/v1/payments?invoiceId=${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const finalPayment = asSuccess<
+        (PaymentPayload & { refundedAmount: number })[]
+      >(finalPaymentRes.body)[0]!;
+      expect(finalPayment.refundedAmount).toBe(100);
+
+      const finalInvoiceRes = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<InvoicePayload>(finalInvoiceRes.body).amountPaid).toBe(
+        200,
+      );
     });
   });
 

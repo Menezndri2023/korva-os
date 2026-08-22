@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import { Order, OrderDocument } from './schemas/order.schema';
 import type { Paginated } from '../../crm/contacts/contacts.repository';
 
@@ -82,6 +82,44 @@ export class OrdersRepository {
         },
         data,
         { new: true },
+      )
+      .exec();
+  }
+
+  /**
+   * Atomic guard against concurrent generateInvoice() calls: the accept/reject decision ("is
+   * this order still uninvoiced") is made by MongoDB itself, in the SAME findOneAndUpdate as
+   * the write, via `invoiceId: { $exists: false }` in the filter — not from the `order`
+   * snapshot OrdersService.generateInvoice read moments earlier. Two concurrent calls for the
+   * same order can therefore never both match: only one findAndModify wins the document at a
+   * time. Resolves to null if the filter didn't match — either the order doesn't exist, or (the
+   * case this method exists for) it was already invoiced; the caller, which is expected to have
+   * already confirmed the order exists, treats null as the latter (ORDER_ALREADY_INVOICED).
+   *
+   * On its own this already closes the concurrency window: called from inside a MongoDB
+   * transaction that also creates the Invoice (see OrdersService.generateInvoice), a losing
+   * concurrent attempt hits a write conflict on this same Order document, its whole transaction
+   * — including the Invoice it just inserted — gets aborted and retried, and the retry's filter
+   * then correctly sees the winner's committed invoiceId and no longer matches. The partial
+   * unique index on Invoice.orderId (see the schema) is defense-in-depth on top of this, not a
+   * substitute for it.
+   */
+  async attachInvoiceIfUnset(
+    organizationId: string,
+    id: string,
+    invoiceId: string,
+    session?: ClientSession,
+  ): Promise<OrderDocument | null> {
+    if (!Types.ObjectId.isValid(id)) return null;
+    return this.orderModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          invoiceId: { $exists: false },
+        },
+        { invoiceId: new Types.ObjectId(invoiceId) },
+        { new: true, session },
       )
       .exec();
   }
