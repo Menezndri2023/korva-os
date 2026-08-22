@@ -180,10 +180,13 @@ export class ConversationsService {
           phone: contact.phone,
         },
       };
-      body = interpolate(template.body, payload) || body;
+      const escapeHtml = conversation.channel === 'email';
+      body = interpolate(template.body, payload, { escapeHtml }) || body;
       subject =
         subject ??
-        (template.subject ? interpolate(template.subject, payload) : undefined);
+        (template.subject
+          ? interpolate(template.subject, payload, { escapeHtml })
+          : undefined);
     }
 
     let status: 'sent' | 'failed' = 'sent';
