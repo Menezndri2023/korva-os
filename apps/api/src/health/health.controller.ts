@@ -1,4 +1,9 @@
-import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
@@ -9,6 +14,8 @@ import { Public } from '../common/decorators/public.decorator';
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
+
   constructor(
     @InjectConnection() private readonly mongooseConnection: Connection,
     private readonly configService: ConfigService,
@@ -27,9 +34,10 @@ export class HealthController {
       await this.mongooseConnection.db?.admin().ping();
       return { status: 'ok' };
     } catch (error) {
+      this.logger.error('Database health check failed', error);
       throw new ServiceUnavailableException({
         code: 'DATABASE_UNAVAILABLE',
-        message: (error as Error).message,
+        message: 'Database is currently unavailable',
       });
     }
   }
@@ -49,9 +57,10 @@ export class HealthController {
       await client.ping();
       return { status: 'ok' };
     } catch (error) {
+      this.logger.error('Redis health check failed', error);
       throw new ServiceUnavailableException({
         code: 'REDIS_UNAVAILABLE',
-        message: (error as Error).message,
+        message: 'Redis is currently unavailable',
       });
     } finally {
       client.disconnect();
