@@ -10,6 +10,7 @@ import { Connection } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import IORedis from 'ioredis';
 import { Public } from '../common/decorators/public.decorator';
+import { QueueMetricsService } from './queue-metrics.service';
 
 @ApiTags('health')
 @Controller('health')
@@ -19,6 +20,7 @@ export class HealthController {
   constructor(
     @InjectConnection() private readonly mongooseConnection: Connection,
     private readonly configService: ConfigService,
+    private readonly queueMetricsService: QueueMetricsService,
   ) {}
 
   @Public()
@@ -64,6 +66,27 @@ export class HealthController {
       });
     } finally {
       client.disconnect();
+    }
+  }
+
+  /**
+   * Aggregate BullMQ job counts only (waiting/active/completed/failed/delayed/paused) for the
+   * 'events' and 'payment-reconciliation' queues — never an individual job, so there is no
+   * organizationId, entityId, eventKey, jobId, or payload to leak. Public like the other
+   * /health/* endpoints for the same reason /health/redis already is: it reveals operational
+   * state, not tenant data, matching this endpoint's own content exactly.
+   */
+  @Public()
+  @Get('queues')
+  async queues() {
+    try {
+      return await this.queueMetricsService.getMetrics();
+    } catch (error) {
+      this.logger.error('Queue metrics unavailable', error);
+      throw new ServiceUnavailableException({
+        code: 'QUEUE_METRICS_UNAVAILABLE',
+        message: 'Queue metrics are currently unavailable',
+      });
     }
   }
 }
