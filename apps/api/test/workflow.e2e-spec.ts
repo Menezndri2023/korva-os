@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { EventBusService } from '../src/core/events/event-bus.service';
+import { WorkflowsRepository } from '../src/workflow/workflows.repository';
 
 interface ApiSuccess<T> {
   success: true;
@@ -379,6 +381,114 @@ describe('Workflow module (e2e)', () => {
       expect(executions[0]!.status).toBe('success');
       expect(executions[0]!.eventName).toBe('lead.created');
     }, 25000);
+
+    it('never creates a second Task when the identical lead.created event is published twice', async () => {
+      const leadRes = await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, pipelineId, stageId, estimatedValue: 5000 })
+        .expect(201);
+      const leadId = asSuccess<{ id: string }>(leadRes.body).id;
+
+      await waitFor(async () => {
+        const tasksRes = await request(server)
+          .get('/api/v1/tasks')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const tasks = asSuccess<TaskPayload[]>(tasksRes.body);
+        return tasks.find((task) => task.title === `Qualified lead ${leadId}`);
+      });
+
+      // Simulates a producer bug/retry publishing the identical logical event a second time —
+      // same organizationId/eventName/payload as the one LeadsService.create() already
+      // published for this exact lead. This must never create a second Task.
+      const eventBus = app.get(EventBusService);
+      await eventBus.publish(organizationId, 'lead.created', {
+        leadId,
+        contactId,
+        estimatedValue: 5000,
+      });
+
+      // Give the (deliberately duplicate) job a real chance to be processed before asserting
+      // there's still only one Task — waitFor would return on the first match either way.
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      const tasksRes = await request(server)
+        .get('/api/v1/tasks')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const matching = asSuccess<TaskPayload[]>(tasksRes.body).filter(
+        (task) => task.title === `Qualified lead ${leadId}`,
+      );
+      expect(matching).toHaveLength(1);
+    }, 25000);
+  });
+
+  describe('workflow action claim — concurrent execution of the same event', () => {
+    it('two simultaneous claims on the same (workflow, action, event) key: exactly one wins', async () => {
+      const repository = app.get(WorkflowsRepository);
+      const organizationId = new Types.ObjectId().toString();
+      const workflowId = new Types.ObjectId();
+      const eventKey = `lead.created:${new Types.ObjectId().toString()}`;
+
+      const [first, second] = await Promise.all([
+        repository.claimAction(organizationId, workflowId, 0, eventKey),
+        repository.claimAction(organizationId, workflowId, 0, eventKey),
+      ]);
+
+      const outcomes = [first, second].sort();
+      expect(outcomes).toEqual(['already-claimed', 'claimed']);
+    });
+
+    it('a claim that never reaches "succeeded" stays re-claimable by a later sequential attempt', async () => {
+      const repository = app.get(WorkflowsRepository);
+      const organizationId = new Types.ObjectId().toString();
+      const workflowId = new Types.ObjectId();
+      const eventKey = `lead.created:${new Types.ObjectId().toString()}`;
+
+      const attempt1 = await repository.claimAction(
+        organizationId,
+        workflowId,
+        0,
+        eventKey,
+      );
+      // attempt1's effect "failed" here — no markActionSucceeded call — modeling a job retry.
+      const attempt2 = await repository.claimAction(
+        organizationId,
+        workflowId,
+        0,
+        eventKey,
+      );
+
+      expect(attempt1).toBe('claimed');
+      expect(attempt2).toBe('claimed');
+    });
+
+    it('once a claim is marked succeeded, a later attempt on the same key is rejected as already done', async () => {
+      const repository = app.get(WorkflowsRepository);
+      const organizationId = new Types.ObjectId().toString();
+      const workflowId = new Types.ObjectId();
+      const eventKey = `lead.created:${new Types.ObjectId().toString()}`;
+
+      await repository.claimAction(organizationId, workflowId, 0, eventKey);
+      await repository.markActionSucceeded(
+        organizationId,
+        workflowId,
+        0,
+        eventKey,
+      );
+      const retry = await repository.claimAction(
+        organizationId,
+        workflowId,
+        0,
+        eventKey,
+      );
+
+      expect(retry).toBe('already-succeeded');
+    });
   });
 
   describe('tenant isolation for workflows', () => {

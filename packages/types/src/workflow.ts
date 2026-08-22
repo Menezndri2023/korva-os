@@ -86,6 +86,13 @@ export interface WorkflowActionResult {
   type: WorkflowActionType;
   success: boolean;
   error?: string;
+  /**
+   * True only for a genuine execution failure of create_task/internal_notification — the two
+   * action types whose claim-first guard makes a BullMQ job retry safe. Never set for
+   * send_email/webhook: their own failure must never trigger an automatic retry, since neither
+   * has a way to guarantee the external side effect wasn't already delivered.
+   */
+  retryable?: boolean;
 }
 
 export interface WorkflowExecution {

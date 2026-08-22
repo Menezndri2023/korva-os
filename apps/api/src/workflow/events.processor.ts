@@ -43,13 +43,20 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
           job.data.organizationId,
           job.data.name,
           job.data.payload,
+          job.data.eventKey,
         );
       },
       { connection: this.connection },
     );
     this.worker.on('failed', (job, error) => {
+      const attemptsMade = job?.attemptsMade ?? 0;
+      const attempts = job?.opts.attempts ?? 1;
+      const exhausted = attemptsMade >= attempts;
       this.logger.error(
-        `Event job ${job?.id} ("${job?.data.name}") failed`,
+        `Event job ${job?.id} ("${job?.data.name}") failed on attempt ${attemptsMade}/${attempts}` +
+          (exhausted
+            ? ' — attempts exhausted, job left in the failed set'
+            : ' — will retry'),
         error,
       );
     });

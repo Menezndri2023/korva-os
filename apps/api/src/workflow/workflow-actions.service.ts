@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Types } from 'mongoose';
 import type {
   CreateTaskActionConfig,
   InternalNotificationActionConfig,
@@ -15,6 +16,28 @@ import {
 } from '../communication/providers/email-provider.interface';
 import { interpolate } from '../shared/template';
 import { safeFetch } from '../shared/safe-fetch';
+import { WorkflowsRepository } from './workflows.repository';
+
+/** Identifies exactly one action within one workflow's run of one event — see WorkflowActionClaim. */
+export interface WorkflowActionClaimContext {
+  workflowId: Types.ObjectId;
+  actionIndex: number;
+  eventKey: string;
+}
+
+/**
+ * create_task/internal_notification are pure internal writes with no external counterparty to
+ * disagree with us about whether they already happened — a claim fully covers them, so their own
+ * failure is safe to propagate as a retryable job failure. send_email/webhook talk to a system
+ * this codebase doesn't control; a claim protects them from being replayed by a retry that was
+ * actually triggered by a *different* action's failure, but it can never prove the external side
+ * effect wasn't already delivered right before a crash/timeout — so their own failure must never
+ * be marked retryable (see docs/lot-q audit §13).
+ */
+const RETRYABLE_ACTION_TYPES: ReadonlySet<WorkflowAction['type']> = new Set([
+  'create_task',
+  'internal_notification',
+]);
 
 @Injectable()
 export class WorkflowActionsService {
@@ -24,13 +47,29 @@ export class WorkflowActionsService {
     private readonly tasksService: TasksService,
     private readonly notificationsService: NotificationsService,
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
+    private readonly workflowsRepository: WorkflowsRepository,
   ) {}
 
   async execute(
     organizationId: string,
     action: WorkflowAction,
     payload: Record<string, unknown>,
+    claim?: WorkflowActionClaimContext,
   ): Promise<WorkflowActionResult> {
+    if (claim) {
+      const claimResult = await this.workflowsRepository.claimAction(
+        organizationId,
+        claim.workflowId,
+        claim.actionIndex,
+        claim.eventKey,
+      );
+      // Someone (a prior attempt, or a concurrent one) already has this covered — running the
+      // effect again is exactly the double-execution this claim exists to prevent.
+      if (claimResult !== 'claimed') {
+        return { type: action.type, success: true };
+      }
+    }
+
     try {
       switch (action.type) {
         case 'create_task':
@@ -46,11 +85,23 @@ export class WorkflowActionsService {
           await this.notifyOrganization(organizationId, action.config, payload);
           break;
       }
+      if (claim) {
+        await this.workflowsRepository.markActionSucceeded(
+          organizationId,
+          claim.workflowId,
+          claim.actionIndex,
+          claim.eventKey,
+        );
+      }
       return { type: action.type, success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Workflow action "${action.type}" failed: ${message}`);
-      return { type: action.type, success: false, error: message };
+      // No claim (eventKey wasn't derivable for this event) means no dedup guard exists at all
+      // — retrying would be unprotected even for create_task/internal_notification, so it's
+      // never marked retryable in that case regardless of action type.
+      const retryable = !!claim && RETRYABLE_ACTION_TYPES.has(action.type);
+      return { type: action.type, success: false, error: message, retryable };
     }
   }
 

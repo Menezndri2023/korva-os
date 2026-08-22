@@ -6,6 +6,10 @@ import {
   WorkflowExecution,
   WorkflowExecutionSchema,
 } from './schemas/workflow-execution.schema';
+import {
+  WorkflowActionClaim,
+  WorkflowActionClaimSchema,
+} from './schemas/workflow-action-claim.schema';
 
 import { WorkflowsRepository } from './workflows.repository';
 import { WorkflowsService } from './workflows.service';
@@ -22,6 +26,7 @@ import { CommunicationModule } from '../communication/communication.module';
     MongooseModule.forFeature([
       { name: Workflow.name, schema: WorkflowSchema },
       { name: WorkflowExecution.name, schema: WorkflowExecutionSchema },
+      { name: WorkflowActionClaim.name, schema: WorkflowActionClaimSchema },
     ]),
     CrmModule,
     CommunicationModule,
