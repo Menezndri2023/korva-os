@@ -8,8 +8,84 @@ services:
       MONGO_INITDB_ROOT_USERNAME: korva
       MONGO_INITDB_ROOT_PASSWORD: korva
       MONGO_INITDB_DATABASE: korva
+    # Financial writes (Payment/Invoice/Order) need multi-document transactions, which MongoDB
+    # only supports on a replica set — never on a bare standalone mongod. This stays a
+    # single-node set (rs0): enough for transaction support locally without running extra
+    # mongod processes. See mongodb-init below for the one-time `rs.initiate()`.
+    #
+    # --keyFile is mandatory as soon as --replSet is combined with auth (root user below) —
+    # mongod refuses to start otherwise, even for a single-node set. mongo-entrypoint.sh
+    # generates that keyfile into the korva_mongodb_keyfile volume on first boot.
+    entrypoint: ["/scripts/mongo-entrypoint.sh"]
+    command:
+      [
+        "mongod",
+        "--replSet",
+        "rs0",
+        "--bind_ip_all",
+        "--keyFile",
+        "/data/keyfile/mongo-keyfile",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "-u",
+          "korva",
+          "-p",
+          "korva",
+          "--authenticationDatabase",
+          "admin",
+          "--eval",
+          "db.adminCommand('ping')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     volumes:
       - korva_mongodb_data:/data/db
+      - korva_mongodb_keyfile:/data/keyfile
+      - ./docker/mongodb/mongo-entrypoint.sh:/scripts/mongo-entrypoint.sh:ro
+
+  # One-shot: waits for mongodb to accept connections, then runs rs.initiate() exactly once.
+  # Idempotent — if rs0 is already initialized (e.g. after `docker compose down` + `up` with
+  # the existing volume), rs.status() succeeds and the container just exits 0 without
+  # re-initiating, so it's always safe to run again.
+  mongodb-init:
+    image: mongo:7
+    restart: "no"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command:
+      - mongosh
+      - --host
+      - mongodb
+      - --port
+      - "27017"
+      - -u
+      - korva
+      - -p
+      - korva
+      - --authenticationDatabase
+      - admin
+      - --quiet
+      - --eval
+      - |
+        try {
+          rs.status();
+          print('rs0 already initialized');
+        } catch (e) {
+          if (e.codeName === 'NotYetInitialized') {
+            rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] });
+            print('rs0 initiated');
+          } else {
+            throw e;
+          }
+        }
 
   redis:
     image: redis:7-alpine
@@ -23,4 +99,5 @@ services:
 
 volumes:
   korva_mongodb_data:
+  korva_mongodb_keyfile:
   korva_redis_data:
