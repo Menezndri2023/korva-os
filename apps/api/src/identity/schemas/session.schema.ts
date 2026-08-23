@@ -13,7 +13,7 @@ export class Session {
   @Prop({ required: true, unique: true, select: false })
   refreshTokenHash!: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, expires: 0 })
   expiresAt!: Date;
 
   @Prop({ type: Date, default: null })
