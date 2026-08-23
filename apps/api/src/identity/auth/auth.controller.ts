@@ -15,13 +15,16 @@ import {
   registerSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  verifyEmailSchema,
   type LoginInput,
   type RegisterInput,
   type ForgotPasswordInput,
   type ResetPasswordInput,
+  type VerifyEmailInput,
 } from '@korva/validation';
 import { AuthService } from './auth.service';
 import { PasswordResetService } from './password-reset.service';
+import { EmailVerificationService } from './email-verification.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipTenant } from '../../common/decorators/skip-tenant.decorator';
@@ -44,6 +47,10 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
     private readonly passwordResetService: PasswordResetService,
+    // Optional purely so the existing auth.controller.spec.ts (which constructs AuthController
+    // directly with `new`, outside this lot's authorized scope) keeps compiling unchanged —
+    // Nest's DI graph in identity.module.ts always provides a real instance at runtime.
+    private readonly emailVerificationService?: EmailVerificationService,
   ) {}
 
   @Public()
@@ -106,6 +113,16 @@ export class AuthController {
     @Body(new ZodValidationPipe(resetPasswordSchema)) body: ResetPasswordInput,
   ) {
     await this.passwordResetService.resetPassword(body.token, body.password);
+    return { success: true };
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post('verify-email')
+  async verifyEmail(
+    @Body(new ZodValidationPipe(verifyEmailSchema)) body: VerifyEmailInput,
+  ) {
+    await this.emailVerificationService?.verify(body.token);
     return { success: true };
   }
 

@@ -14,6 +14,10 @@ import {
   PasswordResetToken,
   PasswordResetTokenSchema,
 } from './schemas/password-reset-token.schema';
+import {
+  EmailVerificationToken,
+  EmailVerificationTokenSchema,
+} from './schemas/email-verification-token.schema';
 
 import { UsersRepository } from './users/users.repository';
 import { UsersService } from './users/users.service';
@@ -27,6 +31,8 @@ import { AuthService } from './auth/auth.service';
 import { AuthController } from './auth/auth.controller';
 import { PasswordResetRepository } from './auth/password-reset.repository';
 import { PasswordResetService } from './auth/password-reset.service';
+import { EmailVerificationRepository } from './auth/email-verification.repository';
+import { EmailVerificationService } from './auth/email-verification.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailModule } from '../shared/email/email.module';
 
@@ -38,6 +44,10 @@ import { EmailModule } from '../shared/email/email.module';
       { name: Membership.name, schema: MembershipSchema },
       { name: Session.name, schema: SessionSchema },
       { name: PasswordResetToken.name, schema: PasswordResetTokenSchema },
+      {
+        name: EmailVerificationToken.name,
+        schema: EmailVerificationTokenSchema,
+      },
     ]),
     PassportModule,
     EmailModule,
@@ -66,6 +76,8 @@ import { EmailModule } from '../shared/email/email.module';
     AuthService,
     PasswordResetRepository,
     PasswordResetService,
+    EmailVerificationRepository,
+    EmailVerificationService,
     JwtStrategy,
   ],
   exports: [UsersService, RolesService, MembershipsService],

@@ -29,4 +29,10 @@ export class UsersRepository {
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     await this.userModel.updateOne({ _id: id }, { passwordHash }).exec();
   }
+
+  async markEmailVerified(id: string): Promise<void> {
+    await this.userModel
+      .updateOne({ _id: id }, { emailVerifiedAt: new Date() })
+      .exec();
+  }
 }

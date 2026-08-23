@@ -10,6 +10,7 @@ import { randomBytes } from 'node:crypto';
 import type { RegisterInput, LoginInput } from '@korva/validation';
 import { UsersService } from '../users/users.service';
 import { SessionsService } from './sessions.service';
+import { EmailVerificationService } from './email-verification.service';
 import { UserDocument } from '../schemas/user.schema';
 import { hashToken } from './token-hash.util';
 
@@ -38,6 +39,10 @@ export class AuthService {
     private readonly sessionsService: SessionsService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    // Optional purely so the existing auth.service.spec.ts (which constructs AuthService
+    // directly with `new`, outside this lot's authorized scope) keeps compiling unchanged —
+    // Nest's DI graph in identity.module.ts always provides a real instance at runtime.
+    private readonly emailVerificationService?: EmailVerificationService,
   ) {
     this.refreshTtlMs = this.parseTtlToMs(
       this.configService.get<string>('JWT_REFRESH_TTL') ?? '30d',
@@ -59,6 +64,17 @@ export class AuthService {
       input.firstName,
       input.lastName,
     );
+
+    // Additive to registration, never allowed to affect its outcome — a failure here (token
+    // issuance or email delivery) must never turn a successful account creation into a failed
+    // request. Verification stays informative-only in this lot: nothing downstream reads
+    // emailVerifiedAt to gate access (see EmailVerificationService's class doc).
+    try {
+      await this.emailVerificationService?.sendVerification(user);
+    } catch (error) {
+      this.logger.error('Failed to issue email verification token', error);
+    }
+
     const tokens = await this.issueTokens(user);
     return { user: toPublicUser(user), ...tokens };
   }
