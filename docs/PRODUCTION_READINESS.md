@@ -4,7 +4,7 @@
 **Scope:** Full monorepo (`apps/api`, `apps/web`, `apps/storefront`, `apps/worker`, `packages/*`, `infrastructure/`, `.github/`, `docs/`).
 **Method:** Direct source inspection (schemas, controllers, services, guards, Dockerfiles, CI workflow, `.env.example`), cross-checked against `docs/security.md`, `docs/deployment.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/architecture.md`, `docs/database.md`, `docs/api.md`, `docs/ai.md`, `docs/architecture-decisions.md`, `docs/multi-tenancy.md`, and `README.md`. Claims in documentation were verified against code, not taken at face value. No code was modified as part of this audit.
 
-> **⚠️ Read this before the rest of the document.** Sections 1–26 below are the **original Phase 13.0 audit**, written before the D4 hardening lots landed. Since it was written: `apps/worker` has been removed in favor of in-process BullMQ workers, Docker/CI have been hardened, and lots D4-A through D4-F have resolved several of the security findings this document originally flagged as open (including its stated basis for the NO-GO verdict in §25). **The original sections below are preserved as-is for historical traceability — do not treat their individual findings as current status.** [§27 — Phase 13.1 — Post-D4 Reconciliation](#27-phase-131--post-d4-reconciliation), at the end of this document, is the source of truth for the state of the repository as of `HEAD = 0f6a258a22b015b849dc42d3e215d4ce066a8f0f`.
+> **⚠️ Read this before the rest of the document.** Sections 1–26 below are the **original Phase 13.0 audit**, written before the D4 hardening lots landed. Since it was written: `apps/worker` has been removed in favor of in-process BullMQ workers, Docker/CI have been hardened, and lots D4-A through D4-F have resolved several of the security findings this document originally flagged as open (including its stated basis for the NO-GO verdict in §25). **The original sections below are preserved as-is for historical traceability — do not treat their individual findings as current status.** [§27 — Phase 13.1 — Post-D4 Reconciliation](#27-phase-131--post-d4-reconciliation) documents the state of the repository as of `HEAD = 0f6a258a22b015b849dc42d3e215d4ce066a8f0f`. **Four further commits (Lots Q/R/S/T) have landed since** — [§28 — Post-Q/R/S/T Reconciliation](#28-post-qrst-reconciliation), at the end of this document, is the source of truth for the current state as of `HEAD = 0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd`. §28 also covers the Payment/Refund reconciliation scheduler, which §27 omitted despite predating it.
 
 ---
 
@@ -642,8 +642,97 @@ Resolving the D4 security findings materially reduces the risk of running even a
 
 Sections 1–26 of this document are preserved deliberately, in their original form, as the historical Phase 13.0 audit — the specific findings it identified (including the three security items resolved in D4) are what directly motivated and scoped the D4-A through D4-F work. They are not deleted or rewritten here so that this traceability remains intact for anyone reviewing why those changes were made.
 
-**This section (§27) is the source of truth for the current state of the repository as of `HEAD = 0f6a258a22b015b849dc42d3e215d4ce066a8f0f`.** Where §1–§26 and §27 disagree, §27 is correct.
+**This section (§27) is the source of truth for the state of the repository as of `HEAD = 0f6a258a22b015b849dc42d3e215d4ce066a8f0f`.** Where §1–§26 and §27 disagree, §27 is correct. **It is not the source of truth for the current repository** — four further commits (Lots Q/R/S/T) have landed since; see [§28 — Post-Q/R/S/T Reconciliation](#28-post-qrst-reconciliation) for the current state as of `HEAD = 0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd` (which also covers the Payment/Refund reconciliation scheduler, predating §27 but never covered by it).
 
 ---
 
 No code changes were made as part of this documentation audit/reconciliation. `apps/api/src/main.ts` and `apps/api/src/workflow/events.processor.ts` are separately modified in the working tree as part of the unrelated Lot F Final code change, pending its own review.
+
+---
+
+## 28. Post-Q/R/S/T Reconciliation
+
+### 28.1 Scope and date of reconciliation
+
+- **Repository:** `korva-os` monorepo.
+- **Branch:** `main`.
+- **HEAD at time of this reconciliation:** `0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd`.
+- **Parent:** `d378963fc423f1726c9bd7fcec8992d0ecf4d469`.
+- **`origin/main`:** `3053218d6885731220897852375be1c5dc2045d0` — local `main` is 18 commits ahead; none of the commits described in this section (or in §27) have been pushed.
+- **Nature:** a further reconciliation layered on top of §27, not a fresh independent audit. §27 remains the accurate historical record for the D4 period ending at `HEAD=0f6a258`; this section extends that record forward through the commits that landed since, and separately notes one commit §27 omitted despite it predating §27's own HEAD.
+- **Objective:** same as §27's — give a reader an accurate, self-contained picture of current status without reconstructing git history themselves.
+
+### 28.2 The commits this section covers
+
+Four commits landed **after** §27's `HEAD=0f6a258`, plus one that **predates** it but was never mentioned by §27. Each is a separate, self-contained commit with a disjoint file footprint — they must not be read as one undifferentiated "hardening batch."
+
+| Commit | Name | Relative to §27's HEAD (`0f6a258`) | Files (top-level) |
+|---|---|---|---|
+| `fee9608` | Payment/Refund reconciliation scheduler | **Predates** `0f6a258` — omitted by §27, not "new since" | `.env.example`, `finance/finance.module.ts`, `finance/payments/reconciliation-scheduler.service.ts`, `test/payment-reconciliation-scheduler.e2e-spec.ts` |
+| `7796559` | Lot Q — reliable event retries + action idempotency | After | `core/events/event-bus.service.ts`(+spec), `core/events/event-names.ts`, `workflow/events.processor.ts`, `workflow/schemas/workflow-action-claim.schema.ts`, `workflow/workflow-actions.service.ts`(+spec), `workflow/workflow-engine.service.ts`(+spec), `workflow/workflow.module.ts`, `workflow/workflows.repository.ts`, `test/workflow.e2e-spec.ts`, `packages/types/src/workflow.ts` |
+| `5fedead` | Lot R — BullMQ queue metrics | After | `health/health.controller.ts`(+spec), `health/health.module.ts`, `health/queue-metrics.service.ts`(+spec), `test/health.e2e-spec.ts` |
+| `d378963` | Lot S — definitive queue failure alerting | After | `health/health.module.ts`, `health/queue-alerting.service.ts`(+spec) |
+| `0d1f289` | Lot T — password reset flow | After | `identity/auth/*`, `identity/users/*`, `communication/communication.module.ts`, `shared/email/*` — see §28.4 |
+
+These commits touch four disjoint areas of the codebase (finance/scheduler, core/events+workflow, health, identity/communication/email) with no file overlap between any two of them — confirmed by direct inspection of each commit's file list.
+
+### 28.3 Scheduler BullMQ, Lot Q, Lot R, Lot S — factual summary
+
+**Scheduler BullMQ (`fee9608`).** A second, independent BullMQ queue (`payment-reconciliation`, distinct from the `events` queue Lot Q hardens) with a repeatable job on a configurable interval (default 5 minutes), sweeping Payments/Refunds stuck in `processing` and re-querying the payment provider to resolve them. Runs entirely inside `apps/api`, same in-process pattern as `EventsProcessor`.
+
+**Lot Q (`7796559`).** Hardens the `events` queue specifically: `EventBusService.publish()` now passes explicit `JobsOptions` (`attempts: 5`, exponential backoff starting at 2s) instead of BullMQ's default `attempts: 1`. Adds a `WorkflowActionClaim` collection (claim-before-execute pattern, unique index on `(organizationId, workflowId, actionIndex, eventKey)`) so a BullMQ-level retry of an event cannot re-run a workflow action's side effect twice. **The `payment-reconciliation` queue (Scheduler BullMQ, above) received none of this** — it still runs with BullMQ's default `attempts: 1` and no explicit retry/backoff configuration. This is a real, confirmed asymmetry between the two queues.
+
+**Lot R (`5fedead`).** Adds `GET /health/queues`, exposing aggregate BullMQ job counts (`waiting`/`active`/`completed`/`failed`/`delayed`/`paused`) for both the `events` and `payment-reconciliation` queues, read via a short-lived, separate Redis connection (never touching the producer/consumer connections). **This is targeted queue observability, not a general-purpose metrics system** — there is still no `/metrics` (Prometheus-style) endpoint and no generic APM; §19's "Metrics (Prometheus): NOT_IMPLEMENTED" finding remains accurate for anything outside these two specific queues.
+
+**Lot S (`d378963`).** Adds `QueueAlertingService`, which subscribes to BullMQ's `QueueEvents` `'failed'` stream on both the `events` and `payment-reconciliation` queues and logs a fixed, non-identifying warning line (`QUEUE_JOB_FAILED — queue "<name>" has a definitively failed job`) with a 5-minute per-process cooldown, when a job exhausts all its retry attempts. **This is a log-line alert, not an integration with any alerting/paging system** (PagerDuty, Slack, email) **and not Sentry/error-tracking** — §19's "Error tracking (Sentry or equivalent): NOT_IMPLEMENTED" and "Alerting: NOT_IMPLEMENTED" findings remain accurate; Lot S narrows only the specific "a BullMQ job silently failed with zero signal" gap, nothing broader.
+
+### 28.4 Lot T (`0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd`) — password reset flow
+
+Verified directly against the code at this HEAD:
+
+- `POST /auth/forgot-password` and `POST /auth/reset-password` (`identity/auth/auth.controller.ts`), both `@Public()` and under the same `AUTH_THROTTLE` (30/min) already applied to `/auth/login`/`/auth/register`.
+- Request bodies validated via `ZodValidationPipe` against `forgotPasswordSchema`/`resetPasswordSchema` (`packages/validation/src/auth.ts`); the reset-password field reuses `registerSchema.shape.password` — no separate password policy.
+- Token: `randomBytes(32).toString('hex')`, SHA-256-hashed (`identity/auth/token-hash.util.ts`, the same primitive already used for refresh tokens) before it ever reaches MongoDB — the plaintext token is never persisted.
+- Storage: one `PasswordResetToken` document per user (unique index on `userId`), `tokenHash` (`select:false`), `expiresAt`, `usedAt`. A new `forgot-password` request replaces (upserts over) any existing row for that user, invalidating a previously-issued, still-unused token.
+- Expiration: 30 minutes (hardcoded — no new environment variable introduced).
+- Consumption: a single atomic `findOneAndUpdate` filtering on `{tokenHash, usedAt: null, expiresAt: {$gt: now}}` and setting `usedAt` — the same accept/reject-by-filter pattern already used by `SessionsRepository.revokeActiveByTokenHash`. Enforces single use.
+- Ordering in `PasswordResetService.resetPassword()`: the new Argon2 password hash is computed **before** the token is consumed; the token is consumed **before** the User document is touched; sessions are revoked (`SessionsService.revokeAllForUser`, unmodified) only after the password write succeeds. An invalid/expired/already-used token can therefore never result in a password change.
+- Anti-enumeration: `forgot-password` returns an identical response (same status, same body) regardless of whether the email belongs to an account — verified by a dedicated e2e test comparing both responses byte-for-byte.
+- The token is never returned in any API response and never appears in a logged value — verified by a dedicated unit test asserting on every `Logger` call made during both the success and the email-delivery-failure path.
+
+**Limits, stated proportionately — none of the following is a critical vulnerability:**
+- **Timing side-channel, not mitigated.** The "account exists" branch of `forgot-password` does more work (token issue + email) than the "no account" branch — a theoretically measurable timing difference. No dummy-cost work was added to equalize it.
+- **No frontend page.** `apps/web` does not currently contain a `/reset-password` (or `/forgot-password`) route — confirmed by direct inspection of `apps/web/src/app` (only `dashboard`, `login`, `onboarding`, `register` exist). The backend flow is complete and independently tested via the API; the missing page is a separate, frontend-only piece of work.
+- **No rate limit specific to a single email address** — only the existing per-IP `AUTH_THROTTLE` applies, the same limitation already present on `/auth/login`/`/auth/register`.
+- **A narrow, non-transactional residual window** between token consumption and the password-hash write: if the MongoDB write in `updatePasswordHash()` fails immediately after `consume()` already succeeded, the token is spent but the password is unchanged. Self-healing (the user can request a new token); deliberately not closed with a multi-document transaction — the token-consumption step alone is what gates correctness here.
+
+### 28.5 Tests, as actually run at this HEAD
+
+Distinct from — and superseding, for anything past `HEAD=0f6a258` — the counts in §27.6, which remain an accurate historical snapshot of that earlier HEAD and are left unaltered:
+
+| Metric | §27.6 (`HEAD=0f6a258`) | This reconciliation (`HEAD=0d1f289`) |
+|---|---|---|
+| `*.e2e-spec.ts` files | 15 | **17** |
+| `it`/`test` blocks in e2e sources (static count) | 159 | **170** |
+| `*.spec.ts` files | 11 | **17** |
+| Unit tests executed | 107/107 | **156/156** |
+| E2E tests executed | not stated in §27.6 | **170/170** |
+| `password-reset.e2e-spec.ts` in isolation | N/A (didn't exist) | **5/5, repeated 3 consecutive times, deterministic** |
+
+### 28.6 Corrections to specific claims in §1–§27
+
+The following individual statements, as written in §1–§27, are no longer accurate descriptions of the codebase at `HEAD=0d1f289` and must not be read as current. As with §27.5, the original text above is left unedited for historical traceability — this list is the correction layer.
+
+- §1 line 19, §6 (Authentication Security Audit table, "Password reset"), §13, §24 P0 (`Implement password-reset flow`), §26 recommendation 7, §27.7 (Auth), §27.8 — **"no password-reset flow" / "NOT_IMPLEMENTED"**: resolved by Lot T (`0d1f289`), see §28.4.
+- §27.7 (Queue) — **"`EventBusService.publish()` still calls `queue.add(name, data)` with no `JobsOptions`... `attempts: 1`"**: resolved for the `events` queue by Lot Q (`7796559`). **Still accurate for the `payment-reconciliation` queue** (Scheduler BullMQ, `fee9608`) — that queue still has no explicit `JobsOptions`. See §28.3.
+- §19 (Monitoring & Observability), "Queue monitoring (Bull Board or similar): NOT_IMPLEMENTED" — **narrowed, not resolved**: `GET /health/queues` (Lot R) and the `QUEUE_JOB_FAILED` log alert (Lot S) now provide targeted visibility into the two existing BullMQ queues specifically. A Bull Board dashboard, a generic `/metrics` endpoint, and Sentry/error-tracking integration remain entirely absent — see §28.3.
+
+Every other individual finding in §1–§27 (billing, infrastructure provisioning, 2FA, email verification, file storage, TTL index on `Session.expiresAt`, request/correlation ID middleware, generic metrics endpoint, Sentry, structured logging) is **unaffected by these commits** and remains exactly as characterized in §27.7/§27.8.
+
+### 28.7 GO / NO-GO — unaffected
+
+The §27.8 verdict (**NO-GO** for a real commercial launch) is unchanged by this reconciliation. Resolving the password-reset gap removes one item from the "baseline account-lifecycle gaps" basis cited in §27.8 (2FA alone remains open there), but the four substantive bases for NO-GO — no real payment collection path, no production infrastructure, no monitoring/error-tracking (Sentry), and the remaining account-lifecycle/storage/queue gaps — are all untouched by the commits covered in this section and remain fully valid.
+
+### 28.8 Source of truth
+
+**This section (§28) is the source of truth for the current state of the repository as of `HEAD = 0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd`.** §27 remains the accurate historical record for the D4 period ending at `HEAD = 0f6a258`; where §27 and §28 disagree on anything covered by §28.6, §28 is correct. Neither section supersedes the other in general — §27 documents D4, §28 documents what has landed since (plus the one pre-existing omission noted in §28.2) — and no future reader should treat this document as current beyond `0d1f289` without checking `git log` for what has landed since this HEAD.

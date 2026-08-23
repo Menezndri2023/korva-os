@@ -13,7 +13,7 @@ Domain Modules
     ↓
 MongoDB · Redis · Object Storage · BullMQ Queues · External Providers
     ↑
-Workers (apps/worker)
+Workers BullMQ (in-process dans apps/api — apps/worker retiré, voir ADR-005 et docs/IMPLEMENTATION_PLAN.md §21.0)
 ```
 
 ## Modules (domaines fonctionnels)
@@ -67,7 +67,7 @@ Toute action métier significative émet un événement (`customer.created`, `le
 
 Le module **WORKFLOW** (`apps/api/src/workflow/`) est le premier consommateur de cette queue : `EventsProcessor` (un `Worker` BullMQ) reçoit chaque événement, `WorkflowEngineService` retrouve les workflows actifs déclenchés par ce nom d'événement, évalue leurs `conditions` (AND, dot-path dans le payload) puis exécute leurs `actions` (`create_task`, `send_email` — réel via `EmailProvider` depuis la Phase 8, `webhook`, `internal_notification` — diffuse une Notification à toute l'organisation via `CommunicationModule`), et journalise le résultat dans `workflow_executions`.
 
-**Note d'architecture** : ce `Worker` tourne aujourd'hui *dans le processus `apps/api`* plutôt que dans `apps/worker`, pour réutiliser directement les services Nest existants (ex. `TasksService`) sans dupliquer de modules métier entre les deux process. Voir [ADR-005](architecture-decisions.md#adr-005--eventsprocessor-worker-bullmq-du-workflow-engine-colocalisé-dans-appsapi-pas-dans-appsworker) pour le compromis et le chemin de migration vers `apps/worker`. Les autres traitements longs (emails, PDF, IA) suivront le placement `apps/worker` par défaut.
+**Note d'architecture** : ce `Worker` tourne *dans le processus `apps/api`*, pour réutiliser directement les services Nest existants (ex. `TasksService`) sans dupliquer de modules métier entre deux process. Voir [ADR-005](architecture-decisions.md#adr-005--eventsprocessor-worker-bullmq-du-workflow-engine-colocalisé-dans-appsapi-pas-dans-appsworker) pour le raisonnement historique de cette décision (prise quand `apps/worker` existait encore comme squelette). `apps/worker` a depuis été retiré du dépôt (commit `c33edd6` — voir `docs/IMPLEMENTATION_PLAN.md` §21.0) ; le chemin de migration que l'ADR envisageait vers `apps/worker` n'a plus de cible et tout traitement asynchrone actuel (events, réconciliation Payment/Refund) tourne dans `apps/api`.
 
 ## Frontend
 

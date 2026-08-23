@@ -1,7 +1,7 @@
 # KORVA OS — Implementation Plan
 
-Statut : PHASE 1 (Foundation) à PHASE 6 (Commerce) terminées et validées — voir sections 9-15. PHASE 7 (Workflow) non démarrée.
-Dernière mise à jour : 2026-08-20
+Statut : PHASE 1 (Foundation) à PHASE 12 (Hardening) terminées et validées — voir sections 9-20, les 12 phases du MVP sont closes. Travaux post-MVP (scheduler de réconciliation BullMQ, Lots Q/R/S/T de fiabilisation et de password reset) réalisés depuis — voir section 21.
+Dernière mise à jour : 2026-08-22
 
 ## 1. Résumé du produit
 
@@ -336,3 +336,58 @@ Dernière phase du MVP. Livrée et validée (typecheck + lint + build + tests un
 Non fait volontairement en Phase 12 (lacunes assumées et documentées plutôt que masquées) : `api_keys` (voir `docs/security.md`), rétrofit du gate de module de la Phase 10 sur les routes internes existantes (reste limité à l'activation d'un module), email de confirmation sur les actions publiques de la Phase 11, 2FA/verrouillage de compte, scan de vulnérabilités automatisé, hébergement réel provisionné, image Docker pour `apps/worker` (squelette non utilisé depuis l'ADR-005), workflow CI non encore exécuté sur GitHub (relu attentivement, reproduit les commandes validées manuellement des dizaines de fois pendant ce projet, mais sa première exécution réelle doit être surveillée).
 
 Avec cette phase, les 12 phases du MVP KORVA OS décrites dans ce document sont terminées.
+
+## 21. Post-Phase-12 — Hardening / Reconciliation
+
+Les sections 1-20 ci-dessus décrivent le plan et le statut du MVP tel qu'il existait à la fin de la Phase 12 (commit `3053218`, qui est aussi le SHA actuel de `origin/main`). Depuis, la branche locale `main` a avancé de 18 commits, jamais poussés. Cette section documente factuellement les travaux réalisés depuis, sans réécrire les sections historiques ci-dessus — voir aussi `docs/PRODUCTION_READINESS.md` §27-§28 pour l'audit de sécurité/readiness correspondant.
+
+### 21.0 `apps/worker`
+
+Le squelette `apps/worker` décrit en §1/§3 (Phase 1) et dans la Phase 12 (ligne « image Docker pour `apps/worker` (squelette non utilisé) ») a été **supprimé** par le commit `c33edd6` (« chore: remove apps/worker (superseded by in-process BullMQ workers) »). Il n'existe plus dans le dépôt. Les workers BullMQ (traitement asynchrone des événements et des jobs de réconciliation) tournent aujourd'hui **exclusivement dans `apps/api`**, exactement comme décrit par l'ADR-005 (`docs/architecture-decisions.md`) — cette décision d'architecture n'a pas changé, seul le squelette `apps/worker` jamais câblé a été retiré.
+
+### 21.A Scheduler BullMQ — réconciliation Payment/Refund
+
+Commit `fee9608` (« feat: automatic Payment/Refund reconciliation scheduler (BullMQ repeatable job) »), antérieur aux Lots Q/R/S/T.
+
+- **Objectif :** résoudre automatiquement les Payments/Refunds restés bloqués en `processing` (ex. crash entre l'appel provider et l'écriture Mongo), sans intervention manuelle.
+- **Périmètre :** une deuxième queue BullMQ, `payment-reconciliation`, distincte de la queue `events` du Workflow Engine (Phase 7). Job répétable (intervalle configurable, 5 minutes par défaut), tournant dans `apps/api` selon le même patron que `EventsProcessor`.
+- **Résultat :** `apps/api/src/finance/payments/reconciliation-scheduler.service.ts` (nouveau), câblé dans `finance.module.ts`, testé par `test/payment-reconciliation-scheduler.e2e-spec.ts`.
+- **Limite :** cette queue n'a pas reçu le durcissement retry/backoff apporté à la queue `events` par le Lot Q ci-dessous (voir 21.B) — elle tourne toujours avec les valeurs par défaut de BullMQ (`attempts: 1`).
+
+### 21.B Lot Q — retries fiables + idempotence des actions (commit `7796559`)
+
+- **Objectif :** empêcher qu'un job de la queue `events` échoué silencieusement (attempts:1 par défaut) fasse perdre un événement métier, et empêcher qu'une relance BullMQ ré-exécute deux fois l'effet d'une action de workflow.
+- **Périmètre :** `core/events/event-bus.service.ts` (ajout de `JobsOptions` — `attempts: 5`, backoff exponentiel démarrant à 2s), `core/events/event-names.ts`, `workflow/events.processor.ts`, nouveau schéma `WorkflowActionClaim` (`workflow/schemas/workflow-action-claim.schema.ts` — claim atomique avant exécution d'une action, index unique sur `(organizationId, workflowId, actionIndex, eventKey)`), `workflow/workflow-actions.service.ts`, `workflow/workflow-engine.service.ts`, `workflow/workflows.repository.ts`, `packages/types/src/workflow.ts`.
+- **Résultat :** la queue `events` uniquement — retries avec backoff exponentiel, et protection contre le double-effet d'une action lors d'une relance.
+- **Limite explicite :** la queue `payment-reconciliation` (21.A) n'est **pas** concernée par ce durcissement — elle reste sur les valeurs par défaut de BullMQ.
+
+### 21.C Lot R — métriques de queue BullMQ (commit `5fedead`)
+
+- **Objectif :** donner une visibilité minimale sur l'état des deux queues existantes (`events`, `payment-reconciliation`) sans construire un système de métriques générique.
+- **Périmètre :** `GET /health/queues` (`health/health.controller.ts`), `health/queue-metrics.service.ts` (nouveau) — expose les compteurs BullMQ agrégés (`waiting`/`active`/`completed`/`failed`/`delayed`/`paused`) pour les deux queues, via une connexion Redis courte et dédiée.
+- **Résultat :** observabilité **ciblée sur ces deux queues uniquement**. Ce n'est pas un endpoint `/metrics` Prometheus générique et ne doit pas être présenté comme tel.
+
+### 21.D Lot S — alerting sur échec définitif de job (commit `d378963`)
+
+- **Objectif :** signaler qu'un job a définitivement échoué (attempts épuisés) sans construire une pile d'observabilité complète (pas de Sentry, pas de PagerDuty).
+- **Périmètre :** `health/queue-alerting.service.ts` (nouveau), `health/health.module.ts`. Écoute l'événement BullMQ `'failed'` sur les deux queues via `QueueEvents`, journalise une ligne fixe et non identifiante (`QUEUE_JOB_FAILED — queue "<nom>" has a definitively failed job`) avec un cooldown de 5 minutes par processus.
+- **Résultat :** une ligne de log, rien de plus — pas d'intégration avec un système d'alerte externe, pas de tracking d'erreur générique. Le gap « Error tracking (Sentry) : NOT_IMPLEMENTED » cité dans `docs/PRODUCTION_READINESS.md` §19 reste exact.
+
+### 21.E Lot T — password reset (commit `0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd`)
+
+Ferme le gap « Password reset flow » cité en Phase 12 (ligne 336 ci-dessus dans une liste d'éléments volontairement non faits — cette liste reste correcte comme photographie historique de la Phase 12 elle-même ; le gap est refermé par ce commit, postérieur).
+
+- **Endpoints :** `POST /auth/forgot-password`, `POST /auth/reset-password` (`identity/auth/auth.controller.ts`), publics, sous le même throttling que `login`/`register` (voir `docs/security.md` pour le détail complet, identique).
+- **Token :** `randomBytes(32)`, hashé en SHA-256 avant stockage (jamais en clair), TTL 30 minutes, usage unique (consommation atomique MongoDB), une nouvelle demande invalide tout token précédent non utilisé pour le même utilisateur.
+- **Ordre critique :** le nouveau mot de passe est haché (Argon2) avant que le token soit consommé ; le mot de passe n'est modifié qu'après consommation réussie du token ; les sessions de l'utilisateur sont révoquées après un reset réussi.
+- **Anti-énumération :** réponse strictement identique que le compte existe ou non.
+- **Tests :** `identity/auth/password-reset.service.spec.ts`, `identity/users/users.service.spec.ts`, `test/password-reset.e2e-spec.ts` (5 scénarios), en plus des tests `auth.controller.spec.ts` étendus.
+- **Gap frontend distinct, non résolu par ce lot :** `apps/web` ne contient à ce jour aucune route `/reset-password` ni `/forgot-password` (confirmé par inspection directe de `apps/web/src/app` : seuls `dashboard`, `login`, `onboarding`, `register` existent). Le backend est complet et testé de bout en bout via l'API ; la page qui consommerait ce flux reste un travail frontend séparé, non un échec du backend.
+
+### 21.F Dependabot / CodeQL
+
+Séparément des Lots Q/R/S/T (commit `6c5897d`, antérieur), `.github/dependabot.yml` et `.github/workflows/codeql.yml` ont été ajoutés au dépôt. La ligne « scan de vulnérabilités automatisé » listée comme non fait en Phase 12 (ligne 336 ci-dessus) reste une photographie correcte de l'état à la fin de la Phase 12 elle-même — elle a été comblée après, par un commit distinct de la Phase 12 et distinct des Lots Q/R/S/T. Voir `docs/security.md` section Dépendances.
+
+### 21.G Chiffres de tests actuels
+
+À `HEAD = 0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd` : 17 fichiers `*.e2e-spec.ts` (170 blocs `it`/`test`, 170/170 exécutés), 17 fichiers `*.spec.ts` unitaires (156/156 exécutés), `password-reset.e2e-spec.ts` isolé : 5/5, répété 3 fois consécutives, déterministe. Ces chiffres remplacent, pour l'état courant, toute mention antérieure de « 109/109 » ou « 92 tests e2e » citée dans les sections historiques ci-dessus, qui restent des photographies correctes de leur propre époque.

@@ -54,4 +54,4 @@ GET /api/v1/health/redis
 
 ## Hors scope (MVP)
 
-Hébergement réel (aucun provider choisi/provisionné), certificats TLS, domaines personnalisés par organisation (voir [architecture.md](architecture.md), Phase 11), scaling horizontal / orchestration (Kubernetes, etc.), image Docker pour `apps/worker` (squelette non utilisé), scan de vulnérabilités automatisé en CI (voir [security.md](security.md)).
+Hébergement réel (aucun provider choisi/provisionné), certificats TLS, domaines personnalisés par organisation (voir [architecture.md](architecture.md), Phase 11), scaling horizontal / orchestration (Kubernetes, etc.), image Docker pour `apps/worker` (squelette non utilisé, depuis retiré du dépôt — voir `docs/IMPLEMENTATION_PLAN.md` §21.0). Le scan de vulnérabilités automatisé en CI, listé ici comme hors scope à l'origine, a depuis été ajouté (`.github/dependabot.yml`, `.github/workflows/codeql.yml` — voir [security.md](security.md)).
