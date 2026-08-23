@@ -16,6 +16,21 @@ export const RECONCILIATION_SCHEDULER_ID = 'payment-reconciliation-sweep';
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
+ * Each sweep re-derives its worklist from Mongo's current 'processing' state rather than
+ * acting on job data, so a BullMQ retry of a failed sweep is just another full sweep against
+ * whatever is still pending — safe to retry without the jobId/eventKey dedup EventBusService
+ * needs for its per-entity jobs (see EventBusService.publish). 3 attempts (vs Lot Q's 5) is
+ * enough headroom for a transient Mongo/Redis blip; the next scheduled tick (~5 min by default)
+ * is already a natural retry for anything that doesn't clear within these attempts.
+ */
+const JOB_OPTIONS = {
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 2000 },
+  removeOnComplete: { age: 24 * 3600, count: 1000 },
+  removeOnFail: false,
+} as const;
+
+/**
  * Periodically calls PaymentReconciliationService.reconcilePendingPayments()/
  * reconcilePendingRefunds() so Payments/Refunds stuck in 'processing' (e.g. a crash between the
  * provider call and the Mongo write) eventually resolve without a human triggering it manually.
@@ -79,7 +94,7 @@ export class ReconciliationSchedulerService
     await this.queue.upsertJobScheduler(
       RECONCILIATION_SCHEDULER_ID,
       { every: intervalMs },
-      { name: RECONCILIATION_JOB_NAME },
+      { name: RECONCILIATION_JOB_NAME, opts: JOB_OPTIONS },
     );
     this.logger.log(
       `Payment/Refund reconciliation scheduler started (every ${intervalMs}ms)`,
