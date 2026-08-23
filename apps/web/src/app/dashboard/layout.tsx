@@ -51,6 +51,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [bootstrapped, accessToken, activeOrganizationId, router]);
 
+  useEffect(() => {
+    // Prevent the page behind the open mobile drawer from scrolling. Captures whatever was
+    // there before (rather than assuming "") so this never clobbers an unrelated overflow
+    // value some other part of the app might have set.
+    const previousOverflow = document.body.style.overflow;
+    if (sidebarOpen) {
+      document.body.style.overflow = "hidden";
+    }
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [sidebarOpen]);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setSidebarOpen(false);
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [sidebarOpen]);
+
   const enabledModules = new Set(organization?.enabledModules ?? []);
 
   async function logout() {
@@ -86,6 +110,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )}
 
       <aside
+        id="mobile-sidebar"
         className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-6 transition-transform md:static md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -125,6 +150,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-3">
             <button
               aria-label="Ouvrir le menu"
+              aria-expanded={sidebarOpen}
+              aria-controls="mobile-sidebar"
               onClick={() => setSidebarOpen(true)}
               className="rounded-md p-2 text-text-muted hover:bg-surface-muted md:hidden"
             >
