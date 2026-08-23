@@ -71,8 +71,15 @@ async function refreshAccessToken(): Promise<void> {
   useAuthStore.getState().setAccessToken(payload.data.accessToken);
 }
 
-/** Ensures at most one refresh is in flight at a time; every concurrent 401 awaits it. */
-function getRefreshedAccessToken(): Promise<void> {
+/**
+ * Ensures at most one refresh is in flight at a time; every concurrent caller — a 401 retry
+ * or useAuthBootstrap's initial silent refresh — awaits this same promise instead of firing
+ * its own request. Exported so useAuthBootstrap can share it rather than calling
+ * POST /auth/refresh directly, which used to bypass this dedup and let React Strict Mode's
+ * double-invoked effect fire two concurrent refreshes against the same (rotating) refresh
+ * token — one winning, the other 401ing and wiping the just-restored session.
+ */
+export function getRefreshedAccessToken(): Promise<void> {
   if (!refreshPromise) {
     refreshPromise = refreshAccessToken().finally(() => {
       refreshPromise = null;

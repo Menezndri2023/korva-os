@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
-import { apiClient } from "./api-client";
+import { getRefreshedAccessToken } from "./api-client";
 import { useAuthStore } from "./auth-store";
-
-interface RefreshResponse {
-  accessToken: string;
-}
 
 /**
  * Runs once per page load. The access token is never persisted (see auth-store.ts), so on a
@@ -14,24 +10,26 @@ interface RefreshResponse {
  * the HttpOnly refresh cookie automatically) to recover a working access token before any
  * route guard decides the user is logged out. A missing/expired cookie is a normal "not
  * logged in" outcome, not an error to surface.
+ *
+ * Goes through the shared getRefreshedAccessToken() — the same dedup used by the 401-retry
+ * path in api-client.ts — instead of calling POST /auth/refresh directly, so that React
+ * Strict Mode's double-invoked effect (two mounts in dev) shares a single in-flight refresh
+ * instead of racing two requests against the same rotating refresh token. It already writes
+ * accessToken/clears the store internally on success/failure; this hook only tracks
+ * `bootstrapped` and lets an unmounted instance's turn be a no-op.
  */
 export function useAuthBootstrap(): void {
   const bootstrapped = useAuthStore((state) => state.bootstrapped);
-  const setAccessToken = useAuthStore((state) => state.setAccessToken);
   const setBootstrapped = useAuthStore((state) => state.setBootstrapped);
-  const clear = useAuthStore((state) => state.clear);
 
   useEffect(() => {
     if (bootstrapped) return;
     let cancelled = false;
 
-    apiClient
-      .post<RefreshResponse>("/auth/refresh", undefined, { withOrganization: false })
-      .then((data) => {
-        if (!cancelled) setAccessToken(data.accessToken);
-      })
+    getRefreshedAccessToken()
       .catch(() => {
-        if (!cancelled) clear();
+        // A missing/expired/already-rotated-away refresh token is a normal "not logged in"
+        // outcome here — getRefreshedAccessToken() has already cleared the store.
       })
       .finally(() => {
         if (!cancelled) setBootstrapped(true);
@@ -40,5 +38,5 @@ export function useAuthBootstrap(): void {
     return () => {
       cancelled = true;
     };
-  }, [bootstrapped, setAccessToken, setBootstrapped, clear]);
+  }, [bootstrapped, setBootstrapped]);
 }
