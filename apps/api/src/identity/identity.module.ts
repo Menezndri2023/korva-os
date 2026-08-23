@@ -10,6 +10,10 @@ import { User, UserSchema } from './schemas/user.schema';
 import { Role, RoleSchema } from './schemas/role.schema';
 import { Membership, MembershipSchema } from './schemas/membership.schema';
 import { Session, SessionSchema } from './schemas/session.schema';
+import {
+  PasswordResetToken,
+  PasswordResetTokenSchema,
+} from './schemas/password-reset-token.schema';
 
 import { UsersRepository } from './users/users.repository';
 import { UsersService } from './users/users.service';
@@ -21,7 +25,10 @@ import { SessionsRepository } from './auth/sessions.repository';
 import { SessionsService } from './auth/sessions.service';
 import { AuthService } from './auth/auth.service';
 import { AuthController } from './auth/auth.controller';
+import { PasswordResetRepository } from './auth/password-reset.repository';
+import { PasswordResetService } from './auth/password-reset.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { EmailModule } from '../shared/email/email.module';
 
 @Module({
   imports: [
@@ -30,8 +37,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       { name: Role.name, schema: RoleSchema },
       { name: Membership.name, schema: MembershipSchema },
       { name: Session.name, schema: SessionSchema },
+      { name: PasswordResetToken.name, schema: PasswordResetTokenSchema },
     ]),
     PassportModule,
+    EmailModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -55,6 +64,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     SessionsRepository,
     SessionsService,
     AuthService,
+    PasswordResetRepository,
+    PasswordResetService,
     JwtStrategy,
   ],
   exports: [UsersService, RolesService, MembershipsService],

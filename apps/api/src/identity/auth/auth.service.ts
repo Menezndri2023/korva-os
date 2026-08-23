@@ -6,19 +6,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import type { RegisterInput, LoginInput } from '@korva/validation';
 import { UsersService } from '../users/users.service';
 import { SessionsService } from './sessions.service';
 import { UserDocument } from '../schemas/user.schema';
+import { hashToken } from './token-hash.util';
 
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
 }
 
 function toPublicUser(user: UserDocument) {

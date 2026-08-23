@@ -13,10 +13,15 @@ import type { Request, Response } from 'express';
 import {
   loginSchema,
   registerSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
   type LoginInput,
   type RegisterInput,
+  type ForgotPasswordInput,
+  type ResetPasswordInput,
 } from '@korva/validation';
 import { AuthService } from './auth.service';
+import { PasswordResetService } from './password-reset.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { Public } from '../../common/decorators/public.decorator';
 import { SkipTenant } from '../../common/decorators/skip-tenant.decorator';
@@ -38,6 +43,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly passwordResetService: PasswordResetService,
   ) {}
 
   @Public()
@@ -82,6 +88,25 @@ export class AuthController {
       await this.authService.refresh(refreshToken);
     this.setRefreshCookie(res, nextRefreshToken);
     return result;
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post('forgot-password')
+  forgotPassword(
+    @Body(new ZodValidationPipe(forgotPasswordSchema)) body: ForgotPasswordInput,
+  ) {
+    return this.passwordResetService.forgotPassword(body.email);
+  }
+
+  @Public()
+  @Throttle(AUTH_THROTTLE)
+  @Post('reset-password')
+  async resetPassword(
+    @Body(new ZodValidationPipe(resetPasswordSchema)) body: ResetPasswordInput,
+  ) {
+    await this.passwordResetService.resetPassword(body.token, body.password);
+    return { success: true };
   }
 
   @SkipTenant()

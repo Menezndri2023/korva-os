@@ -25,4 +25,8 @@ export class UsersRepository {
   findById(id: string): Promise<UserDocument | null> {
     return this.userModel.findById(id).exec();
   }
+
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    await this.userModel.updateOne({ _id: id }, { passwordHash }).exec();
+  }
 }

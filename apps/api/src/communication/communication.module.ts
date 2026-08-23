@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import {
   MessageTemplate,
@@ -29,18 +28,13 @@ import { NotificationsRepository } from './notifications/notifications.repositor
 import { NotificationsService } from './notifications/notifications.service';
 import { NotificationsController } from './notifications/notifications.controller';
 
-import {
-  EMAIL_PROVIDER,
-  type EmailProvider,
-} from './providers/email-provider.interface';
-import { LogEmailProvider } from './providers/log-email.provider';
-import { ResendEmailProvider } from './providers/resend-email.provider';
 import { MESSAGING_PROVIDER } from './providers/messaging-provider.interface';
 import { LogMessagingProvider } from './providers/log-messaging.provider';
 
 import { CrmModule } from '../crm/crm.module';
 import { IdentityModule } from '../identity/identity.module';
 import { AuditModule } from '../audit/audit.module';
+import { EmailModule } from '../shared/email/email.module';
 
 @Module({
   imports: [
@@ -50,10 +44,10 @@ import { AuditModule } from '../audit/audit.module';
       { name: Message.name, schema: MessageSchema },
       { name: Notification.name, schema: NotificationSchema },
     ]),
-    ConfigModule,
     CrmModule,
     IdentityModule,
     AuditModule,
+    EmailModule,
   ],
   controllers: [
     MessageTemplatesController,
@@ -68,25 +62,8 @@ import { AuditModule } from '../audit/audit.module';
     ConversationsService,
     NotificationsRepository,
     NotificationsService,
-    {
-      provide: EMAIL_PROVIDER,
-      useFactory: (configService: ConfigService): EmailProvider => {
-        const apiKey = configService.get<string>('RESEND_API_KEY');
-        if (
-          configService.get<string>('EMAIL_PROVIDER') === 'resend' &&
-          apiKey
-        ) {
-          return new ResendEmailProvider(
-            apiKey,
-            configService.get<string>('EMAIL_FROM') ?? 'no-reply@korva.app',
-          );
-        }
-        return new LogEmailProvider();
-      },
-      inject: [ConfigService],
-    },
     { provide: MESSAGING_PROVIDER, useClass: LogMessagingProvider },
   ],
-  exports: [EMAIL_PROVIDER, NotificationsService, ConversationsService],
+  exports: [EmailModule, NotificationsService, ConversationsService],
 })
 export class CommunicationModule {}

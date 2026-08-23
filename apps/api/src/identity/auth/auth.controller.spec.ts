@@ -3,6 +3,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthController } from './auth.controller';
 import type { AuthService } from './auth.service';
+import type { PasswordResetService } from './password-reset.service';
 import type { ConfigService } from '@nestjs/config';
 
 const THROTTLER_LIMIT_DEFAULT = 'THROTTLER:LIMITdefault';
@@ -53,6 +54,24 @@ describe('AuthController — /auth/refresh throttling', () => {
     const logoutLimit = getThrottleMetadata(THROTTLER_LIMIT_DEFAULT, 'logout');
     expect(logoutLimit).toBeUndefined();
   });
+
+  it('applies the same AUTH_THROTTLE limit/ttl to forgotPassword and resetPassword as to login', () => {
+    const loginLimit = getThrottleMetadata(THROTTLER_LIMIT_DEFAULT, 'login');
+    const loginTtl = getThrottleMetadata(THROTTLER_TTL_DEFAULT, 'login');
+
+    expect(getThrottleMetadata(THROTTLER_LIMIT_DEFAULT, 'forgotPassword')).toBe(
+      loginLimit,
+    );
+    expect(getThrottleMetadata(THROTTLER_TTL_DEFAULT, 'forgotPassword')).toBe(
+      loginTtl,
+    );
+    expect(getThrottleMetadata(THROTTLER_LIMIT_DEFAULT, 'resetPassword')).toBe(
+      loginLimit,
+    );
+    expect(getThrottleMetadata(THROTTLER_TTL_DEFAULT, 'resetPassword')).toBe(
+      loginTtl,
+    );
+  });
 });
 
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -74,6 +93,11 @@ function buildConfigService(nodeEnv: string): ConfigService {
   return {
     get: (key: string) => (key === 'NODE_ENV' ? nodeEnv : undefined),
   } as unknown as ConfigService;
+}
+
+/** Unused by every test below — none of them exercise forgot/reset-password. */
+function buildPasswordResetService(): PasswordResetService {
+  return {} as unknown as PasswordResetService;
 }
 
 function buildAuthService() {
@@ -109,6 +133,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
+      buildPasswordResetService(),
     );
     const { res } = buildRes();
 
@@ -129,6 +154,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
+      buildPasswordResetService(),
     );
     const { res } = buildRes();
 
@@ -149,6 +175,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
+      buildPasswordResetService(),
     );
     const { res, cookie } = buildRes();
 
@@ -173,6 +200,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('production'),
+      buildPasswordResetService(),
     );
     const { res, cookie } = buildRes();
 
@@ -191,6 +219,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
+      buildPasswordResetService(),
     );
     const { res, cookie } = buildRes();
 
@@ -209,6 +238,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
+      buildPasswordResetService(),
     );
     const { res, cookie } = buildRes();
     const req = buildReq(
@@ -232,6 +262,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
+      buildPasswordResetService(),
     );
     const { res, cookie } = buildRes();
     const req = buildReq(undefined);
@@ -248,6 +279,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
+      buildPasswordResetService(),
     );
     const { res, clearCookie } = buildRes();
     const req = buildReq('korva_refresh_token=refresh-token-1');
@@ -267,6 +299,7 @@ describe('AuthController — refresh-token cookie flow', () => {
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
+      buildPasswordResetService(),
     );
     const { res, clearCookie } = buildRes();
     const req = buildReq(undefined);
@@ -275,5 +308,74 @@ describe('AuthController — refresh-token cookie flow', () => {
 
     expect(logout).not.toHaveBeenCalled();
     expect(clearCookie).toHaveBeenCalled();
+  });
+});
+
+function buildPasswordResetServiceMock() {
+  const forgotPassword = jest.fn().mockResolvedValue({
+    message: 'If an account exists for this email, a reset link has been sent.',
+  });
+  const resetPassword = jest.fn().mockResolvedValue(undefined);
+  const passwordResetService = {
+    forgotPassword,
+    resetPassword,
+  } as unknown as PasswordResetService;
+  return { passwordResetService, forgotPassword, resetPassword };
+}
+
+describe('AuthController — forgot/reset password', () => {
+  it('forgotPassword delegates to PasswordResetService and returns its generic response as-is', async () => {
+    const { authService } = buildAuthService();
+    const { passwordResetService, forgotPassword } = buildPasswordResetServiceMock();
+    const controller = new AuthController(
+      authService,
+      buildConfigService('development'),
+      passwordResetService,
+    );
+
+    const result = await controller.forgotPassword({ email: 'ada@example.com' });
+
+    expect(forgotPassword).toHaveBeenCalledWith('ada@example.com');
+    expect(result).toEqual({
+      message: 'If an account exists for this email, a reset link has been sent.',
+    });
+  });
+
+  it('resetPassword delegates token+password to PasswordResetService and returns { success: true }', async () => {
+    const { authService } = buildAuthService();
+    const { passwordResetService, resetPassword } = buildPasswordResetServiceMock();
+    const controller = new AuthController(
+      authService,
+      buildConfigService('development'),
+      passwordResetService,
+    );
+
+    const result = await controller.resetPassword({
+      token: 'raw-token',
+      password: 'newpassword123',
+    });
+
+    expect(resetPassword).toHaveBeenCalledWith('raw-token', 'newpassword123');
+    expect(result).toEqual({ success: true });
+  });
+
+  it('resetPassword propagates PasswordResetService rejection (invalid/expired token) unchanged', async () => {
+    const { authService } = buildAuthService();
+    const { passwordResetService, resetPassword } = buildPasswordResetServiceMock();
+    resetPassword.mockRejectedValue(
+      new UnauthorizedException({
+        code: 'INVALID_RESET_TOKEN',
+        message: 'This reset link is invalid or has expired',
+      }),
+    );
+    const controller = new AuthController(
+      authService,
+      buildConfigService('development'),
+      passwordResetService,
+    );
+
+    await expect(
+      controller.resetPassword({ token: 'bad-token', password: 'newpassword123' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

@@ -36,4 +36,18 @@ export class UsersService {
   verifyPassword(passwordHash: string, plain: string): Promise<boolean> {
     return argon2.verify(passwordHash, plain);
   }
+
+  /**
+   * Same call as `create()`'s own hashing step (argon2, default params), exposed separately so
+   * a caller can compute the hash — the only step that can meaningfully fail before anything is
+   * persisted — ahead of a later, unrelated write (see PasswordResetService.resetPassword,
+   * which must know the new hash is ready *before* irreversibly consuming the reset token).
+   */
+  hashPassword(password: string): Promise<string> {
+    return argon2.hash(password);
+  }
+
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    await this.usersRepository.updatePasswordHash(id, passwordHash);
+  }
 }
