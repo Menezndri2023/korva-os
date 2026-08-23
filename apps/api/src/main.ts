@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
+import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -14,6 +15,7 @@ async function bootstrap() {
   // has to wait out its full grace period and SIGKILL the process instead of exiting promptly.
   app.enableShutdownHooks();
 
+  app.use(requestIdMiddleware);
   app.use(helmet());
   app.use(compression());
 
