@@ -702,7 +702,7 @@ Verified directly against the code at this HEAD:
 
 **Limits, stated proportionately — none of the following is a critical vulnerability:**
 - **Timing side-channel, not mitigated.** The "account exists" branch of `forgot-password` does more work (token issue + email) than the "no account" branch — a theoretically measurable timing difference. No dummy-cost work was added to equalize it.
-- **No frontend page.** `apps/web` does not currently contain a `/reset-password` (or `/forgot-password`) route — confirmed by direct inspection of `apps/web/src/app` (only `dashboard`, `login`, `onboarding`, `register` exist). The backend flow is complete and independently tested via the API; the missing page is a separate, frontend-only piece of work.
+- **No frontend page, at the time of this commit.** At `HEAD=0d1f289`, `apps/web` did not contain a `/reset-password` (or `/forgot-password`) route — confirmed by direct inspection of `apps/web/src/app` at that HEAD (only `dashboard`, `login`, `onboarding`, `register` existed). The backend flow was complete and independently tested via the API; the missing page was a separate, frontend-only piece of work. **This gap has since been closed by Lot U (`4876996`) — see §28.9.**
 - **No rate limit specific to a single email address** — only the existing per-IP `AUTH_THROTTLE` applies, the same limitation already present on `/auth/login`/`/auth/register`.
 - **A narrow, non-transactional residual window** between token consumption and the password-hash write: if the MongoDB write in `updatePasswordHash()` fails immediately after `consume()` already succeeded, the token is spent but the password is unchanged. Self-healing (the user can request a new token); deliberately not closed with a multi-document transaction — the token-consumption step alone is what gates correctness here.
 
@@ -736,3 +736,12 @@ The §27.8 verdict (**NO-GO** for a real commercial launch) is unchanged by this
 ### 28.8 Source of truth
 
 **This section (§28) is the source of truth for the current state of the repository as of `HEAD = 0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd`.** §27 remains the accurate historical record for the D4 period ending at `HEAD = 0f6a258`; where §27 and §28 disagree on anything covered by §28.6, §28 is correct. Neither section supersedes the other in general — §27 documents D4, §28 documents what has landed since (plus the one pre-existing omission noted in §28.2) — and no future reader should treat this document as current beyond `0d1f289` without checking `git log` for what has landed since this HEAD.
+
+### 28.9 Lot U (`4876996`) — password reset frontend
+
+Closes the frontend gap left explicitly open by Lot T (§28.4) — no backend change; `PasswordResetService`/`auth.controller.ts` (Lot T) remain the only business logic.
+
+- **Scope:** `apps/web/src/app/forgot-password/page.tsx` (new, 95 lines) and `apps/web/src/app/reset-password/page.tsx` (new, 150 lines), each with a dedicated test (`page.test.tsx`, 103 and 142 lines); `apps/web/src/app/login/page.tsx` (link to `/forgot-password` added); new `vitest` test infrastructure for `apps/web` (`vitest.config.mts`, `vitest.setup.ts`, `apps/web/src/test/render.tsx` — `apps/web` had no tests at all before this commit); `apps/web/package.json`/`pnpm-lock.yaml` updated for the new test dependencies.
+- **Result:** both routes exist and are functional, consuming the `POST /auth/forgot-password`/`POST /auth/reset-password` endpoints already shipped by Lot T.
+- **Validations:** `pnpm --filter @korva/web test` → **17/17 Vitest tests passing** (3 files); `pnpm --filter @korva/web typecheck` → clean; `pnpm --filter @korva/web lint` → clean (script has no `--fix`). No regression on the `@korva/api` suite (unaffected — disjoint files).
+- **Not addressed by this commit:** the timing side-channel, per-email rate limiting, and non-transactional residual window noted in §28.4 remain exactly as documented there — this is a frontend-only commit.

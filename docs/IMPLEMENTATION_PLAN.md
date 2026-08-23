@@ -339,7 +339,7 @@ Avec cette phase, les 12 phases du MVP KORVA OS décrites dans ce document sont 
 
 ## 21. Post-Phase-12 — Hardening / Reconciliation
 
-Les sections 1-20 ci-dessus décrivent le plan et le statut du MVP tel qu'il existait à la fin de la Phase 12 (commit `3053218`, qui est aussi le SHA actuel de `origin/main`). Depuis, la branche locale `main` a avancé de 18 commits, jamais poussés. Cette section documente factuellement les travaux réalisés depuis, sans réécrire les sections historiques ci-dessus — voir aussi `docs/PRODUCTION_READINESS.md` §27-§28 pour l'audit de sécurité/readiness correspondant.
+Les sections 1-20 ci-dessus décrivent le plan et le statut du MVP tel qu'il existait à la fin de la Phase 12 (commit `3053218`). Depuis, la branche locale `main` a avancé bien au-delà de ce commit ; à `HEAD = 1fb4dbeb410ef067c4e9c1d9ac208760f4253983` (Lot V, réconciliation documentaire comprise), `origin/main` est à `487699650e8c38f333d664ced0631fd02d510473` — les Lots R/S/T/U (entre autres) ont depuis été poussés, seuls les deux commits du Lot V (`9874dc8`, `1fb4dbe`) restent locaux/non poussés à cette date. Cette section documente factuellement les travaux réalisés depuis la fin de la Phase 12, sans réécrire les sections historiques ci-dessus — voir aussi `docs/PRODUCTION_READINESS.md` §27-§28 pour l'audit de sécurité/readiness correspondant.
 
 ### 21.0 `apps/worker`
 
@@ -382,7 +382,7 @@ Ferme le gap « Password reset flow » cité en Phase 12 (ligne 336 ci-dessus da
 - **Ordre critique :** le nouveau mot de passe est haché (Argon2) avant que le token soit consommé ; le mot de passe n'est modifié qu'après consommation réussie du token ; les sessions de l'utilisateur sont révoquées après un reset réussi.
 - **Anti-énumération :** réponse strictement identique que le compte existe ou non.
 - **Tests :** `identity/auth/password-reset.service.spec.ts`, `identity/users/users.service.spec.ts`, `test/password-reset.e2e-spec.ts` (5 scénarios), en plus des tests `auth.controller.spec.ts` étendus.
-- **Gap frontend distinct, non résolu par ce lot :** `apps/web` ne contient à ce jour aucune route `/reset-password` ni `/forgot-password` (confirmé par inspection directe de `apps/web/src/app` : seuls `dashboard`, `login`, `onboarding`, `register` existent). Le backend est complet et testé de bout en bout via l'API ; la page qui consommerait ce flux reste un travail frontend séparé, non un échec du backend.
+- **Gap frontend, non résolu par ce lot au moment de son commit :** à `HEAD = 0d1f289`, `apps/web` ne contenait aucune route `/reset-password` ni `/forgot-password` (confirmé par inspection directe de `apps/web/src/app` à ce HEAD : seuls `dashboard`, `login`, `onboarding`, `register` existaient). Le backend était complet et testé de bout en bout via l'API ; la page qui consommerait ce flux restait un travail frontend séparé, non un échec du backend. **Ce gap a depuis été résolu par le Lot U (commit `4876996`) — voir 21.H.**
 
 ### 21.F Dependabot / CodeQL
 
@@ -391,3 +391,13 @@ Séparément des Lots Q/R/S/T (commit `6c5897d`, antérieur), `.github/dependabo
 ### 21.G Chiffres de tests actuels
 
 À `HEAD = 0d1f289bc5337c26dfb636ae8eefb5aa8ae803dd` : 17 fichiers `*.e2e-spec.ts` (170 blocs `it`/`test`, 170/170 exécutés), 17 fichiers `*.spec.ts` unitaires (156/156 exécutés), `password-reset.e2e-spec.ts` isolé : 5/5, répété 3 fois consécutives, déterministe. Ces chiffres remplacent, pour l'état courant, toute mention antérieure de « 109/109 » ou « 92 tests e2e » citée dans les sections historiques ci-dessus, qui restent des photographies correctes de leur propre époque.
+
+Depuis ce HEAD, seuls certains chiffres ont été re-mesurés et documentés explicitement : tests unitaires `@korva/api` — **157/157** (Lot V, +1 fichier `.spec.ts`) ; tests `apps/web` Vitest — **17/17** sur 3 fichiers, typecheck et lint propres (Lot U, voir 21.H — infrastructure de test inexistante avant ce commit). Les chiffres e2e API ci-dessus (170/170) n'ont pas été intégralement re-exécutés et re-documentés depuis `HEAD=0d1f289` — ne pas les présenter comme un état de production readiness global sans nouvelle vérification directe (voir `docs/PRODUCTION_READINESS.md` pour les réserves connues sur la suite e2e complète).
+
+### 21.H Lot U — password reset (frontend) (commit `4876996`)
+
+Ferme le gap frontend explicitement laissé ouvert par le Lot T (voir 21.E) — aucun changement backend, `PasswordResetService`/`auth.controller.ts` (Lot T) restent la seule logique métier.
+
+- **Périmètre :** `apps/web/src/app/forgot-password/page.tsx` (nouveau, 95 lignes) et `apps/web/src/app/reset-password/page.tsx` (nouveau, 150 lignes), chacun avec son test dédié (`page.test.tsx`, 103 et 142 lignes) ; `apps/web/src/app/login/page.tsx` (lien vers `/forgot-password` ajouté) ; nouvelle infrastructure de test `vitest` pour `apps/web` (`vitest.config.mts`, `vitest.setup.ts`, `apps/web/src/test/render.tsx` — `apps/web` n'avait aucun test avant ce commit) ; `apps/web/package.json`/`pnpm-lock.yaml` mis à jour pour les nouvelles dépendances de test.
+- **Résultat :** les deux routes existent et sont fonctionnelles, consommant les endpoints `POST /auth/forgot-password`/`POST /auth/reset-password` déjà livrés par le Lot T.
+- **Validations :** `pnpm --filter @korva/web test` → **17/17 tests Vitest verts** (3 fichiers) ; `pnpm --filter @korva/web typecheck` → propre ; `pnpm --filter @korva/web lint` → propre (script sans `--fix`). Aucune régression sur la suite `@korva/api` (non concernée par ce commit, fichiers disjoints).
