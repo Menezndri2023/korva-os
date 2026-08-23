@@ -8,59 +8,20 @@ import {
   useAnalyticsOverview,
   useAnalyticsRevenue,
 } from "@/lib/use-analytics";
+import {
+  ACTIVITY_ACTION_LABELS,
+  ACTIVITY_ENTITY_LABELS,
+  formatCurrency,
+  INVOICE_STATUS_LABELS,
+  LEAD_STATUS_LABELS,
+  ORDER_STATUS_LABELS,
+} from "@/lib/analytics-format";
 
 const PERIODS = [
   { label: "7 jours", days: 7, interval: "day" as const },
   { label: "30 jours", days: 30, interval: "day" as const },
   { label: "90 jours", days: 90, interval: "week" as const },
 ];
-
-const LEAD_STATUS_LABELS: Record<string, string> = {
-  open: "Ouverts",
-  won: "Gagnés",
-  lost: "Perdus",
-};
-const ORDER_STATUS_LABELS: Record<string, string> = {
-  pending: "En attente",
-  confirmed: "Confirmées",
-  fulfilled: "Traitées",
-  cancelled: "Annulées",
-};
-const INVOICE_STATUS_LABELS: Record<string, string> = {
-  draft: "Brouillon",
-  issued: "Émises",
-  partially_paid: "Partiellement payées",
-  paid: "Payées",
-  overdue: "En retard",
-  cancelled: "Annulées",
-};
-const ACTIVITY_ENTITY_LABELS: Record<string, string> = {
-  contact: "Contact",
-  lead: "Prospect",
-  booking: "Réservation",
-  order: "Commande",
-  invoice: "Facture",
-  offer: "Offre",
-  quote: "Devis",
-};
-const ACTIVITY_ACTION_LABELS: Record<string, string> = {
-  CREATE: "créé",
-  UPDATE: "mis à jour",
-  DELETE: "supprimé",
-  LOGIN: "connexion",
-  LOGOUT: "déconnexion",
-  PAYMENT: "paiement",
-  REFUND: "remboursement",
-  BOOKING: "réservation",
-  AI_ACTION: "action IA",
-  ROLE_CHANGE: "rôle modifié",
-  SETTINGS_CHANGE: "paramètres modifiés",
-};
-
-function formatCurrency(amount: number, currency: string | null): string {
-  if (!currency) return amount.toLocaleString("fr-FR");
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency }).format(amount);
-}
 
 function rangeForDays(days: number): { from: string; to: string } {
   const to = new Date();
