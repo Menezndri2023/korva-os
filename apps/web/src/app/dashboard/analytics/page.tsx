@@ -292,9 +292,15 @@ function RevenueChart({
 
   return (
     <div role="img" aria-label={`Chiffre d'affaires par période, de ${points[0]?.date} à ${points[points.length - 1]?.date}`}>
-      <div className="flex h-40 items-stretch gap-0.5">
+      <div className="flex h-40 items-stretch gap-1">
         {points.map((point) => (
-          <div key={point.date} className="group relative flex flex-1 flex-col justify-end">
+          <div
+            key={point.date}
+            // max-w caps each bar so a handful of points (as few as one) don't stretch to
+            // fill the whole row — flex-1 alone would make a single day look like a solid
+            // block instead of a bar.
+            className="group relative flex w-full max-w-10 flex-1 flex-col justify-end"
+          >
             <div
               className="rounded-t-[4px] bg-zinc-900 transition-colors group-hover:bg-zinc-700"
               style={{ height: `${Math.max(2, (point.revenue / max) * 100)}%` }}
@@ -305,9 +311,9 @@ function RevenueChart({
           </div>
         ))}
       </div>
-      <div className="mt-1 flex gap-0.5">
+      <div className="mt-1 flex gap-1">
         {points.map((point, index) => (
-          <div key={point.date} className="flex-1 text-center text-[10px] text-text-muted">
+          <div key={point.date} className="w-full max-w-10 flex-1 text-center text-[10px] text-text-muted">
             {labelIndexes.has(index) ? point.date : ""}
           </div>
         ))}
