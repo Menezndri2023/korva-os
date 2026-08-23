@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import OnboardingPage from "./page";
 import { renderWithProviders } from "@/test/render";
+import { apiClient } from "@/lib/api-client";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn() }),
@@ -17,11 +18,74 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
   return { ...actual, apiClient: { ...actual.apiClient, post: vi.fn(), patch: vi.fn() } };
 });
 
-describe("OnboardingPage — Analytics not selectable (Lot F1-A)", () => {
-  it('does not offer "Statistiques" as an activatable module', () => {
+const postMock = vi.mocked(apiClient.post);
+const patchMock = vi.mocked(apiClient.patch);
+
+function fillRequiredFields() {
+  fireEvent.input(screen.getByLabelText("Nom de l'entreprise"), {
+    target: { value: "Audit Org" },
+  });
+  fireEvent.input(screen.getByLabelText("Secteur d'activité"), {
+    target: { value: "audit" },
+  });
+}
+
+describe("OnboardingPage — module selection (Bug #4)", () => {
+  beforeEach(() => {
+    postMock.mockReset();
+    patchMock.mockReset();
+    postMock.mockResolvedValue({ id: "org-1" });
+    patchMock.mockResolvedValue({ id: "org-1" });
+  });
+
+  it("A — offers Statistiques (analytics) among the selectable modules", () => {
     renderWithProviders(<OnboardingPage />);
-    expect(screen.queryByText("Statistiques")).not.toBeInTheDocument();
-    // Sanity check: other modules are still offered — only "analytics" was filtered out.
+    expect(screen.getByText("Statistiques")).toBeInTheDocument();
+    // Sanity check: existing modules remain offered alongside it.
     expect(screen.getByText("Clients & Prospects (CRM)")).toBeInTheDocument();
+  });
+
+  it("B — Statistiques can be selected via its checkbox", () => {
+    renderWithProviders(<OnboardingPage />);
+    const checkbox = screen.getByRole("checkbox", { name: "Statistiques" });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+  });
+
+  it("C/D — submitting with Statistiques checked persists it: enabledModules sent to the API includes analytics", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Statistiques" }));
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalled());
+    expect(patchMock).toHaveBeenCalledWith("/organizations/me", {
+      enabledModules: expect.arrayContaining(["analytics"]),
+    });
+  });
+
+  it("G — selecting another module (CRM) alongside Statistiques still persists both, unaffected by the fix", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Statistiques" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Clients & Prospects (CRM)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalled());
+    expect(patchMock).toHaveBeenCalledWith("/organizations/me", {
+      enabledModules: expect.arrayContaining(["analytics", "crm"]),
+    });
+  });
+
+  it("not selecting Statistiques omits it from the persisted modules", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Clients & Prospects (CRM)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalled());
+    const [, body] = patchMock.mock.calls[0]!;
+    expect((body as { enabledModules: string[] }).enabledModules).not.toContain("analytics");
   });
 });
