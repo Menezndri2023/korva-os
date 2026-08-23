@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createResourceSchema, type CreateResourceInput } from "@korva/validation";
 import type { Resource } from "@korva/types";
+import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -37,44 +38,29 @@ export default function ResourcesPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
-          {showForm ? "Annuler" : "Nouvelle ressource"}
-        </button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouvelle ressource"}</Button>
       </div>
 
       {showForm && (
         <form
           onSubmit={handleSubmit((values) => createMutation.mutate(values))}
-          className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4"
+          // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
+          // onSubmit), and Card renders a <div> — same exclusion documented on the other
+          // migrated create-forms (dashboard/crm, dashboard/bookings).
+          className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
           <div className="grid grid-cols-3 gap-2">
-            <input
-              placeholder="Nom (ex: Salle 1)"
-              className="col-span-2 rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              {...register("name")}
-            />
-            <input
-              placeholder="Type (room, vehicle...)"
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              {...register("type")}
-            />
+            <Input placeholder="Nom (ex: Salle 1)" className="col-span-2" {...register("name")} />
+            <Input placeholder="Type (room, vehicle...)" {...register("type")} />
           </div>
-          <input
-            type="number"
-            placeholder="Capacité"
-            className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm"
-            {...register("capacity", { valueAsNumber: true })}
-          />
+          <Input type="number" placeholder="Capacité" className="w-32" {...register("capacity", { valueAsNumber: true })} />
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-zinc-700">Horaires hebdomadaires</p>
+            <p className="text-sm font-medium text-text">Horaires hebdomadaires</p>
             {fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-12 gap-2">
                 <select
-                  className="col-span-4 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-4 rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none"
                   {...register(`weeklyAvailability.${index}.dayOfWeek`, { valueAsNumber: true })}
                 >
                   {DAY_LABELS.map((label, day) => (
@@ -83,20 +69,12 @@ export default function ResourcesPage() {
                     </option>
                   ))}
                 </select>
-                <input
-                  type="time"
-                  className="col-span-3 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-                  {...register(`weeklyAvailability.${index}.startTime`)}
-                />
-                <input
-                  type="time"
-                  className="col-span-3 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-                  {...register(`weeklyAvailability.${index}.endTime`)}
-                />
+                <Input type="time" className="col-span-3" {...register(`weeklyAvailability.${index}.startTime`)} />
+                <Input type="time" className="col-span-3" {...register(`weeklyAvailability.${index}.endTime`)} />
                 <button
                   type="button"
                   onClick={() => remove(index)}
-                  className="col-span-2 text-sm text-red-600 hover:underline"
+                  className="col-span-2 text-sm text-destructive hover:underline"
                 >
                   Retirer
                 </button>
@@ -105,30 +83,26 @@ export default function ResourcesPage() {
             <button
               type="button"
               onClick={() => append({ dayOfWeek: 1, startTime: "09:00", endTime: "18:00" })}
-              className="text-sm text-zinc-600 hover:underline"
+              className="text-sm text-text-muted hover:underline"
             >
               + Ajouter un créneau
             </button>
           </div>
 
           {createMutation.isError && (
-            <p className="text-sm text-red-600">
+            <p className="text-sm text-destructive">
               {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          <Button type="submit" loading={createMutation.isPending}>
             {createMutation.isPending ? "Création..." : "Créer la ressource"}
-          </button>
+          </Button>
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
             <tr>
               <th className="px-4 py-2">Nom</th>
               <th className="px-4 py-2">Type</th>
@@ -136,17 +110,17 @@ export default function ResourcesPage() {
               <th className="px-4 py-2">Horaires</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100">
+          <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
                   Chargement...
                 </td>
               </tr>
             )}
             {!isLoading && resources?.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
                   Aucune ressource.
                 </td>
               </tr>
@@ -154,9 +128,9 @@ export default function ResourcesPage() {
             {resources?.map((resource) => (
               <tr key={resource.id}>
                 <td className="px-4 py-2 font-medium">{resource.name}</td>
-                <td className="px-4 py-2 text-zinc-600">{resource.type}</td>
-                <td className="px-4 py-2 text-zinc-600">{resource.capacity}</td>
-                <td className="px-4 py-2 text-zinc-600">
+                <td className="px-4 py-2 text-text-muted">{resource.type}</td>
+                <td className="px-4 py-2 text-text-muted">{resource.capacity}</td>
+                <td className="px-4 py-2 text-text-muted">
                   {resource.weeklyAvailability
                     .map((w) => `${DAY_LABELS[w.dayOfWeek]} ${w.startTime}-${w.endTime}`)
                     .join(", ") || "—"}
@@ -165,7 +139,7 @@ export default function ResourcesPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }

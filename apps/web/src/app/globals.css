@@ -1,4 +1,11 @@
 @import "tailwindcss";
+@import "@korva/ui/tokens.css";
+
+/* Tailwind v4's automatic content scan is rooted at this file's directory tree; packages/ui
+   lives outside it (sibling app in the monorepo), so its class names need to be declared
+   explicitly or utilities used only there never get generated. See F2-B.1 report §7 for the
+   before/after proof. */
+@source "../../../../packages/ui/src";
 
 :root {
   --background: #ffffff;

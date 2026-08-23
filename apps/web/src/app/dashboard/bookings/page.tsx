@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Booking, Contact, DayAvailability, Offer, Resource } from "@korva/types";
+import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 const STATUS_LABELS: Record<Booking["status"], string> = {
@@ -88,17 +89,17 @@ export default function BookingsPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
+        <Button onClick={() => setShowForm((v) => !v)}>
           {showForm ? "Annuler" : "Nouvelle réservation"}
-        </button>
+        </Button>
       </div>
 
       {showForm && (
         <form
           onSubmit={handleSubmit((values) => createMutation.mutate(values))}
+          // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
+          // onSubmit), and Card renders a <div> — same exclusion already documented in
+          // dashboard/crm/page.tsx (F2-B.7) and dashboard/crm/leads/page.tsx (F2-B.8).
           className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4"
         >
           <div className="grid grid-cols-3 gap-2">
@@ -147,21 +148,9 @@ export default function BookingsPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            <input
-              type="date"
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              {...register("date", { required: true })}
-            />
-            <input
-              type="time"
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              {...register("startTime", { required: true })}
-            />
-            <input
-              type="time"
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              {...register("endTime", { required: true })}
-            />
+            <Input type="date" {...register("date", { required: true })} />
+            <Input type="time" {...register("startTime", { required: true })} />
+            <Input type="time" {...register("endTime", { required: true })} />
           </div>
 
           {dayAvailability && (
@@ -179,17 +168,13 @@ export default function BookingsPage() {
               {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          <Button type="submit" loading={createMutation.isPending}>
             {createMutation.isPending ? "Création..." : "Créer la réservation"}
-          </button>
+          </Button>
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
             <tr>
@@ -241,7 +226,7 @@ export default function BookingsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }

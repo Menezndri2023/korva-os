@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreatePaymentInput } from "@korva/validation";
 import type { Contact, Invoice, Payment } from "@korva/types";
+import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 const STATUS_LABELS: Record<Invoice["status"], string> = {
@@ -51,9 +52,9 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+    <Card className="overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+        <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
           <tr>
             <th className="px-4 py-2">N°</th>
             <th className="px-4 py-2">Client</th>
@@ -63,17 +64,17 @@ export default function InvoicesPage() {
             <th className="px-4 py-2">Actions</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-100">
+        <tbody className="divide-y divide-border">
           {isLoading && (
             <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+              <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
                 Chargement...
               </td>
             </tr>
           )}
           {!isLoading && invoices?.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+              <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
                 Aucune facture.
               </td>
             </tr>
@@ -82,21 +83,19 @@ export default function InvoicesPage() {
             <Fragment key={invoice.id}>
               <tr>
                 <td className="px-4 py-2 font-medium">{invoice.number}</td>
-                <td className="px-4 py-2 text-zinc-600">{contactName(invoice.contactId)}</td>
-                <td className="px-4 py-2 text-zinc-600">
+                <td className="px-4 py-2 text-text-muted">{contactName(invoice.contactId)}</td>
+                <td className="px-4 py-2 text-text-muted">
                   {invoice.total} {invoice.currency}
                 </td>
-                <td className="px-4 py-2 text-zinc-600">{invoice.amountPaid}</td>
+                <td className="px-4 py-2 text-text-muted">{invoice.amountPaid}</td>
                 <td className="px-4 py-2">
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
-                    {STATUS_LABELS[invoice.status]}
-                  </span>
+                  <Badge>{STATUS_LABELS[invoice.status]}</Badge>
                 </td>
                 <td className="px-4 py-2 space-x-2">
                   {invoice.status === "draft" && (
                     <button
                       onClick={() => issueMutation.mutate(invoice.id)}
-                      className="text-xs text-zinc-600 hover:underline"
+                      className="text-xs text-text-muted hover:underline"
                     >
                       Émettre
                     </button>
@@ -106,7 +105,7 @@ export default function InvoicesPage() {
                       onClick={() =>
                         setPayingInvoiceId(payingInvoiceId === invoice.id ? null : invoice.id)
                       }
-                      className="text-xs text-zinc-600 hover:underline"
+                      className="text-xs text-text-muted hover:underline"
                     >
                       Encaisser
                     </button>
@@ -115,7 +114,7 @@ export default function InvoicesPage() {
               </tr>
               {payingInvoiceId === invoice.id && (
                 <tr>
-                  <td colSpan={6} className="bg-zinc-50 px-4 py-3">
+                  <td colSpan={6} className="bg-surface-muted px-4 py-3">
                     <form
                       onSubmit={handleSubmit((values) =>
                         payMutation.mutate({
@@ -126,27 +125,18 @@ export default function InvoicesPage() {
                       )}
                       className="flex items-center gap-2"
                     >
-                      <input
+                      <Input
                         type="number"
                         step="0.01"
                         placeholder="Montant"
-                        className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
                         {...register("amount", { required: true, valueAsNumber: true })}
                       />
-                      <input
-                        placeholder="Méthode (cash, virement...)"
-                        className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-                        {...register("method")}
-                      />
-                      <button
-                        type="submit"
-                        disabled={payMutation.isPending}
-                        className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-                      >
+                      <Input placeholder="Méthode (cash, virement...)" {...register("method")} />
+                      <Button type="submit" loading={payMutation.isPending}>
                         {payMutation.isPending ? "..." : "Enregistrer le paiement"}
-                      </button>
+                      </Button>
                       {payMutation.isError && (
-                        <span className="text-xs text-red-600">
+                        <span className="text-xs text-destructive">
                           {payMutation.error instanceof ApiError ? payMutation.error.message : "Erreur"}
                         </span>
                       )}
@@ -158,6 +148,6 @@ export default function InvoicesPage() {
           ))}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }

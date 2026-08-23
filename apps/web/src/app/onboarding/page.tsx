@@ -144,7 +144,9 @@ export default function OnboardingPage() {
               name="modules"
               render={({ field }) => (
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  {KORVA_MODULES.map((module) => (
+                  {/* "analytics" retiré des choix : le module n'existe pas encore côté
+                      application, l'activer mènerait à un lien mort dans le dashboard. */}
+                  {KORVA_MODULES.filter((module) => module !== "analytics").map((module) => (
                     <label key={module} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"

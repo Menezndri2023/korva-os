@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { z } from "zod";
 import { resetPasswordSchema, type ResetPasswordInput } from "@korva/validation";
+import { Button, Input } from "@korva/ui";
 import { ApiError, apiClient } from "@/lib/api-client";
 
 interface ResetPasswordResponse {
@@ -95,10 +96,11 @@ function ResetPasswordForm() {
           <label className="block text-sm font-medium" htmlFor="password">
             Nouveau mot de passe
           </label>
-          <input
+          <Input
             id="password"
             type="password"
-            className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            className="mt-1 w-full"
+            error={!!errors.password}
             {...register("password")}
           />
           {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
@@ -108,10 +110,11 @@ function ResetPasswordForm() {
           <label className="block text-sm font-medium" htmlFor="confirmPassword">
             Confirmer le mot de passe
           </label>
-          <input
+          <Input
             id="confirmPassword"
             type="password"
-            className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+            className="mt-1 w-full"
+            error={!!errors.confirmPassword}
             {...register("confirmPassword")}
           />
           {errors.confirmPassword && (
@@ -127,13 +130,9 @@ function ResetPasswordForm() {
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={mutation.isPending}
-          className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-        >
+        <Button type="submit" loading={mutation.isPending} className="w-full">
           {mutation.isPending ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
-        </button>
+        </Button>
       </form>
     </div>
   );

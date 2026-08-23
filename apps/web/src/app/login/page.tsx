@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { loginSchema, type LoginInput } from "@korva/validation";
 import type { Organization } from "@korva/types";
+import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -55,10 +56,11 @@ export default function LoginPage() {
             <label className="block text-sm font-medium" htmlFor="email">
               Email
             </label>
-            <input
+            <Input
               id="email"
               type="email"
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              className="mt-1 w-full"
+              error={!!errors.email}
               {...register("email")}
             />
             {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
@@ -68,10 +70,11 @@ export default function LoginPage() {
             <label className="block text-sm font-medium" htmlFor="password">
               Mot de passe
             </label>
-            <input
+            <Input
               id="password"
               type="password"
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              className="mt-1 w-full"
+              error={!!errors.password}
               {...register("password")}
             />
             {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
@@ -86,13 +89,9 @@ export default function LoginPage() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          <Button type="submit" loading={mutation.isPending} className="w-full">
             {mutation.isPending ? "Connexion..." : "Se connecter"}
-          </button>
+          </Button>
         </form>
 
         <p className="text-center text-sm text-zinc-500">

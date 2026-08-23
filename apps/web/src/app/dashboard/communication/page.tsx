@@ -16,6 +16,7 @@ import {
   type Message,
   type MessageTemplate,
 } from "@korva/types";
+import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 const CHANNEL_LABELS: Record<CommunicationChannel, string> = {
@@ -76,21 +77,19 @@ export default function ConversationsPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
-          {showForm ? "Annuler" : "Nouvelle conversation"}
-        </button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouvelle conversation"}</Button>
       </div>
 
       {showForm && (
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="grid grid-cols-3 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
+          // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
+          // onSubmit), and Card renders a <div> — same exclusion documented on the other
+          // migrated create-forms (dashboard/crm, dashboard/bookings).
+          className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-surface p-4"
         >
           <select
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+            className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             defaultValue=""
             {...register("contactId", { required: true })}
           >
@@ -104,7 +103,7 @@ export default function ConversationsPage() {
             ))}
           </select>
           <select
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+            className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             {...register("channel", { required: true })}
           >
             {COMMUNICATION_CHANNELS.map((channel) => (
@@ -113,26 +112,18 @@ export default function ConversationsPage() {
               </option>
             ))}
           </select>
-          <input
-            placeholder="Sujet (optionnel)"
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-            {...register("subject")}
-          />
+          <Input placeholder="Sujet (optionnel)" {...register("subject")} />
 
-          {formError && <p className="col-span-3 text-sm text-red-600">{formError}</p>}
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="col-span-3 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          {formError && <p className="col-span-3 text-sm text-destructive">{formError}</p>}
+          <Button type="submit" loading={createMutation.isPending} className="col-span-3">
             {createMutation.isPending ? "Création..." : "Créer la conversation"}
-          </button>
+          </Button>
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
             <tr>
               <th className="px-4 py-2">Contact</th>
               <th className="px-4 py-2">Canal</th>
@@ -141,17 +132,17 @@ export default function ConversationsPage() {
               <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100">
+          <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
                   Chargement...
                 </td>
               </tr>
             )}
             {!isLoading && conversations?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
                   Aucune conversation.
                 </td>
               </tr>
@@ -165,7 +156,7 @@ export default function ConversationsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -234,42 +225,38 @@ function ConversationRow({
     <>
       <tr>
         <td className="px-4 py-2 font-medium">{contactName}</td>
-        <td className="px-4 py-2 text-zinc-600">{CHANNEL_LABELS[conversation.channel]}</td>
-        <td className="px-4 py-2 text-zinc-600">{conversation.subject ?? "—"}</td>
+        <td className="px-4 py-2 text-text-muted">{CHANNEL_LABELS[conversation.channel]}</td>
+        <td className="px-4 py-2 text-text-muted">{conversation.subject ?? "—"}</td>
         <td className="px-4 py-2">
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs ${
-              conversation.status === "open" ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-600"
-            }`}
-          >
+          <Badge variant={conversation.status === "open" ? "success" : "default"}>
             {conversation.status === "open" ? "Ouverte" : "Fermée"}
-          </span>
+          </Badge>
         </td>
         <td className="space-x-2 px-4 py-2">
-          <button onClick={() => setExpanded((v) => !v)} className="text-xs text-zinc-600 hover:underline">
+          <button onClick={() => setExpanded((v) => !v)} className="text-xs text-text-muted hover:underline">
             {expanded ? "Fermer" : "Voir le fil"}
           </button>
-          <button onClick={() => toggleStatusMutation.mutate()} className="text-xs text-zinc-600 hover:underline">
+          <button onClick={() => toggleStatusMutation.mutate()} className="text-xs text-text-muted hover:underline">
             {conversation.status === "open" ? "Clore" : "Rouvrir"}
           </button>
         </td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={5} className="bg-zinc-50 px-4 py-3">
+          <td colSpan={5} className="bg-surface-muted px-4 py-3">
             <div className="space-y-3">
               <ul className="space-y-2">
                 {messagesQuery.data?.length === 0 && (
-                  <li className="text-xs text-zinc-500">Aucun message pour l&apos;instant.</li>
+                  <li className="text-xs text-text-muted">Aucun message pour l&apos;instant.</li>
                 )}
                 {messagesQuery.data?.map((message) => (
-                  <li key={message.id} className="rounded-md border border-zinc-200 bg-white p-2 text-xs">
-                    <div className="mb-1 flex justify-between text-zinc-400">
+                  <li key={message.id} className="rounded-md border border-border bg-surface p-2 text-xs">
+                    <div className="mb-1 flex justify-between text-text-muted">
                       <span>{message.direction === "outbound" ? "Envoyé" : "Reçu"}</span>
                       <span>{new Date(message.createdAt).toLocaleString("fr-FR")}</span>
                     </div>
-                    <p className="text-zinc-700">{message.body}</p>
-                    <p className="mt-1 text-zinc-400">
+                    <p className="text-text">{message.body}</p>
+                    <p className="mt-1 text-text-muted">
                       statut: {message.status}
                       {message.to ? ` — à ${message.to}` : ""}
                     </p>
@@ -278,19 +265,19 @@ function ConversationRow({
               </ul>
 
               {conversation.status === "open" && (
-                <div className="space-y-2 border-t border-zinc-200 pt-3">
+                <div className="space-y-2 border-t border-border pt-3">
                   <textarea
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     placeholder="Écrire un message..."
                     rows={2}
-                    className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                    className="w-full rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none"
                   />
                   <div className="flex items-center gap-2">
                     <select
                       value={templateId}
                       onChange={(e) => setTemplateId(e.target.value)}
-                      className="rounded-md border border-zinc-300 px-2 py-1.5 text-xs"
+                      className="rounded-md border border-border-input px-2 py-1.5 text-xs focus:border-focus focus:outline-none"
                     >
                       <option value="">Sans modèle</option>
                       {templates
@@ -301,14 +288,10 @@ function ConversationRow({
                           </option>
                         ))}
                     </select>
-                    <button
-                      onClick={send}
-                      disabled={sendMutation.isPending}
-                      className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-                    >
+                    <Button size="sm" onClick={send} loading={sendMutation.isPending}>
                       {sendMutation.isPending ? "Envoi..." : "Envoyer"}
-                    </button>
-                    {sendError && <span className="text-xs text-red-600">{sendError}</span>}
+                    </Button>
+                    {sendError && <span className="text-xs text-destructive">{sendError}</span>}
                   </div>
                 </div>
               )}

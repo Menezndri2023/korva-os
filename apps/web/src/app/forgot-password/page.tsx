@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@korva/validation";
+import { Button, Input } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 
 interface ForgotPasswordResponse {
@@ -61,10 +62,11 @@ export default function ForgotPasswordPage() {
               <label className="block text-sm font-medium" htmlFor="email">
                 Email
               </label>
-              <input
+              <Input
                 id="email"
                 type="email"
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+                className="mt-1 w-full"
+                error={!!errors.email}
                 {...register("email")}
               />
               {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
@@ -74,13 +76,9 @@ export default function ForgotPasswordPage() {
               <p className="text-sm text-red-600">Une erreur est survenue. Veuillez réessayer.</p>
             )}
 
-            <button
-              type="submit"
-              disabled={mutation.isPending}
-              className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-            >
+            <Button type="submit" loading={mutation.isPending} className="w-full">
               {mutation.isPending ? "Envoi..." : "Envoyer le lien"}
-            </button>
+            </Button>
 
             <p className="text-center text-sm text-zinc-500">
               <Link href="/login" className="font-medium text-zinc-900 underline">

@@ -10,6 +10,7 @@ import {
   type AiMessage,
   type AiPendingAction,
 } from "@korva/types";
+import { Button, Card } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 const AGENT_LABELS: Record<AiAgent, string> = {
@@ -82,18 +83,20 @@ export default function AiPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4">
-      <aside className="w-64 shrink-0 space-y-3 overflow-y-auto rounded-lg border border-zinc-200 bg-white p-3">
-        <button
-          onClick={() => setConversationId(null)}
-          className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
+      <aside
+        // Not migrated to <Card>: Card always renders a <div>, and this element must stay a
+        // real <aside> for document semantics — same exclusion as the raw <form> wrappers
+        // elsewhere (dashboard/crm, dashboard/bookings).
+        className="w-64 shrink-0 space-y-3 overflow-y-auto rounded-lg border border-border bg-surface p-3"
+      >
+        <Button className="w-full" onClick={() => setConversationId(null)}>
           Nouvelle conversation
-        </button>
+        </Button>
         {!conversationId && (
           <select
             value={agent}
             onChange={(e) => setAgent(e.target.value as AiAgent)}
-            className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none"
           >
             {AI_AGENTS.map((a) => (
               <option key={a} value={a}>
@@ -108,7 +111,9 @@ export default function AiPage() {
               <button
                 onClick={() => setConversationId(c.id)}
                 className={`w-full truncate rounded-md px-2 py-1.5 text-left text-sm ${
-                  conversationId === c.id ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-100"
+                  conversationId === c.id
+                    ? "bg-zinc-900 text-text-primary"
+                    : "text-text hover:bg-surface-muted"
                 }`}
               >
                 {AGENT_LABELS[c.agent]}
@@ -116,33 +121,30 @@ export default function AiPage() {
             </li>
           ))}
           {conversations?.length === 0 && (
-            <li className="px-2 py-1.5 text-xs text-zinc-400">Aucune conversation.</li>
+            <li className="px-2 py-1.5 text-xs text-text-muted">Aucune conversation.</li>
           )}
         </ul>
       </aside>
 
-      <div className="flex flex-1 flex-col rounded-lg border border-zinc-200 bg-white">
+      <Card className="flex flex-1 flex-col">
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {!conversationId && (
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-text-muted">
               Choisissez un agent à gauche, puis écrivez votre premier message.
             </p>
           )}
           {conversationId && messagesLoading && (
-            <p className="text-sm text-zinc-500">Chargement...</p>
+            <p className="text-sm text-text-muted">Chargement...</p>
           )}
           {messages?.map((m) => (
             <MessageBubble key={m.id} message={m} />
           ))}
           {pendingOnly.map((action) => (
-            <div
-              key={action.id}
-              className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm"
-            >
+            <div key={action.id} className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
               <p className="font-medium text-amber-900">
                 Confirmation requise : {action.toolName}
               </p>
-              <p className="mt-1 text-xs text-amber-700">{JSON.stringify(action.input)}</p>
+              <p className="mt-1 text-xs text-warning">{JSON.stringify(action.input)}</p>
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={() => confirmMutation.mutate(action.id)}
@@ -162,8 +164,8 @@ export default function AiPage() {
             </div>
           ))}
         </div>
-        <div className="border-t border-zinc-200 p-3">
-          {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+        <div className="border-t border-border p-3">
+          {error && <p className="mb-2 text-sm text-destructive">{error}</p>}
           <div className="flex gap-2">
             <textarea
               value={message}
@@ -176,18 +178,14 @@ export default function AiPage() {
               }}
               rows={2}
               placeholder="Écrivez votre message..."
-              className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="flex-1 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             />
-            <button
-              onClick={send}
-              disabled={chatMutation.isPending}
-              className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-            >
+            <Button onClick={send} loading={chatMutation.isPending}>
               {chatMutation.isPending ? "..." : "Envoyer"}
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -195,14 +193,14 @@ export default function AiPage() {
 function MessageBubble({ message }: { message: AiMessage }) {
   if (message.role === "tool") {
     return (
-      <div className="text-xs text-zinc-400">
+      <div className="text-xs text-text-muted">
         🔧 {message.toolName} → {message.content}
       </div>
     );
   }
   if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
     return (
-      <div className="text-xs text-zinc-400">
+      <div className="text-xs text-text-muted">
         🔧 appel : {message.toolCalls.map((c) => c.name).join(", ")}
       </div>
     );
@@ -212,7 +210,7 @@ function MessageBubble({ message }: { message: AiMessage }) {
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-          isUser ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-800"
+          isUser ? "bg-zinc-900 text-text-primary" : "bg-surface-muted text-text"
         }`}
       >
         {message.content}

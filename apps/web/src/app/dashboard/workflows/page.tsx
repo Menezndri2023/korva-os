@@ -18,6 +18,7 @@ import {
   type WorkflowConditionOperator,
   type WorkflowExecution,
 } from "@korva/types";
+import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 const OPERATOR_LABELS: Record<WorkflowConditionOperator, string> = {
@@ -155,34 +156,28 @@ export default function WorkflowsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Workflows</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-text-muted">
           Automatisez des actions (créer une tâche, envoyer un e-mail, appeler un webhook) en réaction aux
           événements de KORVA.
         </p>
       </div>
 
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
-          {showForm ? "Annuler" : "Nouveau workflow"}
-        </button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouveau workflow"}</Button>
       </div>
 
       {showForm && (
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="space-y-4 rounded-lg border border-zinc-200 bg-white p-4"
+          // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
+          // onSubmit), and Card renders a <div> — same exclusion documented on the other
+          // migrated create-forms (dashboard/crm, dashboard/bookings).
+          className="space-y-4 rounded-lg border border-border bg-surface p-4"
         >
           <div className="grid grid-cols-2 gap-3">
-            <input
-              placeholder="Nom du workflow"
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              {...register("name", { required: true })}
-            />
+            <Input placeholder="Nom du workflow" {...register("name", { required: true })} />
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               {...register("trigger", { required: true })}
             >
               {SYSTEM_EVENTS.map((event) => (
@@ -194,16 +189,16 @@ export default function WorkflowsPage() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-zinc-700">Conditions (toutes doivent être vraies)</p>
+            <p className="text-sm font-medium text-text">Conditions (toutes doivent être vraies)</p>
             {conditionFields.fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-12 gap-2">
-                <input
+                <Input
                   placeholder="Champ (ex: estimatedValue)"
-                  className="col-span-4 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-4"
                   {...register(`conditions.${index}.field`, { required: true })}
                 />
                 <select
-                  className="col-span-3 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-3 rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none"
                   {...register(`conditions.${index}.operator`)}
                 >
                   {WORKFLOW_CONDITION_OPERATORS.map((operator) => (
@@ -213,22 +208,22 @@ export default function WorkflowsPage() {
                   ))}
                 </select>
                 <select
-                  className="col-span-2 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-2 rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none"
                   {...register(`conditions.${index}.valueType`)}
                 >
                   <option value="string">Texte</option>
                   <option value="number">Nombre</option>
                   <option value="boolean">Booléen</option>
                 </select>
-                <input
+                <Input
                   placeholder="Valeur"
-                  className="col-span-2 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-2"
                   {...register(`conditions.${index}.value`, { required: true })}
                 />
                 <button
                   type="button"
                   onClick={() => conditionFields.remove(index)}
-                  className="col-span-1 text-sm text-red-600 hover:underline"
+                  className="col-span-1 text-sm text-destructive hover:underline"
                 >
                   ✕
                 </button>
@@ -239,14 +234,14 @@ export default function WorkflowsPage() {
               onClick={() =>
                 conditionFields.append({ field: "", operator: "equals", valueType: "string", value: "" })
               }
-              className="text-sm text-zinc-600 hover:underline"
+              className="text-sm text-text-muted hover:underline"
             >
               + Ajouter une condition
             </button>
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-zinc-700">Actions (au moins une)</p>
+            <p className="text-sm font-medium text-text">Actions (au moins une)</p>
             {actionFields.fields.map((field, index) => (
               <ActionRow
                 key={field.id}
@@ -269,26 +264,22 @@ export default function WorkflowsPage() {
                   url: "",
                 })
               }
-              className="text-sm text-zinc-600 hover:underline"
+              className="text-sm text-text-muted hover:underline"
             >
               + Ajouter une action
             </button>
           </div>
 
-          {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          {formError && <p className="text-sm text-destructive">{formError}</p>}
+          <Button type="submit" loading={createMutation.isPending}>
             {createMutation.isPending ? "Création..." : "Créer le workflow"}
-          </button>
+          </Button>
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
             <tr>
               <th className="px-4 py-2">Nom</th>
               <th className="px-4 py-2">Déclencheur</th>
@@ -296,17 +287,17 @@ export default function WorkflowsPage() {
               <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100">
+          <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
                   Chargement...
                 </td>
               </tr>
             )}
             {!isLoading && workflows?.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
                   Aucun workflow.
                 </td>
               </tr>
@@ -321,7 +312,7 @@ export default function WorkflowsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }
@@ -340,10 +331,10 @@ function ActionRow({
   const type = useWatch({ control, name: `actions.${index}.type` });
 
   return (
-    <div className="space-y-2 rounded-md border border-zinc-200 p-3">
+    <div className="space-y-2 rounded-md border border-border p-3">
       <div className="flex items-center gap-2">
         <select
-          className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+          className="rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none"
           {...register(`actions.${index}.type`)}
         >
           {WORKFLOW_ACTION_TYPES.map((actionType) => (
@@ -353,7 +344,7 @@ function ActionRow({
           ))}
         </select>
         {onRemove && (
-          <button type="button" onClick={onRemove} className="text-sm text-red-600 hover:underline">
+          <button type="button" onClick={onRemove} className="text-sm text-destructive hover:underline">
             Retirer cette action
           </button>
         )}
@@ -361,56 +352,30 @@ function ActionRow({
 
       {type === "create_task" && (
         <div className="grid grid-cols-2 gap-2">
-          <input
-            placeholder="Titre (ex: Suivre {{leadId}})"
-            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-            {...register(`actions.${index}.title`, { required: true })}
-          />
-          <input
-            placeholder="Description (optionnel)"
-            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-            {...register(`actions.${index}.description`)}
-          />
+          <Input placeholder="Titre (ex: Suivre {{leadId}})" {...register(`actions.${index}.title`, { required: true })} />
+          <Input placeholder="Description (optionnel)" {...register(`actions.${index}.description`)} />
         </div>
       )}
       {type === "send_email" && (
         <div className="grid grid-cols-3 gap-2">
-          <input
+          <Input
             placeholder="Destinataire ({{contact.email}})"
-            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
             {...register(`actions.${index}.to`, { required: true })}
           />
-          <input
-            placeholder="Sujet"
-            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-            {...register(`actions.${index}.subject`, { required: true })}
-          />
-          <input
-            placeholder="Corps du message"
-            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-            {...register(`actions.${index}.body`, { required: true })}
-          />
+          <Input placeholder="Sujet" {...register(`actions.${index}.subject`, { required: true })} />
+          <Input placeholder="Corps du message" {...register(`actions.${index}.body`, { required: true })} />
         </div>
       )}
       {type === "webhook" && (
-        <input
-          placeholder="URL du webhook"
-          className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-          {...register(`actions.${index}.url`, { required: true })}
-        />
+        <Input placeholder="URL du webhook" className="w-full" {...register(`actions.${index}.url`, { required: true })} />
       )}
       {type === "internal_notification" && (
         <div className="grid grid-cols-2 gap-2">
-          <input
+          <Input
             placeholder="Titre (ex: Nouveau lead {{leadId}})"
-            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
             {...register(`actions.${index}.title`, { required: true })}
           />
-          <input
-            placeholder="Message (optionnel)"
-            className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
-            {...register(`actions.${index}.body`)}
-          />
+          <Input placeholder="Message (optionnel)" {...register(`actions.${index}.body`)} />
         </div>
       )}
     </div>
@@ -471,62 +436,49 @@ function WorkflowRow({
     <>
       <tr>
         <td className="px-4 py-2 font-medium">{workflow.name}</td>
-        <td className="px-4 py-2 text-zinc-600">{workflow.trigger}</td>
+        <td className="px-4 py-2 text-text-muted">{workflow.trigger}</td>
         <td className="px-4 py-2">
-          <button
-            onClick={() => onToggleActive(!workflow.active)}
-            className={`rounded-full px-2 py-0.5 text-xs ${
-              workflow.active ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-600"
-            }`}
-          >
-            {workflow.active ? "Actif" : "Inactif"}
+          <button type="button" onClick={() => onToggleActive(!workflow.active)} className="border-0 bg-transparent p-0">
+            <Badge variant={workflow.active ? "success" : "default"}>
+              {workflow.active ? "Actif" : "Inactif"}
+            </Badge>
           </button>
         </td>
         <td className="space-x-2 px-4 py-2">
-          <button
-            onClick={() => setShowTest((v) => !v)}
-            className="text-xs text-zinc-600 hover:underline"
-          >
+          <button onClick={() => setShowTest((v) => !v)} className="text-xs text-text-muted hover:underline">
             Tester
           </button>
-          <button
-            onClick={() => setShowExecutions((v) => !v)}
-            className="text-xs text-zinc-600 hover:underline"
-          >
+          <button onClick={() => setShowExecutions((v) => !v)} className="text-xs text-text-muted hover:underline">
             Exécutions
           </button>
-          <button onClick={onDelete} className="text-xs text-red-600 hover:underline">
+          <button onClick={onDelete} className="text-xs text-destructive hover:underline">
             Supprimer
           </button>
         </td>
       </tr>
       {showTest && (
         <tr>
-          <td colSpan={4} className="bg-zinc-50 px-4 py-3">
+          <td colSpan={4} className="bg-surface-muted px-4 py-3">
             <div className="space-y-2">
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-text-muted">
                 Test à blanc : évalue les conditions sur ce payload JSON sans exécuter les actions.
               </p>
               <textarea
                 value={payload}
                 onChange={(e) => setPayload(e.target.value)}
                 rows={3}
-                className="w-full rounded-md border border-zinc-300 px-2 py-1.5 font-mono text-xs"
+                className="w-full rounded-md border border-border-input px-2 py-1.5 font-mono text-xs focus:border-focus focus:outline-none"
               />
               <div className="flex items-center gap-3">
-                <button
-                  onClick={runTest}
-                  disabled={testMutation.isPending}
-                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-                >
+                <Button size="sm" onClick={runTest} loading={testMutation.isPending}>
                   {testMutation.isPending ? "Test..." : "Lancer le test"}
-                </button>
+                </Button>
                 {testResult && (
-                  <span className={testResult.matched ? "text-xs text-green-700" : "text-xs text-zinc-500"}>
+                  <span className={testResult.matched ? "text-xs text-success" : "text-xs text-text-muted"}>
                     {testResult.matched ? "✓ Conditions satisfaites" : "✕ Conditions non satisfaites"}
                   </span>
                 )}
-                {testError && <span className="text-xs text-red-600">{testError}</span>}
+                {testError && <span className="text-xs text-destructive">{testError}</span>}
               </div>
             </div>
           </td>
@@ -534,23 +486,21 @@ function WorkflowRow({
       )}
       {showExecutions && (
         <tr>
-          <td colSpan={4} className="bg-zinc-50 px-4 py-3">
+          <td colSpan={4} className="bg-surface-muted px-4 py-3">
             {executionsQuery.isLoading && (
-              <p className="text-xs text-zinc-500">Chargement...</p>
+              <p className="text-xs text-text-muted">Chargement...</p>
             )}
             {executionsQuery.data?.length === 0 && (
-              <p className="text-xs text-zinc-500">Aucune exécution pour l&apos;instant.</p>
+              <p className="text-xs text-text-muted">Aucune exécution pour l&apos;instant.</p>
             )}
             <ul className="space-y-1">
               {executionsQuery.data?.map((execution) => (
-                <li key={execution.id} className="text-xs text-zinc-600">
-                  <span
-                    className={execution.status === "success" ? "text-green-700" : "text-red-600"}
-                  >
+                <li key={execution.id} className="text-xs text-text-muted">
+                  <span className={execution.status === "success" ? "text-success" : "text-destructive"}>
                     {execution.status}
                   </span>{" "}
                   — {execution.eventName} — {new Date(execution.createdAt).toLocaleString("fr-FR")}
-                  {execution.error && <span className="text-red-600"> ({execution.error})</span>}
+                  {execution.error && <span className="text-destructive"> ({execution.error})</span>}
                 </li>
               ))}
             </ul>

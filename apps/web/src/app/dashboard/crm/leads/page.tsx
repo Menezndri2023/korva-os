@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createPipelineSchema, createLeadSchema, type CreateLeadInput } from "@korva/validation";
 import type { Contact, Lead, Pipeline } from "@korva/types";
+import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 function usePipelines() {
@@ -75,33 +76,29 @@ export default function LeadsPage() {
 
   if (!pipelinesLoading && pipelines?.length === 0) {
     return (
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 text-sm text-zinc-600">
+      <Card className="p-6 text-sm text-zinc-600">
         <p className="mb-3">Aucun pipeline n&apos;a encore été créé pour gérer vos prospects.</p>
-        <button
-          onClick={() => seedPipelineMutation.mutate()}
-          disabled={seedPipelineMutation.isPending}
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-        >
+        <Button onClick={() => seedPipelineMutation.mutate()} loading={seedPipelineMutation.isPending}>
           {seedPipelineMutation.isPending ? "Création..." : "Créer un pipeline par défaut"}
-        </button>
-      </div>
+        </Button>
+      </Card>
     );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
+        <Button onClick={() => setShowForm((v) => !v)}>
           {showForm ? "Annuler" : "Nouveau prospect"}
-        </button>
+        </Button>
       </div>
 
       {showForm && defaultPipeline && (
         <form
           onSubmit={handleSubmit((values) => createLeadMutation.mutate(values))}
+          // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
+          // onSubmit), and Card renders a <div> — same exclusion already documented in
+          // dashboard/crm/page.tsx (F2-B.7).
           className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
         >
           <select
@@ -134,10 +131,9 @@ export default function LeadsPage() {
               </option>
             ))}
           </select>
-          <input
+          <Input
             type="number"
             placeholder="Valeur estimée"
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
             {...register("estimatedValue", { valueAsNumber: true })}
           />
 
@@ -146,17 +142,13 @@ export default function LeadsPage() {
               {createLeadMutation.error instanceof ApiError ? createLeadMutation.error.message : "Erreur"}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={createLeadMutation.isPending}
-            className="col-span-2 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          <Button type="submit" loading={createLeadMutation.isPending} className="col-span-2">
             {createLeadMutation.isPending ? "Création..." : "Créer le prospect"}
-          </button>
+          </Button>
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
             <tr>
@@ -191,7 +183,7 @@ export default function LeadsPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }

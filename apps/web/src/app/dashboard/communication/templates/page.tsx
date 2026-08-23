@@ -12,6 +12,7 @@ import {
   type CommunicationChannel,
   type MessageTemplate,
 } from "@korva/types";
+import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 const CHANNEL_LABELS: Record<CommunicationChannel, string> = {
@@ -68,27 +69,21 @@ export default function MessageTemplatesPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
-          {showForm ? "Annuler" : "Nouveau modèle"}
-        </button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouveau modèle"}</Button>
       </div>
 
       {showForm && (
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4"
+          // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
+          // onSubmit), and Card renders a <div> — same exclusion documented on the other
+          // migrated create-forms (dashboard/crm, dashboard/bookings).
+          className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
           <div className="grid grid-cols-2 gap-3">
-            <input
-              placeholder="Nom du modèle"
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              {...register("name", { required: true })}
-            />
+            <Input placeholder="Nom du modèle" {...register("name", { required: true })} />
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               {...register("channel", { required: true })}
             >
               {COMMUNICATION_CHANNELS.map((c) => (
@@ -99,33 +94,25 @@ export default function MessageTemplatesPage() {
             </select>
           </div>
           {channel !== "internal" && (
-            <input
-              placeholder="Objet (ex: Bienvenue {{contact.firstName}})"
-              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
-              {...register("subject")}
-            />
+            <Input placeholder="Objet (ex: Bienvenue {{contact.firstName}})" className="w-full" {...register("subject")} />
           )}
           <textarea
             placeholder="Corps du message — variables: {{contact.firstName}}, {{contact.lastName}}, {{contact.email}}, {{contact.phone}}"
             rows={4}
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             {...register("body", { required: true })}
           />
 
-          {formError && <p className="text-sm text-red-600">{formError}</p>}
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          {formError && <p className="text-sm text-destructive">{formError}</p>}
+          <Button type="submit" loading={createMutation.isPending}>
             {createMutation.isPending ? "Création..." : "Créer le modèle"}
-          </button>
+          </Button>
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
             <tr>
               <th className="px-4 py-2">Nom</th>
               <th className="px-4 py-2">Canal</th>
@@ -133,17 +120,17 @@ export default function MessageTemplatesPage() {
               <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100">
+          <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
                   Chargement...
                 </td>
               </tr>
             )}
             {!isLoading && templates?.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
                   Aucun modèle.
                 </td>
               </tr>
@@ -151,12 +138,12 @@ export default function MessageTemplatesPage() {
             {templates?.map((template) => (
               <tr key={template.id}>
                 <td className="px-4 py-2 font-medium">{template.name}</td>
-                <td className="px-4 py-2 text-zinc-600">{CHANNEL_LABELS[template.channel]}</td>
-                <td className="max-w-xs truncate px-4 py-2 text-zinc-600">{template.body}</td>
+                <td className="px-4 py-2 text-text-muted">{CHANNEL_LABELS[template.channel]}</td>
+                <td className="max-w-xs truncate px-4 py-2 text-text-muted">{template.body}</td>
                 <td className="px-4 py-2">
                   <button
                     onClick={() => deleteMutation.mutate(template.id)}
-                    className="text-xs text-red-600 hover:underline"
+                    className="text-xs text-destructive hover:underline"
                   >
                     Supprimer
                   </button>
@@ -165,7 +152,7 @@ export default function MessageTemplatesPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }

@@ -1,0 +1,68 @@
+/**
+ * KORVA design tokens — semantic color aliases layered on top of Tailwind v4's own default
+ * palette (referenced via var(--color-*), never hardcoded hex/oklch) so they always stay in
+ * sync with whatever Tailwind ships.
+ *
+ * Scope: only the semantic names apps/web's existing pages don't already have a Tailwind
+ * utility for (surface, border, destructive, success, warning, focus, ...). Deliberately NOT
+ * redefined here: radius (rounded-md/rounded-lg/rounded-full), spacing (the existing
+ * gap-2/space-y-4/... scale) — Tailwind's own default scale already matches every value
+ * observed across apps/web (see F2-A audit §4), so aliasing them would just add an indirection
+ * with no new information.
+ *
+ * --color-background / --color-foreground are intentionally left alone — they already exist in
+ * apps/web/src/app/globals.css and are consumed by <body>. Redefining them here would risk
+ * silently changing that rendering, which F2-B.1 must not do.
+ */
+@theme {
+  /* Page background (apps/web currently hardcodes bg-zinc-50 on <body>'s children wrapper). */
+  --color-app-background: var(--color-zinc-50);
+
+  /* Card/panel background — currently hardcoded bg-white across every "rounded-lg border
+     bg-white" container (29 occurrences per F2-A audit). */
+  --color-surface: var(--color-white);
+
+  /* Subtle fill inside a surface (table header row, hover background) — currently
+     bg-zinc-50/bg-zinc-100 used ad hoc. */
+  --color-surface-muted: var(--color-zinc-100);
+
+  /* Container/separator border — currently border-zinc-200 (cards, table dividers). */
+  --color-border: var(--color-zinc-200);
+
+  /* Form field border — currently border-zinc-300 on every <input>/<select>/<textarea>. */
+  --color-border-input: var(--color-zinc-300);
+
+  /* Default body text — currently text-zinc-900. */
+  --color-text: var(--color-zinc-900);
+
+  /* Secondary/help text — currently text-zinc-500. */
+  --color-text-muted: var(--color-zinc-500);
+
+  /* Neutral badge/tag text — distinct from --color-text-muted (zinc-500, secondary body
+     text). Badge's neutral variant needs to match the "bg-zinc-100 text-zinc-700" tag pattern
+     already used across the app (6 of 8 real neutral-badge occurrences per the F2-B.10/B.11
+     audit), not the lighter secondary-text shade. Kept separate so this stays scoped to badges
+     and never silently changes Button's ghost variant, which also reads --color-text-muted. */
+  --color-badge-text: var(--color-zinc-700);
+
+  /* Text rendered ON a primary-filled surface (e.g. the white label on a bg-zinc-900 button) —
+     distinct from --color-text, which is for text ON a surface, not text on a filled control. */
+  --color-text-primary: var(--color-white);
+
+  /* Form/mutation error state — currently text-red-600, used identically in every page's
+     mutation.isError block (24 occurrences per F2-A audit). */
+  --color-destructive: var(--color-red-600);
+
+  /* Positive status (active subscription, paid invoice, ...) — currently
+     text-green-700 / bg-green-100. */
+  --color-success: var(--color-green-700);
+
+  /* Warning status — currently text-amber-700 / bg-amber-50, so far only used in the AI
+     pending-action confirmation UI. */
+  --color-warning: var(--color-amber-700);
+
+  /* Keyboard focus ring/border — currently focus:border-zinc-900, applied inconsistently
+     across pages (see F2-A audit §6); this token exists so a future shared Input/Button can
+     apply it uniformly everywhere in one place. */
+  --color-focus: var(--color-zinc-900);
+}

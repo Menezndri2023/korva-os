@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createOrderSchema, type CreateOrderInput } from "@korva/validation";
 import type { Contact, Order } from "@korva/types";
+import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 
 const STATUS_LABELS: Record<Order["status"], string> = {
@@ -77,25 +78,23 @@ export default function OrdersPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Commandes</h1>
-        <p className="mt-1 text-sm text-zinc-500">Commandes manuelles, issues du panier ou d&apos;une réservation.</p>
+        <p className="mt-1 text-sm text-text-muted">Commandes manuelles, issues du panier ou d&apos;une réservation.</p>
       </div>
 
       <div className="flex justify-end">
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-        >
-          {showForm ? "Annuler" : "Nouvelle commande"}
-        </button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouvelle commande"}</Button>
       </div>
 
       {showForm && (
         <form
           onSubmit={handleSubmit((values) => createMutation.mutate(values))}
-          className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4"
+          // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
+          // onSubmit), and Card renders a <div> — same exclusion documented on the other
+          // migrated create-forms (dashboard/crm, dashboard/bookings).
+          className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
           <select
-            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
+            className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             defaultValue=""
             {...register("contactId")}
           >
@@ -112,34 +111,34 @@ export default function OrdersPage() {
           <div className="space-y-2">
             {fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-12 gap-2">
-                <input
+                <Input
                   placeholder="Description"
-                  className="col-span-5 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-5"
                   {...register(`items.${index}.description`)}
                 />
-                <input
+                <Input
                   type="number"
                   placeholder="Qté"
-                  className="col-span-2 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-2"
                   {...register(`items.${index}.quantity`, { valueAsNumber: true })}
                 />
-                <input
+                <Input
                   type="number"
                   step="0.01"
                   placeholder="Prix unitaire"
-                  className="col-span-2 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-2"
                   {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
                 />
-                <input
+                <Input
                   type="number"
                   placeholder="TVA %"
-                  className="col-span-2 rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
+                  className="col-span-2"
                   {...register(`items.${index}.taxRate`, { valueAsNumber: true })}
                 />
                 <button
                   type="button"
                   onClick={() => remove(index)}
-                  className="col-span-1 text-sm text-red-600 hover:underline"
+                  className="col-span-1 text-sm text-destructive hover:underline"
                 >
                   ✕
                 </button>
@@ -148,30 +147,26 @@ export default function OrdersPage() {
             <button
               type="button"
               onClick={() => append({ description: "", quantity: 1, unitPrice: 0, taxRate: 0 })}
-              className="text-sm text-zinc-600 hover:underline"
+              className="text-sm text-text-muted hover:underline"
             >
               + Ajouter une ligne
             </button>
           </div>
 
           {createMutation.isError && (
-            <p className="text-sm text-red-600">
+            <p className="text-sm text-destructive">
               {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={createMutation.isPending}
-            className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          <Button type="submit" loading={createMutation.isPending}>
             {createMutation.isPending ? "Création..." : "Créer la commande"}
-          </button>
+          </Button>
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+      <Card className="overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
             <tr>
               <th className="px-4 py-2">N°</th>
               <th className="px-4 py-2">Client</th>
@@ -181,17 +176,17 @@ export default function OrdersPage() {
               <th className="px-4 py-2">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100">
+          <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
                   Chargement...
                 </td>
               </tr>
             )}
             {!isLoading && orders?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
                   Aucune commande.
                 </td>
               </tr>
@@ -199,21 +194,19 @@ export default function OrdersPage() {
             {orders?.map((order) => (
               <tr key={order.id}>
                 <td className="px-4 py-2 font-medium">{order.number}</td>
-                <td className="px-4 py-2 text-zinc-600">{contactName(order.contactId)}</td>
-                <td className="px-4 py-2 text-zinc-600">{order.source}</td>
-                <td className="px-4 py-2 text-zinc-600">
+                <td className="px-4 py-2 text-text-muted">{contactName(order.contactId)}</td>
+                <td className="px-4 py-2 text-text-muted">{order.source}</td>
+                <td className="px-4 py-2 text-text-muted">
                   {order.total} {order.currency}
                 </td>
                 <td className="px-4 py-2">
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
-                    {STATUS_LABELS[order.status]}
-                  </span>
+                  <Badge>{STATUS_LABELS[order.status]}</Badge>
                 </td>
                 <td className="px-4 py-2 space-x-2">
                   {order.status === "pending" && (
                     <button
                       onClick={() => confirmMutation.mutate(order.id)}
-                      className="text-xs text-zinc-600 hover:underline"
+                      className="text-xs text-text-muted hover:underline"
                     >
                       Confirmer
                     </button>
@@ -221,7 +214,7 @@ export default function OrdersPage() {
                   {order.status === "confirmed" && !order.invoiceId && (
                     <button
                       onClick={() => invoiceMutation.mutate(order.id)}
-                      className="text-xs text-zinc-600 hover:underline"
+                      className="text-xs text-text-muted hover:underline"
                     >
                       Facturer
                     </button>
@@ -229,7 +222,7 @@ export default function OrdersPage() {
                   {order.status === "confirmed" && (
                     <button
                       onClick={() => fulfillMutation.mutate(order.id)}
-                      className="text-xs text-zinc-600 hover:underline"
+                      className="text-xs text-text-muted hover:underline"
                     >
                       Livrer
                     </button>
@@ -237,7 +230,7 @@ export default function OrdersPage() {
                   {(order.status === "pending" || order.status === "confirmed") && (
                     <button
                       onClick={() => cancelMutation.mutate(order.id)}
-                      className="text-xs text-red-600 hover:underline"
+                      className="text-xs text-destructive hover:underline"
                     >
                       Annuler
                     </button>
@@ -247,7 +240,7 @@ export default function OrdersPage() {
             ))}
           </tbody>
         </table>
-      </div>
+      </Card>
     </div>
   );
 }
