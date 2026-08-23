@@ -35,7 +35,7 @@ jobs:
       JWT_REFRESH_SECRET: ci-jwt-refresh-secret
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Start MongoDB (replica set rs0)
         run: |
@@ -170,7 +170,7 @@ jobs:
       JWT_REFRESH_SECRET: ci-jwt-refresh-secret
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Start MongoDB (replica set rs0)
         run: |
