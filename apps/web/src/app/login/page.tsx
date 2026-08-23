@@ -75,6 +75,9 @@ export default function LoginPage() {
               {...register("password")}
             />
             {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
+            <Link href="/forgot-password" className="mt-1 inline-block text-xs text-zinc-500 underline">
+              Mot de passe oublié ?
+            </Link>
           </div>
 
           {mutation.isError && (
