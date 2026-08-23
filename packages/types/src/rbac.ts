@@ -58,6 +58,7 @@ export const CORE_PERMISSIONS = [
   "settings.manage",
   "ai.use",
   "ai.execute_sensitive_actions",
+  "analytics.read",
 ] as const satisfies readonly Permission[];
 
 export type CorePermission = (typeof CORE_PERMISSIONS)[number];
@@ -119,6 +120,7 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "notifications.read",
     "notifications.update",
     "ai.use",
+    "analytics.read",
   ],
   SALES: [
     "contacts.read",

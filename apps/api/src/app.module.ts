@@ -27,6 +27,7 @@ import { CommunicationModule } from './communication/communication.module';
 import { AiModule } from './ai/ai.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { PublicModule } from './public/public.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { PublicModule } from './public/public.module';
     CommunicationModule,
     WorkflowModule,
     AiModule,
+    AnalyticsModule,
     PublicModule,
   ],
   providers: [

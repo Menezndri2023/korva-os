@@ -11,3 +11,4 @@ export * from "./communication.ts";
 export * from "./ai.ts";
 export * from "./subscriptions.ts";
 export * from "./public.ts";
+export * from "./analytics.ts";

@@ -33,4 +33,15 @@ export class AuditService {
       metadata: input.metadata ?? {},
     });
   }
+
+  listRecent(
+    organizationId: string,
+    limit: number,
+  ): Promise<AuditLogDocument[]> {
+    return this.auditLogModel
+      .find({ organizationId: new Types.ObjectId(organizationId) })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .exec();
+  }
 }
