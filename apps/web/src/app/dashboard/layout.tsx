@@ -16,7 +16,7 @@ const MODULE_NAV: { module: KorvaModule; label: string; href: string }[] = [
   { module: "finance", label: "Devis & Factures", href: "/dashboard/finance" },
   { module: "workflow", label: "Workflows", href: "/dashboard/workflows" },
   { module: "communication", label: "Communication", href: "/dashboard/communication" },
-  { module: "analytics", label: "Analytics", href: "/dashboard/analytics" },
+  { module: "analytics", label: "Statistiques", href: "/dashboard/analytics" },
   { module: "ai", label: "Assistant IA", href: "/dashboard/ai" },
 ];
 
