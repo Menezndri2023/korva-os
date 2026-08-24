@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Plan, SubscriptionSummary } from "@korva/types";
+import { KORVA_MODULES } from "@korva/types";
+import type { KorvaModule, Organization, Plan, SubscriptionSummary } from "@korva/types";
 import { Badge, Button } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useActiveOrganization } from "@/lib/use-active-organization";
@@ -17,6 +18,18 @@ interface MemberRow {
 const METRIC_LABELS: Record<string, string> = {
   seats: "Membres de l'équipe",
   ai_messages_per_month: "Messages IA / mois",
+};
+
+const MODULE_LABELS: Record<KorvaModule, string> = {
+  crm: "Clients & Prospects (CRM)",
+  catalog: "Produits & Services",
+  booking: "Réservations",
+  commerce: "Commandes & E-commerce",
+  finance: "Devis & Factures",
+  workflow: "Automatisations",
+  communication: "Communication",
+  analytics: "Statistiques",
+  ai: "Assistant IA",
 };
 
 export default function SettingsPage() {
@@ -44,6 +57,26 @@ export default function SettingsPage() {
       apiClient.post("/subscriptions/change-plan", { planKey }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["subscriptions", "me"] }),
   });
+
+  // Kept non-optimistic on purpose: checked state always derives straight from
+  // organization.enabledModules (server truth), so an error path never leaves a toggle out of
+  // sync with reality — there's no local copy to roll back. onSuccess awaits the invalidated
+  // refetch (not `void`) so isPending — and therefore the disabled state below — covers the
+  // full round trip, not just the PATCH itself; this is what keeps concurrent toggles from
+  // racing each other against a stale enabledModules snapshot.
+  const modulesMutation = useMutation({
+    mutationFn: (enabledModules: KorvaModule[]) =>
+      apiClient.patch<Organization>("/organizations/me", { enabledModules }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organizations", "me"] }),
+  });
+
+  function toggleModule(module: KorvaModule) {
+    if (!organization) return;
+    const next = organization.enabledModules.includes(module)
+      ? organization.enabledModules.filter((m) => m !== module)
+      : [...organization.enabledModules, module];
+    modulesMutation.mutate(next);
+  }
 
   return (
     <div className="space-y-8">
@@ -141,6 +174,60 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-border bg-surface p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-text">Modules</h2>
+          {modulesMutation.isPending && (
+            <span className="text-xs text-text-muted">Enregistrement...</span>
+          )}
+        </div>
+        <p className="mt-1 text-sm text-text-muted">
+          Activez ou désactivez les modules disponibles dans votre plan actuel. Le menu à
+          gauche se met à jour immédiatement.
+        </p>
+
+        {modulesMutation.isError && (
+          <p className="mt-3 text-xs text-destructive">
+            {modulesMutation.error instanceof ApiError
+              ? modulesMutation.error.message
+              : "Impossible de mettre à jour les modules. Réessayez."}
+          </p>
+        )}
+
+        {!organization || !subscription ? (
+          <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {KORVA_MODULES.map((module) => {
+              const isEnabled = organization.enabledModules.includes(module);
+              const isAllowedByPlan = subscription.plan.modules.includes(module);
+              const disabled = !isAllowedByPlan || modulesMutation.isPending;
+              return (
+                <label
+                  key={module}
+                  htmlFor={`module-${module}`}
+                  className={`flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm ${
+                    disabled ? "opacity-60" : ""
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <input
+                      id={`module-${module}`}
+                      type="checkbox"
+                      checked={isEnabled}
+                      disabled={disabled}
+                      onChange={() => toggleModule(module)}
+                    />
+                    {MODULE_LABELS[module]}
+                  </span>
+                  {!isAllowedByPlan && <Badge>Non inclus dans le plan</Badge>}
+                </label>
+              );
+            })}
           </div>
         )}
       </section>
