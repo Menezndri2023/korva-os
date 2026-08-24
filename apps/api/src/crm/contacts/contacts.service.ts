@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Types } from 'mongoose';
 import type {
   CreateContactInput,
@@ -7,6 +11,7 @@ import type {
 } from '@korva/validation';
 import type { Pagination } from '@korva/types';
 import { ContactsRepository } from './contacts.repository';
+import { ContactReferencesRepository } from './contact-references.repository';
 import { ContactDocument } from './schemas/contact.schema';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
@@ -16,6 +21,7 @@ import { EventBusService } from '../../core/events/event-bus.service';
 export class ContactsService {
   constructor(
     private readonly contactsRepository: ContactsRepository,
+    private readonly contactReferencesRepository: ContactReferencesRepository,
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
@@ -161,6 +167,24 @@ export class ContactsService {
     userId: string,
     id: string,
   ): Promise<void> {
+    // Checked before the delete itself: contactId is a required field on every entity that
+    // carries one (leads, orders, carts, bookings, invoices, quotes, conversations), and none
+    // of them support a soft-delete/archival state — a hard delete here would leave those
+    // records pointing at nothing. Status is deliberately not considered: even a cancelled
+    // order or a lost lead is a real historical record.
+    const hasReferences =
+      await this.contactReferencesRepository.hasAnyReference(
+        organizationId,
+        id,
+      );
+    if (hasReferences) {
+      throw new ConflictException({
+        code: 'CONTACT_IN_USE',
+        message:
+          'This contact is still referenced by other records and cannot be deleted',
+      });
+    }
+
     const deleted = await this.contactsRepository.delete(organizationId, id);
     if (!deleted) {
       throw new NotFoundException({

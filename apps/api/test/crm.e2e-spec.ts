@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -347,6 +347,244 @@ describe('CRM module (e2e)', () => {
         .set('X-Organization-Id', b.organizationId)
         .expect(200);
       expect(asSuccess<ContactPayload[]>(ownRes.body)).toHaveLength(0);
+    });
+  });
+
+  describe('contact deletion protection (F5)', () => {
+    async function createContact(
+      accessToken: string,
+      organizationId: string,
+      firstName: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName })
+        .expect(201);
+      return asSuccess<ContactPayload>(res.body).id;
+    }
+
+    it('deletes a contact with no references (unchanged behavior)', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'f5-free@korva.test',
+        'F5 Free Org',
+      );
+      const contactId = await createContact(
+        accessToken,
+        organizationId,
+        'Unreferenced',
+      );
+
+      const res = await request(server)
+        .delete(`/api/v1/contacts/${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<{ deleted: boolean }>(res.body)).toEqual({
+        deleted: true,
+      });
+
+      await request(server)
+        .get(`/api/v1/contacts/${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(404);
+    });
+
+    it('blocks deletion of a contact referenced by a lead, and leaves it intact', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'f5-lead@korva.test',
+        'F5 Lead Org',
+      );
+      const contactId = await createContact(
+        accessToken,
+        organizationId,
+        'Prospect',
+      );
+      const pipelineRes = await request(server)
+        .post('/api/v1/pipelines')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Sales',
+          isDefault: true,
+          stages: [{ name: 'New', order: 0 }],
+        })
+        .expect(201);
+      const pipeline = asSuccess<PipelinePayload>(pipelineRes.body);
+
+      await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          pipelineId: pipeline.id,
+          stageId: pipeline.stages[0]!.id,
+        })
+        .expect(201);
+
+      const res = await request(server)
+        .delete(`/api/v1/contacts/${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(409);
+      expect(asError(res.body).code).toBe('CONTACT_IN_USE');
+
+      await request(server)
+        .get(`/api/v1/contacts/${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+    });
+
+    it('blocks deletion of a contact referenced by a conversation (a different entity than Lead)', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'f5-convo@korva.test',
+        'F5 Convo Org',
+      );
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['crm', 'communication'] })
+        .expect(200);
+
+      const contactId = await createContact(
+        accessToken,
+        organizationId,
+        'Correspondent',
+      );
+
+      await request(server)
+        .post('/api/v1/conversations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, channel: 'internal' })
+        .expect(201);
+
+      const res = await request(server)
+        .delete(`/api/v1/contacts/${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(409);
+      expect(asError(res.body).code).toBe('CONTACT_IN_USE');
+    });
+
+    it('never lets a reference from a different organization block deletion', async () => {
+      const orgA = await registerOrgAndToken(
+        'f5-tenant-a@korva.test',
+        'F5 Tenant A',
+      );
+      const orgB = await registerOrgAndToken(
+        'f5-tenant-b@korva.test',
+        'F5 Tenant B',
+      );
+      const contactAId = await createContact(
+        orgA.accessToken,
+        orgA.organizationId,
+        'Org A Contact',
+      );
+
+      // Simulated foreign-org reference: a document that would never be produced by the real
+      // app (a lead can only ever be created against a contact in its own organization), used
+      // here purely to prove hasAnyReference's Mongo filter is genuinely scoped by
+      // organizationId — not relying on contactId uniqueness alone to stay safe.
+      await connection.collection('leads').insertOne({
+        organizationId: new Types.ObjectId(orgB.organizationId),
+        contactId: new Types.ObjectId(contactAId),
+        pipelineId: new Types.ObjectId(),
+        stageId: new Types.ObjectId(),
+        status: 'open',
+        customFields: {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await request(server)
+        .delete(`/api/v1/contacts/${contactAId}`)
+        .set('Authorization', `Bearer ${orgA.accessToken}`)
+        .set('X-Organization-Id', orgA.organizationId)
+        .expect(200);
+    });
+
+    it('returns 404 for a contact that does not exist', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'f5-missing@korva.test',
+        'F5 Missing Org',
+      );
+
+      const res = await request(server)
+        .delete('/api/v1/contacts/000000000000000000000000')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(404);
+      expect(asError(res.body).code).toBe('CONTACT_NOT_FOUND');
+    });
+
+    it("returns 404 (not a false CONTACT_IN_USE) when deleting another tenant's contact", async () => {
+      const orgA = await registerOrgAndToken(
+        'f5-cross-a@korva.test',
+        'F5 Cross A',
+      );
+      const orgB = await registerOrgAndToken(
+        'f5-cross-b@korva.test',
+        'F5 Cross B',
+      );
+      const contactBId = await createContact(
+        orgB.accessToken,
+        orgB.organizationId,
+        'Belongs To B',
+      );
+
+      const res = await request(server)
+        .delete(`/api/v1/contacts/${contactBId}`)
+        .set('Authorization', `Bearer ${orgA.accessToken}`)
+        .set('X-Organization-Id', orgA.organizationId)
+        .expect(404);
+      expect(asError(res.body).code).toBe('CONTACT_NOT_FOUND');
+    });
+
+    it('denies a STAFF member (no contacts.delete) from deleting a contact', async () => {
+      const owner = await registerOrgAndToken(
+        'f5-rbac-owner@korva.test',
+        'F5 RBAC Org',
+      );
+      const staffAuthRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: 'f5-rbac-staff@korva.test', password: 'password123' })
+        .expect(201);
+      const staffToken = asSuccess<AuthPayload>(staffAuthRes.body).accessToken;
+
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(owner.organizationId),
+        systemKey: 'STAFF',
+      });
+      expect(staffRole).not.toBeNull();
+
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .set('X-Organization-Id', owner.organizationId)
+        .send({
+          email: 'f5-rbac-staff@korva.test',
+          roleId: String(staffRole?._id),
+        })
+        .expect(201);
+
+      const contactId = await createContact(
+        owner.accessToken,
+        owner.organizationId,
+        'Protected',
+      );
+
+      const res = await request(server)
+        .delete(`/api/v1/contacts/${contactId}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', owner.organizationId)
+        .expect(403);
+      expect(asError(res.body).code).toBe('PERMISSION_DENIED');
     });
   });
 });

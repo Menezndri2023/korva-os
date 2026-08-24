@@ -9,7 +9,29 @@ import { Task, TaskSchema } from './tasks/schemas/task.schema';
 import { Note, NoteSchema } from './notes/schemas/note.schema';
 import { Tag, TagSchema } from './tags/schemas/tag.schema';
 
+// Registered here (not by importing CommerceModule/BookingModule/FinanceModule/
+// CommunicationModule) so ContactReferencesRepository can check for references without a
+// circular module dependency — all four of those modules already import CrmModule. Same fix
+// as subscriptions.service.ts's direct Organization model injection; see
+// contact-references.repository.ts for the full rationale.
+import { Order, OrderSchema } from '../commerce/orders/schemas/order.schema';
+import { Cart, CartSchema } from '../commerce/carts/schemas/cart.schema';
+import {
+  Booking,
+  BookingSchema,
+} from '../booking/bookings/schemas/booking.schema';
+import {
+  Invoice,
+  InvoiceSchema,
+} from '../finance/invoices/schemas/invoice.schema';
+import { Quote, QuoteSchema } from '../finance/quotes/schemas/quote.schema';
+import {
+  Conversation,
+  ConversationSchema,
+} from '../communication/conversations/schemas/conversation.schema';
+
 import { ContactsRepository } from './contacts/contacts.repository';
+import { ContactReferencesRepository } from './contacts/contact-references.repository';
 import { ContactsService } from './contacts/contacts.service';
 import { ContactsController } from './contacts/contacts.controller';
 
@@ -50,6 +72,12 @@ import { AuditModule } from '../audit/audit.module';
       { name: Task.name, schema: TaskSchema },
       { name: Note.name, schema: NoteSchema },
       { name: Tag.name, schema: TagSchema },
+      { name: Order.name, schema: OrderSchema },
+      { name: Cart.name, schema: CartSchema },
+      { name: Booking.name, schema: BookingSchema },
+      { name: Invoice.name, schema: InvoiceSchema },
+      { name: Quote.name, schema: QuoteSchema },
+      { name: Conversation.name, schema: ConversationSchema },
     ]),
     CustomFieldsModule,
     AuditModule,
@@ -65,6 +93,7 @@ import { AuditModule } from '../audit/audit.module';
   ],
   providers: [
     ContactsRepository,
+    ContactReferencesRepository,
     ContactsService,
     LeadsRepository,
     LeadsService,
