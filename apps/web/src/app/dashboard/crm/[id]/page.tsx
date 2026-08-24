@@ -6,7 +6,6 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { UseQueryResult } from "@tanstack/react-query";
 import {
   createActivitySchema,
   createNoteSchema,
@@ -35,6 +34,7 @@ import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
+import { RelationSection } from "@/components/relation-section";
 
 function contactDisplayName(contact: Contact): string {
   return (
@@ -52,50 +52,6 @@ function deleteErrorMessage(error: unknown): string {
     return error.message;
   }
   return "Impossible de supprimer le contact.";
-}
-
-/** Shared loading/error/empty/list rendering for every relation section below — each section
- * is independent: a 403 on one (e.g. a module the organization hasn't enabled) never blocks
- * the others or the core identity card above. */
-function RelationSection<T extends { id: string }>({
-  title,
-  query,
-  renderItem,
-  emptyLabel,
-  header,
-}: {
-  title: string;
-  query: Pick<UseQueryResult<T[]>, "isLoading" | "isError" | "error" | "data">;
-  renderItem: (item: T) => React.ReactNode;
-  emptyLabel: string;
-  header?: React.ReactNode;
-}) {
-  return (
-    <Card className="p-6">
-      <h2 className="text-sm font-semibold text-text">{title}</h2>
-      {header && <div className="mt-3">{header}</div>}
-      <div className="mt-3">
-        {query.isLoading && <p className="text-sm text-text-muted">Chargement...</p>}
-        {query.isError && (
-          <p className="text-sm text-text-muted">
-            {query.error instanceof ApiError ? query.error.message : "Non disponible."}
-          </p>
-        )}
-        {!query.isLoading && !query.isError && (query.data?.length ?? 0) === 0 && (
-          <p className="text-sm text-text-muted">{emptyLabel}</p>
-        )}
-        {!query.isLoading && !query.isError && query.data && query.data.length > 0 && (
-          <ul className="divide-y divide-border">
-            {query.data.map((item) => (
-              <li key={item.id} className="py-2 text-sm">
-                {renderItem(item)}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </Card>
-  );
 }
 
 export default function ContactDetailPage() {

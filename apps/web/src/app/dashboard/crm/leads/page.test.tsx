@@ -9,7 +9,13 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
   return {
     ...actual,
-    apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn(), patch: vi.fn() },
+    apiClient: {
+      ...actual.apiClient,
+      get: vi.fn(),
+      getList: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+    },
   };
 });
 
@@ -19,8 +25,19 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
 const getMock = vi.mocked(apiClient.get);
+const getListMock = vi.mocked(apiClient.getList);
 const postMock = vi.mocked(apiClient.post);
 const patchMock = vi.mocked(apiClient.patch);
+
+function mockLeadsPage(
+  leads: unknown[],
+  pagination = { page: 1, limit: 20, total: leads.length, totalPages: 1 },
+) {
+  getListMock.mockImplementation((path: string) => {
+    if (path.startsWith("/leads")) return Promise.resolve({ data: leads, pagination });
+    throw new Error(`unexpected getList ${path}`);
+  });
+}
 
 const pipeline = {
   id: "pipe-1",
@@ -36,15 +53,16 @@ const contact = { id: "contact-1", firstName: "Ada", lastName: "Lovelace", tags:
 function mockGetByPath(path: string) {
   if (path.startsWith("/pipelines")) return Promise.resolve([pipeline]);
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
-  if (path.startsWith("/leads")) return Promise.resolve([]);
   throw new Error(`unexpected GET ${path}`);
 }
 
 describe("LeadsPage (migrated to @korva/ui Button/Input/Card in F2-B.8)", () => {
   beforeEach(() => {
     getMock.mockReset();
+    getListMock.mockReset();
     postMock.mockReset();
     getMock.mockImplementation(mockGetByPath);
+    mockLeadsPage([]);
   });
 
   it("renders the toggle button and the table wrapper when a pipeline already exists", async () => {
@@ -57,7 +75,6 @@ describe("LeadsPage (migrated to @korva/ui Button/Input/Card in F2-B.8)", () => 
     getMock.mockImplementation((path: string) => {
       if (path.startsWith("/pipelines")) return Promise.resolve([]);
       if (path.startsWith("/contacts")) return Promise.resolve([contact]);
-      if (path.startsWith("/leads")) return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
     });
     postMock.mockResolvedValue(pipeline);
@@ -123,6 +140,27 @@ describe("LeadsPage (migrated to @korva/ui Button/Input/Card in F2-B.8)", () => 
 
     expect(await screen.findByRole("button", { name: "Création..." })).toBeDisabled();
   });
+
+  it("fetches page 1 by default and shows the page count from the response", async () => {
+    mockLeadsPage([], { page: 1, limit: 20, total: 45, totalPages: 3 });
+    renderWithProviders(<LeadsPage />);
+
+    await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/leads?page=1"));
+    expect(await screen.findByText("Page 1 sur 3")).toBeInTheDocument();
+  });
+
+  it("clicking Suivant fetches the next page", async () => {
+    mockLeadsPage([], { page: 1, limit: 20, total: 45, totalPages: 3 });
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+
+    await screen.findByText("Page 1 sur 3");
+    mockLeadsPage([], { page: 2, limit: 20, total: 45, totalPages: 3 });
+    await user.click(screen.getByRole("button", { name: "Suivant" }));
+
+    await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/leads?page=2"));
+    expect(await screen.findByText("Page 2 sur 3")).toBeInTheDocument();
+  });
 });
 
 describe("LeadsPage — update lead status/stage (LOT F3)", () => {
@@ -146,15 +184,16 @@ describe("LeadsPage — update lead status/stage (LOT F3)", () => {
 
   beforeEach(() => {
     getMock.mockReset();
+    getListMock.mockReset();
     postMock.mockReset();
     patchMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path.startsWith("/pipelines")) return Promise.resolve([pipeline]);
       if (path.startsWith("/contacts")) return Promise.resolve([contact, contactTwo]);
-      if (path.startsWith("/leads")) return Promise.resolve([leadOne, leadTwo]);
       throw new Error(`unexpected GET ${path}`);
     });
+    mockLeadsPage([leadOne, leadTwo]);
   });
 
   it("shows the lead's current status", async () => {
@@ -229,7 +268,7 @@ describe("LeadsPage — update lead status/stage (LOT F3)", () => {
     const user = userEvent.setup();
     renderWithProviders(<LeadsPage />);
 
-    const leadsCallsBefore = getMock.mock.calls.filter(([path]) =>
+    const leadsCallsBefore = getListMock.mock.calls.filter(([path]) =>
       (path as string).startsWith("/leads"),
     ).length;
 
@@ -238,7 +277,7 @@ describe("LeadsPage — update lead status/stage (LOT F3)", () => {
 
     await waitFor(() =>
       expect(
-        getMock.mock.calls.filter(([path]) => (path as string).startsWith("/leads")).length,
+        getListMock.mock.calls.filter(([path]) => (path as string).startsWith("/leads")).length,
       ).toBeGreaterThan(leadsCallsBefore),
     );
   });

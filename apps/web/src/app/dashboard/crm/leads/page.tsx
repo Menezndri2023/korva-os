@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +13,7 @@ import {
 } from "@korva/validation";
 import { LEAD_STATUSES } from "@korva/types";
 import type { Contact, Lead, Pipeline } from "@korva/types";
-import { Button, Card, Input } from "@korva/ui";
+import { Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { LEAD_STATUS_LABELS } from "@/lib/analytics-format";
@@ -28,6 +29,7 @@ function usePipelines(enabled: boolean) {
 export default function LeadsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [page, setPage] = useState(1);
   const authReady = useAuthReady();
 
   const { data: pipelines, isLoading: pipelinesLoading } = usePipelines(authReady);
@@ -36,11 +38,12 @@ export default function LeadsPage() {
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
     enabled: authReady,
   });
-  const { data: leads, isLoading: leadsLoading } = useQuery({
-    queryKey: ["leads"],
-    queryFn: () => apiClient.get<Lead[]>("/leads"),
+  const { data: leadsPage, isLoading: leadsLoading } = useQuery({
+    queryKey: ["leads", page],
+    queryFn: () => apiClient.getList<Lead>(`/leads?page=${page}`),
     enabled: authReady,
   });
+  const leads = leadsPage?.data;
 
   const defaultPipeline = pipelines?.find((p) => p.isDefault) ?? pipelines?.[0];
 
@@ -206,7 +209,14 @@ export default function LeadsPage() {
               return (
                 <Fragment key={lead.id}>
                   <tr>
-                    <td className="px-4 py-2 font-medium">{contactName(lead)}</td>
+                    <td className="px-4 py-2 font-medium">
+                      <Link
+                        href={`/dashboard/crm/leads/${lead.id}`}
+                        className="text-zinc-900 underline-offset-2 hover:underline"
+                      >
+                        {contactName(lead)}
+                      </Link>
+                    </td>
                     <td className="px-4 py-2 text-zinc-600">
                       <select
                         aria-label={`Étape de ${contactName(lead)}`}
@@ -261,6 +271,13 @@ export default function LeadsPage() {
           </tbody>
         </table>
       </Card>
+
+      <Pagination
+        page={page}
+        totalPages={leadsPage?.pagination.totalPages ?? 1}
+        onPageChange={setPage}
+        disabled={leadsLoading}
+      />
     </div>
   );
 }
