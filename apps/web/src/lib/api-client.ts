@@ -1,4 +1,4 @@
-import type { ApiListResponse, ApiResponse } from "@korva/types";
+import type { ApiListResponse, ApiListSuccess, ApiResponse, ApiSuccess, Pagination } from "@korva/types";
 import { useAuthStore } from "./auth-store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
@@ -92,7 +92,7 @@ async function request<T>(
   path: string,
   options: RequestOptions = {},
   isRetry = false,
-): Promise<T> {
+): Promise<ApiSuccess<T> | ApiListSuccess<T>> {
   const { accessToken, activeOrganizationId } = useAuthStore.getState();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
@@ -131,16 +131,26 @@ async function request<T>(
     throw toApiError(payload);
   }
 
-  return payload.data as T;
+  return payload;
 }
 
 export const apiClient = {
   get: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
-    request<T>(path, { ...options, method: "GET" }),
+    request<T>(path, { ...options, method: "GET" }).then((payload) => payload.data as T),
+  // For a paginated list endpoint (GET /orders, /invoices, ...): T is the item type (matching
+  // ApiListSuccess<T>.data: T[]), not the array itself — unlike get<T>() above, where T is the
+  // full response shape. Throws if the endpoint didn't actually return a paginated envelope.
+  getList: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
+    request<T>(path, { ...options, method: "GET" }).then((payload) => {
+      if (!("pagination" in payload)) {
+        throw new Error(`Expected a paginated list response from ${path}`);
+      }
+      return { data: payload.data, pagination: payload.pagination as Pagination };
+    }),
   post: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
-    request<T>(path, { ...options, method: "POST", body }),
+    request<T>(path, { ...options, method: "POST", body }).then((payload) => payload.data as T),
   patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
-    request<T>(path, { ...options, method: "PATCH", body }),
+    request<T>(path, { ...options, method: "PATCH", body }).then((payload) => payload.data as T),
   delete: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
-    request<T>(path, { ...options, method: "DELETE" }),
+    request<T>(path, { ...options, method: "DELETE" }).then((payload) => payload.data as T),
 };

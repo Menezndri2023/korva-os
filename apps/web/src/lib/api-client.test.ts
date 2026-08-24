@@ -1,6 +1,6 @@
 import "./test-localstorage-shim"; // must load before auth-store.ts — see that file's comment
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getRefreshedAccessToken, ApiError } from "./api-client";
+import { getRefreshedAccessToken, apiClient, ApiError } from "./api-client";
 import { useAuthStore } from "./auth-store";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -98,5 +98,66 @@ describe("getRefreshedAccessToken — shared refresh dedup", () => {
     await getRefreshedAccessToken();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("apiClient.get / getList — envelope unwrapping", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    useAuthStore.setState({
+      accessToken: "a-token",
+      user: null,
+      activeOrganizationId: "org-1",
+      bootstrapped: true,
+    });
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("get() returns just the data, dropping the envelope", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue({ status: 200, json: () => Promise.resolve({ success: true, data: { id: "c1" } }) }) as unknown as typeof fetch;
+
+    await expect(apiClient.get("/contacts/c1")).resolves.toEqual({ id: "c1" });
+  });
+
+  it("getList() returns both the data array and the pagination metadata", async () => {
+    const pagination = { page: 1, limit: 20, total: 42, totalPages: 3 };
+    global.fetch = vi.fn().mockResolvedValue({
+      status: 200,
+      json: () =>
+        Promise.resolve({ success: true, data: [{ id: "o1" }, { id: "o2" }], pagination }),
+    }) as unknown as typeof fetch;
+
+    await expect(apiClient.getList("/orders")).resolves.toEqual({
+      data: [{ id: "o1" }, { id: "o2" }],
+      pagination,
+    });
+  });
+
+  it("getList() throws if the endpoint returns a non-paginated envelope", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      status: 200,
+      json: () => Promise.resolve({ success: true, data: { id: "c1" } }),
+    }) as unknown as typeof fetch;
+
+    await expect(apiClient.getList("/contacts/c1")).rejects.toThrow(
+      "Expected a paginated list response",
+    );
+  });
+
+  it("getList() still throws an ApiError on a failed response", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      status: 403,
+      json: () =>
+        Promise.resolve({ success: false, error: { code: "PERMISSION_DENIED", message: "nope" } }),
+    }) as unknown as typeof fetch;
+
+    await expect(apiClient.getList("/orders")).rejects.toBeInstanceOf(ApiError);
   });
 });
