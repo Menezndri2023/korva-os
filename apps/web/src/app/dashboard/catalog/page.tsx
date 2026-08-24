@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createOfferSchema, type CreateOfferInput } from "@korva/validation";
 import { OFFER_TYPES, type Offer, type OfferType } from "@korva/types";
-import { Badge, Button, Card, Input } from "@korva/ui";
+import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
@@ -28,14 +29,19 @@ const STATUS_VARIANT: Record<Offer["status"], "default" | "success" | "warning">
 export default function CatalogPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["offers", typeFilter],
-    queryFn: () => apiClient.get<Offer[]>(`/offers${typeFilter ? `?type=${typeFilter}` : ""}`),
+  const { data: offersPage, isLoading } = useQuery({
+    queryKey: ["offers", typeFilter, page],
+    queryFn: () =>
+      apiClient.getList<Offer>(
+        `/offers?page=${page}${typeFilter ? `&type=${typeFilter}` : ""}`,
+      ),
     enabled: authReady,
   });
+  const data = offersPage?.data;
 
   const {
     register,
@@ -73,7 +79,10 @@ export default function CatalogPage() {
       <div className="flex items-center justify-between gap-3">
         <select
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
+          onChange={(e) => {
+            setTypeFilter(e.target.value);
+            setPage(1);
+          }}
           className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
         >
           <option value="">Tous les types</option>
@@ -162,7 +171,14 @@ export default function CatalogPage() {
             )}
             {data?.map((offer) => (
               <tr key={offer.id}>
-                <td className="px-4 py-2 font-medium">{offer.name}</td>
+                <td className="px-4 py-2 font-medium">
+                  <Link
+                    href={`/dashboard/catalog/${offer.id}`}
+                    className="text-text underline-offset-2 hover:underline"
+                  >
+                    {offer.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-2 text-text-muted">{TYPE_LABELS[offer.type]}</td>
                 <td className="px-4 py-2 text-text-muted">
                   {offer.pricing.amount} {offer.pricing.currency}
@@ -175,6 +191,13 @@ export default function CatalogPage() {
           </tbody>
         </table>
       </Card>
+
+      <Pagination
+        page={page}
+        totalPages={offersPage?.pagination.totalPages ?? 1}
+        onPageChange={setPage}
+        disabled={isLoading}
+      />
     </div>
   );
 }
