@@ -1,0 +1,140 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import OrderDetailPage from "./page";
+import { renderWithProviders } from "@/test/render";
+import { apiClient, ApiError } from "@/lib/api-client";
+
+vi.mock("next/navigation", () => ({
+  useParams: () => ({ id: "order-1" }),
+}));
+
+vi.mock("@/lib/api-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api-client")>();
+  return {
+    ...actual,
+    apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn() },
+  };
+});
+
+vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
+
+const getMock = vi.mocked(apiClient.get);
+const postMock = vi.mocked(apiClient.post);
+
+const contact = { id: "contact-1", firstName: "Ada", lastName: "Lovelace", tags: [] };
+
+const order = {
+  id: "order-1",
+  number: "ORD-1",
+  contactId: "contact-1",
+  source: "manual",
+  status: "pending" as const,
+  items: [
+    { description: "Chaise", quantity: 2, unitPrice: 50, taxRate: 20 },
+    { description: "Coussin", quantity: 3, unitPrice: 10, taxRate: 0 },
+  ],
+  currency: "EUR",
+  subtotal: 130,
+  taxTotal: 20,
+  total: 150,
+  createdAt: "2026-01-01T00:00:00.000Z",
+};
+
+function mockGetByPath(path: string) {
+  if (path === "/orders/order-1") return Promise.resolve(order);
+  if (path.startsWith("/contacts")) return Promise.resolve([contact]);
+  throw new Error(`unexpected GET ${path}`);
+}
+
+describe("OrderDetailPage", () => {
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+    getMock.mockImplementation(mockGetByPath);
+  });
+
+  it("shows the order number, contact link, and line items", async () => {
+    renderWithProviders(<OrderDetailPage />);
+
+    expect(await screen.findByRole("heading", { name: "ORD-1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ada Lovelace" })).toHaveAttribute(
+      "href",
+      "/dashboard/crm/contact-1",
+    );
+    expect(screen.getByText("Chaise")).toBeInTheDocument();
+  });
+
+  it("shows the subtotal, tax and total from the order, not recomputed", async () => {
+    renderWithProviders(<OrderDetailPage />);
+    await screen.findByRole("heading", { name: "ORD-1" });
+
+    expect(screen.getByText("130,00 €")).toBeInTheDocument();
+    expect(screen.getByText("20,00 €")).toBeInTheDocument();
+    expect(screen.getByText("150,00 €")).toBeInTheDocument();
+  });
+
+  it("shows a message and a link back when the order does not exist", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/orders/order-1") {
+        return Promise.reject(new ApiError("ORDER_NOT_FOUND", "Order not found"));
+      }
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<OrderDetailPage />);
+
+    expect(await screen.findByText("Order not found")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Retour aux commandes" })).toHaveAttribute(
+      "href",
+      "/dashboard/orders",
+    );
+  });
+
+  it("confirming a pending order calls POST /orders/:id/confirm", async () => {
+    postMock.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithProviders(<OrderDetailPage />);
+    await screen.findByRole("heading", { name: "ORD-1" });
+
+    await user.click(screen.getByRole("button", { name: "Confirmer" }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith("/orders/order-1/confirm"));
+  });
+
+  it("only shows Facturer for a confirmed order without an invoice yet", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/orders/order-1") {
+        return Promise.resolve({ ...order, status: "confirmed" as const });
+      }
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<OrderDetailPage />);
+
+    expect(await screen.findByRole("button", { name: "Facturer" })).toBeInTheDocument();
+  });
+
+  it("does not show Facturer once the order already has an invoice", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/orders/order-1") {
+        return Promise.resolve({ ...order, status: "confirmed" as const, invoiceId: "invoice-1" });
+      }
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<OrderDetailPage />);
+
+    await screen.findByRole("heading", { name: "ORD-1" });
+    expect(screen.queryByRole("button", { name: "Facturer" })).not.toBeInTheDocument();
+    expect(screen.getByText("Générée")).toBeInTheDocument();
+  });
+
+  it("shows the backend error message when an action fails", async () => {
+    postMock.mockRejectedValue(new ApiError("ORDER_CONFLICT", "Cannot confirm this order"));
+    const user = userEvent.setup();
+    renderWithProviders(<OrderDetailPage />);
+    await screen.findByRole("heading", { name: "ORD-1" });
+
+    await user.click(screen.getByRole("button", { name: "Confirmer" }));
+
+    expect(await screen.findByText("Cannot confirm this order")).toBeInTheDocument();
+  });
+});
