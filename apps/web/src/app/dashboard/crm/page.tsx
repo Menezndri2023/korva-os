@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -204,9 +205,14 @@ export default function ContactsPage() {
                 <Fragment key={contact.id}>
                   <tr>
                     <td className="px-4 py-2 font-medium">
-                      {[contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
-                        contact.company ||
-                        "—"}
+                      <Link
+                        href={`/dashboard/crm/${contact.id}`}
+                        className="text-text underline-offset-2 hover:underline"
+                      >
+                        {[contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+                          contact.company ||
+                          "—"}
+                      </Link>
                     </td>
                     <td className="px-4 py-2 text-zinc-600">{contact.email ?? "—"}</td>
                     <td className="px-4 py-2 text-zinc-600">{contact.phone ?? "—"}</td>
