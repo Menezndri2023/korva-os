@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createOrderSchema, type CreateOrderInput } from "@korva/validation";
 import type { Contact, Order } from "@korva/types";
-import { Badge, Button, Card, Input } from "@korva/ui";
+import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
@@ -19,14 +19,16 @@ const STATUS_LABELS: Record<Order["status"], string> = {
 
 export default function OrdersPage() {
   const [showForm, setShowForm] = useState(false);
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
-  const { data: orders, isLoading } = useQuery({
-    queryKey: ["orders"],
-    queryFn: () => apiClient.get<Order[]>("/orders"),
+  const { data: ordersPage, isLoading } = useQuery({
+    queryKey: ["orders", page],
+    queryFn: () => apiClient.getList<Order>(`/orders?page=${page}`),
     enabled: authReady,
   });
+  const orders = ordersPage?.data;
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
@@ -245,6 +247,13 @@ export default function OrdersPage() {
           </tbody>
         </table>
       </Card>
+
+      <Pagination
+        page={page}
+        totalPages={ordersPage?.pagination.totalPages ?? 1}
+        onPageChange={setPage}
+        disabled={isLoading}
+      />
     </div>
   );
 }
