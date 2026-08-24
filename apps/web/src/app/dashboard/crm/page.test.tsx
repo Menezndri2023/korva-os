@@ -9,7 +9,13 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
   return {
     ...actual,
-    apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn(), patch: vi.fn() },
+    apiClient: {
+      ...actual.apiClient,
+      get: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+    },
   };
 });
 
@@ -21,6 +27,7 @@ vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 const getMock = vi.mocked(apiClient.get);
 const postMock = vi.mocked(apiClient.post);
 const patchMock = vi.mocked(apiClient.patch);
+const deleteMock = vi.mocked(apiClient.delete);
 
 describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () => {
   beforeEach(() => {
@@ -253,5 +260,202 @@ describe("ContactsPage — edit contact (LOT F4)", () => {
 
     expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
     expect(screen.getByLabelText("Prénom")).toBeInTheDocument();
+  });
+});
+
+describe("ContactsPage — delete contact (LOT F6)", () => {
+  const contactOne = {
+    id: "contact-1",
+    type: "person",
+    firstName: "Ada",
+    lastName: "Lovelace",
+    email: "ada@example.com",
+    phone: "0102030405",
+    company: "Analytical Engines",
+    tags: [],
+  };
+  const contactTwo = {
+    id: "contact-2",
+    type: "person",
+    firstName: "Grace",
+    lastName: "Hopper",
+    email: "grace@example.com",
+    phone: "0607080910",
+    company: "Navy",
+    tags: [],
+  };
+
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    deleteMock.mockReset();
+    getMock.mockResolvedValue([contactOne, contactTwo]);
+  });
+
+  function rowFor(name: string) {
+    return screen.findByText(name).then((cell) => cell.closest("tr")!);
+  }
+
+  it("shows a Supprimer button for each contact", async () => {
+    renderWithProviders(<ContactsPage />);
+    const rowOne = await rowFor("Ada Lovelace");
+    const rowTwo = await rowFor("Grace Hopper");
+    expect(within(rowOne).getByRole("button", { name: "Supprimer" })).toBeInTheDocument();
+    expect(within(rowTwo).getByRole("button", { name: "Supprimer" })).toBeInTheDocument();
+  });
+
+  it("first click shows Confirmer ?/Annuler and sends no DELETE", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const row = await rowFor("Ada Lovelace");
+
+    await user.click(within(row).getByRole("button", { name: "Supprimer" }));
+
+    expect(within(row).getByRole("button", { name: "Confirmer ?" })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Annuler" })).toBeInTheDocument();
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it("cancelling the confirmation sends no DELETE and restores the initial state", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const row = await rowFor("Ada Lovelace");
+
+    await user.click(within(row).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(row).getByRole("button", { name: "Annuler" }));
+
+    expect(within(row).getByRole("button", { name: "Supprimer" })).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Confirmer ?" })).not.toBeInTheDocument();
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it("confirming sends exactly DELETE /contacts/:id with no body", async () => {
+    deleteMock.mockResolvedValue({ deleted: true });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const row = await rowFor("Ada Lovelace");
+
+    await user.click(within(row).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(row).getByRole("button", { name: "Confirmer ?" }));
+
+    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith("/contacts/contact-1"));
+  });
+
+  it("with multiple contacts, deleting one uses only that contact's id", async () => {
+    deleteMock.mockResolvedValue({ deleted: true });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const rowTwo = await rowFor("Grace Hopper");
+
+    await user.click(within(rowTwo).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(rowTwo).getByRole("button", { name: "Confirmer ?" }));
+
+    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith("/contacts/contact-2"));
+    expect(deleteMock).not.toHaveBeenCalledWith("/contacts/contact-1");
+  });
+
+  it("pending disables only the confirming row; the other contact stays usable", async () => {
+    deleteMock.mockImplementation(() => new Promise(() => {}));
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const rowOne = await rowFor("Ada Lovelace");
+    const rowTwo = await rowFor("Grace Hopper");
+
+    await user.click(within(rowOne).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(rowOne).getByRole("button", { name: "Confirmer ?" }));
+
+    expect(await within(rowOne).findByRole("button", { name: "Suppression..." })).toBeDisabled();
+    expect(within(rowTwo).getByRole("button", { name: "Supprimer" })).not.toBeDisabled();
+  });
+
+  it("on success: closes the confirmation and refetches the contacts list", async () => {
+    deleteMock.mockResolvedValue({ deleted: true });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const row = await rowFor("Ada Lovelace");
+
+    const getCallsBefore = getMock.mock.calls.length;
+    await user.click(within(row).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(row).getByRole("button", { name: "Confirmer ?" }));
+
+    await waitFor(() =>
+      expect(within(row).queryByRole("button", { name: "Confirmer ?" })).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(getMock.mock.calls.length).toBeGreaterThan(getCallsBefore));
+  });
+
+  it("on a 404 CONTACT_NOT_FOUND error: shows the message and keeps the contact", async () => {
+    deleteMock.mockRejectedValue(new ApiError("CONTACT_NOT_FOUND", "Contact not found"));
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const row = await rowFor("Ada Lovelace");
+
+    await user.click(within(row).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(row).getByRole("button", { name: "Confirmer ?" }));
+
+    expect(await screen.findByText("Contact not found")).toBeInTheDocument();
+    expect(await rowFor("Ada Lovelace")).toBeInTheDocument();
+  });
+
+  it("on a 403 PERMISSION_DENIED error: shows the message and keeps the contact", async () => {
+    deleteMock.mockRejectedValue(
+      new ApiError("PERMISSION_DENIED", "Réservé aux administrateurs"),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const row = await rowFor("Ada Lovelace");
+
+    await user.click(within(row).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(row).getByRole("button", { name: "Confirmer ?" }));
+
+    expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
+    expect(await rowFor("Ada Lovelace")).toBeInTheDocument();
+  });
+
+  it("on a 409 CONTACT_IN_USE error: shows an explicit message, keeps the contact, and resets the confirmation", async () => {
+    deleteMock.mockRejectedValue(
+      new ApiError(
+        "CONTACT_IN_USE",
+        "This contact is still referenced by other records and cannot be deleted",
+      ),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const row = await rowFor("Ada Lovelace");
+
+    await user.click(within(row).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(row).getByRole("button", { name: "Confirmer ?" }));
+
+    expect(
+      await screen.findByText(
+        "Ce contact ne peut pas être supprimé car il est encore utilisé par d'autres éléments de votre organisation.",
+      ),
+    ).toBeInTheDocument();
+    // The raw backend message is not shown verbatim — it is replaced by the clearer one above.
+    expect(
+      screen.queryByText(
+        "This contact is still referenced by other records and cannot be deleted",
+      ),
+    ).not.toBeInTheDocument();
+
+    const rowAfter = await rowFor("Ada Lovelace");
+    expect(within(rowAfter).getByRole("button", { name: "Supprimer" })).toBeInTheDocument();
+    expect(
+      within(rowAfter).queryByRole("button", { name: "Confirmer ?" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("on a generic ApiError: shows the backend message and keeps the contact", async () => {
+    deleteMock.mockRejectedValue(new ApiError("NETWORK_ERROR", "Unable to reach the server"));
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+    const row = await rowFor("Ada Lovelace");
+
+    await user.click(within(row).getByRole("button", { name: "Supprimer" }));
+    await user.click(within(row).getByRole("button", { name: "Confirmer ?" }));
+
+    expect(await screen.findByText("Unable to reach the server")).toBeInTheDocument();
+    expect(await rowFor("Ada Lovelace")).toBeInTheDocument();
   });
 });

@@ -88,6 +88,32 @@ export default function ContactsPage() {
     },
   });
 
+  const [deletingConfirmId, setDeletingConfirmId] = useState<string | null>(null);
+
+  // Same non-optimistic shape as updateContactMutation: the list is only ever the query's
+  // data, so an error never leaves a phantom removal to roll back. Reset on both success and
+  // error (not just success) — per spec, a failed delete (e.g. CONTACT_IN_USE) must return the
+  // row to its normal "Supprimer" state rather than leaving it stuck on "Confirmer ?".
+  const deleteContactMutation = useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      apiClient.delete<{ deleted: true }>(`/contacts/${id}`),
+    onSuccess: () => {
+      setDeletingConfirmId(null);
+      return queryClient.invalidateQueries({ queryKey: ["contacts"] });
+    },
+    onError: () => setDeletingConfirmId(null),
+  });
+
+  function deleteErrorMessage(error: unknown): string {
+    if (error instanceof ApiError) {
+      if (error.code === "CONTACT_IN_USE") {
+        return "Ce contact ne peut pas être supprimé car il est encore utilisé par d'autres éléments de votre organisation.";
+      }
+      return error.message;
+    }
+    return "Impossible de supprimer le contact.";
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -165,6 +191,15 @@ export default function ContactsPage() {
                 updateContactMutation.variables?.id === contact.id
                   ? updateContactMutation.error
                   : null;
+              const isDeleteConfirming = deletingConfirmId === contact.id;
+              const isDeletePending =
+                deleteContactMutation.isPending &&
+                deleteContactMutation.variables?.id === contact.id;
+              const deleteError =
+                deleteContactMutation.isError &&
+                deleteContactMutation.variables?.id === contact.id
+                  ? deleteContactMutation.error
+                  : null;
               return (
                 <Fragment key={contact.id}>
                   <tr>
@@ -188,15 +223,56 @@ export default function ContactsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => (isEditing ? cancelEdit() : startEdit(contact))}
-                      >
-                        {isEditing ? "Annuler" : "Modifier"}
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={isDeleteConfirming}
+                          onClick={() => (isEditing ? cancelEdit() : startEdit(contact))}
+                        >
+                          {isEditing ? "Annuler" : "Modifier"}
+                        </Button>
+                        {isDeleteConfirming ? (
+                          <>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={isDeletePending}
+                              onClick={() =>
+                                deleteContactMutation.mutate({ id: contact.id })
+                              }
+                            >
+                              {isDeletePending ? "Suppression..." : "Confirmer ?"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={isDeletePending}
+                              onClick={() => setDeletingConfirmId(null)}
+                            >
+                              Annuler
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isEditing}
+                            onClick={() => setDeletingConfirmId(contact.id)}
+                          >
+                            Supprimer
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
+                  {deleteError && (
+                    <tr>
+                      <td colSpan={5} className="px-4 pb-2 text-xs text-red-600">
+                        {deleteErrorMessage(deleteError)}
+                      </td>
+                    </tr>
+                  )}
                   {isEditing && (
                     <tr>
                       <td colSpan={5} className="px-4 pb-4">
