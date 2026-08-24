@@ -19,8 +19,10 @@ import { TasksService } from './tasks.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 
 @ApiTags('tasks')
+@RequireModule('crm')
 @Controller('tasks')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}

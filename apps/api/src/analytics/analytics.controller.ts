@@ -13,8 +13,10 @@ import { AnalyticsService } from './analytics.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import { RequireModule } from '../common/decorators/require-module.decorator';
 
 @ApiTags('analytics')
+@RequireModule('analytics')
 @Controller('analytics')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}

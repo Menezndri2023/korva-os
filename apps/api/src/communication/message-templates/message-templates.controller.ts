@@ -19,8 +19,10 @@ import { MessageTemplatesService } from './message-templates.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 
 @ApiTags('message-templates')
+@RequireModule('communication')
 @Controller('message-templates')
 export class MessageTemplatesController {
   constructor(

@@ -1,3 +1,5 @@
+import type { KorvaModule } from "./organization.ts";
+
 export interface User {
   id: string;
   email: string;
@@ -20,4 +22,6 @@ export interface TenantContext {
   membershipId: string;
   roleId: string;
   permissions: string[];
+  /** The active organization's currently activated modules — used by ModuleGuard. */
+  enabledModules: KorvaModule[];
 }

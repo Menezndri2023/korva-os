@@ -18,6 +18,10 @@ import {
   EmailVerificationToken,
   EmailVerificationTokenSchema,
 } from './schemas/email-verification-token.schema';
+import {
+  Organization,
+  OrganizationSchema,
+} from '../organizations/schemas/organization.schema';
 
 import { UsersRepository } from './users/users.repository';
 import { UsersService } from './users/users.service';
@@ -48,6 +52,11 @@ import { EmailModule } from '../shared/email/email.module';
         name: EmailVerificationToken.name,
         schema: EmailVerificationTokenSchema,
       },
+      // Registered here (not via OrganizationsModule) so MembershipsService can read
+      // enabledModules while resolving TenantContext — OrganizationsModule already imports
+      // IdentityModule, so depending on OrganizationsModule/OrganizationsRepository here would
+      // be circular.
+      { name: Organization.name, schema: OrganizationSchema },
     ]),
     PassportModule,
     EmailModule,

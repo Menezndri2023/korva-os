@@ -9,6 +9,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { JwtAuthGuard } from './core/guards/jwt-auth.guard';
 import { TenantGuard } from './core/guards/tenant.guard';
+import { ModuleGuard } from './core/guards/module.guard';
 import { PermissionsGuard } from './core/guards/permissions.guard';
 
 import { IdentityModule } from './identity/identity.module';
@@ -64,6 +65,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: TenantGuard },
+    { provide: APP_GUARD, useClass: ModuleGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })

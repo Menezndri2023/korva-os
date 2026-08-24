@@ -99,6 +99,13 @@ describe('CRM module (e2e)', () => {
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ enabledModules: ['crm'] })
+      .expect(200);
+
     return { accessToken, organizationId };
   }
 

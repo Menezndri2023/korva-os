@@ -83,7 +83,11 @@ describe('Public storefront API (e2e)', () => {
   async function setupStorefrontOrg(
     email: string,
     orgName: string,
-    modules: string[] = ['catalog', 'booking', 'commerce'],
+    // "crm" isn't part of what these tests are proving about the public storefront (that's
+    // catalog/booking/commerce, checked below via assertModuleEnabled) — it's included here
+    // only so the internal GET /contacts calls these tests use to verify a public order/booking
+    // created the expected contact are themselves allowed by ModuleGuard.
+    modules: string[] = ['catalog', 'booking', 'commerce', 'crm'],
   ) {
     const authRes = await request(server)
       .post('/api/v1/auth/register')

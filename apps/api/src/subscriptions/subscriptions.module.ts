@@ -7,6 +7,10 @@ import {
   SubscriptionSchema,
 } from './schemas/subscription.schema';
 import { Usage, UsageSchema } from './schemas/usage.schema';
+import {
+  Organization,
+  OrganizationSchema,
+} from '../organizations/schemas/organization.schema';
 
 import { PlansRepository } from './plans.repository';
 import { PlansService } from './plans.service';
@@ -25,6 +29,10 @@ import { AuditModule } from '../audit/audit.module';
       { name: Plan.name, schema: PlanSchema },
       { name: Subscription.name, schema: SubscriptionSchema },
       { name: Usage.name, schema: UsageSchema },
+      // Registered here (not via OrganizationsModule) so changePlan can trim enabledModules on
+      // downgrade — OrganizationsModule already imports SubscriptionsModule, so depending on
+      // OrganizationsModule/OrganizationsRepository here would be circular.
+      { name: Organization.name, schema: OrganizationSchema },
     ]),
     IdentityModule,
     AuditModule,

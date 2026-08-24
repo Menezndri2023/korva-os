@@ -248,6 +248,12 @@ describe('Subscriptions module (e2e)', () => {
         'ai-quota@korva.test',
         'AI Quota Org',
       );
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['ai'] })
+        .expect(200);
 
       for (let i = 0; i < 5; i++) {
         await request(server)

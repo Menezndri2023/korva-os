@@ -15,8 +15,10 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 
 @ApiTags('notes')
+@RequireModule('crm')
 @Controller('notes')
 export class NotesController {
   constructor(private readonly notesService: NotesService) {}

@@ -210,6 +210,13 @@ describe('AI module (e2e)', () => {
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ enabledModules: ['crm', 'catalog', 'booking', 'ai'] })
+      .expect(200);
+
     const contactRes = await request(server)
       .post('/api/v1/contacts')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -578,6 +585,13 @@ describe('AI module (e2e) — default NullAIProvider (no AI_API_KEY)', () => {
       })
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ enabledModules: ['ai'] })
+      .expect(200);
 
     const res = await request(server)
       .post('/api/v1/ai/chat')

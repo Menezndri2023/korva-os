@@ -121,6 +121,13 @@ describe('Communication module (e2e)', () => {
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ enabledModules: ['crm', 'communication', 'workflow'] })
+      .expect(200);
+
     const contactRes = await request(server)
       .post('/api/v1/contacts')
       .set('Authorization', `Bearer ${accessToken}`)

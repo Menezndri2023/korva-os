@@ -6,8 +6,10 @@ import { TagsService } from './tags.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { RequireModule } from '../../common/decorators/require-module.decorator';
 
 @ApiTagsDecorator('tags')
+@RequireModule('crm')
 @Controller('tags')
 export class TagsController {
   constructor(private readonly tagsService: TagsService) {}

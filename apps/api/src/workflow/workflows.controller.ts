@@ -21,8 +21,10 @@ import { WorkflowsService } from './workflows.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import { RequireModule } from '../common/decorators/require-module.decorator';
 
 @ApiTags('workflows')
+@RequireModule('workflow')
 @Controller('workflows')
 export class WorkflowsController {
   constructor(private readonly workflowsService: WorkflowsService) {}
