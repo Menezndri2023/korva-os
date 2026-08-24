@@ -311,6 +311,12 @@ export default function WorkflowsPage() {
                 workflow={workflow}
                 onToggleActive={(active) => toggleActiveMutation.mutate({ id: workflow.id, active })}
                 onDelete={() => deleteMutation.mutate(workflow.id)}
+                isDeleting={deleteMutation.isPending && deleteMutation.variables === workflow.id}
+                deleteError={
+                  deleteMutation.isError && deleteMutation.variables === workflow.id
+                    ? deleteMutation.error
+                    : null
+                }
               />
             ))}
           </tbody>
@@ -389,16 +395,21 @@ function WorkflowRow({
   workflow,
   onToggleActive,
   onDelete,
+  isDeleting,
+  deleteError,
 }: {
   workflow: Workflow;
   onToggleActive: (active: boolean) => void;
   onDelete: () => void;
+  isDeleting: boolean;
+  deleteError: unknown;
 }) {
   const [showTest, setShowTest] = useState(false);
   const [showExecutions, setShowExecutions] = useState(false);
   const [payload, setPayload] = useState("{}");
   const [testResult, setTestResult] = useState<{ matched: boolean } | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   const authReady = useAuthReady();
   const executionsQuery = useQuery({
@@ -455,11 +466,42 @@ function WorkflowRow({
           <button onClick={() => setShowExecutions((v) => !v)} className="text-xs text-text-muted hover:underline">
             Exécutions
           </button>
-          <button onClick={onDelete} className="text-xs text-destructive hover:underline">
-            Supprimer
-          </button>
+          {isConfirmingDelete ? (
+            <>
+              <button
+                onClick={onDelete}
+                disabled={isDeleting}
+                className="text-xs text-destructive hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeleting ? "Suppression..." : "Confirmer ?"}
+              </button>
+              <button
+                onClick={() => setIsConfirmingDelete(false)}
+                disabled={isDeleting}
+                className="text-xs text-text-muted hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Annuler
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setIsConfirmingDelete(true)}
+              className="text-xs text-destructive hover:underline"
+            >
+              Supprimer
+            </button>
+          )}
         </td>
       </tr>
+      {deleteError != null && (
+        <tr>
+          <td colSpan={4} className="px-4 pb-2 text-xs text-destructive">
+            {deleteError instanceof ApiError
+              ? deleteError.message
+              : "Impossible de supprimer le workflow."}
+          </td>
+        </tr>
+      )}
       {showTest && (
         <tr>
           <td colSpan={4} className="bg-surface-muted px-4 py-3">
