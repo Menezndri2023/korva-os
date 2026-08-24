@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LeadsPage from "./page";
 import { renderWithProviders } from "@/test/render";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiError } from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn() } };
+  return {
+    ...actual,
+    apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn(), patch: vi.fn() },
+  };
 });
 
 // This page's queries are gated on auth bootstrap readiness (Bug #6) — these tests exercise
@@ -17,6 +20,7 @@ vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
 const getMock = vi.mocked(apiClient.get);
 const postMock = vi.mocked(apiClient.post);
+const patchMock = vi.mocked(apiClient.patch);
 
 const pipeline = {
   id: "pipe-1",
@@ -118,5 +122,148 @@ describe("LeadsPage (migrated to @korva/ui Button/Input/Card in F2-B.8)", () => 
     await user.click(screen.getByRole("button", { name: "Créer le prospect" }));
 
     expect(await screen.findByRole("button", { name: "Création..." })).toBeDisabled();
+  });
+});
+
+describe("LeadsPage — update lead status/stage (LOT F3)", () => {
+  const leadOne = {
+    id: "lead-1",
+    contactId: "contact-1",
+    pipelineId: "pipe-1",
+    stageId: "stage-1",
+    status: "open",
+    estimatedValue: 100,
+  };
+  const leadTwo = {
+    id: "lead-2",
+    contactId: "contact-2",
+    pipelineId: "pipe-1",
+    stageId: "stage-1",
+    status: "open",
+    estimatedValue: 200,
+  };
+  const contactTwo = { id: "contact-2", firstName: "Grace", lastName: "Hopper", tags: [] };
+
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path.startsWith("/pipelines")) return Promise.resolve([pipeline]);
+      if (path.startsWith("/contacts")) return Promise.resolve([contact, contactTwo]);
+      if (path.startsWith("/leads")) return Promise.resolve([leadOne, leadTwo]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+  });
+
+  it("shows the lead's current status", async () => {
+    renderWithProviders(<LeadsPage />);
+    expect(await screen.findByLabelText("Statut de Ada Lovelace")).toHaveValue("open");
+  });
+
+  it("lists the real LEAD_STATUSES values as options", async () => {
+    renderWithProviders(<LeadsPage />);
+    const statusSelect = await screen.findByLabelText("Statut de Ada Lovelace");
+    expect(within(statusSelect).getByText("Ouverts")).toBeInTheDocument();
+    expect(within(statusSelect).getByText("Gagnés")).toBeInTheDocument();
+    expect(within(statusSelect).getByText("Perdus")).toBeInTheDocument();
+    // Only within this one select — 3 options, no others invented.
+    expect(statusSelect.querySelectorAll("option")).toHaveLength(3);
+  });
+
+  it("changing the status sends PATCH /leads/:id with only { status }", async () => {
+    patchMock.mockResolvedValue(leadOne);
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+
+    const statusSelect = await screen.findByLabelText("Statut de Ada Lovelace");
+    await user.selectOptions(statusSelect, "won");
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/leads/lead-1", { status: "won" }),
+    );
+  });
+
+  it("shows the lead's current stage", async () => {
+    renderWithProviders(<LeadsPage />);
+    expect(await screen.findByLabelText("Étape de Ada Lovelace")).toHaveValue("stage-1");
+  });
+
+  it("lists the real pipeline stages as options", async () => {
+    renderWithProviders(<LeadsPage />);
+    const stageSelect = await screen.findByLabelText("Étape de Ada Lovelace");
+    expect(within(stageSelect).getByText("Nouveau")).toBeInTheDocument();
+    expect(within(stageSelect).getByText("Gagné")).toBeInTheDocument();
+    expect(stageSelect.querySelectorAll("option")).toHaveLength(2);
+  });
+
+  it("changing the stage sends PATCH /leads/:id with only { stageId }", async () => {
+    patchMock.mockResolvedValue(leadOne);
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+
+    const stageSelect = await screen.findByLabelText("Étape de Ada Lovelace");
+    await user.selectOptions(stageSelect, "stage-2");
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/leads/lead-1", { stageId: "stage-2" }),
+    );
+  });
+
+  it("disables only the row being updated while its mutation is pending", async () => {
+    patchMock.mockImplementation(() => new Promise(() => {}));
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+
+    const statusSelectOne = await screen.findByLabelText("Statut de Ada Lovelace");
+    const statusSelectTwo = await screen.findByLabelText("Statut de Grace Hopper");
+    await user.selectOptions(statusSelectOne, "won");
+
+    await waitFor(() => expect(statusSelectOne).toBeDisabled());
+    expect(statusSelectTwo).not.toBeDisabled();
+  });
+
+  it("on success: refetches the leads list", async () => {
+    patchMock.mockResolvedValue(leadOne);
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+
+    const leadsCallsBefore = getMock.mock.calls.filter(([path]) =>
+      (path as string).startsWith("/leads"),
+    ).length;
+
+    const statusSelect = await screen.findByLabelText("Statut de Ada Lovelace");
+    await user.selectOptions(statusSelect, "won");
+
+    await waitFor(() =>
+      expect(
+        getMock.mock.calls.filter(([path]) => (path as string).startsWith("/leads")).length,
+      ).toBeGreaterThan(leadsCallsBefore),
+    );
+  });
+
+  it("on API error: shows a message near the affected row", async () => {
+    patchMock.mockRejectedValue(new ApiError("VALIDATION_ERROR", "Étape invalide pour ce pipeline"));
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+
+    const stageSelect = await screen.findByLabelText("Étape de Ada Lovelace");
+    await user.selectOptions(stageSelect, "stage-2");
+
+    expect(await screen.findByText("Étape invalide pour ce pipeline")).toBeInTheDocument();
+  });
+
+  it("on a 403 PERMISSION_DENIED error: shows the message and keeps the server value", async () => {
+    patchMock.mockRejectedValue(new ApiError("PERMISSION_DENIED", "Réservé aux administrateurs"));
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+
+    const statusSelect = await screen.findByLabelText("Statut de Ada Lovelace");
+    await user.selectOptions(statusSelect, "won");
+
+    expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
+    // No invalidation on error — the select still reflects the untouched server value.
+    expect(screen.getByLabelText("Statut de Ada Lovelace")).toHaveValue("open");
   });
 });

@@ -1,14 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createPipelineSchema, createLeadSchema, type CreateLeadInput } from "@korva/validation";
+import {
+  createPipelineSchema,
+  createLeadSchema,
+  type CreateLeadInput,
+  type UpdateLeadInput,
+} from "@korva/validation";
+import { LEAD_STATUSES } from "@korva/types";
 import type { Contact, Lead, Pipeline } from "@korva/types";
 import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { LEAD_STATUS_LABELS } from "@/lib/analytics-format";
 
 function usePipelines(enabled: boolean) {
   return useQuery({
@@ -69,9 +76,19 @@ export default function LeadsPage() {
     },
   });
 
-  function stageName(lead: Lead): string {
-    const pipeline = pipelines?.find((p) => p.id === lead.pipelineId);
-    return pipeline?.stages.find((s) => s.id === lead.stageId)?.name ?? "—";
+  // Non optimiste, comme modulesMutation (F1) / inviteMemberMutation (F2) : le statut et
+  // l'étape affichés dérivent toujours de la query ["leads"], jamais d'une copie locale — en
+  // cas d'erreur, le <select> revient donc naturellement à la valeur serveur, sans rollback à
+  // écrire. onSuccess retourne (pas `void`) la promesse d'invalidateQueries pour que isPending
+  // couvre tout le refetch, pas seulement le PATCH.
+  const updateLeadMutation = useMutation({
+    mutationFn: ({ id, ...input }: { id: string } & UpdateLeadInput) =>
+      apiClient.patch<Lead>(`/leads/${id}`, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["leads"] }),
+  });
+
+  function pipelineForLead(lead: Lead): Pipeline | undefined {
+    return pipelines?.find((p) => p.id === lead.pipelineId);
   }
   function contactName(lead: Lead): string {
     const contact = contacts?.find((c) => c.id === lead.contactId);
@@ -178,14 +195,69 @@ export default function LeadsPage() {
                 </td>
               </tr>
             )}
-            {leads?.map((lead) => (
-              <tr key={lead.id}>
-                <td className="px-4 py-2 font-medium">{contactName(lead)}</td>
-                <td className="px-4 py-2 text-zinc-600">{stageName(lead)}</td>
-                <td className="px-4 py-2 text-zinc-600">{lead.status}</td>
-                <td className="px-4 py-2 text-zinc-600">{lead.estimatedValue ?? "—"}</td>
-              </tr>
-            ))}
+            {leads?.map((lead) => {
+              const pipeline = pipelineForLead(lead);
+              const isRowPending =
+                updateLeadMutation.isPending && updateLeadMutation.variables?.id === lead.id;
+              const rowError =
+                updateLeadMutation.isError && updateLeadMutation.variables?.id === lead.id
+                  ? updateLeadMutation.error
+                  : null;
+              return (
+                <Fragment key={lead.id}>
+                  <tr>
+                    <td className="px-4 py-2 font-medium">{contactName(lead)}</td>
+                    <td className="px-4 py-2 text-zinc-600">
+                      <select
+                        aria-label={`Étape de ${contactName(lead)}`}
+                        value={lead.stageId}
+                        disabled={isRowPending || !pipeline}
+                        onChange={(e) =>
+                          updateLeadMutation.mutate({ id: lead.id, stageId: e.target.value })
+                        }
+                        className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {pipeline?.stages.map((stage) => (
+                          <option key={stage.id} value={stage.id}>
+                            {stage.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2 text-zinc-600">
+                      <select
+                        aria-label={`Statut de ${contactName(lead)}`}
+                        value={lead.status}
+                        disabled={isRowPending}
+                        onChange={(e) =>
+                          updateLeadMutation.mutate({
+                            id: lead.id,
+                            status: e.target.value as Lead["status"],
+                          })
+                        }
+                        className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {LEAD_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {LEAD_STATUS_LABELS[status] ?? status}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2 text-zinc-600">{lead.estimatedValue ?? "—"}</td>
+                  </tr>
+                  {rowError && (
+                    <tr>
+                      <td colSpan={4} className="px-4 pb-2 text-xs text-red-600">
+                        {rowError instanceof ApiError
+                          ? rowError.message
+                          : "Impossible de mettre à jour le prospect."}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </Card>
