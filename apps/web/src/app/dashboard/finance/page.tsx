@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -187,7 +188,14 @@ export default function QuotesPage() {
             )}
             {quotes?.map((quote) => (
               <tr key={quote.id}>
-                <td className="px-4 py-2 font-medium">{quote.number}</td>
+                <td className="px-4 py-2 font-medium">
+                  <Link
+                    href={`/dashboard/finance/${quote.id}`}
+                    className="text-text underline-offset-2 hover:underline"
+                  >
+                    {quote.number}
+                  </Link>
+                </td>
                 <td className="px-4 py-2 text-text-muted">{contactName(quote.contactId)}</td>
                 <td className="px-4 py-2 text-text-muted">
                   {quote.total} {quote.currency}
