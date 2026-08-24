@@ -52,10 +52,15 @@ function asError(body: unknown): ApiError['error'] {
   return (body as ApiError).error;
 }
 
+/**
+ * 500ms (not 200ms): under a loaded full-suite run, aggressive polling here can stack with
+ * other files' own polling against ThrottlerGuard's real 120-req/60s limit — see the identical
+ * note in workflow.e2e-spec.ts, where this was confirmed directly via a reproduced 429.
+ */
 async function waitFor<T>(
   check: () => Promise<T | undefined>,
   timeoutMs = 18000,
-  intervalMs = 200,
+  intervalMs = 500,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {

@@ -57,11 +57,23 @@ function asError(body: unknown): ApiError['error'] {
   return (body as ApiError).error;
 }
 
-/** Async events are processed by a real BullMQ worker over Redis — poll until the side effect appears or the timeout elapses. */
+/**
+ * Async events are processed by a real BullMQ worker over Redis — poll until the side effect
+ * appears or the timeout elapses. 500ms (not 200ms): at 200ms, two waitFor calls in the same
+ * test can burn through ~180 requests against ThrottlerGuard's real 120-req/60s limit on their
+ * own, turning into a genuine 429 rather than the BullMQ processing actually being slow —
+ * confirmed by reproduction (isolated runs failing with "got 429 Too Many Requests"). 500ms
+ * caps a single call at 40 requests, comfortably under the limit. timeoutMs bumped from 18000
+ * to 20000: the original outer Jest per-test timeout (25000) didn't actually leave room for
+ * two sequential 18000ms waitFor calls in the same test, an existing mismatch independent of
+ * the 429 issue — 20000 keeps that math honest without chasing the separate, deeper source of
+ * intermittent delay documented in the audit report (reproduced even at 35000/45000, so this
+ * is deliberately not inflated further to try to paper over it).
+ */
 async function waitFor<T>(
   check: () => Promise<T | undefined>,
-  timeoutMs = 18000,
-  intervalMs = 200,
+  timeoutMs = 20000,
+  intervalMs = 500,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -387,7 +399,12 @@ describe('Workflow module (e2e)', () => {
       });
       expect(executions[0]!.status).toBe('success');
       expect(executions[0]!.eventName).toBe('lead.created');
-    }, 25000);
+    // Must stay above the worst realistic case of two sequential waitFor calls (20000 each) —
+    // the original 25000 didn't actually leave room for that even before the 429 fix, an
+    // existing mismatch. In practice the second call (executions) resolves near-instantly once
+    // the first succeeds, since both are written by the same job — reproduction never once
+    // failed on the second call specifically.
+    }, 26000);
 
     it('never creates a second Task when the identical lead.created event is published twice', async () => {
       const leadRes = await request(server)
@@ -431,7 +448,8 @@ describe('Workflow module (e2e)', () => {
         (task) => task.title === `Qualified lead ${leadId}`,
       );
       expect(matching).toHaveLength(1);
-    }, 25000);
+    // Must stay above the waitFor budget (20000) plus the explicit 3s settle sleep after it.
+    }, 26000);
   });
 
   describe('workflow action claim — concurrent execution of the same event', () => {
