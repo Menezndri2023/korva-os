@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -211,7 +212,14 @@ export default function BookingsPage() {
             )}
             {bookings?.map((booking) => (
               <tr key={booking.id}>
-                <td className="px-4 py-2 font-medium">{resourceName(booking.resourceId)}</td>
+                <td className="px-4 py-2 font-medium">
+                  <Link
+                    href={`/dashboard/bookings/${booking.id}`}
+                    className="text-zinc-900 underline-offset-2 hover:underline"
+                  >
+                    {resourceName(booking.resourceId)}
+                  </Link>
+                </td>
                 <td className="px-4 py-2 text-zinc-600">{contactName(booking.contactId)}</td>
                 <td className="px-4 py-2 text-zinc-600">{new Date(booking.startAt).toLocaleString()}</td>
                 <td className="px-4 py-2 text-zinc-600">{new Date(booking.endAt).toLocaleString()}</td>
