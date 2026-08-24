@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createMessageTemplateSchema,
   type CreateMessageTemplateInput,
+  type UpdateMessageTemplateInput,
 } from "@korva/validation";
 import {
   COMMUNICATION_CHANNELS,
@@ -54,9 +55,47 @@ export default function MessageTemplatesPage() {
     onError: (error) => setFormError(error instanceof ApiError ? error.message : "Erreur"),
   });
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const {
+    register: registerEdit,
+    control: editControl,
+    handleSubmit: handleEditSubmit,
+    reset: resetEditForm,
+  } = useForm<UpdateMessageTemplateInput>();
+  const editChannel = useWatch({ control: editControl, name: "channel" });
+
+  function startEdit(template: MessageTemplate) {
+    setEditingId(template.id);
+    resetEditForm({
+      name: template.name,
+      channel: template.channel,
+      subject: template.subject,
+      body: template.body,
+    });
+  }
+  function cancelEdit() {
+    setEditingId(null);
+    resetEditForm();
+  }
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, ...input }: { id: string } & UpdateMessageTemplateInput) =>
+      apiClient.patch<MessageTemplate>(`/message-templates/${id}`, input),
+    onSuccess: () => {
+      invalidate();
+      setEditingId(null);
+      resetEditForm();
+    },
+  });
+
+  const [deletingConfirmId, setDeletingConfirmId] = useState<string | null>(null);
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/message-templates/${id}`),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setDeletingConfirmId(null);
+      invalidate();
+    },
+    onError: () => setDeletingConfirmId(null),
   });
 
   function onSubmit(values: CreateMessageTemplateInput) {
@@ -138,21 +177,137 @@ export default function MessageTemplatesPage() {
                 </td>
               </tr>
             )}
-            {templates?.map((template) => (
-              <tr key={template.id}>
-                <td className="px-4 py-2 font-medium">{template.name}</td>
-                <td className="px-4 py-2 text-text-muted">{CHANNEL_LABELS[template.channel]}</td>
-                <td className="max-w-xs truncate px-4 py-2 text-text-muted">{template.body}</td>
-                <td className="px-4 py-2">
-                  <button
-                    onClick={() => deleteMutation.mutate(template.id)}
-                    className="text-xs text-destructive hover:underline"
-                  >
-                    Supprimer
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {templates?.map((template) => {
+              const isEditing = editingId === template.id;
+              const isDeleteConfirming = deletingConfirmId === template.id;
+              const isDeletePending =
+                deleteMutation.isPending && deleteMutation.variables === template.id;
+              const deleteError =
+                deleteMutation.isError && deleteMutation.variables === template.id
+                  ? deleteMutation.error
+                  : null;
+              return (
+                <Fragment key={template.id}>
+                  <tr>
+                    <td className="px-4 py-2 font-medium">{template.name}</td>
+                    <td className="px-4 py-2 text-text-muted">
+                      {CHANNEL_LABELS[template.channel]}
+                    </td>
+                    <td className="max-w-xs truncate px-4 py-2 text-text-muted">
+                      {template.body}
+                    </td>
+                    <td className="px-4 py-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={isDeleteConfirming}
+                          onClick={() => (isEditing ? cancelEdit() : startEdit(template))}
+                        >
+                          {isEditing ? "Annuler" : "Modifier"}
+                        </Button>
+                        {isDeleteConfirming ? (
+                          <>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={isDeletePending}
+                              onClick={() => deleteMutation.mutate(template.id)}
+                            >
+                              {isDeletePending ? "Suppression..." : "Confirmer ?"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={isDeletePending}
+                              onClick={() => setDeletingConfirmId(null)}
+                            >
+                              Annuler
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isEditing}
+                            onClick={() => setDeletingConfirmId(template.id)}
+                          >
+                            Supprimer
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {deleteError && (
+                    <tr>
+                      <td colSpan={4} className="px-4 pb-2 text-xs text-destructive">
+                        {deleteError instanceof ApiError
+                          ? deleteError.message
+                          : "Impossible de supprimer le modèle."}
+                      </td>
+                    </tr>
+                  )}
+                  {isEditing && (
+                    <tr>
+                      <td colSpan={4} className="px-4 pb-4">
+                        <form
+                          onSubmit={handleEditSubmit((values) =>
+                            updateMutation.mutate({ id: template.id, ...values }),
+                          )}
+                          className="space-y-3 rounded-lg border border-border bg-surface p-4"
+                        >
+                          <div className="grid grid-cols-2 gap-3">
+                            <Input
+                              placeholder="Nom du modèle"
+                              {...registerEdit("name", { required: true })}
+                            />
+                            <select
+                              className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+                              {...registerEdit("channel", { required: true })}
+                            >
+                              {COMMUNICATION_CHANNELS.map((c) => (
+                                <option key={c} value={c}>
+                                  {CHANNEL_LABELS[c]}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {editChannel !== "internal" && (
+                            <Input
+                              placeholder="Objet (ex: Bienvenue {{contact.firstName}})"
+                              className="w-full"
+                              {...registerEdit("subject")}
+                            />
+                          )}
+                          <textarea
+                            placeholder="Corps du message"
+                            rows={4}
+                            className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+                            {...registerEdit("body", { required: true })}
+                          />
+
+                          {updateMutation.isError && (
+                            <p className="text-sm text-destructive">
+                              {updateMutation.error instanceof ApiError
+                                ? updateMutation.error.message
+                                : "Impossible d'enregistrer le modèle."}
+                            </p>
+                          )}
+                          <div className="flex gap-2">
+                            <Button type="submit" loading={updateMutation.isPending}>
+                              {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                            </Button>
+                            <Button type="button" variant="ghost" onClick={cancelEdit}>
+                              Annuler
+                            </Button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </Card>
