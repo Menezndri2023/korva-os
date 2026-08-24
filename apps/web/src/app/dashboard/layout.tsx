@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { KorvaModule, Organization } from "@korva/types";
+import { Button } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
@@ -148,15 +149,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col md:pl-0">
         <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 md:px-8">
           <div className="flex items-center gap-3">
-            <button
+            <Button
+              variant="ghost"
               aria-label="Ouvrir le menu"
               aria-expanded={sidebarOpen}
               aria-controls="mobile-sidebar"
               onClick={() => setSidebarOpen(true)}
-              className="rounded-md p-2 text-text-muted hover:bg-surface-muted md:hidden"
+              className="p-2 md:hidden"
             >
               <MenuIcon />
-            </button>
+            </Button>
             {organizations && organizations.length > 1 && (
               <OrgSwitcher
                 organizations={organizations}
@@ -257,12 +259,13 @@ function UserMenu({ name, email, onLogout }: { name: string; email: string; onLo
               <p className="truncate text-xs text-text-muted">{email}</p>
             </div>
             <div className="my-1 h-px bg-border" />
-            <button
+            <Button
+              variant="ghost"
               onClick={onLogout}
-              className="w-full rounded-md px-3 py-2 text-left text-sm text-text hover:bg-surface-muted"
+              className="w-full justify-start text-left"
             >
               Se déconnecter
-            </button>
+            </Button>
           </div>
         </>
       )}
