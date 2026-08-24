@@ -10,6 +10,11 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
   return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn() } };
 });
 
+// This page's queries are gated on auth bootstrap readiness (Bug #6) — these tests exercise
+// the page's own behavior once that readiness is established, not the readiness gate itself
+// (covered separately in use-auth-ready.test.ts).
+vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
+
 const getMock = vi.mocked(apiClient.get);
 const postMock = vi.mocked(apiClient.post);
 

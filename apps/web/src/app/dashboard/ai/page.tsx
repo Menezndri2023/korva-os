@@ -12,6 +12,7 @@ import {
 } from "@korva/types";
 import { Button, Card } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const AGENT_LABELS: Record<AiAgent, string> = {
   general_assistant: "Assistant général",
@@ -26,21 +27,23 @@ export default function AiPage() {
   const [agent, setAgent] = useState<AiAgent>("general_assistant");
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const authReady = useAuthReady();
 
   const { data: conversations } = useQuery({
     queryKey: ["ai-conversations"],
     queryFn: () => apiClient.get<AiConversation[]>("/ai/conversations"),
+    enabled: authReady,
   });
   const { data: messages, isLoading: messagesLoading } = useQuery({
     queryKey: ["ai-messages", conversationId],
     queryFn: () => apiClient.get<AiMessage[]>(`/ai/conversations/${conversationId}/messages`),
-    enabled: !!conversationId,
+    enabled: authReady && !!conversationId,
   });
   const { data: pendingActions } = useQuery({
     queryKey: ["ai-pending-actions", conversationId],
     queryFn: () =>
       apiClient.get<AiPendingAction[]>(`/ai/conversations/${conversationId}/pending-actions`),
-    enabled: !!conversationId,
+    enabled: authReady && !!conversationId,
   });
 
   function invalidateConversation(id: string) {

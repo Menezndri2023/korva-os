@@ -14,6 +14,7 @@ import {
 } from "@korva/types";
 import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const CHANNEL_LABELS: Record<CommunicationChannel, string> = {
   email: "E-mail",
@@ -26,10 +27,12 @@ export default function MessageTemplatesPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const authReady = useAuthReady();
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ["message-templates"],
     queryFn: () => apiClient.get<MessageTemplate[]>("/message-templates"),
+    enabled: authReady,
   });
 
   const { register, control, handleSubmit, reset } = useForm<CreateMessageTemplateInput>({

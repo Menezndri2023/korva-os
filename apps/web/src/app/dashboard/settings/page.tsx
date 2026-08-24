@@ -5,6 +5,7 @@ import type { Plan, SubscriptionSummary } from "@korva/types";
 import { Badge, Button } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 interface MemberRow {
   id: string;
@@ -21,17 +22,21 @@ const METRIC_LABELS: Record<string, string> = {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: organization } = useActiveOrganization();
+  const authReady = useAuthReady();
   const { data: members, isLoading } = useQuery({
     queryKey: ["organizations", "me", "members"],
     queryFn: () => apiClient.get<MemberRow[]>("/organizations/me/members"),
+    enabled: authReady,
   });
   const { data: subscription } = useQuery({
     queryKey: ["subscriptions", "me"],
     queryFn: () => apiClient.get<SubscriptionSummary>("/subscriptions/me"),
+    enabled: authReady,
   });
   const { data: plans } = useQuery({
     queryKey: ["plans"],
     queryFn: () => apiClient.get<Plan[]>("/plans"),
+    enabled: authReady,
   });
 
   const changePlanMutation = useMutation({

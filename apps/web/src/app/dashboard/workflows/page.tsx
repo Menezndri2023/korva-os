@@ -20,6 +20,7 @@ import {
 } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const OPERATOR_LABELS: Record<WorkflowConditionOperator, string> = {
   equals: "égal à",
@@ -90,10 +91,12 @@ export default function WorkflowsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const authReady = useAuthReady();
 
   const { data: workflows, isLoading } = useQuery({
     queryKey: ["workflows"],
     queryFn: () => apiClient.get<Workflow[]>("/workflows"),
+    enabled: authReady,
   });
 
   const { register, control, handleSubmit, reset } = useForm<WorkflowFormValues>({
@@ -397,10 +400,11 @@ function WorkflowRow({
   const [testResult, setTestResult] = useState<{ matched: boolean } | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
 
+  const authReady = useAuthReady();
   const executionsQuery = useQuery({
     queryKey: ["workflow-executions", workflow.id],
     queryFn: () => apiClient.get<WorkflowExecution[]>(`/workflows/${workflow.id}/executions`),
-    enabled: showExecutions,
+    enabled: authReady && showExecutions,
   });
 
   const testMutation = useMutation({

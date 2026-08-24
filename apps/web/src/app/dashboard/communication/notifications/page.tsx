@@ -4,13 +4,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Notification } from "@korva/types";
 import { Button, Card } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
+  const authReady = useAuthReady();
 
   const { data: notifications, isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => apiClient.get<Notification[]>("/notifications"),
+    enabled: authReady,
   });
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["notifications"] });

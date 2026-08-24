@@ -8,6 +8,7 @@ import { createQuoteSchema, type CreateQuoteInput } from "@korva/validation";
 import type { Contact, Quote } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const STATUS_LABELS: Record<Quote["status"], string> = {
   draft: "Brouillon",
@@ -21,14 +22,17 @@ const STATUS_LABELS: Record<Quote["status"], string> = {
 export default function QuotesPage() {
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
+  const authReady = useAuthReady();
 
   const { data: quotes, isLoading } = useQuery({
     queryKey: ["quotes"],
     queryFn: () => apiClient.get<Quote[]>("/quotes"),
+    enabled: authReady,
   });
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
+    enabled: authReady,
   });
 
   const { register, control, handleSubmit, reset } = useForm<CreateQuoteInput>({

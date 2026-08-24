@@ -8,16 +8,19 @@ import { createResourceSchema, type CreateResourceInput } from "@korva/validatio
 import type { Resource } from "@korva/types";
 import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
 export default function ResourcesPage() {
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
+  const authReady = useAuthReady();
 
   const { data: resources, isLoading } = useQuery({
     queryKey: ["resources"],
     queryFn: () => apiClient.get<Resource[]>("/resources"),
+    enabled: authReady,
   });
 
   const { register, control, handleSubmit, reset } = useForm<CreateResourceInput>({

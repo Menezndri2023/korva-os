@@ -8,6 +8,7 @@ import { createOfferSchema, type CreateOfferInput } from "@korva/validation";
 import { OFFER_TYPES, type Offer, type OfferType } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const TYPE_LABELS: Record<OfferType, string> = {
   product: "Produit",
@@ -28,10 +29,12 @@ export default function CatalogPage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
+  const authReady = useAuthReady();
 
   const { data, isLoading } = useQuery({
     queryKey: ["offers", typeFilter],
     queryFn: () => apiClient.get<Offer[]>(`/offers${typeFilter ? `?type=${typeFilter}` : ""}`),
+    enabled: authReady,
   });
 
   const {

@@ -7,6 +7,7 @@ import type { CreatePaymentInput } from "@korva/validation";
 import type { Contact, Invoice, Payment } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const STATUS_LABELS: Record<Invoice["status"], string> = {
   draft: "Brouillon",
@@ -20,14 +21,17 @@ const STATUS_LABELS: Record<Invoice["status"], string> = {
 export default function InvoicesPage() {
   const queryClient = useQueryClient();
   const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
+  const authReady = useAuthReady();
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["invoices"],
     queryFn: () => apiClient.get<Invoice[]>("/invoices"),
+    enabled: authReady,
   });
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
+    enabled: authReady,
   });
 
   const issueMutation = useMutation({

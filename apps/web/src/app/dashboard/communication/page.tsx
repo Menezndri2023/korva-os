@@ -18,6 +18,7 @@ import {
 } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const CHANNEL_LABELS: Record<CommunicationChannel, string> = {
   email: "E-mail",
@@ -30,14 +31,17 @@ export default function ConversationsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const authReady = useAuthReady();
 
   const { data: conversations, isLoading } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => apiClient.get<Conversation[]>("/conversations"),
+    enabled: authReady,
   });
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
+    enabled: authReady,
   });
 
   const { register, handleSubmit, reset } = useForm<CreateConversationInput>({
@@ -173,16 +177,17 @@ function ConversationRow({
   const [body, setBody] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
+  const authReady = useAuthReady();
 
   const messagesQuery = useQuery({
     queryKey: ["messages", conversation.id],
     queryFn: () => apiClient.get<Message[]>(`/conversations/${conversation.id}/messages`),
-    enabled: expanded,
+    enabled: authReady && expanded,
   });
   const { data: templates } = useQuery({
     queryKey: ["message-templates"],
     queryFn: () => apiClient.get<MessageTemplate[]>("/message-templates"),
-    enabled: expanded,
+    enabled: authReady && expanded,
   });
 
   const invalidate = () => {

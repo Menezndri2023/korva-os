@@ -8,16 +8,19 @@ import { createContactSchema, type CreateContactInput } from "@korva/validation"
 import type { Contact } from "@korva/types";
 import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 export default function ContactsPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
+  const authReady = useAuthReady();
 
   const { data, isLoading } = useQuery({
     queryKey: ["contacts", search],
     queryFn: () =>
       apiClient.get<Contact[]>(`/contacts?${search ? `search=${encodeURIComponent(search)}` : ""}`),
+    enabled: authReady,
   });
 
   const {

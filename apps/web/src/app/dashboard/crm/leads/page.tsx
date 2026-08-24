@@ -8,26 +8,31 @@ import { createPipelineSchema, createLeadSchema, type CreateLeadInput } from "@k
 import type { Contact, Lead, Pipeline } from "@korva/types";
 import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
-function usePipelines() {
+function usePipelines(enabled: boolean) {
   return useQuery({
     queryKey: ["pipelines"],
     queryFn: () => apiClient.get<Pipeline[]>("/pipelines"),
+    enabled,
   });
 }
 
 export default function LeadsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const authReady = useAuthReady();
 
-  const { data: pipelines, isLoading: pipelinesLoading } = usePipelines();
+  const { data: pipelines, isLoading: pipelinesLoading } = usePipelines(authReady);
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
+    enabled: authReady,
   });
   const { data: leads, isLoading: leadsLoading } = useQuery({
     queryKey: ["leads"],
     queryFn: () => apiClient.get<Lead[]>("/leads"),
+    enabled: authReady,
   });
 
   const defaultPipeline = pipelines?.find((p) => p.isDefault) ?? pipelines?.[0];

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Booking, Contact, DayAvailability, Offer, Resource } from "@korva/types";
 import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useAuthReady } from "@/lib/use-auth-ready";
 
 const STATUS_LABELS: Record<Booking["status"], string> = {
   pending: "En attente",
@@ -26,22 +27,27 @@ interface BookingFormValues {
 export default function BookingsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const authReady = useAuthReady();
 
   const { data: bookings, isLoading } = useQuery({
     queryKey: ["bookings"],
     queryFn: () => apiClient.get<Booking[]>("/bookings"),
+    enabled: authReady,
   });
   const { data: resources } = useQuery({
     queryKey: ["resources"],
     queryFn: () => apiClient.get<Resource[]>("/resources"),
+    enabled: authReady,
   });
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
+    enabled: authReady,
   });
   const { data: offers } = useQuery({
     queryKey: ["offers", "booking"],
     queryFn: () => apiClient.get<Offer[]>("/offers?type=booking"),
+    enabled: authReady,
   });
 
   const { register, handleSubmit, control, reset } = useForm<BookingFormValues>();
@@ -52,7 +58,7 @@ export default function BookingsPage() {
     queryKey: ["availability", watchedResourceId, watchedDate],
     queryFn: () =>
       apiClient.get<DayAvailability>(`/availability?resourceId=${watchedResourceId}&date=${watchedDate}`),
-    enabled: Boolean(watchedResourceId && watchedDate),
+    enabled: authReady && Boolean(watchedResourceId && watchedDate),
   });
 
   const createMutation = useMutation({
