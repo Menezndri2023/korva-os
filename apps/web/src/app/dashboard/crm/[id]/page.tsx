@@ -7,7 +7,17 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { updateContactSchema, type UpdateContactInput } from "@korva/validation";
+import {
+  createActivitySchema,
+  createNoteSchema,
+  createTaskSchema,
+  updateContactSchema,
+  type CreateActivityInput,
+  type CreateNoteInput,
+  type CreateTaskInput,
+  type UpdateContactInput,
+} from "@korva/validation";
+import { ACTIVITY_TYPES } from "@korva/types";
 import type {
   Activity,
   Booking,
@@ -52,15 +62,18 @@ function RelationSection<T extends { id: string }>({
   query,
   renderItem,
   emptyLabel,
+  header,
 }: {
   title: string;
   query: Pick<UseQueryResult<T[]>, "isLoading" | "isError" | "error" | "data">;
   renderItem: (item: T) => React.ReactNode;
   emptyLabel: string;
+  header?: React.ReactNode;
 }) {
   return (
     <Card className="p-6">
       <h2 className="text-sm font-semibold text-text">{title}</h2>
+      {header && <div className="mt-3">{header}</div>}
       <div className="mt-3">
         {query.isLoading && <p className="text-sm text-text-muted">Chargement...</p>}
         {query.isError && (
@@ -146,6 +159,62 @@ export default function ContactDetailPage() {
     queryKey: ["activities", "contact", id],
     queryFn: () => apiClient.get<Activity[]>(`/activities?entity=contact&entityId=${id}`),
     enabled: authReady,
+  });
+
+  const {
+    register: registerNote,
+    handleSubmit: handleNoteSubmit,
+    reset: resetNoteForm,
+    formState: { errors: noteErrors },
+  } = useForm<CreateNoteInput>({
+    resolver: zodResolver(createNoteSchema),
+    defaultValues: { entity: "contact", entityId: id, content: "" },
+  });
+  const createNoteMutation = useMutation({
+    mutationFn: (input: CreateNoteInput) => apiClient.post<Note>("/notes", input),
+    onSuccess: () => {
+      resetNoteForm({ entity: "contact", entityId: id, content: "" });
+      return queryClient.invalidateQueries({ queryKey: ["notes", "contact", id] });
+    },
+  });
+
+  const [taskDueAt, setTaskDueAt] = useState("");
+  const {
+    register: registerTask,
+    handleSubmit: handleTaskSubmit,
+    reset: resetTaskForm,
+    formState: { errors: taskErrors },
+  } = useForm<CreateTaskInput>({
+    resolver: zodResolver(createTaskSchema),
+    defaultValues: { entity: "contact", entityId: id, title: "" },
+  });
+  const createTaskMutation = useMutation({
+    mutationFn: (input: CreateTaskInput) => apiClient.post<Task>("/tasks", input),
+    onSuccess: () => {
+      resetTaskForm({ entity: "contact", entityId: id, title: "" });
+      setTaskDueAt("");
+      return queryClient.invalidateQueries({ queryKey: ["tasks", "contact", id] });
+    },
+  });
+  const completeTaskMutation = useMutation({
+    mutationFn: (taskId: string) => apiClient.patch<Task>(`/tasks/${taskId}`, { status: "done" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks", "contact", id] }),
+  });
+
+  const {
+    register: registerActivity,
+    handleSubmit: handleActivitySubmit,
+    reset: resetActivityForm,
+  } = useForm<CreateActivityInput>({
+    resolver: zodResolver(createActivitySchema),
+    defaultValues: { entity: "contact", entityId: id, type: "note", content: "" },
+  });
+  const createActivityMutation = useMutation({
+    mutationFn: (input: CreateActivityInput) => apiClient.post<Activity>("/activities", input),
+    onSuccess: () => {
+      resetActivityForm({ entity: "contact", entityId: id, type: "note", content: "" });
+      return queryClient.invalidateQueries({ queryKey: ["activities", "contact", id] });
+    },
   });
 
   const [isEditing, setIsEditing] = useState(false);
@@ -467,10 +536,62 @@ export default function ContactDetailPage() {
           title="Tâches"
           query={tasksQuery}
           emptyLabel="Aucune tâche."
+          header={
+            <form
+              className="flex flex-wrap items-start gap-2"
+              onSubmit={handleTaskSubmit((values) =>
+                createTaskMutation.mutate({
+                  ...values,
+                  ...(taskDueAt ? { dueAt: new Date(taskDueAt).toISOString() } : {}),
+                }),
+              )}
+            >
+              <Input
+                className="min-w-0 flex-1"
+                placeholder="Nouvelle tâche..."
+                aria-label="Titre de la tâche"
+                {...registerTask("title")}
+              />
+              <Input
+                type="datetime-local"
+                aria-label="Échéance"
+                value={taskDueAt}
+                onChange={(e) => setTaskDueAt(e.target.value)}
+              />
+              <Button type="submit" size="sm" loading={createTaskMutation.isPending}>
+                Ajouter
+              </Button>
+              {taskErrors.title && (
+                <p className="w-full text-xs text-destructive">{taskErrors.title.message}</p>
+              )}
+              {createTaskMutation.isError && (
+                <p className="w-full text-xs text-destructive">
+                  {createTaskMutation.error instanceof ApiError
+                    ? createTaskMutation.error.message
+                    : "Impossible d'ajouter la tâche."}
+                </p>
+              )}
+            </form>
+          }
           renderItem={(task) => (
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span>{task.title}</span>
-              <Badge>{task.status}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge>{task.status}</Badge>
+                {task.status === "pending" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    loading={
+                      completeTaskMutation.isPending &&
+                      completeTaskMutation.variables === task.id
+                    }
+                    onClick={() => completeTaskMutation.mutate(task.id)}
+                  >
+                    Terminer
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         />
@@ -478,12 +599,72 @@ export default function ContactDetailPage() {
           title="Notes"
           query={notesQuery}
           emptyLabel="Aucune note."
+          header={
+            <form
+              className="flex flex-wrap items-start gap-2"
+              onSubmit={handleNoteSubmit((values) => createNoteMutation.mutate(values))}
+            >
+              <Input
+                className="min-w-0 flex-1"
+                placeholder="Ajouter une note..."
+                aria-label="Contenu de la note"
+                {...registerNote("content")}
+              />
+              <Button type="submit" size="sm" loading={createNoteMutation.isPending}>
+                Ajouter
+              </Button>
+              {noteErrors.content && (
+                <p className="w-full text-xs text-destructive">{noteErrors.content.message}</p>
+              )}
+              {createNoteMutation.isError && (
+                <p className="w-full text-xs text-destructive">
+                  {createNoteMutation.error instanceof ApiError
+                    ? createNoteMutation.error.message
+                    : "Impossible d'ajouter la note."}
+                </p>
+              )}
+            </form>
+          }
           renderItem={(note) => <p className="text-text">{note.content}</p>}
         />
         <RelationSection<Activity>
           title="Activité"
           query={activitiesQuery}
           emptyLabel="Aucune activité récente."
+          header={
+            <form
+              className="flex flex-wrap items-start gap-2"
+              onSubmit={handleActivitySubmit((values) => createActivityMutation.mutate(values))}
+            >
+              <select
+                aria-label="Type d'activité"
+                className="rounded-md border border-zinc-300 px-2 py-2 text-sm"
+                {...registerActivity("type")}
+              >
+                {ACTIVITY_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+              <Input
+                className="min-w-0 flex-1"
+                placeholder="Détails (optionnel)"
+                aria-label="Détails de l'activité"
+                {...registerActivity("content")}
+              />
+              <Button type="submit" size="sm" loading={createActivityMutation.isPending}>
+                Ajouter
+              </Button>
+              {createActivityMutation.isError && (
+                <p className="w-full text-xs text-destructive">
+                  {createActivityMutation.error instanceof ApiError
+                    ? createActivityMutation.error.message
+                    : "Impossible d'ajouter l'activité."}
+                </p>
+              )}
+            </form>
+          }
           renderItem={(activity) => (
             <div className="flex items-center justify-between">
               <span>

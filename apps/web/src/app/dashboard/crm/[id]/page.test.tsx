@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ContactDetailPage from "./page";
 import { renderWithProviders } from "@/test/render";
@@ -18,6 +18,7 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
     apiClient: {
       ...actual.apiClient,
       get: vi.fn(),
+      post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
     },
@@ -27,6 +28,7 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
 const getMock = vi.mocked(apiClient.get);
+const postMock = vi.mocked(apiClient.post);
 const patchMock = vi.mocked(apiClient.patch);
 const deleteMock = vi.mocked(apiClient.delete);
 
@@ -59,6 +61,7 @@ function mockGetByPath(path: string) {
 describe("ContactDetailPage (LOT F7)", () => {
   beforeEach(() => {
     getMock.mockReset();
+    postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
     pushMock.mockReset();
@@ -205,5 +208,123 @@ describe("ContactDetailPage (LOT F7)", () => {
     ).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Supprimer" })).toBeInTheDocument();
+  });
+
+  it("adds a note and refetches the notes list", async () => {
+    postMock.mockResolvedValue({ id: "note-1" });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactDetailPage />);
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+
+    await user.type(screen.getByLabelText("Contenu de la note"), "Rappeler demain");
+    const notesForm = screen.getByLabelText("Contenu de la note").closest("form")!;
+    await user.click(within(notesForm).getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/notes", {
+        entity: "contact",
+        entityId: "contact-1",
+        content: "Rappeler demain",
+      }),
+    );
+  });
+
+  it("blocks adding an empty note and sends no request", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ContactDetailPage />);
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+
+    const notesForm = screen.getByLabelText("Contenu de la note").closest("form")!;
+    await user.click(within(notesForm).getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() => expect(postMock).not.toHaveBeenCalled());
+  });
+
+  it("adds a task with a due date, converted to an ISO string", async () => {
+    postMock.mockResolvedValue({ id: "task-1" });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactDetailPage />);
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+
+    await user.type(screen.getByLabelText("Titre de la tâche"), "Envoyer le devis");
+    await user.type(screen.getByLabelText("Échéance"), "2026-09-01T10:00");
+    const tasksForm = screen.getByLabelText("Titre de la tâche").closest("form")!;
+    await user.click(within(tasksForm).getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/tasks", {
+        entity: "contact",
+        entityId: "contact-1",
+        title: "Envoyer le devis",
+        dueAt: new Date("2026-09-01T10:00").toISOString(),
+      }),
+    );
+  });
+
+  it("adds a task without a due date: dueAt is omitted from the payload", async () => {
+    postMock.mockResolvedValue({ id: "task-1" });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactDetailPage />);
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+
+    await user.type(screen.getByLabelText("Titre de la tâche"), "Relancer");
+    const tasksForm = screen.getByLabelText("Titre de la tâche").closest("form")!;
+    await user.click(within(tasksForm).getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/tasks", {
+        entity: "contact",
+        entityId: "contact-1",
+        title: "Relancer",
+      }),
+    );
+  });
+
+  it("marks a pending task as done via PATCH and refetches the tasks list", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/contacts/contact-1") return Promise.resolve(contact);
+      if (path === "/tasks?entity=contact&entityId=contact-1") {
+        return Promise.resolve([
+          {
+            id: "task-1",
+            title: "Envoyer le devis",
+            status: "pending",
+            createdAt: "",
+            updatedAt: "",
+          },
+        ]);
+      }
+      return mockGetByPath(path);
+    });
+    patchMock.mockResolvedValue({ id: "task-1", status: "done" });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactDetailPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Terminer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/tasks/task-1", { status: "done" }),
+    );
+  });
+
+  it("adds an activity with the selected type and optional content", async () => {
+    postMock.mockResolvedValue({ id: "activity-1" });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactDetailPage />);
+    await screen.findByRole("heading", { name: "Ada Lovelace" });
+
+    await user.selectOptions(screen.getByLabelText("Type d'activité"), "call");
+    await user.type(screen.getByLabelText("Détails de l'activité"), "Appel de suivi");
+    const activityForm = screen.getByLabelText("Détails de l'activité").closest("form")!;
+    await user.click(within(activityForm).getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/activities", {
+        entity: "contact",
+        entityId: "contact-1",
+        type: "call",
+        content: "Appel de suivi",
+      }),
+    );
   });
 });
