@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -130,7 +131,14 @@ export default function ResourcesPage() {
             )}
             {resources?.map((resource) => (
               <tr key={resource.id}>
-                <td className="px-4 py-2 font-medium">{resource.name}</td>
+                <td className="px-4 py-2 font-medium">
+                  <Link
+                    href={`/dashboard/bookings/resources/${resource.id}`}
+                    className="text-text underline-offset-2 hover:underline"
+                  >
+                    {resource.name}
+                  </Link>
+                </td>
                 <td className="px-4 py-2 text-text-muted">{resource.type}</td>
                 <td className="px-4 py-2 text-text-muted">{resource.capacity}</td>
                 <td className="px-4 py-2 text-text-muted">
