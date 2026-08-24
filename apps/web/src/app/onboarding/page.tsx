@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { createOrganizationSchema, type CreateOrganizationInput } from "@korva/validation";
 import { KORVA_MODULES, type KorvaModule, type Organization } from "@korva/types";
+import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -81,11 +82,7 @@ export default function OnboardingPage() {
             <label className="block text-sm font-medium" htmlFor="name">
               Nom de l&apos;entreprise
             </label>
-            <input
-              id="name"
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
-              {...register("name")}
-            />
+            <Input id="name" className="mt-1 w-full" {...register("name")} />
             {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
           </div>
 
@@ -93,10 +90,10 @@ export default function OnboardingPage() {
             <label className="block text-sm font-medium" htmlFor="type">
               Secteur d&apos;activité
             </label>
-            <input
+            <Input
               id="type"
               placeholder="ex: commerce, service, réservation..."
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              className="mt-1 w-full"
               {...register("type")}
             />
             {errors.type && <p className="mt-1 text-xs text-red-600">{errors.type.message}</p>}
@@ -172,13 +169,9 @@ export default function OnboardingPage() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
-          >
+          <Button type="submit" loading={mutation.isPending} className="w-full">
             {mutation.isPending ? "Création..." : "Créer mon organisation"}
-          </button>
+          </Button>
         </form>
       </div>
     </div>
