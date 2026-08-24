@@ -7,7 +7,10 @@ import { apiClient } from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn() } };
+  return {
+    ...actual,
+    apiClient: { ...actual.apiClient, get: vi.fn(), getList: vi.fn(), post: vi.fn() },
+  };
 });
 
 // This page's queries are gated on auth bootstrap readiness (Bug #6) — these tests exercise
@@ -16,6 +19,7 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
 const getMock = vi.mocked(apiClient.get);
+const getListMock = vi.mocked(apiClient.getList);
 const postMock = vi.mocked(apiClient.post);
 
 const resource = { id: "res-1", name: "Salle 1" };
@@ -23,7 +27,6 @@ const offer = { id: "offer-1", name: "Séance" };
 const contact = { id: "contact-1", firstName: "Ada", lastName: "Lovelace", tags: [] };
 
 function mockGetByPath(path: string) {
-  if (path.startsWith("/bookings")) return Promise.resolve([]);
   if (path.startsWith("/resources")) return Promise.resolve([resource]);
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
   if (path.startsWith("/offers")) return Promise.resolve([offer]);
@@ -31,11 +34,23 @@ function mockGetByPath(path: string) {
   throw new Error(`unexpected GET ${path}`);
 }
 
+function mockBookingsPage(
+  bookings: unknown[],
+  pagination = { page: 1, limit: 20, total: bookings.length, totalPages: 1 },
+) {
+  getListMock.mockImplementation((path: string) => {
+    if (path.startsWith("/bookings")) return Promise.resolve({ data: bookings, pagination });
+    throw new Error(`unexpected getList ${path}`);
+  });
+}
+
 describe("BookingsPage (migrated to @korva/ui Button/Input/Card in F2-B.9)", () => {
   beforeEach(() => {
     getMock.mockReset();
+    getListMock.mockReset();
     postMock.mockReset();
     getMock.mockImplementation(mockGetByPath);
+    mockBookingsPage([]);
   });
 
   it("renders the toggle button and the table wrapper", async () => {
@@ -101,5 +116,26 @@ describe("BookingsPage (migrated to @korva/ui Button/Input/Card in F2-B.9)", () 
     await user.click(screen.getByRole("button", { name: "Créer la réservation" }));
 
     expect(await screen.findByRole("button", { name: "Création..." })).toBeDisabled();
+  });
+
+  it("fetches page 1 by default and shows the page count from the response", async () => {
+    mockBookingsPage([], { page: 1, limit: 20, total: 45, totalPages: 3 });
+    renderWithProviders(<BookingsPage />);
+
+    await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/bookings?page=1"));
+    expect(await screen.findByText("Page 1 sur 3")).toBeInTheDocument();
+  });
+
+  it("clicking Suivant fetches the next page", async () => {
+    mockBookingsPage([], { page: 1, limit: 20, total: 45, totalPages: 3 });
+    const user = userEvent.setup();
+    renderWithProviders(<BookingsPage />);
+
+    await screen.findByText("Page 1 sur 3");
+    mockBookingsPage([], { page: 2, limit: 20, total: 45, totalPages: 3 });
+    await user.click(screen.getByRole("button", { name: "Suivant" }));
+
+    await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/bookings?page=2"));
+    expect(await screen.findByText("Page 2 sur 3")).toBeInTheDocument();
   });
 });

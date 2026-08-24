@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Booking, Contact, DayAvailability, Offer, Resource } from "@korva/types";
-import { Button, Card, Input } from "@korva/ui";
+import { Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
@@ -27,13 +27,15 @@ interface BookingFormValues {
 export default function BookingsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [page, setPage] = useState(1);
   const authReady = useAuthReady();
 
-  const { data: bookings, isLoading } = useQuery({
-    queryKey: ["bookings"],
-    queryFn: () => apiClient.get<Booking[]>("/bookings"),
+  const { data: bookingsPage, isLoading } = useQuery({
+    queryKey: ["bookings", page],
+    queryFn: () => apiClient.getList<Booking>(`/bookings?page=${page}`),
     enabled: authReady,
   });
+  const bookings = bookingsPage?.data;
   const { data: resources } = useQuery({
     queryKey: ["resources"],
     queryFn: () => apiClient.get<Resource[]>("/resources"),
@@ -233,6 +235,13 @@ export default function BookingsPage() {
           </tbody>
         </table>
       </Card>
+
+      <Pagination
+        page={page}
+        totalPages={bookingsPage?.pagination.totalPages ?? 1}
+        onPageChange={setPage}
+        disabled={isLoading}
+      />
     </div>
   );
 }

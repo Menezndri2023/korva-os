@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createQuoteSchema, type CreateQuoteInput } from "@korva/validation";
 import type { Contact, Quote } from "@korva/types";
-import { Badge, Button, Card, Input } from "@korva/ui";
+import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
@@ -21,14 +21,16 @@ const STATUS_LABELS: Record<Quote["status"], string> = {
 
 export default function QuotesPage() {
   const [showForm, setShowForm] = useState(false);
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
-  const { data: quotes, isLoading } = useQuery({
-    queryKey: ["quotes"],
-    queryFn: () => apiClient.get<Quote[]>("/quotes"),
+  const { data: quotesPage, isLoading } = useQuery({
+    queryKey: ["quotes", page],
+    queryFn: () => apiClient.getList<Quote>(`/quotes?page=${page}`),
     enabled: authReady,
   });
+  const quotes = quotesPage?.data;
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
@@ -224,6 +226,13 @@ export default function QuotesPage() {
           </tbody>
         </table>
       </Card>
+
+      <Pagination
+        page={page}
+        totalPages={quotesPage?.pagination.totalPages ?? 1}
+        onPageChange={setPage}
+        disabled={isLoading}
+      />
     </div>
   );
 }

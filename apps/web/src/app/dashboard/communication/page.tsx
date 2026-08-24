@@ -16,7 +16,7 @@ import {
   type Message,
   type MessageTemplate,
 } from "@korva/types";
-import { Badge, Button, Card, Input } from "@korva/ui";
+import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
@@ -31,13 +31,15 @@ export default function ConversationsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const authReady = useAuthReady();
 
-  const { data: conversations, isLoading } = useQuery({
-    queryKey: ["conversations"],
-    queryFn: () => apiClient.get<Conversation[]>("/conversations"),
+  const { data: conversationsPage, isLoading } = useQuery({
+    queryKey: ["conversations", page],
+    queryFn: () => apiClient.getList<Conversation>(`/conversations?page=${page}`),
     enabled: authReady,
   });
+  const conversations = conversationsPage?.data;
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
@@ -161,6 +163,13 @@ export default function ConversationsPage() {
           </tbody>
         </table>
       </Card>
+
+      <Pagination
+        page={page}
+        totalPages={conversationsPage?.pagination.totalPages ?? 1}
+        onPageChange={setPage}
+        disabled={isLoading}
+      />
     </div>
   );
 }

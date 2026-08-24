@@ -1,20 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Notification } from "@korva/types";
-import { Button, Card } from "@korva/ui";
+import { Button, Card, Pagination } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
+  const [page, setPage] = useState(1);
 
-  const { data: notifications, isLoading } = useQuery({
-    queryKey: ["notifications"],
-    queryFn: () => apiClient.get<Notification[]>("/notifications"),
+  const { data: notificationsPage, isLoading } = useQuery({
+    queryKey: ["notifications", page],
+    queryFn: () => apiClient.getList<Notification>(`/notifications?page=${page}`),
     enabled: authReady,
   });
+  const notifications = notificationsPage?.data;
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["notifications"] });
 
@@ -78,6 +81,13 @@ export default function NotificationsPage() {
           </div>
         ))}
       </Card>
+
+      <Pagination
+        page={page}
+        totalPages={notificationsPage?.pagination.totalPages ?? 1}
+        onPageChange={setPage}
+        disabled={isLoading}
+      />
     </div>
   );
 }
