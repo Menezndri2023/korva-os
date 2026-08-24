@@ -12,22 +12,26 @@ import {
   type UpdateContactInput,
 } from "@korva/validation";
 import type { Contact } from "@korva/types";
-import { Button, Card, Input } from "@korva/ui";
+import { Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
 export default function ContactsPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["contacts", search],
+  const { data: contactsPage, isLoading } = useQuery({
+    queryKey: ["contacts", "list", search, page],
     queryFn: () =>
-      apiClient.get<Contact[]>(`/contacts?${search ? `search=${encodeURIComponent(search)}` : ""}`),
+      apiClient.getList<Contact>(
+        `/contacts?page=${page}${search ? `&search=${encodeURIComponent(search)}` : ""}`,
+      ),
     enabled: authReady,
   });
+  const data = contactsPage?.data;
 
   const {
     register,
@@ -122,7 +126,10 @@ export default function ContactsPage() {
           type="search"
           placeholder="Rechercher un contact..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
           className="w-64"
         />
         <Button onClick={() => setShowForm((v) => !v)}>
@@ -393,6 +400,13 @@ export default function ContactsPage() {
           </tbody>
         </table>
       </Card>
+
+      <Pagination
+        page={page}
+        totalPages={contactsPage?.pagination.totalPages ?? 1}
+        onPageChange={setPage}
+        disabled={isLoading}
+      />
     </div>
   );
 }

@@ -12,6 +12,7 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
     apiClient: {
       ...actual.apiClient,
       get: vi.fn(),
+      getList: vi.fn(),
       post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
@@ -25,22 +26,31 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
 const getMock = vi.mocked(apiClient.get);
+const getListMock = vi.mocked(apiClient.getList);
 const postMock = vi.mocked(apiClient.post);
 const patchMock = vi.mocked(apiClient.patch);
 const deleteMock = vi.mocked(apiClient.delete);
 
+function mockContactsPage(
+  contacts: unknown[],
+  pagination = { page: 1, limit: 20, total: contacts.length, totalPages: 1 },
+) {
+  getListMock.mockResolvedValue({ data: contacts, pagination });
+}
+
 describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () => {
   beforeEach(() => {
     getMock.mockReset();
+    getListMock.mockReset();
     postMock.mockReset();
-    getMock.mockResolvedValue([]);
+    mockContactsPage([]);
   });
 
   it("renders the search input and the toggle button", async () => {
     renderWithProviders(<ContactsPage />);
     expect(screen.getByPlaceholderText("Rechercher un contact...")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Nouveau contact" })).toBeInTheDocument();
-    await waitFor(() => expect(getMock).toHaveBeenCalled());
+    await waitFor(() => expect(getListMock).toHaveBeenCalled());
   });
 
   it("toggles the create form open and closed via the same button", async () => {
@@ -59,11 +69,11 @@ describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () 
   it("filters via the search input (queryFn receives the typed value)", async () => {
     const user = userEvent.setup();
     renderWithProviders(<ContactsPage />);
-    await waitFor(() => expect(getMock).toHaveBeenCalledWith("/contacts?"));
+    await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/contacts?page=1"));
 
     await user.type(screen.getByPlaceholderText("Rechercher un contact..."), "ada");
     await waitFor(() =>
-      expect(getMock).toHaveBeenCalledWith("/contacts?search=ada"),
+      expect(getListMock).toHaveBeenCalledWith("/contacts?page=1&search=ada"),
     );
   });
 
@@ -118,6 +128,45 @@ describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () 
 
     expect(await screen.findByRole("button", { name: "Création..." })).toBeDisabled();
   });
+
+  it("shows the page count from the response and disables Précédent on page 1", async () => {
+    mockContactsPage([], { page: 1, limit: 20, total: 45, totalPages: 3 });
+    renderWithProviders(<ContactsPage />);
+
+    expect(await screen.findByText("Page 1 sur 3")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Précédent" })).toBeDisabled();
+  });
+
+  it("clicking Suivant fetches the next page", async () => {
+    mockContactsPage([], { page: 1, limit: 20, total: 45, totalPages: 3 });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+
+    await screen.findByText("Page 1 sur 3");
+    mockContactsPage([], { page: 2, limit: 20, total: 45, totalPages: 3 });
+    await user.click(screen.getByRole("button", { name: "Suivant" }));
+
+    await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/contacts?page=2"));
+    expect(await screen.findByText("Page 2 sur 3")).toBeInTheDocument();
+  });
+
+  it("typing in the search input resets to page 1", async () => {
+    mockContactsPage([], { page: 1, limit: 20, total: 45, totalPages: 3 });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+
+    await screen.findByText("Page 1 sur 3");
+    mockContactsPage([], { page: 2, limit: 20, total: 45, totalPages: 3 });
+    await user.click(screen.getByRole("button", { name: "Suivant" }));
+    await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/contacts?page=2"));
+
+    mockContactsPage([], { page: 1, limit: 20, total: 1, totalPages: 1 });
+    await user.type(screen.getByPlaceholderText("Rechercher un contact..."), "a");
+
+    await waitFor(() =>
+      expect(getListMock).toHaveBeenCalledWith("/contacts?page=1&search=a"),
+    );
+  });
 });
 
 describe("ContactsPage — edit contact (LOT F4)", () => {
@@ -144,9 +193,10 @@ describe("ContactsPage — edit contact (LOT F4)", () => {
 
   beforeEach(() => {
     getMock.mockReset();
+    getListMock.mockReset();
     postMock.mockReset();
     patchMock.mockReset();
-    getMock.mockResolvedValue([contactOne, contactTwo]);
+    mockContactsPage([contactOne, contactTwo]);
   });
 
   async function openEditForm(user: ReturnType<typeof userEvent.setup>, name: string) {
@@ -231,11 +281,13 @@ describe("ContactsPage — edit contact (LOT F4)", () => {
     const user = userEvent.setup();
     await openEditForm(user, "Ada Lovelace");
 
-    const getCallsBefore = getMock.mock.calls.length;
+    const getListCallsBefore = getListMock.mock.calls.length;
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(screen.queryByLabelText("Prénom")).not.toBeInTheDocument());
-    await waitFor(() => expect(getMock.mock.calls.length).toBeGreaterThan(getCallsBefore));
+    await waitFor(() =>
+      expect(getListMock.mock.calls.length).toBeGreaterThan(getListCallsBefore),
+    );
   });
 
   it("on API error: shows the message and keeps the form with the typed values", async () => {
@@ -287,10 +339,11 @@ describe("ContactsPage — delete contact (LOT F6)", () => {
 
   beforeEach(() => {
     getMock.mockReset();
+    getListMock.mockReset();
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
-    getMock.mockResolvedValue([contactOne, contactTwo]);
+    mockContactsPage([contactOne, contactTwo]);
   });
 
   function rowFor(name: string) {
@@ -375,14 +428,16 @@ describe("ContactsPage — delete contact (LOT F6)", () => {
     renderWithProviders(<ContactsPage />);
     const row = await rowFor("Ada Lovelace");
 
-    const getCallsBefore = getMock.mock.calls.length;
+    const getListCallsBefore = getListMock.mock.calls.length;
     await user.click(within(row).getByRole("button", { name: "Supprimer" }));
     await user.click(within(row).getByRole("button", { name: "Confirmer ?" }));
 
     await waitFor(() =>
       expect(within(row).queryByRole("button", { name: "Confirmer ?" })).not.toBeInTheDocument(),
     );
-    await waitFor(() => expect(getMock.mock.calls.length).toBeGreaterThan(getCallsBefore));
+    await waitFor(() =>
+      expect(getListMock.mock.calls.length).toBeGreaterThan(getListCallsBefore),
+    );
   });
 
   it("on a 404 CONTACT_NOT_FOUND error: shows the message and keeps the contact", async () => {
