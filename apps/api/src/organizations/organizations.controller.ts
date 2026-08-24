@@ -59,6 +59,12 @@ export class OrganizationsController {
   }
 
   @RequirePermissions('settings.manage')
+  @Get('me/roles')
+  listRoles(@CurrentTenant() tenant: TenantContext) {
+    return this.organizationsService.listRoles(tenant.organizationId);
+  }
+
+  @RequirePermissions('settings.manage')
   @Post('me/members')
   addMember(
     @CurrentTenant() tenant: TenantContext,

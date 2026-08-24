@@ -27,6 +27,11 @@ interface OrganizationPayload {
 interface MemberPayload {
   userId: { email: string };
 }
+interface RolePayload {
+  id: string;
+  name: string;
+  systemKey?: string;
+}
 
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
@@ -163,6 +168,52 @@ describe('Multi-tenant isolation (e2e)', () => {
         .expect(403);
     });
 
+    it('rejects an unauthenticated request to list roles', async () => {
+      await request(server).get('/api/v1/organizations/me/roles').expect(401);
+    });
+
+    it('rejects a roles-listing request with no X-Organization-Id header', async () => {
+      await request(server)
+        .get('/api/v1/organizations/me/roles')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .expect(403);
+    });
+
+    it('lists exactly the six seeded system roles for the caller organization', async () => {
+      const res = await request(server)
+        .get('/api/v1/organizations/me/roles')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .set('X-Organization-Id', orgAId)
+        .expect(200);
+
+      const roles = asSuccess<RolePayload[]>(res.body);
+      expect(roles.map((r) => r.systemKey).sort()).toEqual(
+        ['ADMIN', 'FINANCE', 'MANAGER', 'OWNER', 'SALES', 'STAFF'].sort(),
+      );
+      expect(
+        roles.every((r) => typeof r.id === 'string' && r.id.length > 0),
+      ).toBe(true);
+    });
+
+    it('never leaks org A roles into org B roles listing', async () => {
+      const resA = await request(server)
+        .get('/api/v1/organizations/me/roles')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .set('X-Organization-Id', orgAId)
+        .expect(200);
+      const orgARoleIds = asSuccess<RolePayload[]>(resA.body).map((r) => r.id);
+
+      const resB = await request(server)
+        .get('/api/v1/organizations/me/roles')
+        .set('Authorization', `Bearer ${tokenB}`)
+        .set('X-Organization-Id', orgBId)
+        .expect(200);
+      const orgBRoles = asSuccess<RolePayload[]>(resB.body);
+
+      expect(orgBRoles).toHaveLength(6);
+      expect(orgBRoles.some((r) => orgARoleIds.includes(r.id))).toBe(false);
+    });
+
     it('denies user B reading org A by passing org A id in the header', async () => {
       const res = await request(server)
         .get('/api/v1/organizations/me')
@@ -273,6 +324,46 @@ describe('Multi-tenant isolation (e2e)', () => {
         .set('Authorization', `Bearer ${staff.accessToken}`)
         .set('X-Organization-Id', orgId)
         .send({ name: 'Should Not Work' })
+        .expect(403);
+      expect(asError(res.body).code).toBe('PERMISSION_DENIED');
+    });
+
+    it('blocks a STAFF member (no settings.manage) from listing organization roles, but allows the OWNER', async () => {
+      const owner = await registerAndLogin('rbac-roles-owner@korva.test');
+      const staff = await registerAndLogin('rbac-roles-staff@korva.test');
+      const orgId = await createOrganization(
+        owner.accessToken,
+        'RBAC Roles Org',
+      );
+
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(orgId),
+        systemKey: 'STAFF',
+      });
+      expect(staffRole).not.toBeNull();
+
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .set('X-Organization-Id', orgId)
+        .send({
+          email: 'rbac-roles-staff@korva.test',
+          roleId: String(staffRole?._id),
+        })
+        .expect(201);
+
+      // OWNER can list roles.
+      await request(server)
+        .get('/api/v1/organizations/me/roles')
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .set('X-Organization-Id', orgId)
+        .expect(200);
+
+      // STAFF is a real member but lacks settings.manage.
+      const res = await request(server)
+        .get('/api/v1/organizations/me/roles')
+        .set('Authorization', `Bearer ${staff.accessToken}`)
+        .set('X-Organization-Id', orgId)
         .expect(403);
       expect(asError(res.body).code).toBe('PERMISSION_DENIED');
     });

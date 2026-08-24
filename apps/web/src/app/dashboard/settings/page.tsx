@@ -1,9 +1,13 @@
 "use client";
 
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KORVA_MODULES } from "@korva/types";
 import type { KorvaModule, Organization, Plan, SubscriptionSummary } from "@korva/types";
-import { Badge, Button } from "@korva/ui";
+import { addMemberSchema, type AddMemberInput } from "@korva/validation";
+import { Badge, Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -13,6 +17,12 @@ interface MemberRow {
   status: string;
   userId: { id: string; email: string; firstName?: string; lastName?: string };
   roleId: { id: string; name: string; systemKey?: string };
+}
+
+interface RoleOption {
+  id: string;
+  name: string;
+  systemKey?: string;
 }
 
 const METRIC_LABELS: Record<string, string> = {
@@ -50,6 +60,37 @@ export default function SettingsPage() {
     queryKey: ["plans"],
     queryFn: () => apiClient.get<Plan[]>("/plans"),
     enabled: authReady,
+  });
+
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const {
+    data: roles,
+    isLoading: rolesLoading,
+    isError: rolesError,
+    refetch: refetchRoles,
+  } = useQuery({
+    queryKey: ["organizations", "me", "roles"],
+    queryFn: () => apiClient.get<RoleOption[]>("/organizations/me/roles"),
+    enabled: authReady,
+  });
+
+  const {
+    register: registerInvite,
+    handleSubmit: handleInviteSubmit,
+    reset: resetInviteForm,
+    formState: { errors: inviteErrors },
+  } = useForm<AddMemberInput>({ resolver: zodResolver(addMemberSchema) });
+
+  // Not optimistic, same reasoning as F1's modulesMutation: the member list is the source of
+  // truth, and onSuccess returns (not `void`) the invalidated refetch so isPending — and the
+  // submit button's disabled state — covers the full round trip, not just the POST itself.
+  const inviteMemberMutation = useMutation({
+    mutationFn: (input: AddMemberInput) =>
+      apiClient.post<MemberRow>("/organizations/me/members", input),
+    onSuccess: () => {
+      resetInviteForm();
+      return queryClient.invalidateQueries({ queryKey: ["organizations", "me", "members"] });
+    },
   });
 
   const changePlanMutation = useMutation({
@@ -233,7 +274,100 @@ export default function SettingsPage() {
       </section>
 
       <section className="rounded-lg border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-text">Équipe</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-text">Équipe</h2>
+          <Button variant="secondary" size="sm" onClick={() => setInviteOpen((v) => !v)}>
+            {inviteOpen ? "Annuler" : "Inviter un membre"}
+          </Button>
+        </div>
+
+        {inviteOpen && (
+          <form
+            onSubmit={handleInviteSubmit((values) => inviteMemberMutation.mutate(values))}
+            className="mt-4 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
+          >
+            <div>
+              <label className="block text-sm font-medium text-text" htmlFor="invite-email">
+                Adresse email
+              </label>
+              <Input
+                id="invite-email"
+                type="email"
+                className="mt-1 w-full"
+                error={!!inviteErrors.email}
+                {...registerInvite("email")}
+              />
+              {inviteErrors.email && (
+                <p className="mt-1 text-xs text-destructive">{inviteErrors.email.message}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-text" htmlFor="invite-role">
+                Rôle
+              </label>
+              <select
+                id="invite-role"
+                defaultValue=""
+                disabled={rolesLoading || rolesError || (roles?.length ?? 0) === 0}
+                className="mt-1 w-full rounded-md border border-border-input bg-surface px-3 py-2 text-sm text-text focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                {...registerInvite("roleId")}
+              >
+                <option value="" disabled>
+                  {rolesLoading
+                    ? "Chargement des rôles..."
+                    : rolesError
+                      ? "Rôles indisponibles"
+                      : roles && roles.length === 0
+                        ? "Aucun rôle disponible"
+                        : "Sélectionner un rôle"}
+                </option>
+                {roles?.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+              {rolesError && (
+                <div className="mt-1">
+                  <p className="text-xs text-destructive">Impossible de charger les rôles.</p>
+                  <button
+                    type="button"
+                    onClick={() => void refetchRoles()}
+                    className="text-xs font-medium text-text underline"
+                  >
+                    Réessayer
+                  </button>
+                </div>
+              )}
+              {inviteErrors.roleId && (
+                <p className="mt-1 text-xs text-destructive">{inviteErrors.roleId.message}</p>
+              )}
+            </div>
+
+            {inviteMemberMutation.isError && (
+              <p className="text-sm text-destructive sm:col-span-2">
+                {inviteMemberMutation.error instanceof ApiError
+                  ? inviteMemberMutation.error.message
+                  : "Impossible d'envoyer l'invitation. Réessayez."}
+              </p>
+            )}
+
+            {inviteMemberMutation.isSuccess && (
+              <p className="text-sm text-text sm:col-span-2">Invitation envoyée.</p>
+            )}
+
+            <Button
+              type="submit"
+              className="sm:col-span-2"
+              loading={inviteMemberMutation.isPending}
+              disabled={rolesLoading || rolesError || (roles?.length ?? 0) === 0}
+            >
+              {inviteMemberMutation.isPending ? "Invitation en cours..." : "Envoyer l'invitation"}
+            </Button>
+          </form>
+        )}
+
         <div className="mt-4 divide-y divide-border">
           {isLoading && <p className="py-2 text-sm text-text-muted">Chargement...</p>}
           {members?.map((member) => (

@@ -177,6 +177,10 @@ export class OrganizationsService {
     return this.membershipsService.listMembersForOrganization(organizationId);
   }
 
+  listRoles(organizationId: string) {
+    return this.rolesService.listForOrganization(organizationId);
+  }
+
   async addMember(
     organizationId: string,
     actorUserId: string,

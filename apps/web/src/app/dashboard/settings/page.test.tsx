@@ -66,6 +66,7 @@ describe("SettingsPage — Modules section (LOT F1)", () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
       if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -174,5 +175,206 @@ describe("SettingsPage — Modules section (LOT F1)", () => {
     expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Produits & Services/ })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Clients & Prospects/ })).toBeChecked();
+  });
+});
+
+describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
+  const organization = makeOrganization(["crm", "analytics"]);
+  const existingMembers = [
+    {
+      id: "member-1",
+      status: "active",
+      userId: { id: "user-1", email: "owner@korva.test", firstName: "Ada" },
+      roleId: { id: "role-owner", name: "OWNER", systemKey: "OWNER" },
+    },
+  ];
+  const roles = [
+    { id: "role-owner", name: "OWNER", systemKey: "OWNER" },
+    { id: "role-admin", name: "ADMIN", systemKey: "ADMIN" },
+    { id: "role-staff", name: "STAFF", systemKey: "STAFF" },
+  ];
+
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve(existingMembers);
+      if (path === "/organizations/me/roles") return Promise.resolve(roles);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+  });
+
+  async function openInviteForm(user: ReturnType<typeof userEvent.setup>) {
+    renderWithProviders(<SettingsPage />);
+    await screen.findByText("owner@korva.test");
+    await user.click(screen.getByRole("button", { name: "Inviter un membre" }));
+  }
+
+  it("shows the Équipe section with the existing member list and an Inviter un membre action", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    expect(screen.getByText("Équipe")).toBeInTheDocument();
+    expect(await screen.findByText("owner@korva.test")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Inviter un membre" })).toBeInTheDocument();
+  });
+
+  it("loads roles from GET /organizations/me/roles once the invite form is opened", async () => {
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    await waitFor(() => expect(getMock).toHaveBeenCalledWith("/organizations/me/roles"));
+  });
+
+  it("renders the real roles returned by the backend, using role.id as the option value", async () => {
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    const roleSelect = await screen.findByLabelText("Rôle");
+    for (const role of roles) {
+      const option = within(roleSelect).getByText(role.name) as HTMLOptionElement;
+      expect(option.value).toBe(role.id);
+    }
+  });
+
+  it("rejects submission with no email filled in — no POST is sent", async () => {
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    const roleSelect = await screen.findByLabelText("Rôle");
+    await user.selectOptions(roleSelect, "role-admin");
+    await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
+
+    await waitFor(() => expect(screen.queryByText("Invitation envoyée.")).not.toBeInTheDocument());
+    expect(postMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects submission with no role selected — no POST is sent", async () => {
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    await screen.findByLabelText("Rôle");
+    await user.type(screen.getByLabelText("Adresse email"), "new.member@korva.test");
+    await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
+
+    await waitFor(() => expect(screen.queryByText("Invitation envoyée.")).not.toBeInTheDocument());
+    expect(postMock).not.toHaveBeenCalled();
+  });
+
+  it("submits exactly { email, roleId } to POST /organizations/me/members", async () => {
+    postMock.mockResolvedValue({ id: "member-2" });
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    const roleSelect = await screen.findByLabelText("Rôle");
+    await user.type(screen.getByLabelText("Adresse email"), "new.member@korva.test");
+    await user.selectOptions(roleSelect, "role-admin");
+    await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/organizations/me/members", {
+        email: "new.member@korva.test",
+        roleId: "role-admin",
+      }),
+    );
+  });
+
+  it("disables the submit button while the invitation is in flight, preventing a second submission", async () => {
+    postMock.mockImplementation(() => new Promise(() => {}));
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    const roleSelect = await screen.findByLabelText("Rôle");
+    await user.type(screen.getByLabelText("Adresse email"), "new.member@korva.test");
+    await user.selectOptions(roleSelect, "role-admin");
+    await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
+
+    const pendingButton = await screen.findByRole("button", { name: "Invitation en cours..." });
+    expect(pendingButton).toBeDisabled();
+    await user.click(pendingButton);
+    expect(postMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("on success: refetches the member list, clears the form, and shows a confirmation", async () => {
+    postMock.mockResolvedValue({ id: "member-2" });
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    const roleSelect = await screen.findByLabelText("Rôle");
+    const emailInput = screen.getByLabelText("Adresse email");
+    await user.type(emailInput, "new.member@korva.test");
+    await user.selectOptions(roleSelect, "role-admin");
+    await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
+
+    expect(await screen.findByText("Invitation envoyée.")).toBeInTheDocument();
+    expect(emailInput).toHaveValue("");
+    // Real refetch of the members query, not a manually-patched list.
+    expect(
+      getMock.mock.calls.filter(([path]) => path === "/organizations/me/members").length,
+    ).toBeGreaterThan(1);
+  });
+
+  it("on an API error: shows the message and keeps the typed email so the user can retry", async () => {
+    postMock.mockRejectedValue(new ApiError("VALIDATION_ERROR", "Adresse email invalide"));
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    const roleSelect = await screen.findByLabelText("Rôle");
+    const emailInput = screen.getByLabelText("Adresse email");
+    await user.type(emailInput, "new.member@korva.test");
+    await user.selectOptions(roleSelect, "role-admin");
+    await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
+
+    expect(await screen.findByText("Adresse email invalide")).toBeInTheDocument();
+    expect(emailInput).toHaveValue("new.member@korva.test");
+  });
+
+  it("on a 403 PERMISSION_DENIED error: shows the message and never touches the member list", async () => {
+    postMock.mockRejectedValue(new ApiError("PERMISSION_DENIED", "Réservé aux administrateurs"));
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    const membersCallsBefore = getMock.mock.calls.filter(
+      ([path]) => path === "/organizations/me/members",
+    ).length;
+
+    const roleSelect = await screen.findByLabelText("Rôle");
+    await user.type(screen.getByLabelText("Adresse email"), "new.member@korva.test");
+    await user.selectOptions(roleSelect, "role-admin");
+    await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
+
+    expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
+    // No invalidation fired on error — the member list was never asked to refetch.
+    expect(
+      getMock.mock.calls.filter(([path]) => path === "/organizations/me/members").length,
+    ).toBe(membersCallsBefore);
+  });
+
+  it("shows a clear error with a retry option when the roles fail to load", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve(existingMembers);
+      if (path === "/organizations/me/roles")
+        return Promise.reject(new ApiError("NETWORK_ERROR", "Unable to reach the server"));
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const user = userEvent.setup();
+    await openInviteForm(user);
+
+    expect(await screen.findByText("Impossible de charger les rôles.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Rôle")).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Réessayer" }));
+    await waitFor(() =>
+      expect(
+        getMock.mock.calls.filter(([path]) => path === "/organizations/me/roles").length,
+      ).toBeGreaterThan(1),
+    );
   });
 });
