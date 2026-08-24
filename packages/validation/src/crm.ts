@@ -56,6 +56,7 @@ export const listLeadsQuerySchema = z.object({
   stageId: z.string().optional(),
   status: z.enum(LEAD_STATUSES).optional(),
   ownerId: z.string().optional(),
+  contactId: z.string().optional(),
 });
 export type ListLeadsQuery = z.infer<typeof listLeadsQuerySchema>;
 

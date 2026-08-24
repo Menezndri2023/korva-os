@@ -99,25 +99,15 @@ describe("ContactDetailPage (LOT F7)", () => {
     expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
   });
 
-  it("shows only the leads that belong to this contact (client-side filter)", async () => {
+  it("fetches and displays leads filtered by contactId", async () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/contacts/contact-1") return Promise.resolve(contact);
-      if (path.startsWith("/leads")) {
+      if (path === "/leads?contactId=contact-1") {
         return Promise.resolve([
           {
             id: "lead-1",
             contactId: "contact-1",
             status: "open",
-            pipelineId: "p1",
-            stageId: "s1",
-            customFields: {},
-            createdAt: "",
-            updatedAt: "",
-          },
-          {
-            id: "lead-2",
-            contactId: "other-contact",
-            status: "won",
             pipelineId: "p1",
             stageId: "s1",
             customFields: {},
@@ -132,7 +122,6 @@ describe("ContactDetailPage (LOT F7)", () => {
     await screen.findByRole("heading", { name: "Ada Lovelace" });
 
     expect(await screen.findByText("open")).toBeInTheDocument();
-    expect(screen.queryByText("won")).not.toBeInTheDocument();
   });
 
   it("fetches and displays orders filtered by contactId", async () => {

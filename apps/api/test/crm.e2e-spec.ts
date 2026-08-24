@@ -38,6 +38,7 @@ interface LeadPayload {
   id: string;
   status: string;
   stageId: string;
+  contactId: string;
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -319,6 +320,45 @@ describe('CRM module (e2e)', () => {
       const updated = asSuccess<LeadPayload>(updateRes.body);
       expect(updated.status).toBe('won');
       expect(updated.stageId).toBe(stageBId);
+    });
+
+    it('filters leads by contactId', async () => {
+      const otherContactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName: 'Other Prospect' })
+        .expect(201);
+      const otherContactId = asSuccess<ContactPayload>(otherContactRes.body).id;
+
+      const ownLeadRes = await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, pipelineId, stageId: stageAId })
+        .expect(201);
+      const ownLeadId = asSuccess<LeadPayload>(ownLeadRes.body).id;
+
+      await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId: otherContactId,
+          pipelineId,
+          stageId: stageAId,
+        })
+        .expect(201);
+
+      const filteredRes = await request(server)
+        .get(`/api/v1/leads?contactId=${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const filtered = asSuccess<LeadPayload[]>(filteredRes.body);
+      expect(filtered.length).toBeGreaterThan(0);
+      expect(filtered.every((lead) => lead.contactId === contactId)).toBe(true);
+      expect(filtered.map((lead) => lead.id)).toContain(ownLeadId);
     });
   });
 

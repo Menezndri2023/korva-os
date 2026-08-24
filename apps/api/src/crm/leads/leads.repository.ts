@@ -11,6 +11,7 @@ export interface FindLeadsOptions {
   stageId?: string;
   status?: string;
   ownerId?: string;
+  contactId?: string;
 }
 
 @Injectable()
@@ -45,6 +46,8 @@ export class LeadsRepository {
     if (options.stageId) filter.stageId = new Types.ObjectId(options.stageId);
     if (options.status) filter.status = options.status;
     if (options.ownerId) filter.ownerId = new Types.ObjectId(options.ownerId);
+    if (options.contactId)
+      filter.contactId = new Types.ObjectId(options.contactId);
 
     const skip = (options.page - 1) * options.limit;
     const [data, total] = await Promise.all([

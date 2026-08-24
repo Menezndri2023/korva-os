@@ -97,13 +97,9 @@ export default function ContactDetailPage() {
     enabled: authReady,
   });
 
-  // Leads have no contactId filter on GET /leads (unlike the other six relations below) — a
-  // known, documented backend gap (LOT F7 audit). Worked around by fetching the largest page
-  // the API allows and filtering client-side; organizations with more than 100 leads may miss
-  // some here until a proper filter is added.
   const leadsQuery = useQuery({
-    queryKey: ["leads", "for-contact-workaround"],
-    queryFn: () => apiClient.get<Lead[]>("/leads?limit=100"),
+    queryKey: ["leads", "contact", id],
+    queryFn: () => apiClient.get<Lead[]>(`/leads?contactId=${id}`),
     enabled: authReady,
   });
   const ordersQuery = useQuery({
@@ -151,8 +147,6 @@ export default function ContactDetailPage() {
     queryFn: () => apiClient.get<Activity[]>(`/activities?entity=contact&entityId=${id}`),
     enabled: authReady,
   });
-
-  const leadsForContact = leadsQuery.data?.filter((lead) => lead.contactId === id);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editTagsInput, setEditTagsInput] = useState("");
@@ -389,12 +383,7 @@ export default function ContactDetailPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <RelationSection<Lead>
           title="Prospects"
-          query={{
-            isLoading: leadsQuery.isLoading,
-            isError: leadsQuery.isError,
-            error: leadsQuery.error,
-            data: leadsForContact,
-          }}
+          query={leadsQuery}
           emptyLabel="Aucun prospect."
           renderItem={(lead) => (
             <div className="flex items-center justify-between">
