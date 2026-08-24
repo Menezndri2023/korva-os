@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ContactsPage from "./page";
 import { renderWithProviders } from "@/test/render";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiError } from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn() } };
+  return {
+    ...actual,
+    apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn(), patch: vi.fn() },
+  };
 });
 
 // This page's queries are gated on auth bootstrap readiness (Bug #6) — these tests exercise
@@ -17,6 +20,7 @@ vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
 const getMock = vi.mocked(apiClient.get);
 const postMock = vi.mocked(apiClient.post);
+const patchMock = vi.mocked(apiClient.patch);
 
 describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () => {
   beforeEach(() => {
@@ -106,5 +110,148 @@ describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () 
     await user.click(screen.getByRole("button", { name: "Créer le contact" }));
 
     expect(await screen.findByRole("button", { name: "Création..." })).toBeDisabled();
+  });
+});
+
+describe("ContactsPage — edit contact (LOT F4)", () => {
+  const contactOne = {
+    id: "contact-1",
+    type: "person",
+    firstName: "Ada",
+    lastName: "Lovelace",
+    email: "ada@example.com",
+    phone: "0102030405",
+    company: "Analytical Engines",
+    tags: ["vip"],
+  };
+  const contactTwo = {
+    id: "contact-2",
+    type: "person",
+    firstName: "Grace",
+    lastName: "Hopper",
+    email: "grace@example.com",
+    phone: "0607080910",
+    company: "Navy",
+    tags: [],
+  };
+
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    getMock.mockResolvedValue([contactOne, contactTwo]);
+  });
+
+  async function openEditForm(user: ReturnType<typeof userEvent.setup>, name: string) {
+    renderWithProviders(<ContactsPage />);
+    const row = (await screen.findByText(name)).closest("tr")!;
+    await user.click(within(row).getByRole("button", { name: "Modifier" }));
+  }
+
+  it("opens the edit form when Modifier is clicked", async () => {
+    const user = userEvent.setup();
+    await openEditForm(user, "Ada Lovelace");
+    expect(screen.getByLabelText("Prénom")).toBeInTheDocument();
+  });
+
+  it("prefills the edit form with the contact's current values", async () => {
+    const user = userEvent.setup();
+    await openEditForm(user, "Ada Lovelace");
+
+    expect(screen.getByLabelText("Prénom")).toHaveValue("Ada");
+    expect(screen.getByLabelText("Nom")).toHaveValue("Lovelace");
+    expect(screen.getByLabelText("Email")).toHaveValue("ada@example.com");
+    expect(screen.getByLabelText("Téléphone")).toHaveValue("0102030405");
+    expect(screen.getByLabelText("Entreprise")).toHaveValue("Analytical Engines");
+    expect(screen.getByLabelText("Tags (séparés par des virgules)")).toHaveValue("vip");
+  });
+
+  it("blocks submission when a required field is cleared (updateContactSchema)", async () => {
+    const user = userEvent.setup();
+    await openEditForm(user, "Ada Lovelace");
+
+    await user.clear(screen.getByLabelText("Prénom"));
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() => expect(patchMock).not.toHaveBeenCalled());
+  });
+
+  it("submits PATCH /contacts/:id with exactly the form fields, id in the URL", async () => {
+    patchMock.mockResolvedValue(contactOne);
+    const user = userEvent.setup();
+    await openEditForm(user, "Ada Lovelace");
+
+    await user.clear(screen.getByLabelText("Prénom"));
+    await user.type(screen.getByLabelText("Prénom"), "Augusta");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/contacts/contact-1", {
+        firstName: "Augusta",
+        lastName: "Lovelace",
+        email: "ada@example.com",
+        phone: "0102030405",
+        company: "Analytical Engines",
+        tags: ["vip"],
+      }),
+    );
+  });
+
+  it("uses the correct id in the URL when editing a different contact", async () => {
+    patchMock.mockResolvedValue(contactTwo);
+    const user = userEvent.setup();
+    await openEditForm(user, "Grace Hopper");
+
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/contacts/contact-2", expect.anything()),
+    );
+  });
+
+  it("disables the submit button and shows a saving state while pending", async () => {
+    patchMock.mockImplementation(() => new Promise(() => {}));
+    const user = userEvent.setup();
+    await openEditForm(user, "Ada Lovelace");
+
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(await screen.findByRole("button", { name: "Enregistrement..." })).toBeDisabled();
+  });
+
+  it("on success: refetches the contacts list and closes the edit form", async () => {
+    patchMock.mockResolvedValue(contactOne);
+    const user = userEvent.setup();
+    await openEditForm(user, "Ada Lovelace");
+
+    const getCallsBefore = getMock.mock.calls.length;
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() => expect(screen.queryByLabelText("Prénom")).not.toBeInTheDocument());
+    await waitFor(() => expect(getMock.mock.calls.length).toBeGreaterThan(getCallsBefore));
+  });
+
+  it("on API error: shows the message and keeps the form with the typed values", async () => {
+    patchMock.mockRejectedValue(new ApiError("VALIDATION_ERROR", "Email déjà utilisé"));
+    const user = userEvent.setup();
+    await openEditForm(user, "Ada Lovelace");
+
+    await user.clear(screen.getByLabelText("Prénom"));
+    await user.type(screen.getByLabelText("Prénom"), "Augusta");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(await screen.findByText("Email déjà utilisé")).toBeInTheDocument();
+    expect(screen.getByLabelText("Prénom")).toHaveValue("Augusta");
+  });
+
+  it("on a 403 PERMISSION_DENIED error: shows the message without touching the row", async () => {
+    patchMock.mockRejectedValue(new ApiError("PERMISSION_DENIED", "Réservé aux administrateurs"));
+    const user = userEvent.setup();
+    await openEditForm(user, "Ada Lovelace");
+
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
+    expect(screen.getByLabelText("Prénom")).toBeInTheDocument();
   });
 });
