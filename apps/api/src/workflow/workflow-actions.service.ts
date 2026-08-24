@@ -56,6 +56,11 @@ export class WorkflowActionsService {
     payload: Record<string, unknown>,
     claim?: WorkflowActionClaimContext,
   ): Promise<WorkflowActionResult> {
+    // Set only once claimAction reports 'claimed' below, and read only from inside `if (claim &&
+    // ownedLeaseExpiresAt)` guards — this is the exact lease this call was granted, required to
+    // finalize (markActionSucceeded/markActionFailed) without disturbing a different holder's
+    // claim. See WorkflowsRepository.claimAction/markActionSucceeded/markActionFailed.
+    let ownedLeaseExpiresAt: Date | undefined;
     if (claim) {
       const claimResult = await this.workflowsRepository.claimAction(
         organizationId,
@@ -65,9 +70,10 @@ export class WorkflowActionsService {
       );
       // Someone (a prior attempt, or a concurrent one) already has this covered — running the
       // effect again is exactly the double-execution this claim exists to prevent.
-      if (claimResult !== 'claimed') {
+      if (claimResult.status !== 'claimed') {
         return { type: action.type, success: true };
       }
+      ownedLeaseExpiresAt = claimResult.leaseExpiresAt;
     }
 
     try {
@@ -85,18 +91,49 @@ export class WorkflowActionsService {
           await this.notifyOrganization(organizationId, action.config, payload);
           break;
       }
-      if (claim) {
-        await this.workflowsRepository.markActionSucceeded(
+      if (claim && ownedLeaseExpiresAt) {
+        const finalized = await this.workflowsRepository.markActionSucceeded(
           organizationId,
           claim.workflowId,
           claim.actionIndex,
           claim.eventKey,
+          ownedLeaseExpiresAt,
         );
+        if (!finalized) {
+          // Rare: this claim's lease expired, was presumed stalled, and re-claimed by another
+          // worker before this (still-alive) call finished. The effect above genuinely ran — that
+          // can't be undone — but the row now belongs to that other worker, so its own eventual
+          // finalize is what should decide the row's state, not this stale one.
+          this.logger.warn(
+            `Workflow action "${action.type}" succeeded, but its claim lease was no longer owned when finalizing — likely a stalled retry; leaving the current owner's claim untouched.`,
+          );
+        }
       }
       return { type: action.type, success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Workflow action "${action.type}" failed: ${message}`);
+      if (claim && ownedLeaseExpiresAt) {
+        // Release the lease now rather than leaving it to time out — a subsequent attempt
+        // (a genuine BullMQ retry, or a retry of this same workflow triggered by a different
+        // action's failure) must be able to re-claim this exact action on its next pass. See
+        // WorkflowsRepository.claimAction/markActionFailed.
+        const released = await this.workflowsRepository.markActionFailed(
+          organizationId,
+          claim.workflowId,
+          claim.actionIndex,
+          claim.eventKey,
+          ownedLeaseExpiresAt,
+        );
+        if (!released) {
+          // Same rare case as above, on the failure path: don't release a lease that isn't ours
+          // to release anymore — that would let a third worker claim while the current owner is
+          // still (possibly) mid-execution.
+          this.logger.warn(
+            `Workflow action "${action.type}" failed, but its claim lease was no longer owned when releasing — likely a stalled retry; leaving the current owner's claim untouched.`,
+          );
+        }
+      }
       // No claim (eventKey wasn't derivable for this event) means no dedup guard exists at all
       // — retrying would be unprotected even for create_task/internal_notification, so it's
       // never marked retryable in that case regardless of action type.

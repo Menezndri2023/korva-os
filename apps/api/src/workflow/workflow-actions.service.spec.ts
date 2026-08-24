@@ -118,31 +118,69 @@ describe('WorkflowActionsService — callWebhook SSRF protection', () => {
  * something a single-threaded fake can reproduce.
  */
 class FakeClaimsRepository {
-  private readonly claims = new Map<string, 'claimed' | 'succeeded'>();
+  private readonly claims = new Map<
+    string,
+    { status: 'claimed' | 'succeeded'; leaseExpiresAt: Date }
+  >();
 
-  private key(workflowId: Types.ObjectId, actionIndex: number, eventKey: string) {
+  private key(
+    workflowId: Types.ObjectId,
+    actionIndex: number,
+    eventKey: string,
+  ) {
     return `${workflowId.toString()}:${actionIndex}:${eventKey}`;
   }
 
-  async claimAction(
+  claimAction(
     _organizationId: string,
     workflowId: Types.ObjectId,
     actionIndex: number,
     eventKey: string,
   ): Promise<ClaimActionResult> {
     const key = this.key(workflowId, actionIndex, eventKey);
-    if (this.claims.get(key) === 'succeeded') return 'already-succeeded';
-    this.claims.set(key, 'claimed');
-    return 'claimed';
+    if (this.claims.get(key)?.status === 'succeeded') {
+      return Promise.resolve({ status: 'already-succeeded' });
+    }
+    const leaseExpiresAt = new Date(Date.now() + 60_000);
+    this.claims.set(key, { status: 'claimed', leaseExpiresAt });
+    return Promise.resolve({ status: 'claimed', leaseExpiresAt });
   }
 
-  async markActionSucceeded(
+  /**
+   * Real WorkflowsRepository.markActionSucceeded only finalizes when ownedLeaseExpiresAt still
+   * matches the row's current lease (see LOT G4-FIX3) — mirrored here so a stale caller in a test
+   * can't finalize a claim it no longer owns, even in this simplified in-memory model.
+   */
+  markActionSucceeded(
     _organizationId: string,
     workflowId: Types.ObjectId,
     actionIndex: number,
     eventKey: string,
-  ): Promise<void> {
-    this.claims.set(this.key(workflowId, actionIndex, eventKey), 'succeeded');
+    ownedLeaseExpiresAt: Date,
+  ): Promise<boolean> {
+    const key = this.key(workflowId, actionIndex, eventKey);
+    const existing = this.claims.get(key);
+    if (
+      !existing ||
+      existing.leaseExpiresAt.getTime() !== ownedLeaseExpiresAt.getTime()
+    ) {
+      return Promise.resolve(false);
+    }
+    this.claims.set(key, {
+      status: 'succeeded',
+      leaseExpiresAt: existing.leaseExpiresAt,
+    });
+    return Promise.resolve(true);
+  }
+
+  /**
+   * Real WorkflowsRepository.markActionFailed releases a lease so a later claimAction call can
+   * re-claim before it would otherwise time out — this fake has no lease-expiry concept for
+   * claimAction (see above: it always re-claims a non-'succeeded' key regardless of timing), so
+   * there's nothing for a release to unblock. Always reports success, matching that simplification.
+   */
+  markActionFailed(): Promise<boolean> {
+    return Promise.resolve(true);
   }
 }
 
@@ -160,7 +198,10 @@ describe('WorkflowActionsService — claim-first idempotence', () => {
       { name: 'stub', send: jest.fn() },
       repository as unknown as WorkflowsRepository,
     );
-    const action = { type: 'create_task' as const, config: { title: 'Qualified lead' } };
+    const action = {
+      type: 'create_task' as const,
+      config: { title: 'Qualified lead' },
+    };
 
     const first = await service.execute('org-1', action, {}, claim);
     const second = await service.execute('org-1', action, {}, claim);
@@ -172,7 +213,9 @@ describe('WorkflowActionsService — claim-first idempotence', () => {
 
   it('internal_notification: a retry with the same claim key never notifies the organization twice', async () => {
     const notifyOrganization = jest.fn().mockResolvedValue(undefined);
-    const notificationsService = { notifyOrganization } as unknown as NotificationsService;
+    const notificationsService = {
+      notifyOrganization,
+    } as unknown as NotificationsService;
     const repository = new FakeClaimsRepository();
     const service = new WorkflowActionsService(
       {} as TasksService,
@@ -198,11 +241,14 @@ describe('WorkflowActionsService — claim-first idempotence', () => {
     // caller wins ('claimed'), the other loses the unique-index race ('already-claimed').
     const claimAction = jest
       .fn<Promise<ClaimActionResult>, unknown[]>()
-      .mockResolvedValueOnce('claimed')
-      .mockResolvedValueOnce('already-claimed');
+      .mockResolvedValueOnce({
+        status: 'claimed',
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      })
+      .mockResolvedValueOnce({ status: 'already-claimed' });
     const repository = {
       claimAction,
-      markActionSucceeded: jest.fn().mockResolvedValue(undefined),
+      markActionSucceeded: jest.fn().mockResolvedValue(true),
     } as unknown as WorkflowsRepository;
     const service = new WorkflowActionsService(
       tasksService,
@@ -210,7 +256,10 @@ describe('WorkflowActionsService — claim-first idempotence', () => {
       { name: 'stub', send: jest.fn() },
       repository,
     );
-    const action = { type: 'create_task' as const, config: { title: 'Qualified lead' } };
+    const action = {
+      type: 'create_task' as const,
+      config: { title: 'Qualified lead' },
+    };
 
     const [a, b] = await Promise.all([
       service.execute('org-1', action, {}, claim),
@@ -232,7 +281,10 @@ describe('WorkflowActionsService — claim-first idempotence', () => {
       { name: 'stub', send: jest.fn() },
       repository as unknown as WorkflowsRepository,
     );
-    const action = { type: 'create_task' as const, config: { title: 'Qualified lead' } };
+    const action = {
+      type: 'create_task' as const,
+      config: { title: 'Qualified lead' },
+    };
 
     const withClaim = await service.execute('org-1', action, {}, claim);
     const withoutClaim = await service.execute('org-1', action, {});
@@ -244,7 +296,9 @@ describe('WorkflowActionsService — claim-first idempotence', () => {
   });
 
   it('send_email/webhook failures are never marked retryable, even with a claim context', async () => {
-    const send = jest.fn().mockResolvedValue({ status: 'failed', providerReference: '' });
+    const send = jest
+      .fn()
+      .mockResolvedValue({ status: 'failed', providerReference: '' });
     const repository = new FakeClaimsRepository();
     const service = new WorkflowActionsService(
       {} as TasksService,

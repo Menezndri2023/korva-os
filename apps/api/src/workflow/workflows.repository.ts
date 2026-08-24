@@ -11,10 +11,29 @@ import {
   WorkflowActionClaimDocument,
 } from './schemas/workflow-action-claim.schema';
 
+/**
+ * 'claimed' carries the exact lease the caller now owns — required by markActionSucceeded/
+ * markActionFailed's compare-and-swap filter (see LOT G4-POST-AUDIT/G4-FIX3): finalizing a claim
+ * must prove the caller still holds the lease it was given, not just that it once held *a* lease
+ * on this key. Passing that value back is what lets a stale caller's late finalize become a
+ * verifiable no-op instead of silently touching whoever holds the claim now.
+ */
 export type ClaimActionResult =
-  | 'claimed'
-  | 'already-succeeded'
-  | 'already-claimed';
+  | { status: 'claimed'; leaseExpiresAt: Date }
+  | { status: 'already-succeeded' }
+  | { status: 'already-claimed' };
+
+/**
+ * How long a 'claimed' row stays ineligible for match-and-reuse by another claimAction call
+ * (see WorkflowActionClaim#leaseExpiresAt). Only matters as a crash backstop — a holder that
+ * finishes normally releases its lease immediately via markActionSucceeded/markActionFailed, so
+ * a legitimate BullMQ retry (2s-30s exponential backoff, see EventBusService's JOB_OPTIONS) never
+ * waits this out. Set well above BullMQ's default Worker lockDuration/stalledInterval (30s each,
+ * unconfigured in EventsProcessor) so a lease can never expire while the original worker is still
+ * legitimately holding its BullMQ job lock — only once that lock itself would already be
+ * considered stalled.
+ */
+const ACTION_CLAIM_LEASE_MS = 60_000;
 
 @Injectable()
 export class WorkflowsRepository {
@@ -115,18 +134,35 @@ export class WorkflowsRepository {
 
   /**
    * Claim-first guard for one workflow action: atomically reserves (organizationId, workflowId,
-   * actionIndex, eventKey) unless it's already 'succeeded'. Returns:
-   *  - 'claimed': no matching document existed yet, or one existed with status 'claimed' and got
-   *    updated in place (a sequential retry after a prior attempt that never reached 'succeeded'
-   *    — never throws, since updating an existing doc in-place never touches the unique index).
-   *    The caller is cleared to run the action's effect.
+   * actionIndex, eventKey) unless it's already 'succeeded' or currently leased by someone else.
+   * Returns:
+   *  - 'claimed' (with the lease just granted): either no matching document existed yet (fresh
+   *    insert, arbitrated by the unique index below), or one existed with status 'claimed' and an
+   *    *expired* lease — a re-claim, updated in place. Both cases never throw: an insert only
+   *    collides with another insert (the unique-index race), and an in-place update only ever
+   *    matches a row already ineligible for anyone else to also match (see leaseExpiresAt on the
+   *    schema). The caller is cleared to run the action's effect, and must call
+   *    markActionSucceeded/markActionFailed — passing back this exact leaseExpiresAt — when it's
+   *    done, so the lease is released for the next legitimate attempt instead of sitting until it
+   *    times out. That returned value is also this call's ownership proof: see
+   *    markActionSucceeded/markActionFailed for why a stale caller can't use it to disturb
+   *    whoever holds the claim by the time it gets around to finalizing (LOT G4-POST-AUDIT/
+   *    G4-FIX3).
    *  - 'already-succeeded': a previous attempt already completed this exact action for this
    *    exact event. The caller must not repeat the effect.
-   *  - 'already-claimed': lost a genuine concurrent race to insert a brand-new claim (two callers
-   *    reserving the same not-yet-existing key at the same instant — Mongo lets exactly one
-   *    upsert insert and E11000s the other). Someone else is handling this right now; the caller
-   *    must not repeat the effect either, but this is distinct from 'already-succeeded' for
-   *    observability.
+   *  - 'already-claimed': the row is currently leased by someone else (either a genuine
+   *    concurrent insert race, or an attempt to re-claim a lease that hasn't expired yet). The
+   *    caller must not repeat the effect either, but this is distinct from 'already-succeeded'
+   *    for observability.
+   *
+   * Concurrency proof (see LOT G4/G4-FIX2 audit): whatever a caller's own find phase observes,
+   * MongoDB serializes writes to a single document, and only a row with status 'claimed' *and* an
+   * expired lease matches this filter. A winner's write always sets leaseExpiresAt far into the
+   * future, so every other caller racing on the same key — whether it started before or after the
+   * winner's write commits — either finds nothing to match (attempts its own insert) or finds a
+   * row with an unexpired lease (also falls through to attempting its own insert, since the
+   * filter doesn't match). Either way every loser ends up on the insert path, which the unique
+   * index arbitrates to exactly one winner regardless of how many callers race.
    */
   async claimAction(
     organizationId: string,
@@ -134,6 +170,8 @@ export class WorkflowsRepository {
     actionIndex: number,
     eventKey: string,
   ): Promise<ClaimActionResult> {
+    const now = new Date();
+    const leaseExpiresAt = new Date(now.getTime() + ACTION_CLAIM_LEASE_MS);
     try {
       await this.actionClaimModel.findOneAndUpdate(
         {
@@ -142,19 +180,28 @@ export class WorkflowsRepository {
           actionIndex,
           eventKey,
           status: { $ne: 'succeeded' },
+          // A row written before leaseExpiresAt existed has no such field at all — $lte alone
+          // wouldn't match a missing field, which would leave it permanently un-reclaimable
+          // (stuck matching neither branch, forever hitting the insert path's E11000 below) until
+          // a manual data migration ran. $exists:false treats "no lease was ever recorded" the
+          // same as "the lease has expired": both mean nothing is currently holding this claim.
+          $or: [
+            { leaseExpiresAt: { $exists: false } },
+            { leaseExpiresAt: { $lte: now } },
+          ],
         },
-        { $set: { status: 'claimed' } },
+        { $set: { status: 'claimed', leaseExpiresAt } },
         { upsert: true },
       );
-      return 'claimed';
+      return { status: 'claimed', leaseExpiresAt };
     } catch (error) {
       if (!isDuplicateActionClaimError(error)) throw error;
-      // The filter above only attempts an insert when nothing matched it — either no document
-      // existed at all, or the only one existing is already 'succeeded'. So a unique-index
-      // conflict here means one of two things, disambiguated by reading the row back: someone
-      // else's upsert already wrote 'succeeded' (had already completed the effect before we
-      // even ran the filter), or someone else's upsert won a concurrent insert race and left
-      // it 'claimed' (in flight right now). Either way, we must not run the effect.
+      // The filter above only attempts an insert when nothing matched it — no document existed
+      // at all, the existing one is already 'succeeded', or its lease hasn't expired yet. So a
+      // unique-index conflict here means one of two things, disambiguated by reading the row
+      // back: someone else's write already landed 'succeeded' (completed the effect before we
+      // even ran our filter), or someone else currently holds an active (or just-renewed) lease
+      // on 'claimed'. Either way, we must not run the effect.
       const existing = await this.actionClaimModel.findOne({
         organizationId: new Types.ObjectId(organizationId),
         workflowId,
@@ -162,26 +209,81 @@ export class WorkflowsRepository {
         eventKey,
       });
       return existing?.status === 'succeeded'
-        ? 'already-succeeded'
-        : 'already-claimed';
+        ? { status: 'already-succeeded' }
+        : { status: 'already-claimed' };
     }
   }
 
+  /**
+   * Finalizes a claim as 'succeeded' — but only if `ownedLeaseExpiresAt` (the exact value
+   * claimAction returned to this caller) still matches the row's current lease. Returns whether
+   * that was still true.
+   *
+   * This is the fix for the race LOT G4-POST-AUDIT found in G4-FIX2: a worker whose lease expired
+   * (BullMQ considered it stalled, per Worker's default lockDuration/stalledInterval of 30s each)
+   * can still be alive and finish *after* a second worker has already re-claimed the same action
+   * with a new lease. Without the ownedLeaseExpiresAt filter below, the first (stale) worker's
+   * finalize would match on business key alone and silently stamp 'succeeded' onto the row the
+   * second worker now legitimately owns — corrupting its outcome without either worker knowing.
+   * Filtering on the exact lease turns that stale write into a no-op: by the time the first worker
+   * gets here, the row's leaseExpiresAt has already moved on to the second worker's value, so this
+   * updateOne matches zero documents and changes nothing.
+   *
+   * A `false` return means exactly that: the effect this caller just ran is real (it can't be
+   * un-run), but the bookkeeping for it couldn't be safely recorded because this caller is no
+   * longer the row's owner — recording it anyway would silently corrupt whoever the current owner
+   * is. The caller should log this as a rare stalled-worker condition, not retry or escalate: the
+   * current owner's own finalize (success or failure) is what the row's state should reflect.
+   */
   async markActionSucceeded(
     organizationId: string,
     workflowId: Types.ObjectId,
     actionIndex: number,
     eventKey: string,
-  ): Promise<void> {
-    await this.actionClaimModel.updateOne(
+    ownedLeaseExpiresAt: Date,
+  ): Promise<boolean> {
+    const result = await this.actionClaimModel.updateOne(
       {
         organizationId: new Types.ObjectId(organizationId),
         workflowId,
         actionIndex,
         eventKey,
+        leaseExpiresAt: ownedLeaseExpiresAt,
       },
       { $set: { status: 'succeeded' } },
     );
+    return result.matchedCount > 0;
+  }
+
+  /**
+   * Releases a 'claimed' row's lease immediately after its effect failed, so the next claimAction
+   * attempt — a genuine BullMQ retry, arriving after real backoff — can re-claim right away
+   * instead of waiting out ACTION_CLAIM_LEASE_MS. Only takes effect if `ownedLeaseExpiresAt` (the
+   * exact value claimAction returned to this caller) still matches the row's current lease —
+   * exactly the same ownership proof and the same stale-worker rationale as markActionSucceeded
+   * above, which this mirrors: a stale caller's release must never touch a lease someone else
+   * currently holds (that would let a third worker claim and run the effect concurrently with the
+   * second worker, the exact scenario LOT G4-POST-AUDIT demonstrated against the unguarded
+   * version of this method). Returns whether the release actually applied.
+   */
+  async markActionFailed(
+    organizationId: string,
+    workflowId: Types.ObjectId,
+    actionIndex: number,
+    eventKey: string,
+    ownedLeaseExpiresAt: Date,
+  ): Promise<boolean> {
+    const result = await this.actionClaimModel.updateOne(
+      {
+        organizationId: new Types.ObjectId(organizationId),
+        workflowId,
+        actionIndex,
+        eventKey,
+        leaseExpiresAt: ownedLeaseExpiresAt,
+      },
+      { $set: { leaseExpiresAt: new Date(0) } },
+    );
+    return result.matchedCount > 0;
   }
 }
 
