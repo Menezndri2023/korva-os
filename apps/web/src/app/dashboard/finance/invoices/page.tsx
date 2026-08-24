@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -89,7 +90,14 @@ export default function InvoicesPage() {
             {invoices?.map((invoice) => (
               <Fragment key={invoice.id}>
                 <tr>
-                  <td className="px-4 py-2 font-medium">{invoice.number}</td>
+                  <td className="px-4 py-2 font-medium">
+                    <Link
+                      href={`/dashboard/finance/invoices/${invoice.id}`}
+                      className="text-text underline-offset-2 hover:underline"
+                    >
+                      {invoice.number}
+                    </Link>
+                  </td>
                   <td className="px-4 py-2 text-text-muted">{contactName(invoice.contactId)}</td>
                   <td className="px-4 py-2 text-text-muted">
                     {invoice.total} {invoice.currency}
