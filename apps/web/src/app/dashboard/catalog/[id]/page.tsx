@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,8 +28,19 @@ const STATUS_VARIANT: Record<Offer["status"], "default" | "success" | "warning">
   draft: "warning",
 };
 
+function deleteErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === "OFFER_IN_USE") {
+      return "Cette offre ne peut pas être supprimée car elle est encore utilisée par d'autres données.";
+    }
+    return error.message;
+  }
+  return "Impossible de supprimer l'offre.";
+}
+
 export default function OfferDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [isEditing, setIsEditing] = useState(false);
@@ -69,6 +80,16 @@ export default function OfferDetailPage() {
       setIsEditing(false);
       return queryClient.invalidateQueries({ queryKey: ["offers"] });
     },
+  });
+
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const deleteOfferMutation = useMutation({
+    mutationFn: () => apiClient.delete<{ deleted: true }>(`/offers/${id}`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["offers"] });
+      router.push("/dashboard/catalog");
+    },
+    onError: () => setDeleteConfirming(false),
   });
 
   if (offerQuery.isLoading) {
@@ -111,12 +132,48 @@ export default function OfferDetailPage() {
             <Button
               variant="secondary"
               size="sm"
+              disabled={deleteConfirming}
               onClick={() => (isEditing ? cancelEdit() : startEdit(offer))}
             >
               {isEditing ? "Annuler" : "Modifier"}
             </Button>
+            {deleteConfirming ? (
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={deleteOfferMutation.isPending}
+                  onClick={() => deleteOfferMutation.mutate()}
+                >
+                  {deleteOfferMutation.isPending ? "Suppression..." : "Confirmer ?"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={deleteOfferMutation.isPending}
+                  onClick={() => setDeleteConfirming(false)}
+                >
+                  Annuler
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={isEditing}
+                onClick={() => setDeleteConfirming(true)}
+              >
+                Supprimer
+              </Button>
+            )}
           </div>
         </div>
+
+        {deleteOfferMutation.isError && (
+          <p className="mt-3 text-sm text-destructive">
+            {deleteErrorMessage(deleteOfferMutation.error)}
+          </p>
+        )}
 
         {!isEditing ? (
           <>
