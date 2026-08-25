@@ -213,6 +213,170 @@ volume** that would justify absorbing the Meta relationship directly.
    was conducted before Meta's committed September 1, 2026 publication date for exact figures, so
    budget estimates using current per-message rates should be treated as provisional.
 
+## Wave 3 refinement (2026-08-25) — verification, webhooks, opt-in, credential storage
+
+This section was added by a Wave 3 refinement pass. It does **not** redo the provider/market/pricing
+research above — that was re-verified against the current codebase and found still accurate — and
+instead deepens four specific points and records one important cross-cutting finding on credential
+storage.
+
+### Verification against current codebase (commit `d52de50`)
+
+Re-checked every repo-evidence claim above directly against `d52de50`:
+
+- `apps/api/src/communication/providers/messaging-provider.interface.ts` is unchanged — still a
+  single `send({ to, body }) → { providerReference, status }` method, no template/category/opt-in
+  parameters.
+- `apps/api/src/communication/communication.module.ts` still binds `MESSAGING_PROVIDER` to
+  `LogMessagingProvider` via a plain `useClass`, with **no env-var-driven factory** — this is
+  actually a smaller gap than `EMAIL_PROVIDER`'s wiring: `apps/api/src/shared/email/email.module.ts`
+  already has a `useFactory` that switches between `ResendEmailProvider`/`LogEmailProvider` based on
+  `EMAIL_PROVIDER`/`RESEND_API_KEY` config. `CommunicationModule` has not even been given the
+  equivalent factory scaffold yet for `MESSAGING_PROVIDER`, so the very first step of wiring in any
+  real WhatsApp provider is copying that factory pattern before a provider class is written at all.
+- `send_whatsapp` workflow action still does not exist in `workflow-actions.service.ts`; 2FA is
+  still TOTP-only (`two-factor.service.ts`); `MessageTemplate` still has no approval-state field.
+  All still accurate.
+- **Wave 2.1 (this branch's base commit) completed the Resend webhook receiver** — confirmed by
+  reading `apps/api/src/communication/webhooks/resend-webhook.controller.ts`,
+  `resend-webhook.service.ts`, and `verify-svix-signature.ts` in full. This is now a fully working,
+  tested pattern in the codebase and is directly relevant to what a WhatsApp delivery-status webhook
+  would need (see below) — the original decision record did not reference it because it predates
+  Wave 2.1's completion of that webhook.
+
+### The Resend webhook as an explicit template for a future WhatsApp delivery-status webhook
+
+The Resend webhook pattern is a strong structural template, and the differences are worth spelling
+out concretely rather than just gesturing at "similar":
+
+**What transfers directly:**
+- `@Public()` controller, no JWT/tenant context — the only trust boundary is the signature.
+- Raw-bytes requirement: `req.rawBody`, populated via `NestFactory.create(AppModule, { rawBody: true })`
+  in `main.ts`, is verified *before* JSON parsing — signature verification over a re-serialized body
+  is unreliable and this codebase already learned that lesson once (see the controller's comment
+  about the `!rawBody` 503 guard).
+- Constant-time comparison (`timingSafeEqual`) rather than `===` on the computed HMAC.
+- `@Throttle` on the endpoint (public + unauthenticated + externally triggered = abuse surface).
+- Idempotency via a repository-level guard that only applies an incoming status if it doesn't
+  regress an already-newer status (`MessagesRepository.updateStatusByProviderReference`) — this
+  pattern transfers almost unchanged to WhatsApp: Meta's per-message status webhooks arrive as
+  `sent → delivered → read` (or `failed`), keyed by WhatsApp's own `messages[].id`, which would
+  become the `providerReference` exactly the way Resend's `email_id` is used today.
+- Acknowledge-and-ignore-unknown-events posture (`EVENT_TO_STATUS` partial map, unhandled types
+  logged and 200'd, not errored) — same shape works for WhatsApp's broader webhook payload (which
+  also carries inbound message events, not just status events, in the same webhook stream).
+
+**What does NOT transfer and would need provider-specific work** (stated from general platform
+documentation; not re-verified via new web research in this pass — confirm exact current header
+names/algorithms against each provider's docs before implementing):
+- **Meta Cloud API** signs webhooks with `X-Hub-Signature-256` (HMAC-SHA256 over the raw body, keyed
+  by the Meta **App Secret**, not a per-WABA secret) — structurally close to Svix (HMAC over raw
+  bytes, constant-time compare) but a different header and no built-in replay-window timestamp the
+  way Svix's `svix-timestamp` provides; replay protection would have to lean on the idempotency guard
+  above rather than a timestamp check.
+- **Twilio** signs with `X-Twilio-Signature`, computed differently again (HMAC-SHA1 over the full
+  callback URL plus sorted POST parameters, not a raw-body HMAC) — meaningfully different enough
+  that `verify-svix-signature.ts` could not be reused as-is; Twilio's SDK ships its own
+  `validateRequest` helper for this.
+- **360dialog** passes through Meta's native webhook format, so it follows the Meta Cloud API
+  signature scheme above, not a scheme of its own.
+- Meta also requires a one-time **GET verification handshake** at webhook registration
+  (`hub.mode=subscribe&hub.verify_token=...`, echoed back to confirm ownership) — Resend's webhook
+  model has no equivalent step, so a WhatsApp webhook controller needs an extra GET handler the
+  Resend template doesn't demonstrate.
+
+Net: the existing record should be read as already correctly implying "webhooks are supported by
+every candidate" (true) but the original text did not spell out that a **new, provider-specific
+signature-verification module** is still required either way — `verify-svix-signature.ts` is a
+template for *shape*, not a drop-in dependency.
+
+### Opt-in / opt-out
+
+Checked `apps/api/src/crm/contacts/schemas/contact.schema.ts` in full: fields are `organizationId`,
+`type`, `firstName`, `lastName`, `company`, `email`, `phone`, `tags`, `customFields` (freeform
+object). **There is no opt-in, consent, or per-channel marketing-preference field of any kind.**
+This is a genuine gap, independent of provider choice (Meta's opt-in requirement is a platform
+policy, not a per-provider one, consistent with what the original record already says).
+
+What would need to be added, at minimum:
+- A consent record per contact — not just a boolean, since Meta expects a business to be able to
+  demonstrate *how and when* consent was obtained (e.g. `{ channel: 'whatsapp', grantedAt, source,
+  revokedAt? }`, plausibly generalized across channels rather than WhatsApp-specific, given `tags`/
+  `customFields` already show a preference for generic contact modeling in this schema).
+- An enforcement point in the send path. `apps/api/src/communication/conversations/conversations.service.ts:211-224`
+  today only checks that `contact.phone` is present before calling `MessagingProvider.send()` — it
+  has no concept of opt-in at all. This check should stay permissive for **replies inside a
+  customer-initiated conversation** (no additional Meta opt-in required within an active session)
+  but would need a new guard for **business-initiated sends** (proactive template messages, e.g. a
+  future `send_whatsapp` workflow action or the AI tool triggering a new conversation) — which is
+  exactly the send path that doesn't exist yet per the original record's Context section, so this
+  can be built alongside it rather than retrofitted.
+
+### Tenant isolation / multi-tenant credential model — the deepest gap, and a cross-cutting finding
+
+Grepped the full `apps/api/src` tree for `IntegrationCredential`, `integration-credential`, and
+`IntegrationConfig` — **zero matches**. Also checked `apps/api/src/organizations/schemas/` for any
+`apiKey`/`credential`/`secret` field — none. **No per-organization credential store exists anywhere
+in this codebase today.**
+
+Every external provider secret currently in use is a single, global, process-wide environment
+variable, read once via `ConfigService` at boot:
+- `RESEND_API_KEY` (email)
+- `STRIPE_SECRET_KEY`, `CINETPAY_API_KEY`, `PAYSTACK_SECRET_KEY` (payments)
+- `WHATSAPP_API_KEY` (the current unused placeholder this whole record is about)
+
+`apps/api/src/shared/email/email.module.ts` is the closest thing to a "provider selection" pattern
+in the repo (a `useFactory` choosing `ResendEmailProvider` vs. `LogEmailProvider` based on
+`EMAIL_PROVIDER`/`RESEND_API_KEY`), but it only switches between two **globally-configured**
+implementations — it does not parametrize per tenant. There is no mechanism anywhere for "tenant A's
+credentials" to differ from "tenant B's credentials" for any provider, WhatsApp included.
+
+This flatly contradicts what the record's own architectural section concludes: **every KORVA tenant
+that wants WhatsApp needs its own WABA and its own access token** (Embedded Signup per tenant,
+Tech-Provider-held token per tenant). That per-tenant token has nowhere to live in the current data
+model — it cannot be a global env var the way `WHATSAPP_API_KEY` is today.
+
+**Cross-cutting finding.** The companion PSP decision record (`docs/decisions/psp-provider.md:31-33,82`)
+independently reaches the identical conclusion for payment providers: *"there is no per-organization
+provider credential concept anywhere in identity/organizations/finance"*, and that a tenant-owns-
+account model would require the `PaymentProvider` DI wiring to become per-tenant instead of a single
+global injection token — *"a non-trivial change to the current DI wiring."* **This is now two
+independent decision records (PSP and WhatsApp) converging on the exact same missing prerequisite.**
+That strongly suggests the real next architectural investment is not "pick a WhatsApp provider" or
+"pick a PSP" in isolation, but building a shared, general-purpose **per-organization integration
+credential store** once — encrypted-at-rest secrets keyed by `(organizationId, providerType)`, with
+provider clients instantiated per-request/per-tenant instead of once at DI-container boot — since
+both of these integrations (and likely future ones — accounting sync, calendar sync, SMS) need the
+same primitive. Building bespoke per-tenant credential handling twice, once for payments and once
+for messaging, would be redundant work relative to building this foundation once and having both
+consume it.
+
+**Recommendation update**: if KORVA proceeds toward the "tenant connects their own WABA" model this
+record already concludes is close to mandatory, treat **"build a per-tenant IntegrationCredential
+model"** as a shared prerequisite epic ahead of both the WhatsApp and PSP tenant-owned-account paths,
+not as WhatsApp-specific scope. This does not change the provider recommendation above (BSP-first,
+defer becoming a Meta Tech Provider) — it adds a data-model prerequisite that sits underneath
+whichever provider is chosen, and is arguably more urgent to resolve than the provider pick itself.
+
+### Templates — checked for completeness, no material gap found
+
+Re-read the existing Comparison table's "Template approval" row against the codebase: confirmed
+`MessageTemplate` (`apps/api/src/communication/message-templates/schemas/message-template.schema.ts`)
+still has no approval-state field, consistent with the original record. The table's coverage of
+submission/turnaround per provider (Meta direct via Business Manager, same underlying Meta review
+pipeline through Twilio's or 360dialog's dashboards) was found adequate on review — no material gap
+to add here beyond what's already written.
+
+### Additional open questions (appended to the list above)
+
+9. Should contact consent/opt-in be modeled generically across channels (extending `Contact` with a
+   `consents`-style array) or WhatsApp-specifically? This affects schema design before any
+   business-initiated WhatsApp send path is built.
+10. Given the cross-cutting finding above, should the "per-organization integration credential store"
+    be scoped and built as its own epic/decision (shared by PSP and WhatsApp, and likely future
+    integrations), rather than being decided inside either provider-specific record? This is now a
+    bigger open question than the WhatsApp provider pick itself.
+
 ## Sources
 
 - [Pricing on the WhatsApp Business Platform — Meta for Developers](https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing)
