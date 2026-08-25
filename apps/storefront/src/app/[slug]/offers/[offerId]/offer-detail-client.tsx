@@ -126,6 +126,8 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
                       <button
                         key={image + String(index)}
                         onClick={() => setActiveImage(index)}
+                        aria-label={`Image ${index + 1} sur ${images.length}`}
+                        aria-current={index === activeImage}
                         className={`h-12 w-12 flex-shrink-0 overflow-hidden rounded border ${
                           index === activeImage ? "border-focus" : "border-border"
                         }`}
@@ -184,28 +186,38 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
               <div className="mt-6">
                 <h3 className="text-sm font-medium text-text">Variantes</h3>
                 <Card className="mt-2 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-                      <tr>
-                        <th className="px-3 py-2">Variante</th>
-                        <th className="px-3 py-2">SKU</th>
-                        <th className="px-3 py-2">Prix</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {offer.variants.map((variant) => (
-                        <tr key={variant.id}>
-                          <td className="px-3 py-2 font-medium text-text">{variant.name}</td>
-                          <td className="px-3 py-2 text-text-muted">{variant.sku ?? "—"}</td>
-                          <td className="px-3 py-2 text-text-muted">
-                            {variant.priceOverride != null
-                              ? formatOfferPrice(variant.priceOverride, offer.pricing.currency)
-                              : "—"}
-                          </td>
+                  {/* Separate scroll container from Card's own overflow-hidden (which exists only
+                      to clip content to the rounded corners, per packages/ui/src/card/card.tsx) —
+                      without it, a variant/SKU too wide for the viewport would be silently cut off
+                      on narrow screens instead of reachable via horizontal scroll. */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+                        <tr>
+                          <th className="px-3 py-2">Variante</th>
+                          <th className="px-3 py-2">SKU</th>
+                          <th className="px-3 py-2">Prix</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {offer.variants.map((variant) => (
+                          <tr key={variant.id}>
+                            <td className="whitespace-nowrap px-3 py-2 font-medium text-text">
+                              {variant.name}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 text-text-muted">
+                              {variant.sku ?? "—"}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 text-text-muted">
+                              {variant.priceOverride != null
+                                ? formatOfferPrice(variant.priceOverride, offer.pricing.currency)
+                                : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </Card>
               </div>
             )}

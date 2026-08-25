@@ -112,7 +112,12 @@ export function BookingPanel({
       <DialogCloseButton onClose={onClose} />
       <form onSubmit={handleSubmit((values) => bookMutation.mutate(values))} className="space-y-3 text-sm">
         <div>
-          <Select {...register("resourceId")} error={!!errors.resourceId} className="w-full">
+          <Select
+            {...register("resourceId")}
+            aria-label="Emplacement"
+            error={!!errors.resourceId}
+            className="w-full"
+          >
             <option value="" disabled>
               Choisir un emplacement
             </option>
@@ -135,6 +140,7 @@ export function BookingPanel({
 
         <Input
           type="date"
+          aria-label="Date de réservation"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           className="w-full"
@@ -166,11 +172,16 @@ export function BookingPanel({
         <div className="flex gap-2">
           <Input
             type="time"
+            aria-label="Heure de début"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
             className="flex-1"
           />
-          <Select value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value))}>
+          <Select
+            aria-label="Durée"
+            value={durationMinutes}
+            onChange={(e) => setDurationMinutes(Number(e.target.value))}
+          >
             {DURATIONS.map((d) => (
               <option key={d.minutes} value={d.minutes}>
                 {d.label}
@@ -179,11 +190,17 @@ export function BookingPanel({
           </Select>
         </div>
 
-        <Input placeholder="Prénom" {...register("contact.firstName")} error={!!errors.contact?.firstName} />
+        <Input
+          placeholder="Prénom"
+          aria-label="Prénom"
+          {...register("contact.firstName")}
+          error={!!errors.contact?.firstName}
+        />
         <div>
           <Input
             type="email"
             placeholder="E-mail"
+            aria-label="Adresse e-mail"
             {...register("contact.email")}
             error={!!errors.contact?.email}
           />
@@ -191,7 +208,12 @@ export function BookingPanel({
             <p className="mt-1 text-xs text-destructive">{errors.contact.email.message}</p>
           )}
         </div>
-        <Input placeholder="Téléphone (optionnel)" {...register("contact.phone")} error={!!errors.contact?.phone} />
+        <Input
+          placeholder="Téléphone (optionnel)"
+          aria-label="Téléphone"
+          {...register("contact.phone")}
+          error={!!errors.contact?.phone}
+        />
 
         {bookMutation.isError && (
           <p className="text-xs text-destructive">
@@ -267,11 +289,17 @@ export function CheckoutPanel({
           Total : {total.toFixed(2)} {currency}
         </p>
 
-        <Input placeholder="Prénom" {...register("contact.firstName")} error={!!errors.contact?.firstName} />
+        <Input
+          placeholder="Prénom"
+          aria-label="Prénom"
+          {...register("contact.firstName")}
+          error={!!errors.contact?.firstName}
+        />
         <div>
           <Input
             type="email"
             placeholder="E-mail"
+            aria-label="Adresse e-mail"
             {...register("contact.email")}
             error={!!errors.contact?.email}
           />
@@ -279,7 +307,12 @@ export function CheckoutPanel({
             <p className="mt-1 text-xs text-destructive">{errors.contact.email.message}</p>
           )}
         </div>
-        <Input placeholder="Téléphone (optionnel)" {...register("contact.phone")} error={!!errors.contact?.phone} />
+        <Input
+          placeholder="Téléphone (optionnel)"
+          aria-label="Téléphone"
+          {...register("contact.phone")}
+          error={!!errors.contact?.phone}
+        />
 
         {errors.items && <p className="text-xs text-destructive">{errors.items.message ?? "Panier invalide."}</p>}
         {orderMutation.isError && (
