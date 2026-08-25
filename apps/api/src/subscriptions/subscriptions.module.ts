@@ -19,6 +19,7 @@ import { SubscriptionsService } from './subscriptions.service';
 import { UsageRepository } from './usage.repository';
 import { EntitlementsService } from './entitlements.service';
 import { SubscriptionsController } from './subscriptions.controller';
+import { SubscriptionPeriodSchedulerService } from './subscription-period-scheduler.service';
 
 import { IdentityModule } from '../identity/identity.module';
 import { AuditModule } from '../audit/audit.module';
@@ -45,6 +46,7 @@ import { AuditModule } from '../audit/audit.module';
     SubscriptionsService,
     UsageRepository,
     EntitlementsService,
+    SubscriptionPeriodSchedulerService,
   ],
   exports: [PlansService, SubscriptionsService, EntitlementsService],
 })

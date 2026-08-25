@@ -49,6 +49,11 @@ import { InvitationsService } from './invitations/invitations.service';
 import { InvitationsRepository } from './invitations/invitations.repository';
 import { Invitation, InvitationSchema } from './schemas/invitation.schema';
 import { AuditModule } from '../audit/audit.module';
+import { ApiKey, ApiKeySchema } from './schemas/api-key.schema';
+import { ApiKeysRepository } from './api-keys/api-keys.repository';
+import { ApiKeysService } from './api-keys/api-keys.service';
+import { ApiKeysController } from './api-keys/api-keys.controller';
+import { ApiKeyGuard } from '../core/guards/api-key.guard';
 
 @Module({
   imports: [
@@ -63,6 +68,7 @@ import { AuditModule } from '../audit/audit.module';
         schema: EmailVerificationTokenSchema,
       },
       { name: Invitation.name, schema: InvitationSchema },
+      { name: ApiKey.name, schema: ApiKeySchema },
       // Registered here (not via OrganizationsModule) so MembershipsService can read
       // enabledModules while resolving TenantContext — OrganizationsModule already imports
       // IdentityModule, so depending on OrganizationsModule/OrganizationsRepository here would
@@ -89,6 +95,7 @@ import { AuditModule } from '../audit/audit.module';
     TwoFactorController,
     InvitationsController,
     InvitationsAcceptController,
+    ApiKeysController,
   ],
   providers: [
     UsersRepository,
@@ -108,6 +115,9 @@ import { AuditModule } from '../audit/audit.module';
     InvitationsRepository,
     InvitationsService,
     JwtStrategy,
+    ApiKeysRepository,
+    ApiKeysService,
+    ApiKeyGuard,
   ],
   exports: [UsersService, RolesService, MembershipsService],
 })

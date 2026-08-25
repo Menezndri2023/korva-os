@@ -7,6 +7,39 @@ import type { Request } from 'express';
 import type { RequestWithContext } from '../../core/tenant/request-context.types';
 import { ALLOWED_UPLOAD_MIME_TYPES } from './storage.constants';
 
+/**
+ * File-signature ("magic number") checks for every mimetype in ALLOWED_UPLOAD_MIME_TYPES.
+ * `fileFilter` (uploads.controller.ts) and the mimetype check below only ever look at
+ * `file.mimetype`, which is a client-supplied multipart header — trivially spoofable (e.g. a
+ * `.png`-labeled upload whose Content-Type field says `image/png` but whose actual bytes are an
+ * HTML/script payload). Without inspecting the real bytes, a spoofed upload would be written to
+ * disk under a `.png` extension and later served back with `Content-Type: image/png` (see
+ * UploadsController.read) — a content-type-confusion risk on a publicly-reachable URL. Checking
+ * the first few bytes against each format's well-known signature closes that gap without adding
+ * a new dependency for four fixed, simple formats.
+ */
+const SIGNATURE_CHECK_BYTES = 12; // longest signature below (WEBP) needs bytes 0-11
+
+const FILE_SIGNATURE_CHECKS: Record<string, (head: Buffer) => boolean> = {
+  'image/jpeg': (head) =>
+    head.length >= 3 &&
+    head[0] === 0xff &&
+    head[1] === 0xd8 &&
+    head[2] === 0xff,
+  'image/png': (head) =>
+    head.length >= 8 &&
+    head
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  'image/gif': (head) =>
+    head.length >= 6 &&
+    ['GIF87a', 'GIF89a'].includes(head.subarray(0, 6).toString('ascii')),
+  'image/webp': (head) =>
+    head.length >= 12 &&
+    head.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    head.subarray(8, 12).toString('ascii') === 'WEBP',
+};
+
 /** Shape multer actually passes to a StorageEngine — matches busboy's parsed file, not
  * @types/multer (not installed; see the class doc below for why). */
 export interface MulterFileLike {
@@ -44,8 +77,10 @@ export interface StoredMulterFileInfo {
  * upload — including calling `_removeFile` on whatever this engine already wrote — before
  * `@nestjs/platform-express` ever surfaces a response, independently of which StorageEngine is
  * used. Mimetype filtering is likewise primarily `fileFilter`'s job (also in
- * uploads.controller.ts, which runs before multer ever calls `_handleFile`); the check here is
- * defense-in-depth only.
+ * uploads.controller.ts, which runs before multer ever calls `_handleFile`); the declared-
+ * mimetype check here is defense-in-depth only. The actual-bytes signature check below is NOT
+ * redundant with either of those — both only ever see the client-supplied mimetype string, never
+ * the file's real content.
  */
 export class LocalDiskStorageEngine {
   constructor(private readonly rootDir: string) {}
@@ -62,7 +97,8 @@ export class LocalDiskStorageEngine {
     }
 
     const extension = ALLOWED_UPLOAD_MIME_TYPES[file.mimetype];
-    if (!extension) {
+    const signatureCheck = FILE_SIGNATURE_CHECKS[file.mimetype];
+    if (!extension || !signatureCheck) {
       callback(
         new UnsupportedMediaTypeException({
           code: 'UNSUPPORTED_FILE_TYPE',
@@ -79,12 +115,65 @@ export class LocalDiskStorageEngine {
     mkdir(dir, { recursive: true })
       .then(() => {
         let size = 0;
+        let settled = false;
+        let signatureVerified = false;
+        let headBuffer = Buffer.alloc(0);
         const writeStream = createWriteStream(destinationPath);
+
+        const fail = (error: Error) => {
+          if (settled) return;
+          settled = true;
+          writeStream.destroy();
+          // Drain and discard whatever the client still has in flight instead of leaving the
+          // request stream dangling mid-upload, which could hang the connection.
+          file.stream.removeAllListeners('data');
+          file.stream.resume();
+          unlink(destinationPath).catch(() => {});
+          callback(error);
+        };
+
+        const verifySignature = (): boolean => {
+          signatureVerified = true;
+          if (!signatureCheck(headBuffer)) {
+            fail(
+              new UnsupportedMediaTypeException({
+                code: 'UNSUPPORTED_FILE_TYPE',
+                message: `File content does not match declared type "${file.mimetype}"`,
+              }),
+            );
+            return false;
+          }
+          writeStream.write(headBuffer);
+          return true;
+        };
+
         file.stream.on('data', (chunk: Buffer) => {
+          if (settled) return;
           size += chunk.length;
+
+          if (!signatureVerified) {
+            headBuffer = Buffer.concat([headBuffer, chunk]);
+            if (headBuffer.length < SIGNATURE_CHECK_BYTES) return;
+            if (!verifySignature()) return;
+            return;
+          }
+          writeStream.write(chunk);
         });
-        writeStream.on('error', (error) => callback(error));
+
+        file.stream.on('end', () => {
+          if (settled) return;
+          // Fewer bytes ever arrived than SIGNATURE_CHECK_BYTES (a tiny/empty file) — verify
+          // against whatever was buffered; every real signature above needs at most 12 bytes, so
+          // anything shorter genuinely can't be a valid file of its claimed type.
+          if (!signatureVerified && !verifySignature()) return;
+          writeStream.end();
+        });
+
+        file.stream.on('error', (error) => fail(error as Error));
+        writeStream.on('error', (error) => fail(error));
         writeStream.on('finish', () => {
+          if (settled) return;
+          settled = true;
           callback(null, {
             destination: dir,
             filename,
@@ -92,7 +181,6 @@ export class LocalDiskStorageEngine {
             size,
           });
         });
-        file.stream.pipe(writeStream);
       })
       .catch((error: Error) => callback(error));
   }

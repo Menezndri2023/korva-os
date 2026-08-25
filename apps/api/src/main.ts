@@ -14,7 +14,11 @@ async function bootstrap() {
   // via the bootstrap().catch() handler below.
   initSentry();
 
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true makes Express preserve the raw request body bytes on `req.rawBody` (alongside
+  // the normal parsed `req.body` — this does not change parsing behavior for any other route).
+  // Required by ResendWebhookController's Svix HMAC-SHA256 signature verification, which must
+  // hash the exact bytes Resend sent — see communication/webhooks/resend-webhook.controller.ts.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // Replaces Nest's default ConsoleLogger with a JSON-structured one that also stamps every log
   // line with the current request's id (see common/logging/) — done as early as possible so it

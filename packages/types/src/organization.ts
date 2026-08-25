@@ -38,6 +38,7 @@ export interface Organization {
   timezone: string;
   language: string;
   logo?: string;
+  brandColor?: string;
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
   createdAt: string;

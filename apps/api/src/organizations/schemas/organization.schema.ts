@@ -41,6 +41,10 @@ export class Organization {
   @Prop()
   logo?: string;
 
+  /** Hex color (e.g. "#1a73e8"), used as a single storefront accent — see storefront-client.tsx. */
+  @Prop()
+  brandColor?: string;
+
   @Prop({ type: Object, default: { onboardingCompleted: false } })
   settings!: OrganizationSettings;
 

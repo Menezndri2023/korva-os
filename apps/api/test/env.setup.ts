@@ -11,11 +11,14 @@ import { randomUUID } from 'node:crypto';
  * an e2e-published job, process it against the dev Mongo database instead of
  * korva_test, and silently no-op it (confirmed during LOT G3's investigation of an
  * intermittently-failing notification test). Redis's numbered logical databases
- * (SELECT n) give each keyspace/queue full isolation on the same physical instance,
- * with zero code changes: every consumer in this codebase (EventBusService,
+ * (SELECT n) give each keyspace/queue full isolation from DEV on the same physical
+ * instance, with zero code changes: every consumer in this codebase (EventBusService,
  * EventsProcessor, QueueAlertingService, QueueMetricsService,
  * ReconciliationSchedulerService, HealthController) builds its own connection from
- * this same REDIS_URL, so redirecting it here redirects all of them at once.
+ * this same REDIS_URL, so redirecting it here redirects all of them at once. This
+ * dev-vs-test isolation says nothing about isolation BETWEEN two concurrent e2e
+ * processes sharing the same test DB index — see the `TEST_RUN_REDIS_DB` comment
+ * below (WAVE 2.1 / E2E-INFRA-5) for that separate, only-partially-solved problem.
  *
  * MongoDB database name is derived per-process (not a shared `korva_test`
  * constant): `MONGODB_URI ??=` is only ever assigned once per OS process — Jest
@@ -39,9 +42,64 @@ import { randomUUID } from 'node:crypto';
  */
 const TEST_RUN_DB_NAME = `korva_test_${process.pid}_${process.env.JEST_WORKER_ID ?? '0'}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
+/**
+ * WAVE 2.1 / E2E-INFRA-5 — Redis per-process isolation, and why this is only a
+ * PARTIAL analog of the Mongo fix above.
+ *
+ * The Mongo fix works because a database *name* is an arbitrary string — the
+ * `??=` guard lets each process mint a collision-proof, effectively-unbounded
+ * name (`pid` + `JEST_WORKER_ID` + a fresh `randomUUID()` slice). Redis has no
+ * equivalent unbounded axis available from test infra alone:
+ *
+ *  - Every BullMQ consumer in this codebase (EventBusService, EventsProcessor,
+ *    QueueMetricsService, QueueAlertingService, ReconciliationSchedulerService,
+ *    InvoiceOverdueSchedulerService, QuoteExpirySchedulerService) builds its own
+ *    `new IORedis(configService.getOrThrow('REDIS_URL'), {...})` /
+ *    `new Queue/Worker/QueueEvents(name, { connection, ... })` independently —
+ *    there is no shared connection factory and none of them read any
+ *    "prefix"-shaped env var today, confirmed by grepping
+ *    `apps/api/src/**` for `prefix`, `BULLMQ_PREFIX`, `REDIS_KEY_PREFIX`
+ *    (nothing found). So a per-process *BullMQ* `prefix` — the option BullMQ
+ *    itself recommends specifically to namespace all of a queue's keys under
+ *    the same Redis DB — cannot be injected from `env.setup.ts` alone; it
+ *    would require adding `prefix: configService.get('BULLMQ_PREFIX')` to
+ *    each of those constructors, i.e. editing business-domain files, which is
+ *    out of this file's ownership. See WAVE 2.1 AGENT G's final report
+ *    (§11, Cross-agent dependency) for the exact proposed diff.
+ *  - The tempting Redis-native workaround — pass a `keyPrefix` on the ioredis
+ *    connection itself via a `REDIS_URL` query string (ioredis's own
+ *    `parseURL` merges *any* query param into connection options, so this
+ *    genuinely requires zero code changes) — was tried and empirically
+ *    rejected: BullMQ's `RedisConnection` constructor throws synchronously
+ *    ("BullMQ: ioredis does not support ioredis prefixes, use the prefix
+ *    option instead") the moment it sees `connection.options.keyPrefix` set,
+ *    for any of the Queue/Worker/QueueEvents in `apps/api/src/**`. Confirmed
+ *    with a throwaway two-Queue/two-Worker probe against the real dev Redis
+ *    before writing this comment — this is not a theoretical concern.
+ *
+ * What's left, and genuinely achievable from test infra alone, is widening the
+ * existing DB-index isolation (dev uses implicit DB 0; test used a hardcoded
+ * DB 1) from "fixed, shared by every concurrent e2e process" to "one of 15
+ * DB indices (1-15, DB 0 reserved for dev), chosen once per process". Redis's
+ * default `databases` config is 16 (confirmed via `CONFIG GET databases`
+ * against the docker-compose Redis), so this is a HARD, low ceiling: with N
+ * concurrent e2e processes each picking uniformly at random from 15 slots,
+ * two of them collide with ~50% probability once N reaches ~5 (birthday
+ * paradox), and any two that do land on the same index are back to full
+ * cross-process BullMQ job visibility, exactly the original bug. This is
+ * strictly better than the old fixed-DB-1 behavior (which guaranteed a
+ * collision the instant a second e2e process ran at all) but is NOT the
+ * "closes collisions" guarantee the Mongo fix provides — see the final
+ * report's Limitations section. `??=` guards this exactly like
+ * `TEST_RUN_DB_NAME`/`MONGODB_URI` above: computed fresh on first module load
+ * per OS process, then pinned via `process.env` for every subsequent
+ * `*.e2e-spec.ts` file Jest re-executes in that same process.
+ */
+const TEST_RUN_REDIS_DB = 1 + Math.floor(Math.random() * 15);
+
 process.env.NODE_ENV ??= 'test';
 process.env.MONGODB_URI ??= `mongodb://korva:korva@localhost:27017/${TEST_RUN_DB_NAME}?authSource=admin&replicaSet=rs0`;
-process.env.REDIS_URL ??= 'redis://localhost:6380/1';
+process.env.REDIS_URL ??= `redis://localhost:6380/${TEST_RUN_REDIS_DB}`;
 process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.JWT_REFRESH_SECRET ??= 'test-jwt-refresh-secret';
 

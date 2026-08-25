@@ -40,3 +40,14 @@ export const createPublicOrderSchema = z.object({
   contact: publicContactSchema,
 });
 export type CreatePublicOrderInput = z.infer<typeof createPublicOrderSchema>;
+
+/**
+ * Query for the customer-facing order/booking lookup endpoints. `email` is the ONLY proof of
+ * ownership accepted — never the order number / booking id alone (that would let an attacker
+ * enumerate valid order numbers by trying them without any credential). See PublicService#trackOrder
+ * and #trackBooking for the matching generic-404 behavior on any mismatch.
+ */
+export const trackByEmailQuerySchema = z.object({
+  email: z.string().email(),
+});
+export type TrackByEmailQuery = z.infer<typeof trackByEmailQuerySchema>;

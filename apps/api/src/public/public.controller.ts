@@ -6,10 +6,12 @@ import {
   createPublicOrderSchema,
   listPublicOffersQuerySchema,
   publicAvailabilityQuerySchema,
+  trackByEmailQuerySchema,
   type CreatePublicBookingInput,
   type CreatePublicOrderInput,
   type ListPublicOffersQuery,
   type PublicAvailabilityQuery,
+  type TrackByEmailQuery,
 } from '@korva/validation';
 import { PublicService } from './public.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -23,6 +25,11 @@ import { Public } from '../common/decorators/public.decorator';
  * making a rapid calendar-flooding burst meaningfully slower from a single source. This is an
  * anti-abuse throttle, not a defense against a distributed/botnet attacker spreading requests
  * across many IPs — see docs/PRODUCTION_READINESS.md for that broader, separately-scoped gap.
+ *
+ * Reused (not redefined) on the GET order/booking tracking lookups below for the same reason:
+ * each request there tests one guessed order number/booking id + email combination, so this is
+ * exactly the kind of low-volume-for-a-real-customer, high-value-for-an-enumeration-attempt
+ * route this limit was designed for.
  */
 const PUBLIC_BOOKING_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
@@ -81,5 +88,33 @@ export class PublicController {
     body: CreatePublicOrderInput,
   ) {
     return this.publicService.createOrder(slug, body);
+  }
+
+  /**
+   * Customer order tracking — never authenticated, so `email` (query, validated below) is the
+   * only accepted proof of ownership; the order number in the path is never sufficient on its
+   * own. See PublicService#trackOrder for the generic-404 requirement this enforces.
+   */
+  @Throttle(PUBLIC_BOOKING_THROTTLE)
+  @Get('orders/:orderNumber')
+  trackOrder(
+    @Param('organizationSlug') slug: string,
+    @Param('orderNumber') orderNumber: string,
+    @Query(new ZodValidationPipe(trackByEmailQuerySchema))
+    query: TrackByEmailQuery,
+  ) {
+    return this.publicService.trackOrder(slug, orderNumber, query.email);
+  }
+
+  /** Same email-as-sole-authorization model as trackOrder above. */
+  @Throttle(PUBLIC_BOOKING_THROTTLE)
+  @Get('bookings/:bookingId')
+  trackBooking(
+    @Param('organizationSlug') slug: string,
+    @Param('bookingId') bookingId: string,
+    @Query(new ZodValidationPipe(trackByEmailQuerySchema))
+    query: TrackByEmailQuery,
+  ) {
+    return this.publicService.trackBooking(slug, bookingId, query.email);
   }
 }

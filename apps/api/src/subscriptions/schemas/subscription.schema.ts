@@ -27,6 +27,31 @@ export class Subscription {
 
   @Prop({ required: true })
   currentPeriodEnd!: Date;
+
+  /** Whether the subscription is scheduled to become 'canceled' once currentPeriodEnd is reached. */
+  @Prop({ type: Boolean, default: false })
+  cancelAtPeriodEnd!: boolean;
+
+  /** When cancelAtPeriodEnd was last set to true (a cancel-at-period-end request). */
+  @Prop({ type: Date, default: null })
+  cancelRequestedAt!: Date | null;
+
+  /** When status actually became 'canceled' (immediate cancel, or the period scheduler). */
+  @Prop({ type: Date, default: null })
+  canceledAt!: Date | null;
+
+  /**
+   * Computed, stored-only proration from the most recent mid-period changePlan() — positive
+   * means owed, negative means a credit. Never actually charged: no PSP integration exists yet.
+   */
+  @Prop({ type: Number, default: null })
+  prorationAmount!: number | null;
+
+  @Prop({ type: String, default: null })
+  prorationCurrency!: string | null;
+
+  @Prop({ type: Date, default: null })
+  prorationCalculatedAt!: Date | null;
 }
 
 export const SubscriptionSchema = SchemaFactory.createForClass(Subscription);

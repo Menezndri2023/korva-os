@@ -27,6 +27,8 @@ interface AuthPayload {
 interface OrganizationPayload {
   id: string;
   enabledModules: string[];
+  logo?: string;
+  brandColor?: string;
 }
 interface PlanPayload {
   key: string;
@@ -153,6 +155,50 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
       .send({ enabledModules: ['crm', 'workflow'] })
       .expect(403);
     expect(asError(res.body).code).toBe('MODULE_NOT_IN_PLAN');
+  });
+
+  it('accepts a valid hex brandColor and persists it through PATCH /organizations/me', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'org-branding@korva.test',
+      'Branding Org',
+    );
+
+    const patchRes = await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({
+        brandColor: '#1a73e8',
+        logo: 'https://cdn.korva.test/logos/branding-org.png',
+      })
+      .expect(200);
+    const patched = asSuccess<OrganizationPayload>(patchRes.body);
+    expect(patched.brandColor).toBe('#1a73e8');
+    expect(patched.logo).toBe('https://cdn.korva.test/logos/branding-org.png');
+
+    const meRes = await request(server)
+      .get('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+    expect(asSuccess<OrganizationPayload>(meRes.body).brandColor).toBe(
+      '#1a73e8',
+    );
+  });
+
+  it('rejects a brandColor that is not a valid hex color', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'org-branding-invalid@korva.test',
+      'Branding Invalid Org',
+    );
+
+    const res = await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ brandColor: 'not-a-color' })
+      .expect(400);
+    expect(asError(res.body).code).toBe('VALIDATION_ERROR');
   });
 });
 

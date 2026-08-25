@@ -127,6 +127,11 @@ export class UploadsController {
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Length', file.size.toString());
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    // Defense in depth alongside LocalDiskStorageEngine's magic-byte check: even though every
+    // stored file's content is now verified to actually match its extension at upload time,
+    // never let a browser MIME-sniff this response into something other than the declared
+    // image type (e.g. as HTML, if a legacy sniffing algorithm ever disagreed with it).
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     file.stream.pipe(res);
   }
 

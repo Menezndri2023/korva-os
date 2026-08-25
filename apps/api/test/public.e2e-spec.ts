@@ -44,6 +44,25 @@ interface PublicOrderPayload {
   total: number;
   status: string;
 }
+interface PublicOrganizationPayload {
+  name: string;
+  enabledModules: string[];
+  logo?: string;
+  brandColor?: string;
+}
+interface TrackedOrderPayload {
+  number: string;
+  status: string;
+  total: number;
+  currency: string;
+  items: { description: string; quantity: number; unitPrice: number }[];
+}
+interface TrackedBookingPayload {
+  id: string;
+  status: string;
+  startAt: string;
+  endAt: string;
+}
 
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
@@ -235,6 +254,138 @@ describe('Public storefront API (e2e)', () => {
     });
   });
 
+  describe('storefront branding', () => {
+    it('exposes logo and brandColor publicly once set, and omits brandColor when unset', async () => {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        'storefront-branding@korva.test',
+        'Branding Storefront Org',
+      );
+
+      const before = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      expect(
+        asSuccess<PublicOrganizationPayload>(before.body).brandColor,
+      ).toBeUndefined();
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          logo: 'https://cdn.korva.test/logos/branding-storefront.png',
+          brandColor: '#ff6600',
+        })
+        .expect(200);
+
+      const after = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const info = asSuccess<PublicOrganizationPayload>(after.body);
+      expect(info.logo).toBe(
+        'https://cdn.korva.test/logos/branding-storefront.png',
+      );
+      expect(info.brandColor).toBe('#ff6600');
+    });
+  });
+
+  describe('order tracking', () => {
+    let slug: string;
+    let activeOfferId: string;
+    let orderNumber: string;
+    const customerEmail = 'track-me@customer.test';
+
+    beforeAll(async () => {
+      const {
+        accessToken,
+        organizationId,
+        slug: orgSlug,
+      } = await setupStorefrontOrg(
+        'storefront-order-tracking@korva.test',
+        'Order Tracking Org',
+      );
+      slug = orgSlug;
+
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Tracked Mug',
+          status: 'active',
+          pricing: { amount: 15, currency: 'EUR' },
+        })
+        .expect(201);
+      activeOfferId = asSuccess<OfferPayload>(offerRes.body).id;
+
+      const orderRes = await request(server)
+        .post(`/api/v1/public/${slug}/orders`)
+        .send({
+          items: [{ offerId: activeOfferId, quantity: 2 }],
+          currency: 'EUR',
+          contact: { email: customerEmail, firstName: 'Track' },
+        })
+        .expect(201);
+      orderNumber = asSuccess<PublicOrderPayload>(orderRes.body).number;
+    });
+
+    it('returns the real order when the order number and email both match', async () => {
+      const res = await request(server)
+        .get(
+          `/api/v1/public/${slug}/orders/${orderNumber}?email=${encodeURIComponent(customerEmail)}`,
+        )
+        .expect(200);
+      const order = asSuccess<TrackedOrderPayload>(res.body);
+      expect(order.number).toBe(orderNumber);
+      expect(order.status).toBe('pending');
+      expect(order.total).toBe(30);
+      expect(order.currency).toBe('EUR');
+      expect(order.items).toEqual([
+        { description: 'Tracked Mug', quantity: 2, unitPrice: 15 },
+      ]);
+    });
+
+    it('returns a generic 404 for a real order number with the wrong email (never distinguished from "not found")', async () => {
+      const res = await request(server)
+        .get(
+          `/api/v1/public/${slug}/orders/${orderNumber}?email=${encodeURIComponent('attacker@evil.test')}`,
+        )
+        .expect(404);
+      expect(asError(res.body).code).toBe('ORDER_NOT_FOUND');
+    });
+
+    it('returns the same generic 404 for an order number that does not exist at all', async () => {
+      const res = await request(server)
+        .get(
+          `/api/v1/public/${slug}/orders/CMD-DOES-NOT-EXIST?email=${encodeURIComponent(customerEmail)}`,
+        )
+        .expect(404);
+      expect(asError(res.body).code).toBe('ORDER_NOT_FOUND');
+    });
+
+    it('returns the same generic 404 when the real order number is looked up under a different organization (cross-tenant)', async () => {
+      const { slug: otherSlug } = await setupStorefrontOrg(
+        'storefront-order-tracking-other@korva.test',
+        'Order Tracking Other Org',
+      );
+
+      const res = await request(server)
+        .get(
+          `/api/v1/public/${otherSlug}/orders/${orderNumber}?email=${encodeURIComponent(customerEmail)}`,
+        )
+        .expect(404);
+      expect(asError(res.body).code).toBe('ORDER_NOT_FOUND');
+    });
+
+    it('rejects a lookup with no email query param as a validation error, not a 404', async () => {
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}/orders/${orderNumber}`)
+        .expect(400);
+      expect(asError(res.body).code).toBe('VALIDATION_ERROR');
+    });
+  });
+
   describe('booking flow via the storefront', () => {
     let accessToken: string;
     let organizationId: string;
@@ -311,6 +462,109 @@ describe('Public storefront API (e2e)', () => {
         .expect(201);
       const booking = asSuccess<PublicBookingPayload>(res.body);
       expect(booking.status).toBe('confirmed');
+    });
+  });
+
+  describe('booking tracking', () => {
+    let slug: string;
+    let resourceId: string;
+    let offerId: string;
+    let bookingId: string;
+    const monday = nextMonday();
+    const customerEmail = 'track-booking@customer.test';
+
+    beforeAll(async () => {
+      const {
+        accessToken,
+        organizationId,
+        slug: orgSlug,
+      } = await setupStorefrontOrg(
+        'storefront-booking-tracking@korva.test',
+        'Booking Tracking Org',
+      );
+      slug = orgSlug;
+
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Tracked Studio',
+          type: 'room',
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'booking',
+          name: 'Tracked Yoga Class',
+          status: 'active',
+          pricing: { amount: 20, currency: 'EUR' },
+        })
+        .expect(201);
+      offerId = asSuccess<OfferPayload>(offerRes.body).id;
+
+      const bookingRes = await request(server)
+        .post(`/api/v1/public/${slug}/bookings`)
+        .send({
+          resourceId,
+          offerId,
+          startAt: `${monday}T12:00:00.000Z`,
+          endAt: `${monday}T13:00:00.000Z`,
+          contact: { email: customerEmail, firstName: 'Tracked' },
+        })
+        .expect(201);
+      bookingId = asSuccess<PublicBookingPayload>(bookingRes.body).id;
+    });
+
+    it('returns the real booking when the booking id and email both match', async () => {
+      const res = await request(server)
+        .get(
+          `/api/v1/public/${slug}/bookings/${bookingId}?email=${encodeURIComponent(customerEmail)}`,
+        )
+        .expect(200);
+      const booking = asSuccess<TrackedBookingPayload>(res.body);
+      expect(booking.id).toBe(bookingId);
+      expect(booking.status).toBe('confirmed');
+    });
+
+    it('returns a generic 404 for a real booking id with the wrong email', async () => {
+      const res = await request(server)
+        .get(
+          `/api/v1/public/${slug}/bookings/${bookingId}?email=${encodeURIComponent('attacker@evil.test')}`,
+        )
+        .expect(404);
+      expect(asError(res.body).code).toBe('BOOKING_NOT_FOUND');
+    });
+
+    it('returns the same generic 404 for a well-formed but non-existent booking id', async () => {
+      const res = await request(server)
+        .get(
+          `/api/v1/public/${slug}/bookings/000000000000000000000000?email=${encodeURIComponent(customerEmail)}`,
+        )
+        .expect(404);
+      expect(asError(res.body).code).toBe('BOOKING_NOT_FOUND');
+    });
+
+    it('returns the same generic 404 when the real booking id is looked up under a different organization (cross-tenant)', async () => {
+      const { slug: otherSlug } = await setupStorefrontOrg(
+        'storefront-booking-tracking-other@korva.test',
+        'Booking Tracking Other Org',
+      );
+
+      const res = await request(server)
+        .get(
+          `/api/v1/public/${otherSlug}/bookings/${bookingId}?email=${encodeURIComponent(customerEmail)}`,
+        )
+        .expect(404);
+      expect(asError(res.body).code).toBe('BOOKING_NOT_FOUND');
     });
   });
 

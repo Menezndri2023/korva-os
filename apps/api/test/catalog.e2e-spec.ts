@@ -1006,13 +1006,57 @@ describe('Catalog module (e2e)', () => {
       expect(asError(res.body).code).toBe('UNSUPPORTED_FILE_TYPE');
     });
 
+    it('rejects a file whose real bytes do not match its declared (spoofable) Content-Type, and serves genuine uploads with X-Content-Type-Options: nosniff', async () => {
+      // fileFilter and the mimetype->extension lookup only ever see the client-supplied
+      // multipart Content-Type field, never the actual bytes — before LocalDiskStorageEngine's
+      // magic-byte check, this exact request (a plain-text payload declared as image/png) would
+      // have been accepted, written to disk as `<uuid>.png`, and served back at a public URL
+      // with `Content-Type: image/png`, a content-type-confusion risk on a public endpoint.
+      // Shares one registration with the nosniff-header assertion below (rather than two
+      // separate tests) to avoid tripping AuthController's AUTH_THROTTLE (30 req/60s) when this
+      // describe block's already-numerous /auth/register calls run back-to-back.
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'uploads-spoofed@korva.test',
+        'Uploads Spoofed Org',
+      );
+
+      const spoofedRes = await request(server)
+        .post('/api/v1/uploads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .attach('file', Buffer.from('<script>alert(1)</script>'), {
+          filename: 'fake.png',
+          contentType: 'image/png',
+        })
+        .expect(415);
+      expect(asError(spoofedRes.body).code).toBe('UNSUPPORTED_FILE_TYPE');
+
+      const uploadRes = await request(server)
+        .post('/api/v1/uploads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .attach('file', pngBuffer, 'photo.png')
+        .expect(201);
+      const upload = asSuccess<UploadPayload>(uploadRes.body);
+
+      const fileRes = await request(server)
+        .get(new URL(upload.url).pathname)
+        .expect(200);
+      expect(fileRes.headers['x-content-type-options']).toBe('nosniff');
+    });
+
     it('rejects a file over the size limit', async () => {
       const { accessToken, organizationId } = await registerOrgAndToken(
         'uploads-oversized@korva.test',
         'Uploads Oversized Org',
       );
 
-      const oversizedBuffer = Buffer.alloc(6 * 1024 * 1024, 1); // 6MB > 5MB limit
+      // Starts with real PNG magic bytes so this exercises the size limit specifically (413),
+      // not the unrelated magic-byte signature check (415) added alongside it.
+      const oversizedBuffer = Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        Buffer.alloc(6 * 1024 * 1024, 1), // 6MB > 5MB limit
+      ]);
       const res = await request(server)
         .post('/api/v1/uploads')
         .set('Authorization', `Bearer ${accessToken}`)

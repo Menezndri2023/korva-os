@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
+import { createHmac } from 'node:crypto';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -43,6 +44,7 @@ interface MessagePayload {
   status: string;
   body: string;
   to?: string;
+  providerReference?: string;
 }
 interface NotificationPayload {
   id: string;
@@ -87,7 +89,11 @@ describe('Communication module (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    // rawBody: true mirrors the option main.ts's bootstrap() passes to NestFactory.create — this
+    // testing app is built via TestingModule.createNestApplication() instead, which bypasses
+    // main.ts entirely, so the option has to be repeated here for the webhook tests below to be
+    // able to exercise real Svix signature verification (see resend-webhook.controller.ts).
+    app = moduleFixture.createNestApplication({ rawBody: true });
     app.setGlobalPrefix('api/v1');
     await app.init();
     server = app.getHttpServer();
@@ -497,16 +503,107 @@ describe('Communication module (e2e)', () => {
   });
 
   /**
-   * Full unit coverage of the actual signature-verification + status-update logic lives in
+   * Full unit coverage of the actual signature-verification + status-update branching lives in
    * resend-webhook.controller.spec.ts / resend-webhook.service.spec.ts / verify-svix-signature
-   * .spec.ts (constructing real signed payloads directly against the controller, no HTTP layer
-   * involved). What's left to prove here, through the real bootstrapped HTTP stack, is the part
-   * that's specific to going through an actual request: header validation, and the documented
-   * raw-body limitation (see resend-webhook.controller.ts's class doc) — this app is built the
-   * same way main.ts's bootstrap() builds it (no `{ rawBody: true }`), so `req.rawBody` is
-   * genuinely unavailable here too, the same as it would be in production today.
+   * .spec.ts (constructing signed payloads directly against the controller, no HTTP layer
+   * involved). What's proved here, through the real bootstrapped HTTP stack with real Mongo, is
+   * everything that only shows up end-to-end: the raw body actually round-tripping through
+   * Express/Nest (rawBody: true — see the createNestApplication() call above), a real message's
+   * `providerReference` actually being matched and its `status` actually persisted, the ordering/
+   * idempotency guard in messages.repository.ts's updateStatusByProviderReference, and tenant
+   * scoping.
    */
   describe('resend delivery webhook (e2e)', () => {
+    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET as string;
+    let accessToken: string;
+    let organizationId: string;
+    let conversationId: string;
+
+    beforeAll(async () => {
+      const ctx = await registerOrgAndContact(
+        'webhook-owner@korva.test',
+        'Webhook Org',
+        'webhook-contact@customer.test',
+      );
+      accessToken = ctx.accessToken;
+      organizationId = ctx.organizationId;
+
+      const convoRes = await request(server)
+        .post('/api/v1/conversations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId: ctx.contactId, channel: 'email' })
+        .expect(201);
+      conversationId = asSuccess<ConversationPayload>(convoRes.body).id;
+    });
+
+    /** Sends a real outbound email message and returns its id + the (real, log-provider) providerReference the webhook targets. */
+    async function sendFreshMessage(): Promise<{
+      messageId: string;
+      providerReference: string;
+    }> {
+      const res = await request(server)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ body: 'Webhook e2e probe message' })
+        .expect(201);
+      const message = asSuccess<MessagePayload>(res.body);
+      expect(message.status).toBe('sent');
+      expect(message.providerReference).toBeTruthy();
+      return {
+        messageId: message.id,
+        providerReference: message.providerReference as string,
+      };
+    }
+
+    async function getMessageStatus(messageId: string): Promise<string> {
+      const res = await request(server)
+        .get(`/api/v1/conversations/${conversationId}/messages`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const messages = asSuccess<MessagePayload[]>(res.body);
+      const message = messages.find((m) => m.id === messageId);
+      if (!message) throw new Error(`message ${messageId} not found`);
+      return message.status;
+    }
+
+    function sign(svixId: string, svixTimestamp: string, rawBody: string) {
+      const secretBytes = Buffer.from(
+        webhookSecret.replace(/^whsec_/, ''),
+        'base64',
+      );
+      const digest = createHmac('sha256', secretBytes)
+        .update(`${svixId}.${svixTimestamp}.${rawBody}`, 'utf8')
+        .digest('base64');
+      return `v1,${digest}`;
+    }
+
+    /** Posts a real HTTP request with the exact same raw bytes that were signed — not a re-serialized object — the same way Resend actually calls this endpoint. */
+    function postWebhook(
+      payload: unknown,
+      opts: {
+        svixId?: string;
+        svixTimestamp?: string;
+        signature?: string;
+      } = {},
+    ) {
+      const rawBody = JSON.stringify(payload);
+      const svixId =
+        opts.svixId ?? `msg_${Math.random().toString(36).slice(2)}`;
+      const svixTimestamp =
+        opts.svixTimestamp ?? String(Math.floor(Date.now() / 1000));
+      const signature = opts.signature ?? sign(svixId, svixTimestamp, rawBody);
+      return request(server)
+        .post('/api/v1/webhooks/resend')
+        .set('svix-id', svixId)
+        .set('svix-timestamp', svixTimestamp)
+        .set('svix-signature', signature)
+        .type('json')
+        .send(rawBody);
+    }
+
     it('rejects with 400 when svix signature headers are missing', async () => {
       const res = await request(server)
         .post('/api/v1/webhooks/resend')
@@ -515,17 +612,170 @@ describe('Communication module (e2e)', () => {
       expect(asError(res.body).code).toBe('MISSING_SIGNATURE_HEADERS');
     });
 
-    it('fails closed with 503 when headers are present but req.rawBody is unavailable (known limitation, see resend-webhook.controller.ts)', async () => {
-      const res = await request(server)
-        .post('/api/v1/webhooks/resend')
-        .set('svix-id', 'msg_e2e')
-        .set('svix-timestamp', String(Math.floor(Date.now() / 1000)))
-        .set('svix-signature', 'v1,irrelevant-because-rawbody-check-runs-first')
-        .send({ type: 'email.delivered', data: { email_id: 'irrelevant' } })
-        .expect(503);
-      expect(asError(res.body).code).toBe(
-        'RESEND_WEBHOOK_RAW_BODY_UNAVAILABLE',
+    it('applies a correctly-signed email.delivered event to the target message end-to-end', async () => {
+      const { messageId, providerReference } = await sendFreshMessage();
+
+      const res = await postWebhook({
+        type: 'email.delivered',
+        data: { email_id: providerReference },
+      }).expect(200);
+      expect(asSuccess<{ received: boolean }>(res.body)).toEqual({
+        received: true,
+      });
+
+      expect(await getMessageStatus(messageId)).toBe('delivered');
+    });
+
+    it('rejects an incorrectly-signed payload with 401 and leaves the message untouched', async () => {
+      const { messageId, providerReference } = await sendFreshMessage();
+
+      const res = await postWebhook(
+        { type: 'email.delivered', data: { email_id: providerReference } },
+        { signature: 'v1,dGhpcyBpcyBub3QgdGhlIHJlYWwgc2lnbmF0dXJl' },
+      ).expect(401);
+      expect(asError(res.body).code).toBe('INVALID_WEBHOOK_SIGNATURE');
+
+      expect(await getMessageStatus(messageId)).toBe('sent');
+    });
+
+    it('is idempotent: redelivering the identical event twice is a no-op the second time, not an error or a duplicate side effect', async () => {
+      const { messageId, providerReference } = await sendFreshMessage();
+      const svixId = 'msg_replay_test';
+      const svixTimestamp = String(Math.floor(Date.now() / 1000));
+      const event = {
+        type: 'email.bounced',
+        data: { email_id: providerReference },
+      };
+
+      const first = await postWebhook(event, { svixId, svixTimestamp }).expect(
+        200,
       );
+      expect(asSuccess<{ received: boolean }>(first.body)).toEqual({
+        received: true,
+      });
+      expect(await getMessageStatus(messageId)).toBe('bounced');
+
+      // Exact same svix-id/timestamp/payload, as a real Resend redelivery would send.
+      const second = await postWebhook(event, {
+        svixId,
+        svixTimestamp,
+      }).expect(200);
+      expect(asSuccess<{ received: boolean }>(second.body)).toEqual({
+        received: true,
+      });
+      expect(await getMessageStatus(messageId)).toBe('bounced');
+    });
+
+    it('does not let a stale/out-of-order "delivered" event regress a message already marked "bounced"', async () => {
+      const { messageId, providerReference } = await sendFreshMessage();
+
+      await postWebhook({
+        type: 'email.bounced',
+        data: { email_id: providerReference },
+      }).expect(200);
+      expect(await getMessageStatus(messageId)).toBe('bounced');
+
+      // A "delivered" event arriving after a "bounced" one — e.g. redelivered out of order by
+      // Resend's at-least-once webhook delivery — must not undo the more specific, later outcome.
+      const res = await postWebhook({
+        type: 'email.delivered',
+        data: { email_id: providerReference },
+      }).expect(200);
+      expect(asSuccess<{ received: boolean }>(res.body)).toEqual({
+        received: true,
+      });
+      expect(await getMessageStatus(messageId)).toBe('bounced');
+    });
+
+    it('acknowledges an event for an unknown email_id gracefully, without crashing or affecting any message', async () => {
+      const res = await postWebhook({
+        type: 'email.delivered',
+        data: { email_id: 'email-id-nothing-in-this-app-ever-sent' },
+      }).expect(200);
+      expect(asSuccess<{ received: boolean }>(res.body)).toEqual({
+        received: true,
+      });
+    });
+
+    it('ignores an unhandled/unknown event type gracefully, without touching the message', async () => {
+      const { messageId, providerReference } = await sendFreshMessage();
+
+      const res = await postWebhook({
+        type: 'email.opened',
+        data: { email_id: providerReference },
+      }).expect(200);
+      expect(asSuccess<{ received: boolean }>(res.body)).toEqual({
+        received: true,
+      });
+
+      expect(await getMessageStatus(messageId)).toBe('sent');
+    });
+
+    it("scopes the update by providerReference: a webhook event can only ever affect the one message it is genuinely about, never another organization's message or one addressed by its internal id", async () => {
+      const other = await registerOrgAndContact(
+        'webhook-other-org@korva.test',
+        'Webhook Other Org',
+        'webhook-other-contact@customer.test',
+      );
+      const otherConvoRes = await request(server)
+        .post('/api/v1/conversations')
+        .set('Authorization', `Bearer ${other.accessToken}`)
+        .set('X-Organization-Id', other.organizationId)
+        .send({ contactId: other.contactId, channel: 'email' })
+        .expect(201);
+      const otherConversationId = asSuccess<ConversationPayload>(
+        otherConvoRes.body,
+      ).id;
+      const otherMsgRes = await request(server)
+        .post(`/api/v1/conversations/${otherConversationId}/messages`)
+        .set('Authorization', `Bearer ${other.accessToken}`)
+        .set('X-Organization-Id', other.organizationId)
+        .send({ body: 'Other org message' })
+        .expect(201);
+      const otherMessage = asSuccess<MessagePayload>(otherMsgRes.body);
+
+      const { messageId, providerReference } = await sendFreshMessage();
+
+      // Webhook event genuinely about our own org's message.
+      await postWebhook({
+        type: 'email.delivered',
+        data: { email_id: providerReference },
+      }).expect(200);
+      expect(await getMessageStatus(messageId)).toBe('delivered');
+
+      // The other organization's message, sent independently around the same time, must be
+      // completely unaffected — proving the lookup is scoped to the one matching
+      // providerReference, not a broader/organization-blind update.
+      const otherStatusRes = await request(server)
+        .get(`/api/v1/conversations/${otherConversationId}/messages`)
+        .set('Authorization', `Bearer ${other.accessToken}`)
+        .set('X-Organization-Id', other.organizationId)
+        .expect(200);
+      const otherStatus = asSuccess<MessagePayload[]>(otherStatusRes.body).find(
+        (m) => m.id === otherMessage.id,
+      );
+      expect(otherStatus?.status).toBe('sent');
+
+      // A webhook event carrying a message's internal Mongo id instead of its real
+      // providerReference must not match anything either — internal ids are never a valid
+      // lookup key for this endpoint, so they can't be used to enumerate/target arbitrary
+      // messages across organizations.
+      const byInternalIdRes = await postWebhook({
+        type: 'email.delivered',
+        data: { email_id: otherMessage.id },
+      }).expect(200);
+      expect(asSuccess<{ received: boolean }>(byInternalIdRes.body)).toEqual({
+        received: true,
+      });
+      const stillUnaffectedRes = await request(server)
+        .get(`/api/v1/conversations/${otherConversationId}/messages`)
+        .set('Authorization', `Bearer ${other.accessToken}`)
+        .set('X-Organization-Id', other.organizationId)
+        .expect(200);
+      const stillUnaffected = asSuccess<MessagePayload[]>(
+        stillUnaffectedRes.body,
+      ).find((m) => m.id === otherMessage.id);
+      expect(stillUnaffected?.status).toBe('sent');
     });
   });
 });

@@ -11,9 +11,15 @@ export const createOrganizationSchema = z.object({
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 
+/** e.g. "#1a73e8" or "#fff" — a single storefront accent color, deliberately not a full theme. */
+const hexColorSchema = z
+  .string()
+  .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Must be a hex color, e.g. #1a73e8');
+
 export const updateOrganizationSchema = createOrganizationSchema.partial().extend({
   legalName: z.string().max(200).optional(),
   logo: z.string().url().optional(),
+  brandColor: hexColorSchema.optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
 });
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;

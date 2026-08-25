@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { PlansService } from './plans.service';
@@ -15,6 +19,34 @@ function addOneMonth(date: Date): Date {
   const result = new Date(date);
   result.setUTCMonth(result.getUTCMonth() + 1);
   return result;
+}
+
+/**
+ * Fair-share proration for a mid-period plan change: the fraction of the CURRENT period still
+ * remaining, multiplied by the price delta between the old and new plan. Positive means the new
+ * plan is more expensive for the time left (amount owed), negative means a credit. Returns null
+ * when there is nothing sensible to compute (no prior period, or the two plans don't share a
+ * currency) — the caller stores null in that case rather than a misleading 0.
+ */
+function computeProration(
+  oldPriceAmount: number,
+  oldPriceCurrency: string,
+  newPriceAmount: number,
+  newPriceCurrency: string,
+  currentPeriodStart: Date,
+  currentPeriodEnd: Date,
+  now: Date,
+): number | null {
+  if (oldPriceCurrency !== newPriceCurrency) return null;
+  const totalMs = currentPeriodEnd.getTime() - currentPeriodStart.getTime();
+  if (totalMs <= 0) return null;
+  const remainingMs = Math.min(
+    totalMs,
+    Math.max(0, currentPeriodEnd.getTime() - now.getTime()),
+  );
+  const remainingFraction = remainingMs / totalMs;
+  const delta = newPriceAmount - oldPriceAmount;
+  return Math.round(delta * remainingFraction * 100) / 100;
 }
 
 @Injectable()
@@ -87,12 +119,43 @@ export class SubscriptionsService {
       }
     }
 
+    const existing =
+      await this.subscriptionsRepository.findForOrganization(organizationId);
+
+    // Only worth computing against a genuinely still-running prior period — a subscription
+    // already past its period end is about to be handled by the period scheduler anyway, and
+    // proration against a period that's already over is meaningless.
+    let prorationAmount: number | null = null;
+    let prorationCurrency: string | null = null;
     const now = new Date();
+    if (existing && existing.currentPeriodEnd.getTime() > now.getTime()) {
+      const oldPlan = await this.plansService.getById(
+        existing.planId.toString(),
+      );
+      prorationAmount = computeProration(
+        oldPlan.priceAmount,
+        oldPlan.priceCurrency,
+        plan.priceAmount,
+        plan.priceCurrency,
+        existing.currentPeriodStart,
+        existing.currentPeriodEnd,
+        now,
+      );
+      prorationCurrency = prorationAmount !== null ? plan.priceCurrency : null;
+    }
+
     const updated = await this.subscriptionsRepository.update(organizationId, {
       planId: plan._id,
       status: 'active',
       currentPeriodStart: now,
       currentPeriodEnd: addOneMonth(now),
+      // Choosing a new plan is an active intent to keep the subscription — any pending
+      // cancel-at-period-end request no longer applies to the (freshly extended) period.
+      cancelAtPeriodEnd: false,
+      cancelRequestedAt: null,
+      prorationAmount,
+      prorationCurrency,
+      prorationCalculatedAt: prorationAmount !== null ? now : null,
     });
     if (!updated) {
       throw new NotFoundException({
@@ -107,7 +170,84 @@ export class SubscriptionsService {
       action: 'SETTINGS_CHANGE',
       entity: 'subscription',
       entityId: updated.id as string,
-      metadata: { plan: planKey },
+      metadata: { plan: planKey, prorationAmount, prorationCurrency },
+    });
+
+    return updated;
+  }
+
+  /**
+   * `immediate: true` revokes access now — status becomes 'canceled' right away.
+   * `immediate: false` (default) is the standard SaaS UX: the subscription stays 'active' and
+   * usable until currentPeriodEnd, only flagging cancelAtPeriodEnd — SubscriptionPeriodScheduler
+   * performs the actual terminal transition once that date passes. See reactivate() for undoing
+   * this while still within the grace window.
+   */
+  async cancel(
+    organizationId: string,
+    userId: string,
+    immediate: boolean,
+  ): Promise<SubscriptionDocument> {
+    // Surfaces a clean 404 (no subscription at all) distinctly from the 409s below.
+    await this.getForOrganization(organizationId);
+
+    const updated = immediate
+      ? await this.subscriptionsRepository.cancelNow(organizationId)
+      : await this.subscriptionsRepository.requestCancelAtPeriodEnd(
+          organizationId,
+        );
+
+    if (!updated) {
+      throw new ConflictException({
+        code: 'SUBSCRIPTION_CANCEL_CONFLICT',
+        message: immediate
+          ? 'This subscription is already canceled'
+          : 'This subscription is already canceled or already scheduled to cancel at period end',
+      });
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'SETTINGS_CHANGE',
+      entity: 'subscription',
+      entityId: updated.id as string,
+      metadata: { cancel: immediate ? 'immediate' : 'at_period_end' },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Undoes a pending cancel-at-period-end request while still within the grace window (status
+   * still 'active' and currentPeriodEnd still in the future — see
+   * SubscriptionsRepository.reactivateIfEligible). Fails on an immediately-canceled subscription
+   * (there is no grace window for that) and on one whose period has already elapsed, even if the
+   * scheduler hasn't ticked yet to formally flip it to 'canceled'.
+   */
+  async reactivate(
+    organizationId: string,
+    userId: string,
+  ): Promise<SubscriptionDocument> {
+    await this.getForOrganization(organizationId);
+
+    const updated =
+      await this.subscriptionsRepository.reactivateIfEligible(organizationId);
+    if (!updated) {
+      throw new ConflictException({
+        code: 'SUBSCRIPTION_REACTIVATE_NOT_ELIGIBLE',
+        message:
+          'This subscription cannot be reactivated — it is not pending cancellation within its grace window',
+      });
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'SETTINGS_CHANGE',
+      entity: 'subscription',
+      entityId: updated.id as string,
+      metadata: { reactivated: true },
     });
 
     return updated;

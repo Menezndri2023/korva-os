@@ -34,17 +34,12 @@ const RESEND_WEBHOOK_THROTTLE = { default: { limit: 60, ttl: 60_000 } };
  * Public by necessity (Resend calls it, not an authenticated KORVA user); the ONLY trust boundary
  * is svix signature verification below — there is no tenant/JWT context on this route at all.
  *
- * KNOWN LIMITATION (see the raw-body branch below): verifying a Svix signature requires the
- * exact raw request bytes Resend sent, not a re-serialization of `req.body`. Getting real raw
- * bytes into `req.rawBody` requires `NestFactory.create(AppModule, { rawBody: true })` in
- * main.ts's bootstrap() — confirmed empirically (a module-scoped `express.raw()` middleware
- * registered via NestModule.configure() runs AFTER Nest's automatic global JSON body parser,
- * which already consumed the stream; @nestjs/core's own registerParserMiddleware() runs before
- * registerModules() in NestApplication.init()). That one-line main.ts change is outside this
- * lot's ownership this wave (main.ts is scoped to the structured-logging change only — see
- * common/logging/), so this endpoint fails closed instead of either trusting an unverified
- * payload or reconstructing signed bytes from parsed JSON (unreliable — see verify-svix-
- * signature.ts). Flagged in the final report as a one-line cross-agent dependency.
+ * Verifying a Svix signature requires the exact raw request bytes Resend sent, not a
+ * re-serialization of `req.body` (unreliable — see verify-svix-signature.ts). `req.rawBody` is
+ * populated by `NestFactory.create(AppModule, { rawBody: true })` in main.ts's bootstrap() (wired
+ * up in Wave 2.1 — previously this endpoint failed closed with 503 because that option was
+ * missing; the `!rawBody` branch below is now a defense-in-depth guard against that
+ * misconfiguration recurring, not the expected steady-state path).
  */
 @Public()
 @Controller('webhooks/resend')

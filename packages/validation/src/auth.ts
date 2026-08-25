@@ -44,3 +44,14 @@ export const verifyEmailSchema = z.object({
   token: z.string().min(1),
 });
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
+export const createApiKeySchema = z.object({
+  name: z.string().min(1).max(120),
+  /** Ties the key to an existing Role of the caller's organization — its permissions become
+   *  the key's permissions. See ApiKeysService.create. */
+  roleId: z.string().min(1),
+  /** ISO 8601 datetime string; must be in the future (checked server-side). Omit for a
+   *  non-expiring key. */
+  expiresAt: z.string().datetime().optional(),
+});
+export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;

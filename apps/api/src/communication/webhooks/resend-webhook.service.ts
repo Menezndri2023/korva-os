@@ -49,8 +49,11 @@ export class ResendWebhookService {
         status,
       );
     if (!updated) {
+      // Two indistinguishable causes, both correctly a no-op: no message has this
+      // providerReference at all, or one does but its status already outranks this event (a
+      // stale/out-of-order redelivery) — see the guard in updateStatusByProviderReference.
       this.logger.warn(
-        `Resend "${type}" event for email_id=${data.email_id} matched no known message`,
+        `Resend "${type}" event for email_id=${data.email_id} was not applied (no matching message, or a newer status already recorded)`,
       );
       return { handled: false };
     }

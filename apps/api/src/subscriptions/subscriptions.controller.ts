@@ -1,6 +1,11 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { changePlanSchema, type ChangePlanInput } from '@korva/validation';
+import {
+  changePlanSchema,
+  type ChangePlanInput,
+  cancelSubscriptionSchema,
+  type CancelSubscriptionInput,
+} from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import type { AuthenticatedUser } from '../core/tenant/request-context.types';
 import { PlansService } from './plans.service';
@@ -43,6 +48,33 @@ export class SubscriptionsController {
       tenant.organizationId,
       user.userId,
       body.planKey,
+    );
+  }
+
+  @RequirePermissions('settings.manage')
+  @Post('subscriptions/cancel')
+  cancel(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(cancelSubscriptionSchema))
+    body: CancelSubscriptionInput,
+  ) {
+    return this.subscriptionsService.cancel(
+      tenant.organizationId,
+      user.userId,
+      body.immediate,
+    );
+  }
+
+  @RequirePermissions('settings.manage')
+  @Post('subscriptions/reactivate')
+  reactivate(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.subscriptionsService.reactivate(
+      tenant.organizationId,
+      user.userId,
     );
   }
 }

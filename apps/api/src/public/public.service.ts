@@ -1,4 +1,6 @@
 import { NotFoundException, Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import type { KorvaModule } from '@korva/types';
 import type {
   CreatePublicBookingInput,
@@ -13,6 +15,34 @@ import { ResourcesService } from '../booking/resources/resources.service';
 import { OrdersService } from '../commerce/orders/orders.service';
 import { ContactsService } from '../crm/contacts/contacts.service';
 import { OrganizationDocument } from '../organizations/schemas/organization.schema';
+import { Order, OrderDocument } from '../commerce/orders/schemas/order.schema';
+import {
+  Booking,
+  BookingDocument,
+} from '../booking/bookings/schemas/booking.schema';
+import {
+  Contact,
+  ContactDocument,
+} from '../crm/contacts/schemas/contact.schema';
+
+/**
+ * Same generic 404 for every reason a lookup can fail: unknown order/booking number, an
+ * order/booking that belongs to a different organization, and a genuine order/booking whose
+ * contact email doesn't match. Deliberately identical in shape and status code in all three
+ * cases — distinguishing "wrong email" from "doesn't exist" would let an attacker enumerate
+ * valid order/booking numbers by observing which guesses get a different error.
+ */
+function trackingNotFound(entity: 'order' | 'booking'): NotFoundException {
+  return new NotFoundException({
+    code: entity === 'order' ? 'ORDER_NOT_FOUND' : 'BOOKING_NOT_FOUND',
+    message: `${entity === 'order' ? 'Order' : 'Booking'} not found`,
+  });
+}
+
+/** Contact.email is stored lowercased/trimmed already; normalize the caller-supplied side too. */
+function emailsMatch(storedEmail: string, candidateEmail: string): boolean {
+  return storedEmail === candidateEmail.trim().toLowerCase();
+}
 
 /**
  * Backs the public, unauthenticated storefront API (`/public/:organizationSlug/...`). Never
@@ -31,6 +61,11 @@ export class PublicService {
     private readonly resourcesService: ResourcesService,
     private readonly ordersService: OrdersService,
     private readonly contactsService: ContactsService,
+    @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
+    @InjectModel(Booking.name)
+    private readonly bookingModel: Model<BookingDocument>,
+    @InjectModel(Contact.name)
+    private readonly contactModel: Model<ContactDocument>,
   ) {}
 
   private async resolveOrganization(
@@ -60,6 +95,7 @@ export class PublicService {
       currency: organization.currency,
       language: organization.language,
       logo: organization.logo,
+      brandColor: organization.brandColor,
       enabledModules: organization.enabledModules,
     };
   }
@@ -196,6 +232,84 @@ export class PublicService {
       total: order.total,
       currency: order.currency,
       status: order.status,
+    };
+  }
+
+  /**
+   * Customer-facing order lookup after the fact. `email` is the sole authorization check — it
+   * must match the email of the Contact the order was placed under. An order number alone is
+   * NOT sufficient (it's a small, sequential, human-readable identifier — trivially guessable/
+   * enumerable), so every failure path (unknown number, number belonging to another
+   * organization, correct number but wrong email) returns the exact same generic 404 via
+   * trackingNotFound(); see that helper's doc for why they must never be distinguishable.
+   */
+  async trackOrder(slug: string, orderNumber: string, email: string) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'commerce');
+    const organizationId = new Types.ObjectId(organization.id as string);
+
+    const order = await this.orderModel
+      .findOne({
+        organizationId,
+        number: orderNumber,
+      })
+      .exec();
+    if (!order) {
+      throw trackingNotFound('order');
+    }
+
+    const contact = await this.contactModel
+      .findOne({ _id: order.contactId, organizationId })
+      .exec();
+    if (!contact?.email || !emailsMatch(contact.email, email)) {
+      throw trackingNotFound('order');
+    }
+
+    return {
+      number: order.number,
+      status: order.status,
+      items: order.items.map((item) => ({
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      total: order.total,
+      currency: order.currency,
+    };
+  }
+
+  /** Same email-as-sole-authorization model as trackOrder — see that method's doc. */
+  async trackBooking(slug: string, bookingId: string, email: string) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'booking');
+    const organizationId = new Types.ObjectId(organization.id as string);
+
+    if (!Types.ObjectId.isValid(bookingId)) {
+      throw trackingNotFound('booking');
+    }
+    const booking = await this.bookingModel
+      .findOne({
+        _id: new Types.ObjectId(bookingId),
+        organizationId,
+      })
+      .exec();
+    if (!booking) {
+      throw trackingNotFound('booking');
+    }
+
+    const contact = await this.contactModel
+      .findOne({ _id: booking.contactId, organizationId })
+      .exec();
+    if (!contact?.email || !emailsMatch(contact.email, email)) {
+      throw trackingNotFound('booking');
+    }
+
+    return {
+      id: booking.id as string,
+      status: booking.status,
+      startAt: booking.startAt,
+      endAt: booking.endAt,
+      pricing: booking.pricing,
     };
   }
 }

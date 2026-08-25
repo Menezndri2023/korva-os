@@ -49,17 +49,36 @@ export default function StorefrontClient({ slug }: { slug: string }) {
   const bookingEnabled = organization.enabledModules.includes("booking");
   const commerceEnabled = organization.enabledModules.includes("commerce");
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
+  const brandColor = organization.brandColor;
 
   return (
     <div className="min-h-screen bg-app-background">
-      <header className="border-b border-border bg-surface px-6 py-4">
+      <header
+        className="border-b border-border bg-surface px-6 py-4"
+        style={brandColor ? { borderBottomColor: brandColor, borderBottomWidth: 3 } : undefined}
+      >
         <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <h1 className="text-lg font-semibold text-text">{organization.name}</h1>
-          {commerceEnabled && cartCount > 0 && (
-            <Button size="sm" onClick={() => setShowCheckout(true)}>
-              Panier ({cartCount})
-            </Button>
-          )}
+          <div className="flex items-center gap-3">
+            <OrganizationLogo organization={organization} />
+            <h1 className="text-lg font-semibold text-text">{organization.name}</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/${slug}/track`}
+              className="text-sm text-text-muted hover:underline"
+            >
+              Suivre ma commande
+            </Link>
+            {commerceEnabled && cartCount > 0 && (
+              <Button
+                size="sm"
+                onClick={() => setShowCheckout(true)}
+                style={brandColor ? { backgroundColor: brandColor } : undefined}
+              >
+                Panier ({cartCount})
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -200,6 +219,27 @@ function OfferCard({
         </Link>
       </div>
     </Card>
+  );
+}
+
+/** Renders the organization's logo when it has one and it loads successfully; renders nothing otherwise. */
+function OrganizationLogo({ organization }: { organization: PublicOrganization }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  if (!organization.logo || imageFailed) {
+    return null;
+  }
+  return (
+    // Arbitrary tenant-supplied host, not one of Next's configured image domains — same
+    // rationale as OfferCard's thumbnail above.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={organization.logo}
+      alt=""
+      loading="eager"
+      referrerPolicy="no-referrer"
+      onError={() => setImageFailed(true)}
+      className="h-8 w-8 rounded object-contain"
+    />
   );
 }
 

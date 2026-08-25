@@ -1,4 +1,10 @@
-import type { OfferPricing, OfferType, OfferVariant } from "@korva/types";
+import type {
+  BookingStatus,
+  OfferPricing,
+  OfferType,
+  OfferVariant,
+  OrderStatus,
+} from "@korva/types";
 
 /** Mirrors PublicService#getOrganization (apps/api/src/public/public.service.ts) exactly. */
 export interface PublicOrganization {
@@ -8,6 +14,8 @@ export interface PublicOrganization {
   currency: string;
   language: string;
   logo?: string;
+  /** Hex color (e.g. "#1a73e8") — a single storefront accent, not a full theme. */
+  brandColor?: string;
   enabledModules: string[];
 }
 
@@ -54,4 +62,22 @@ export interface CartLine {
   name: string;
   unitPrice: number;
   quantity: number;
+}
+
+/** Mirrors PublicService#trackOrder exactly. */
+export interface TrackedOrder {
+  number: string;
+  status: OrderStatus;
+  items: { description: string; quantity: number; unitPrice: number }[];
+  total: number;
+  currency: string;
+}
+
+/** Mirrors PublicService#trackBooking exactly. */
+export interface TrackedBooking {
+  id: string;
+  status: BookingStatus;
+  startAt: string;
+  endAt: string;
+  pricing: { amount: number; currency: string };
 }
