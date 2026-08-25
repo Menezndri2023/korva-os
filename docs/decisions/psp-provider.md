@@ -1,7 +1,89 @@
 # PSP Decision Record — Payment Service Provider Selection
 
 ## Status
-Proposed — awaiting KORVA stakeholder confirmation
+Proposed — awaiting KORVA stakeholder confirmation. Refined once (Wave 3, see update section below); still no single-provider pick, by design.
+
+## Update — Wave 3 (implementation-focused refinement)
+
+This section was added by a follow-up agent whose mandate was narrower than the original research round: verify the record still holds against the current codebase, deepen the split/marketplace-payment analysis specifically, and make the "two different payment flows" question explicit. **No new provider research was redone from scratch** — the comparison table, sources, and core recommendation above are unchanged and still stand. This section only adds to them.
+
+### W3.1 — Codebase verification against commit `d52de50`
+
+Re-checked every file this record's conclusions depend on, at the current worktree HEAD (`d52de50`, "wave 2.1 production readiness"):
+
+- **`apps/api/src/finance/payments/providers/payment-provider.interface.ts`** — unchanged in substance. Still exactly one `PaymentProvider` interface (`createPayment`/`verifyPayment`/`getPaymentStatus`/`refundPayment`), still injected once via a single `PAYMENT_PROVIDER` token, still no `destination`/`subMerchant`/`splitRules` concept anywhere in the method signatures or `PaymentProviderResult`. The single-global-account assumption flagged in the original record is still exactly as true as it was.
+- **`apps/api/src/finance/finance.module.ts`** — still binds `{ provide: PAYMENT_PROVIDER, useClass: ManualPaymentProvider }`. No second provider implementation exists anywhere in the repo (`apps/api/src/finance/payments/providers/` still contains only the interface file and `manual-payment.provider.ts`).
+- **`.env.example`** — still exactly the same four unused keys (`STRIPE_SECRET_KEY`, `CINETPAY_API_KEY`, `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_SECRET_KEY`), still unread by any code. Nothing added or removed since the original research.
+- **`apps/web/src/app/onboarding/page.tsx`** — the only change between the commit the original record was based on and `d52de50` is the addition of a `timezone` select field (`git diff` confirms `COUNTRIES` and `CURRENCIES` arrays are byte-for-byte unchanged: still `FR, CI, SN, MA, BE, CA` / `EUR, XOF, MAD, USD, CAD`). The market-signal conclusion is unaffected.
+- **Wave 2 "webhook completion" work** (referenced in the `d52de50` commit message) is exclusively about **Resend email webhooks** (`apps/api/src/communication/webhooks/resend-webhook.*`, Svix signature verification) — nothing to do with payment-provider webhooks. Not relevant to this record.
+
+**Conclusion: nothing changed that invalidates any prior finding.** This is the expected, boring outcome, not a gap.
+
+**One thing did change and materially matters**: a full **`apps/api/src/subscriptions/`** module now exists (`SubscriptionsService`, `PlansService`, `SubscriptionsRepository`, `SubscriptionPeriodSchedulerService`, `EntitlementsService`) implementing KORVA's own SaaS plan lifecycle for tenants — plan changes, proration, cancel-at-period-end with a grace window, reactivation. This did not exist as real code when the original record was written; it makes the "two different payment flows" question (see below) concrete rather than hypothetical. Notably, `subscription.schema.ts` stores `prorationAmount`/`prorationCurrency` with an explicit code comment: *"Never actually charged: no PSP integration exists yet."* This is direct, current, first-party confirmation that KORVA's own subscription billing has **zero** PSP wiring today — same conclusion as the tenant-commerce side, arrived at independently.
+
+### W3.2 — The two payment flows, made explicit
+
+The original record's "merchant-of-record" section already raised this implicitly; the mission for this round asked to make it unambiguous, since the two flows have different actors and, on inspection, different constraints:
+
+| | **Flow A — KORVA subscription billing** | **Flow B — tenant-customer commerce/booking payment** |
+|---|---|---|
+| Who pays | The tenant organization (KORVA's own customer) | The tenant's own end-customer (KORVA's customer's customer) |
+| Who receives | KORVA itself | The tenant organization |
+| Code today | `apps/api/src/subscriptions/*` — plans, proration, cancel/reactivate, **no PSP call anywhere** | `apps/api/src/finance/{invoices,quotes,payments}/*` — routes through `PaymentProvider` via `PAYMENT_PROVIDER`, backed today by `ManualPaymentProvider` only |
+| Merchant-of-record question | **Not ambiguous.** KORVA is unavoidably the merchant of record for its own SaaS fees — there is no "tenant owns the account" variant of this flow, because the tenant is the payer, not a payee. | **The genuinely open question** from the original record: does KORVA collect centrally and split out to tenants, or does each tenant hold its own provider account? |
+| Does it need split/marketplace payments? | **No.** It's a simple platform-collects-a-fee model; nothing is paid out to a third party as part of this flow. | **Only if** KORVA chooses the merchant-of-record model; not needed at all if tenants hold their own accounts. |
+| Where must it work? | Wherever **KORVA the legal entity** is domiciled and however it prices/bills tenants — this is a function of KORVA's own incorporation, not of which country a given tenant's *end-customers* are in. A France-incorporated KORVA billing a Moroccan tenant in EUR via card is a completely normal Stripe Billing/Subscriptions use case, regardless of whether that same tenant's own storefront needs CMI or ChariBaaS for its Moroccan end-customers. | Must work in the tenant's own operating market (MA, CI, SN, FR, BE, CA per the onboarding dropdown) — this is exactly what the rest of this record already evaluates. |
+
+**This is a real, actionable finding, not just a restatement**: Flow A and Flow B do not have to use the same provider, and there is no architectural or business reason they should be forced to. Flow A looks like a textbook Stripe Billing (or equivalent recurring-billing platform) use case *regardless of the Morocco/Côte d'Ivoire conclusions above*, because Flow A's geography is "wherever KORVA the company is incorporated and however it wants to bill," not "wherever the tenant's storefront customers are." Conflating the two flows — e.g. assuming that because Stripe doesn't work for Moroccan/Ivorian *end-customer* commerce, it's also wrong for KORVA's own subscription billing — would be a mistake the original record's framing invited but didn't fully rule out. Recommend stakeholders treat Flow A (KORVA→tenant billing) and Flow B (tenant→end-customer payments) as **two separate PSP decisions from day one**, even though both flows will likely be implemented behind the same `PaymentProvider`-style abstraction pattern already used in the codebase.
+
+Note one open dependency this creates: Flow A's answer depends on **where KORVA the company is legally incorporated**, which is not established anywhere in the repo (the onboarding dropdown describes tenant countries, not KORVA's own). This is folded into the open questions below as a new item.
+
+### W3.3 — Deepened split-payment / marketplace-payout analysis
+
+The original record's merchant-of-record section (lines above) correctly identified Flutterwave, Paystack, ChariBaaS, and CinetPay Mass Payout as the four split/payout-capable candidates, but only lightly touched payout timelines, sub-merchant KYC depth, and production-maturity signals. Deepened findings, gathered from vendor docs/blog/support content and third-party integration guides (flagged where a claim is vendor-sourced and unverified independently, consistent with this record's existing sourcing standard):
+
+**Flutterwave — Split Payments with Sub-accounts**
+- **Payout timeline**: vendor documentation states settlement can be "instant, same-day, or next business day depending on region, currency, and account status" ([Flutterwave Settlements docs](https://developer.flutterwave.com/v3.0/docs/settlements)) — this is a range, not a firm commitment, and is explicitly conditioned on account approval status.
+- **Sub-merchant KYC**: "only approved accounts are eligible for settlements" — sub-account KYC/approval is a hard gate before any payout occurs, per Flutterwave's own Payout Subaccount docs ([developer.flutterwave.com/v3.0/docs/payout-subaccount](https://developer.flutterwave.com/v3.0/docs/payout-subaccount)). No fixed approval SLA found (i.e., no promise of "approved within N days").
+- **Production maturity**: split payments is a long-standing, documented, non-beta product (present in the v3 API and referenced since early Flutterwave "Rave" documentation-era blog posts) — no beta/limited-availability language found. Treat as production-proven.
+
+**Paystack — Split Payments / Multi-Split (material update to the original record)**
+- The original record flagged a **two-account cap** on Paystack splits as a real limitation, sourced to general split-payment documentation, and listed it as open question #6 needing direct confirmation.
+- **This appears to be resolved**: Paystack has a distinct **"Multi-split Payments"** product ("Introducing Multiple Transaction Splits," [paystack.com/blog/product/multisplits](https://paystack.com/blog/product/multisplits)) that a third-party integration guide describes explicitly: *"Multi-split divides a payment among your main account and multiple subaccounts in a single transaction"* ([mctaba.com complete guide](https://www.mctaba.com/learn/paystack/paystack-split-payments-and-marketplaces-complete-guide)), with a worked example splitting three ways (platform + restaurant + rider). This directly contradicts the "capped at two" characterization and should be treated as a probable correction, though the official Paystack docs page (`paystack.com/docs/payments/multi-split-payments/`) returned an HTTP 403 to automated fetching during this research and could not be read first-party — **still recommend a stakeholder or engineer confirm this directly against a live Paystack dashboard/sandbox before relying on it architecturally**, since this record could only confirm it via a third-party guide, not Paystack's own docs page.
+- **Payout timeline**: "Paystack settles the subaccount's share directly to their bank account on the normal settlement cycle" — same guide states subaccounts follow the same T+1/T+2-class cycle as the main account, but does not give a country-specific figure for Côte d'Ivoire specifically (Paystack's CI operation is comparatively new, per the original record's beta→GA note).
+- **Sub-merchant KYC**: explicitly a build-your-own-policy decision per Paystack's own guidance — *"you need to decide whether to verify the seller's identity (via Paystack's identity verification or your own KYC) before allowing them to receive payments"* — i.e. Paystack does not itself mandate a specific KYC depth for subaccounts beyond validating the bank account via its Resolve Account endpoint. This is meaningfully **lighter-touch** than Flutterwave's "must be an approved account" gate, which could matter for tenant-onboarding friction, but also pushes fraud/compliance risk onto KORVA if it operates as merchant-of-record and chooses not to layer its own KYC.
+- **Production maturity**: split payments described without beta/limitation language in current third-party guides; treat as production-oriented, but weigh against the earlier record's own note that Paystack's Côte d'Ivoire market itself is comparatively young (beta→GA in 2025).
+
+**ChariBaaS / Chari Pay — Morocco marketplace splits**
+- ChariBaaS markets itself as a full BaaS platform (payment accounts, wallets, **KYC/KYB**, card issuing, POS acquiring), not just a payment gateway — its split-payment feature sits on top of this broader BaaS stack, described as "real-time split payments between sellers and platform, with automated settlement and consolidated reporting."
+- **KYC**: ChariBaaS explicitly advertises **tiered KYC levels** (cited transaction/balance ceilings in the 1,000–100,000 MAD range per tier) with automated identity verification (document scanning + facial recognition) and phone-number-based digital account opening — this is a materially more detailed, productized KYC story than anything found for the West-African candidates, consistent with it being a licensed Bank Al-Maghrib entity rather than a pure payment aggregator.
+- **Payout timeline**: no specific timeframe (e.g., T+1/T+2) found in public marketing content; described only as "automatically settled... with detailed reconciliation reporting." This is the weakest point of ChariBaaS's public documentation relative to Flutterwave/Paystack — a stakeholder or engineer should get a concrete settlement SLA directly from ChariBaaS sales/docs before relying on it for production planning.
+- **Production maturity**: cannot be independently confirmed as "battle-tested at scale" from public sources the way Flutterwave/Paystack can (both have years of public split-payment usage across many marketplaces); ChariBaaS is comparatively newer and smaller. Not a red flag, but a genuine unknown — the original record's own characterization ("new/smaller, no adverse signal found, but also no long incident-free track record found either") still applies and is not contradicted by this deeper look.
+
+**CinetPay — Mass Payout**
+- **Payout timeline**: vendor claims (CinetPay's own marketing/social content) cite "99% deliverability" and "payments processed in 2 seconds" for Mass Payout specifically, alongside a separate general claim elsewhere of merchant funds available "within 24–72 hours" after a payout request — **these are vendor-sourced and should be read skeptically**, especially given this record's own already-documented reliability red flag (the Sept 2025 cyberattack and unresolved partner-settlement backlog as of this research date).
+- **Sub-merchant KYC**: CinetPay's own general messaging states KYC is required "to ensure transaction security and regulatory compliance" before any commercial relationship, but no Mass-Payout-specific sub-merchant KYC depth (tiers, documents required, approval SLA) was found in public sources — this is the least-documented of the four candidates on this specific axis.
+- **Production maturity**: Mass Payout is presented as an established, named product (not a beta), but this must be weighed directly against the unresolved settlement-backlog reliability concern already in this record — a payout product's technical maturity does not offset a live solvency/reliability concern with the same vendor.
+
+**Summary judgment for this deepened axis**: Flutterwave has the best-documented combination of payout-timeline transparency and explicit (if strict) KYC gating; Paystack looks similarly strong now that the two-account cap appears lifted, but that correction rests on a third-party source, not Paystack's own docs, and should be confirmed directly; ChariBaaS has the most sophisticated KYC/KYB story (as expected from a licensed BaaS platform) but the weakest public payout-SLA documentation; CinetPay's payout product looks technically capable but is the one candidate where a **business-risk** concern (the settlement backlog), not a technical one, should dominate the decision regardless of how good Mass Payout's mechanics look on paper. None of the four should be described as "beta" or "limited availability" based on what was found — the caveats found are about documentation completeness and, for CinetPay, general reliability, not product immaturity.
+
+### W3.4 — Decision matrix: confirmed complete, two additions
+
+The comparison table above already covers Morocco fit, Côte d'Ivoire fit, cards, Mobile Money, refunds, webhooks, and split/marketplace payments as explicit rows — confirmed complete against the mission's checklist. Two things were added rather than duplicating the table:
+1. **Flow A vs. Flow B fit**, added as the dedicated table in W3.2 above (the original record's comparison table is oriented entirely around Flow B / tenant-customer-payment fit — reasonably so, since Flow A didn't exist as real code yet when it was written; W3.2 fills that gap explicitly rather than retrofitting extra columns onto an already-dense 20-row table).
+2. **Split-payment depth** (payout timelines, sub-merchant KYC, production maturity), added as prose in W3.3 rather than as three more matrix columns — the findings are too heterogeneous in shape per provider (a KYC tier schedule vs. a settlement-cycle description vs. a reliability caveat) to compress cleanly into single table cells without losing the caveats that matter.
+
+### W3.5 — Updated open questions
+
+The original nine open questions (below) are all still valid and are **not** superseded. This round refines one and adds two:
+
+- **Question 6 (Paystack two-account cap)** — refined from "unconfirmed, needs checking" to "**likely resolved via Paystack's Multi-Split product, but only confirmed through a third-party guide, not Paystack's own docs page (which 403'd to automated fetching)** — still needs a direct check against a live Paystack sandbox/dashboard or support contact before being relied on architecturally." Downgraded from a probable blocker to a likely non-issue, but not fully closed.
+- **New question 10 — Where is KORVA (the company) legally incorporated, and how does it intend to bill tenants for its own SaaS subscription?** This determines the entire Flow A (subscription-billing) provider choice independently of everything else in this record, which is scoped to Flow B (tenant-customer commerce in MA/CI). Nothing in the repo answers this — the onboarding dropdown describes tenant countries, not KORVA's own domicile. Given `apps/api/src/subscriptions/` now exists as real, unmonetized code (see W3.1), this is no longer a hypothetical future question — it blocks the very next PSP integration KORVA is likely to want (charging its own tenants), independent of the harder MA/CI Flow B question.
+- **New question 11 — If KORVA becomes merchant-of-record for Flow B, what is its own KYC/AML posture toward sub-merchant tenants?** Flutterwave gates payouts on "approved accounts" with no published SLA, Paystack leaves seller-verification depth to the platform's own judgment, and ChariBaaS provides a full tiered KYC/KYB stack. Which of these postures KORVA wants to inherit (strict-but-slow vs. fast-but-KORVA-owns-the-risk) is a business/legal decision, not a technical one, and changes which of Flutterwave/Paystack/ChariBaaS is the better architectural fit even after the market-coverage question is settled.
+
+### W3.6 — Why this round still does not pick a single provider
+
+Per this round's explicit mandate: the mission instructions were clear that `.env.example` already listing `STRIPE_SECRET_KEY`/`CINETPAY_API_KEY`/`PAYSTACK_SECRET_KEY`/`FLUTTERWAVE_SECRET_KEY` is not evidence of a decision and must not be treated as a default. Nothing found in this deepened pass changes the original record's core conclusion that no single provider covers both Morocco and Côte d'Ivoire for Flow B, and Flow A's answer depends on a business fact (KORVA's own incorporation/billing intent) not present anywhere in the repository. Recommending a single pick here would mean inventing an answer to open questions 1, 2, 10, and 11 — which is exactly the kind of unilateral, business-fact-free decision this task was explicitly told not to make.
 
 ## Context
 
@@ -99,6 +181,8 @@ If forced to name a starting pair pending stakeholder confirmation: **Flutterwav
 
 ## Open questions requiring stakeholder confirmation
 
+*(See "W3.5 — Updated open questions" above for a Wave 3 refinement of question 6 and two new questions, 10 and 11. Questions 1–9 below are unchanged from the original research round.)*
+
 1. **Merchant-of-record model**: will KORVA act as merchant of record (platform collects, splits/pays out to tenants) or will each tenant hold and connect its own provider account? This single answer materially changes the recommended provider(s) and the `PaymentProvider` DI wiring.
 2. **Is Morocco or Côte d'Ivoire the priority launch market**, or are both simultaneous? Since no single provider covers both, sequencing affects which integration gets built first.
 3. **Confirm KORVA is not planning to prioritize card-heavy Western/EUR markets (France/Belgium/Canada) first** — the onboarding dropdown lists France first and defaults to `FR`/`EUR`, so it's not certain Morocco/CI are the near-term priority versus the European cluster also present in the same dropdown.
@@ -147,6 +231,18 @@ If forced to name a starting pair pending stakeholder confirmation: **Flutterwav
 - [Paystack Node.js community SDK (alexasomba/paystack-node)](https://github.com/alexasomba/paystack-node)
 - [Paystack Developer Documentation — Webhooks](https://paystack.com/docs/payments/webhooks/)
 
+### Additional sources (Wave 3 refinement)
+
+- [Flutterwave — Settlements documentation](https://developer.flutterwave.com/v3.0/docs/settlements)
+- [Flutterwave — Payout Subaccount documentation](https://developer.flutterwave.com/v3.0/docs/payout-subaccount)
+- [Paystack Blog — Introducing Multiple Transaction Splits](https://paystack.com/blog/product/multisplits)
+- [Paystack Multi-split Payments — Developer Documentation](https://paystack.com/docs/payments/multi-split-payments/) (returned HTTP 403 to automated fetching during this research; content confirmed only via the mctaba.com guide below — flagged as needing direct first-party confirmation)
+- [Paystack Split Payments & Marketplaces Complete Guide — mctaba.com](https://www.mctaba.com/learn/paystack/paystack-split-payments-and-marketplaces-complete-guide)
+- [ChariBaaS — E-Commerce Payment Solutions Morocco](https://www.baas.ma/en/ecommerce-payment-morocco)
+- [ChariBaaS — Embedded Finance in Morocco: Complete 2026 Guide](https://www.baas.ma/en/blog/finance-embarquee-embedded-finance-maroc)
+- [CinetPay — Mass Payout product page](https://cinetpay.com/products/mass-payout) (re-checked)
+- [CinetPay Mass Payout — vendor claim, X/Twitter post citing "99% deliverability, 2-second processing"](https://x.com/cinetpay/status/1934169759010201797) (vendor-sourced, unverified independently — cited for transparency, not relied upon)
+
 ## Internal evidence (this repository, for reference)
 
 - `.env.example` — `STRIPE_SECRET_KEY`, `CINETPAY_API_KEY`, `PAYSTACK_SECRET_KEY`, `FLUTTERWAVE_SECRET_KEY` (all unused today)
@@ -155,3 +251,4 @@ If forced to name a starting pair pending stakeholder confirmation: **Flutterwav
 - `apps/web/src/app/onboarding/page.tsx` — `COUNTRIES`/`CURRENCIES` constants, the strongest product-facing market signal found
 - `docs/architecture.md` — "Abstractions de fournisseurs" table naming Stripe/CinetPay/Paystack/Flutterwave as planned
 - `docs/IMPLEMENTATION_PLAN.md` — Phase 4 notes confirming the `PaymentProvider` abstraction is deliberately provider-agnostic and multi-region-intended, with no real online provider wired yet
+- `apps/api/src/subscriptions/` (added in Wave 2.1, commit `d52de50`) — `SubscriptionsService`, `PlansService`, `subscription.schema.ts` implement KORVA's own SaaS plan/billing lifecycle (plan changes, proration, cancel/reactivate) with **zero PSP integration**; `subscription.schema.ts` explicitly comments "Never actually charged: no PSP integration exists yet" on the stored proration fields. This is the concrete code behind "Flow A" in the Wave 3 update section above.
