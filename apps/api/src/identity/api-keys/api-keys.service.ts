@@ -11,6 +11,7 @@ import { ApiKeysRepository } from './api-keys.repository';
 import { generateApiKey } from './api-key-generator.util';
 import { RolesService } from '../roles/roles.service';
 import { AuditService } from '../../audit/audit.service';
+import { requireSystemRoleRank } from '../../organizations/organizations.service';
 
 /**
  * CRUD + rotation for org-scoped server-to-server API keys (see ApiKey's schema doc for the
@@ -33,6 +34,7 @@ export class ApiKeysService {
   async create(
     organizationId: string,
     actorUserId: string,
+    actorRoleId: string,
     input: CreateApiKeyInput,
   ) {
     const role = await this.rolesService.getRoleById(input.roleId);
@@ -40,6 +42,30 @@ export class ApiKeysService {
       throw new BadRequestException({
         code: 'ROLE_NOT_FOUND',
         message: 'Role not found in this organization',
+      });
+    }
+
+    // Same role-assignment hierarchy enforcement as OrganizationsService.addMember /
+    // InvitationsService.invite: an actor must never be able to mint a credential — human
+    // membership or, here, a standing API key — scoped to a role that outranks their own. Without
+    // this, an ADMIN (the same `settings.manage` bar as this endpoint requires) could issue an
+    // OWNER-scoped key. That's a no-op against today's fixed SYSTEM_ROLE_PERMISSIONS (OWNER and
+    // ADMIN currently carry identical permissions), but it's a silent privilege-escalation trap
+    // waiting for the day permissions diverge or custom roles ship — and every other role-grant
+    // path in this codebase already fails closed on it.
+    const actorRole = await this.rolesService.getRoleById(actorRoleId);
+    if (!actorRole) {
+      throw new ForbiddenException({
+        code: 'ROLE_HIERARCHY_UNKNOWN',
+        message:
+          'You cannot assign a role with higher privileges than your own.',
+      });
+    }
+    if (requireSystemRoleRank(actorRole) > requireSystemRoleRank(role)) {
+      throw new ForbiddenException({
+        code: 'ROLE_HIERARCHY_VIOLATION',
+        message:
+          'You cannot assign a role with higher privileges than your own.',
       });
     }
 
