@@ -314,6 +314,135 @@ describe('Public storefront API (e2e)', () => {
     });
   });
 
+  describe('booking creation throttle (LOT P3-FIX)', () => {
+    let slugA: string;
+    let resourceIdA: string;
+    let offerIdA: string;
+    let slugB: string;
+    let resourceIdB: string;
+    let offerIdB: string;
+    const monday = nextMonday();
+
+    async function setupThrottleOrg(email: string, orgName: string) {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        email,
+        orgName,
+      );
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Throttle Room',
+          type: 'room',
+          // A wide window so a burst of test requests can each target a genuinely free hour —
+          // a 400 SLOT_UNAVAILABLE (capacity, default 1) must never be mistaken for the 429
+          // this suite is actually proving.
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '00:00', endTime: '23:00' },
+          ],
+        })
+        .expect(201);
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'booking',
+          name: 'Throttle Session',
+          status: 'active',
+          pricing: { amount: 10, currency: 'EUR' },
+        })
+        .expect(201);
+      return {
+        slug,
+        resourceId: asSuccess<ResourcePayload>(resourceRes.body).id,
+        offerId: asSuccess<OfferPayload>(offerRes.body).id,
+      };
+    }
+
+    beforeAll(async () => {
+      ({
+        slug: slugA,
+        resourceId: resourceIdA,
+        offerId: offerIdA,
+      } = await setupThrottleOrg(
+        'storefront-throttle-a@korva.test',
+        'Storefront Throttle Org A',
+      ));
+      ({
+        slug: slugB,
+        resourceId: resourceIdB,
+        offerId: offerIdB,
+      } = await setupThrottleOrg(
+        'storefront-throttle-b@korva.test',
+        'Storefront Throttle Org B',
+      ));
+    });
+
+    function bookingPayload(resourceId: string, offerId: string, hour: number) {
+      const startHour = String(hour).padStart(2, '0');
+      const endHour = String(hour + 1).padStart(2, '0');
+      return {
+        resourceId,
+        offerId,
+        startAt: `${monday}T${startHour}:00:00.000Z`,
+        endAt: `${monday}T${endHour}:00:00.000Z`,
+        contact: {
+          email: `throttle-${hour}@customer.test`,
+          firstName: 'Throttle',
+        },
+      };
+    }
+
+    // Test 1 — normal, low-volume use stays well under the dedicated limit and works normally.
+    it('allows a normal, low-volume sequence of booking attempts', async () => {
+      const first = await request(server)
+        .post(`/api/v1/public/${slugA}/bookings`)
+        .send(bookingPayload(resourceIdA, offerIdA, 1));
+      const second = await request(server)
+        .post(`/api/v1/public/${slugA}/bookings`)
+        .send(bookingPayload(resourceIdA, offerIdA, 2));
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+    });
+
+    // Test 2 — a rapid burst on the same route/IP eventually gets 429, proving the dedicated
+    // throttle (stricter than the 120/min global) actually engages before too many confirmed
+    // bookings can be created in quick succession.
+    it('throttles a rapid burst of booking attempts with 429 once the dedicated limit is exceeded', async () => {
+      const statuses: number[] = [];
+      for (let hour = 3; hour < 20 && !statuses.includes(429); hour++) {
+        const res = await request(server)
+          .post(`/api/v1/public/${slugA}/bookings`)
+          .send(bookingPayload(resourceIdA, offerIdA, hour));
+        statuses.push(res.status);
+      }
+
+      expect(statuses).toContain(429);
+      // The burst didn't start pre-throttled — some earlier requests genuinely succeeded first.
+      expect(statuses.some((status) => status === 201)).toBe(true);
+    }, 20000);
+
+    // Test 3 — scope: a public GET route is entirely unaffected by the booking route's throttle,
+    // even while that IP is currently throttled on POST bookings (per the burst test above).
+    it('leaves other public routes unaffected by the booking throttle', async () => {
+      await request(server).get(`/api/v1/public/${slugA}/offers`).expect(200);
+    });
+
+    // Test 4 — the throttle is a pure anti-abuse mechanism keyed on (route, IP), not a stand-in
+    // for tenant isolation: this IP being throttled on org A's booking route also throttles a
+    // booking POST for org B, a completely different organization/tenant.
+    it('is not tenant-scoped: the same throttled IP is also blocked when booking for a different organization', async () => {
+      const res = await request(server)
+        .post(`/api/v1/public/${slugB}/bookings`)
+        .send(bookingPayload(resourceIdB, offerIdB, 1));
+
+      expect(res.status).toBe(429);
+    });
+  });
+
   describe('module gating and unknown organizations', () => {
     it('rejects a public request for a module the organization has not enabled', async () => {
       const { slug } = await setupStorefrontOrg(
