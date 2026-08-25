@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
+import type { EventJobData } from '../src/core/events/event-names';
 
 /**
  * Proves both halves of the WAVE 2.1 / E2E-INFRA-5 investigation into Redis
@@ -155,5 +156,179 @@ describe('Redis per-process isolation (e2e)', () => {
         /does not support ioredis prefixes/,
       );
     });
+  });
+
+  /**
+   * WAVE 3 / E2E-INFRA-5 — closes the gap the two describe blocks above leave
+   * open: BullMQ's `prefix` option is proven to work, but every real
+   * `Queue`/`Worker`/`QueueEvents` in this codebase is constructed inside a
+   * business-domain file this wave may not edit. `jest-e2e.json`'s
+   * `moduleNameMapper` now resolves `bullmq` to
+   * `test/support/bullmq-test-prefix.ts` for every file in the module graph
+   * — including `apps/api/src/**` — which auto-injects
+   * `process.env.TEST_RUN_BULLMQ_PREFIX` into any constructor call that
+   * doesn't already pass one. These tests prove that mechanism end-to-end,
+   * finishing on the same real, UNEDITED `EventBusService` production file
+   * (not a probe/mock queue) to demonstrate this actually reaches business
+   * domain code without touching it.
+   */
+  describe('Transparent per-process prefix injection via jest moduleNameMapper (no business-domain edits)', () => {
+    const BASE_URL = 'redis://localhost:6380/1';
+    const openHandles: Array<{ close: () => unknown }> = [];
+    let originalPrefixEnv: string | undefined;
+
+    beforeEach(() => {
+      originalPrefixEnv = process.env.TEST_RUN_BULLMQ_PREFIX;
+    });
+
+    afterEach(async () => {
+      await Promise.all(
+        openHandles.splice(0).map((h) => Promise.resolve(h.close())),
+      );
+      process.env.TEST_RUN_BULLMQ_PREFIX = originalPrefixEnv;
+    });
+
+    it('a Queue constructed with no explicit `prefix` automatically picks up TEST_RUN_BULLMQ_PREFIX', async () => {
+      process.env.TEST_RUN_BULLMQ_PREFIX = 'auto_inject_probe';
+      const connection = new IORedis(BASE_URL, { maxRetriesPerRequest: null });
+      const queue = new Queue<{ marker: string }>(
+        `redis-isolation-auto-prefix-${process.pid}`,
+        { connection },
+      );
+      openHandles.push({ close: () => connection.disconnect() });
+      openHandles.push({ close: () => queue.close() });
+
+      const job = await queue.add('job', { marker: 'x' });
+
+      expect(job.prefix).toBe('auto_inject_probe');
+    });
+
+    it('two auto-injected prefixes (simulating two concurrent e2e OS processes) fully isolate BullMQ job consumption on the same Redis DB and queue name — via automatic injection, not a manually-passed option', async () => {
+      const QUEUE_NAME = `redis-isolation-auto-cross-${process.pid}`;
+      interface ProbeJobData {
+        marker: string;
+      }
+      const seenByA: string[] = [];
+      const seenByB: string[] = [];
+
+      process.env.TEST_RUN_BULLMQ_PREFIX = 'auto_proc_a';
+      const connA = new IORedis(BASE_URL, { maxRetriesPerRequest: null });
+      const queueA = new Queue<ProbeJobData>(QUEUE_NAME, { connection: connA });
+      const workerA = new Worker<ProbeJobData>(
+        QUEUE_NAME,
+        (job) => {
+          seenByA.push(job.data.marker);
+          return Promise.resolve();
+        },
+        { connection: connA },
+      );
+
+      process.env.TEST_RUN_BULLMQ_PREFIX = 'auto_proc_b';
+      const connB = new IORedis(BASE_URL, { maxRetriesPerRequest: null });
+      const queueB = new Queue<ProbeJobData>(QUEUE_NAME, { connection: connB });
+      const workerB = new Worker<ProbeJobData>(
+        QUEUE_NAME,
+        (job) => {
+          seenByB.push(job.data.marker);
+          return Promise.resolve();
+        },
+        { connection: connB },
+      );
+
+      for (const h of [connA, connB])
+        openHandles.push({ close: () => h.disconnect() });
+      for (const h of [queueA, queueB, workerA, workerB])
+        openHandles.push({ close: () => h.close() });
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      await queueA.add('job', { marker: 'from-A' });
+      await queueB.add('job', { marker: 'from-B' });
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      expect(seenByA).toEqual(['from-A']);
+      expect(seenByB).toEqual(['from-B']);
+    }, 10000);
+
+    it("reaches a real, UNEDITED business-domain file (EventBusService) transparently: two instances built with two different simulated per-process prefixes never cross-consume each other's published events", async () => {
+      // Dynamically required (not a static top-level import) so this file's own
+      // `import { Queue, Worker } from 'bullmq'` above — already resolved once
+      // through moduleNameMapper when this test file loaded — isn't implicated:
+      // this require proves EventBusService's OWN `import { Queue } from 'bullmq'`
+      // (a separate, unedited source file) independently resolves through the
+      // same mapping.
+      const { EventBusService } =
+        await import('../src/core/events/event-bus.service');
+      const { EVENTS_QUEUE_NAME } =
+        await import('../src/core/events/event-names');
+      const fakeConfigService = {
+        getOrThrow: (key: string) => {
+          if (key !== 'REDIS_URL') {
+            throw new Error(`unexpected config key: ${key}`);
+          }
+          return BASE_URL;
+        },
+      };
+
+      // Prefixes AND job-derived ids must be unique per test run, not fixed
+      // literals: this Redis (db 1) is a real, persistent shared instance —
+      // BullMQ silently no-ops `queue.add()` for a jobId that already exists
+      // (see EventBusService.publish()'s own dedup comment), so a repeat run
+      // reusing the same prefix + orgId/leadId would find the job already
+      // `completed` from a PRIOR run and never re-enqueue it, making the
+      // worker below spuriously see nothing. `process.pid` alone isn't
+      // enough across repeated manual invocations of the same test in
+      // separate processes, so a random suffix is added too.
+      const runId = `${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+      const prefixA = `auto_domain_a_${runId}`;
+      const prefixB = `auto_domain_b_${runId}`;
+
+      process.env.TEST_RUN_BULLMQ_PREFIX = prefixA;
+      const eventBusA = new EventBusService(fakeConfigService as never);
+      process.env.TEST_RUN_BULLMQ_PREFIX = prefixB;
+      const eventBusB = new EventBusService(fakeConfigService as never);
+      openHandles.push({ close: () => eventBusA.onModuleDestroy() });
+      openHandles.push({ close: () => eventBusB.onModuleDestroy() });
+
+      const seenByA: string[] = [];
+      const seenByB: string[] = [];
+      const connWorkerA = new IORedis(BASE_URL, { maxRetriesPerRequest: null });
+      const connWorkerB = new IORedis(BASE_URL, { maxRetriesPerRequest: null });
+      openHandles.push({ close: () => connWorkerA.disconnect() });
+      openHandles.push({ close: () => connWorkerB.disconnect() });
+      const workerA = new Worker<EventJobData>(
+        EVENTS_QUEUE_NAME,
+        (job) => {
+          seenByA.push(job.data.organizationId);
+          return Promise.resolve();
+        },
+        { connection: connWorkerA, prefix: prefixA },
+      );
+      const workerB = new Worker<EventJobData>(
+        EVENTS_QUEUE_NAME,
+        (job) => {
+          seenByB.push(job.data.organizationId);
+          return Promise.resolve();
+        },
+        { connection: connWorkerB, prefix: prefixB },
+      );
+      openHandles.push({ close: () => workerA.close() });
+      openHandles.push({ close: () => workerB.close() });
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      await eventBusA.publish(`org-from-A-${runId}`, 'lead.created', {
+        leadId: `lead-a-${runId}`,
+      });
+      await eventBusB.publish(`org-from-B-${runId}`, 'lead.created', {
+        leadId: `lead-b-${runId}`,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      expect(seenByA).toEqual([`org-from-A-${runId}`]);
+      expect(seenByB).toEqual([`org-from-B-${runId}`]);
+    }, 10000);
   });
 });

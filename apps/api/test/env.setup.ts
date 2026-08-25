@@ -18,7 +18,9 @@ import { randomUUID } from 'node:crypto';
  * this same REDIS_URL, so redirecting it here redirects all of them at once. This
  * dev-vs-test isolation says nothing about isolation BETWEEN two concurrent e2e
  * processes sharing the same test DB index — see the `TEST_RUN_REDIS_DB` comment
- * below (WAVE 2.1 / E2E-INFRA-5) for that separate, only-partially-solved problem.
+ * below (WAVE 2.1 / E2E-INFRA-5) for that separate problem, left only
+ * partially solved by WAVE 2.1 and closed by WAVE 3's `TEST_RUN_BULLMQ_PREFIX`
+ * further below.
  *
  * MongoDB database name is derived per-process (not a shared `korva_test`
  * constant): `MONGODB_URI ??=` is only ever assigned once per OS process — Jest
@@ -97,9 +99,32 @@ const TEST_RUN_DB_NAME = `korva_test_${process.pid}_${process.env.JEST_WORKER_ID
  */
 const TEST_RUN_REDIS_DB = 1 + Math.floor(Math.random() * 15);
 
+/**
+ * WAVE 3 / E2E-INFRA-5 — closes the gap the comment above documents as
+ * "genuinely achievable from test infra alone" being bounded by Redis's
+ * 16-DB ceiling. `jest-e2e.json`'s `moduleNameMapper` now resolves every
+ * `import ... from 'bullmq'` (including inside the business-domain files
+ * this wave may not edit) to `test/support/bullmq-test-prefix.ts`, which
+ * injects a BullMQ `prefix` — the option BullMQ itself recommends for
+ * namespacing a queue's keys on a shared DB — into every
+ * `Queue`/`Worker`/`QueueEvents` constructed anywhere in the module graph
+ * *unless* the caller already passed one. Because a BullMQ prefix is an
+ * arbitrary string (like `TEST_RUN_DB_NAME` above), it has the same
+ * unbounded, collision-proof property the Mongo fix has — no 15-slot
+ * birthday-paradox ceiling — so it composes with `TEST_RUN_REDIS_DB` above
+ * rather than replacing it: even two processes that land on the same Redis
+ * DB index now still get fully isolated BullMQ keyspaces. See
+ * `bullmq-test-prefix.ts` for why only `Queue`/`Worker`/`QueueEvents` need
+ * wrapping, and `redis-isolation.e2e-spec.ts` for the proof this actually
+ * prevents cross-process job consumption on a real Redis instance,
+ * including through an unedited business-domain constructor.
+ */
+const TEST_RUN_BULLMQ_PREFIX = `e2e_${process.pid}_${process.env.JEST_WORKER_ID ?? '0'}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
 process.env.NODE_ENV ??= 'test';
 process.env.MONGODB_URI ??= `mongodb://korva:korva@localhost:27017/${TEST_RUN_DB_NAME}?authSource=admin&replicaSet=rs0`;
 process.env.REDIS_URL ??= `redis://localhost:6380/${TEST_RUN_REDIS_DB}`;
+process.env.TEST_RUN_BULLMQ_PREFIX ??= TEST_RUN_BULLMQ_PREFIX;
 process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.JWT_REFRESH_SECRET ??= 'test-jwt-refresh-secret';
 
