@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Types } from 'mongoose';
 import type {
   CreateOfferInput,
@@ -7,6 +11,7 @@ import type {
 } from '@korva/validation';
 import type { Pagination } from '@korva/types';
 import { OffersRepository } from './offers.repository';
+import { OfferReferencesRepository } from './offer-references.repository';
 import { OfferDocument } from './schemas/offer.schema';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
@@ -15,6 +20,7 @@ import { AuditService } from '../../audit/audit.service';
 export class OffersService {
   constructor(
     private readonly offersRepository: OffersRepository,
+    private readonly offerReferencesRepository: OfferReferencesRepository,
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
   ) {}
@@ -127,6 +133,24 @@ export class OffersService {
     userId: string,
     id: string,
   ): Promise<void> {
+    // Checked before the delete itself: offerId is a required/persistent field on every
+    // entity that carries one (order/quote/invoice line items, bookings, cart items), and
+    // none of them support a soft-delete/archival state that would make an existing reference
+    // safe to orphan — same policy already applied to contact deletion (LOT F5). Status is
+    // deliberately not considered: even a cancelled order or an abandoned cart is a real
+    // historical record.
+    const hasReferences = await this.offerReferencesRepository.hasAnyReference(
+      organizationId,
+      id,
+    );
+    if (hasReferences) {
+      throw new ConflictException({
+        code: 'OFFER_IN_USE',
+        message:
+          'This offer is still referenced by other records and cannot be deleted',
+      });
+    }
+
     const deleted = await this.offersRepository.delete(organizationId, id);
     if (!deleted) {
       throw new NotFoundException({

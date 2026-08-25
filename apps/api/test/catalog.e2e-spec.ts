@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -31,6 +31,12 @@ interface OfferPayload {
   status: string;
   variants: OfferVariantPayload[];
   customFields: Record<string, unknown>;
+}
+interface ContactPayload {
+  id: string;
+}
+interface ResourcePayload {
+  id: string;
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -249,6 +255,435 @@ describe('Catalog module (e2e)', () => {
         .set('X-Organization-Id', b.organizationId)
         .expect(200);
       expect(asSuccess<OfferPayload[]>(ownRes.body)).toHaveLength(0);
+    });
+  });
+
+  describe('offer deletion protection (LOT G1)', () => {
+    async function registerOrgWithModules(
+      email: string,
+      orgName: string,
+      enabledModules: string[],
+    ) {
+      const org = await registerOrgAndToken(email, orgName);
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${org.accessToken}`)
+        .set('X-Organization-Id', org.organizationId)
+        .send({ enabledModules })
+        .expect(200);
+      return org;
+    }
+
+    async function createOffer(
+      accessToken: string,
+      organizationId: string,
+      name: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name,
+          pricing: { amount: 10, currency: 'EUR' },
+        })
+        .expect(201);
+      return asSuccess<OfferPayload>(res.body).id;
+    }
+
+    async function createContact(
+      accessToken: string,
+      organizationId: string,
+      firstName: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName })
+        .expect(201);
+      return asSuccess<ContactPayload>(res.body).id;
+    }
+
+    async function createResource(
+      accessToken: string,
+      organizationId: string,
+      name: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name, type: 'room' })
+        .expect(201);
+      return asSuccess<ResourcePayload>(res.body).id;
+    }
+
+    it('deletes an offer referenced by nothing (unchanged behavior)', async () => {
+      const { accessToken, organizationId } = await registerOrgWithModules(
+        'g1-unused@korva.test',
+        'G1 Unused Org',
+        ['catalog'],
+      );
+      const offerId = await createOffer(accessToken, organizationId, 'Unused');
+
+      await request(server)
+        .delete(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+
+      await request(server)
+        .get(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(404);
+    });
+
+    it('blocks deletion of an offer referenced by an order line item, and leaves it intact', async () => {
+      const { accessToken, organizationId } = await registerOrgWithModules(
+        'g1-order@korva.test',
+        'G1 Order Org',
+        ['catalog', 'crm', 'commerce'],
+      );
+      const offerId = await createOffer(accessToken, organizationId, 'Sofa');
+      const contactId = await createContact(
+        accessToken,
+        organizationId,
+        'Buyer',
+      );
+
+      await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          items: [{ offerId, description: 'Sofa', quantity: 1, unitPrice: 10 }],
+          currency: 'EUR',
+        })
+        .expect(201);
+
+      const res = await request(server)
+        .delete(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(409);
+      expect(asError(res.body).code).toBe('OFFER_IN_USE');
+
+      await request(server)
+        .get(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+    });
+
+    it('blocks deletion of an offer referenced by a quote line item, and leaves it intact', async () => {
+      const { accessToken, organizationId } = await registerOrgWithModules(
+        'g1-quote@korva.test',
+        'G1 Quote Org',
+        ['catalog', 'crm', 'finance'],
+      );
+      const offerId = await createOffer(accessToken, organizationId, 'Chair');
+      const contactId = await createContact(
+        accessToken,
+        organizationId,
+        'Prospect',
+      );
+
+      await request(server)
+        .post('/api/v1/quotes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          items: [
+            { offerId, description: 'Chair', quantity: 1, unitPrice: 10 },
+          ],
+          currency: 'EUR',
+        })
+        .expect(201);
+
+      const res = await request(server)
+        .delete(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(409);
+      expect(asError(res.body).code).toBe('OFFER_IN_USE');
+
+      await request(server)
+        .get(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+    });
+
+    it('blocks deletion of an offer referenced by an invoice line item, and leaves it intact', async () => {
+      const { accessToken, organizationId } = await registerOrgWithModules(
+        'g1-invoice@korva.test',
+        'G1 Invoice Org',
+        ['catalog', 'crm', 'finance'],
+      );
+      const offerId = await createOffer(accessToken, organizationId, 'Lamp');
+      const contactId = await createContact(
+        accessToken,
+        organizationId,
+        'Client',
+      );
+
+      await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          items: [{ offerId, description: 'Lamp', quantity: 1, unitPrice: 10 }],
+          currency: 'EUR',
+        })
+        .expect(201);
+
+      const res = await request(server)
+        .delete(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(409);
+      expect(asError(res.body).code).toBe('OFFER_IN_USE');
+
+      await request(server)
+        .get(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+    });
+
+    it('blocks deletion of an offer referenced by a booking, and leaves it intact', async () => {
+      const { accessToken, organizationId } = await registerOrgWithModules(
+        'g1-booking@korva.test',
+        'G1 Booking Org',
+        ['catalog', 'crm', 'booking'],
+      );
+      const offerId = await createOffer(accessToken, organizationId, 'Séance');
+      const contactId = await createContact(
+        accessToken,
+        organizationId,
+        'Client',
+      );
+      const resourceId = await createResource(
+        accessToken,
+        organizationId,
+        'Salle 1',
+      );
+
+      await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          resourceId,
+          offerId,
+          contactId,
+          startAt: new Date(Date.now() + 3600_000).toISOString(),
+          endAt: new Date(Date.now() + 7200_000).toISOString(),
+        })
+        .expect(201);
+
+      const res = await request(server)
+        .delete(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(409);
+      expect(asError(res.body).code).toBe('OFFER_IN_USE');
+
+      await request(server)
+        .get(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+    });
+
+    // Not one of the entities named in the original finding (Order/Quote/Invoice/Booking) —
+    // found during this lot's own exhaustive reference search: CartItem.offerId is a required
+    // field, and Cart has no soft-delete/expiry, so an item sitting in an open (or abandoned)
+    // cart is just as permanent a reference as a placed order.
+    it('blocks deletion of an offer referenced by a cart item, and leaves it intact', async () => {
+      const { accessToken, organizationId } = await registerOrgWithModules(
+        'g1-cart@korva.test',
+        'G1 Cart Org',
+        ['catalog', 'crm', 'commerce'],
+      );
+      const offerId = await createOffer(accessToken, organizationId, 'Mug');
+      const contactId = await createContact(
+        accessToken,
+        organizationId,
+        'Shopper',
+      );
+
+      const cartRes = await request(server)
+        .get(`/api/v1/carts?contactId=${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const cartId = asSuccess<{ id: string }>(cartRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/carts/${cartId}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId, quantity: 1 })
+        .expect(201);
+
+      const res = await request(server)
+        .delete(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(409);
+      expect(asError(res.body).code).toBe('OFFER_IN_USE');
+
+      await request(server)
+        .get(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+    });
+
+    it('never lets a reference from a different organization block deletion', async () => {
+      const orgA = await registerOrgWithModules(
+        'g1-tenant-a@korva.test',
+        'G1 Tenant A',
+        ['catalog'],
+      );
+      const orgB = await registerOrgWithModules(
+        'g1-tenant-b@korva.test',
+        'G1 Tenant B',
+        ['catalog', 'crm', 'commerce'],
+      );
+      const offerAId = await createOffer(
+        orgA.accessToken,
+        orgA.organizationId,
+        'Org A Offer',
+      );
+      const contactBId = await createContact(
+        orgB.accessToken,
+        orgB.organizationId,
+        'Org B Contact',
+      );
+
+      // Real, API-created reference in a different organization to the same offerId — orders
+      // do not validate that a line item's offerId belongs to the caller's own organization
+      // (see OrdersService.create), so this proves hasAnyReference's Mongo filter is genuinely
+      // scoped by organizationId and not just by offerId matching.
+      await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${orgB.accessToken}`)
+        .set('X-Organization-Id', orgB.organizationId)
+        .send({
+          contactId: contactBId,
+          items: [
+            {
+              offerId: offerAId,
+              description: 'Cross-tenant reference',
+              quantity: 1,
+              unitPrice: 10,
+            },
+          ],
+          currency: 'EUR',
+        })
+        .expect(201);
+
+      await request(server)
+        .delete(`/api/v1/offers/${offerAId}`)
+        .set('Authorization', `Bearer ${orgA.accessToken}`)
+        .set('X-Organization-Id', orgA.organizationId)
+        .expect(200);
+    });
+
+    it('returns 404 for an offer that does not exist', async () => {
+      const { accessToken, organizationId } = await registerOrgWithModules(
+        'g1-missing@korva.test',
+        'G1 Missing Org',
+        ['catalog'],
+      );
+
+      const res = await request(server)
+        .delete('/api/v1/offers/000000000000000000000000')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(404);
+      expect(asError(res.body).code).toBe('OFFER_NOT_FOUND');
+    });
+
+    it("returns 404 (not a false OFFER_IN_USE) when deleting another tenant's offer", async () => {
+      const orgA = await registerOrgWithModules(
+        'g1-cross-a@korva.test',
+        'G1 Cross A',
+        ['catalog'],
+      );
+      const orgB = await registerOrgWithModules(
+        'g1-cross-b@korva.test',
+        'G1 Cross B',
+        ['catalog'],
+      );
+      const offerBId = await createOffer(
+        orgB.accessToken,
+        orgB.organizationId,
+        'Belongs To B',
+      );
+
+      const res = await request(server)
+        .delete(`/api/v1/offers/${offerBId}`)
+        .set('Authorization', `Bearer ${orgA.accessToken}`)
+        .set('X-Organization-Id', orgA.organizationId)
+        .expect(404);
+      expect(asError(res.body).code).toBe('OFFER_NOT_FOUND');
+    });
+
+    it('denies a STAFF member (no offers.delete) from deleting an offer', async () => {
+      const owner = await registerOrgWithModules(
+        'g1-rbac-owner@korva.test',
+        'G1 RBAC Org',
+        ['catalog'],
+      );
+      const staffAuthRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: 'g1-rbac-staff@korva.test', password: 'password123' })
+        .expect(201);
+      const staffToken = asSuccess<AuthPayload>(staffAuthRes.body).accessToken;
+
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(owner.organizationId),
+        systemKey: 'STAFF',
+      });
+      expect(staffRole).not.toBeNull();
+
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .set('X-Organization-Id', owner.organizationId)
+        .send({
+          email: 'g1-rbac-staff@korva.test',
+          roleId: String(staffRole?._id),
+        })
+        .expect(201);
+
+      const offerId = await createOffer(
+        owner.accessToken,
+        owner.organizationId,
+        'Protected',
+      );
+
+      const res = await request(server)
+        .delete(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', owner.organizationId)
+        .expect(403);
+      expect(asError(res.body).code).toBe('PERMISSION_DENIED');
+
+      await request(server)
+        .get(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${owner.accessToken}`)
+        .set('X-Organization-Id', owner.organizationId)
+        .expect(200);
     });
   });
 });
