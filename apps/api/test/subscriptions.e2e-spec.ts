@@ -525,6 +525,117 @@ describe('Subscriptions module (e2e)', () => {
     });
   });
 
+  /**
+   * Wave 3 fix: EntitlementsService now checks `subscription.status` before its three
+   * consuming/growing checks (module enablement, seat addition, AI usage recording) — see
+   * EntitlementsService's own doc comment for the full policy reasoning. Before this fix, an
+   * immediately-canceled organization ("revokes access now" per the test above) kept full access
+   * to all three regardless of status.
+   */
+  describe('entitlements lockout once a subscription is canceled', () => {
+    // Deliberately consolidated into as few registerOrgAndToken calls as possible: this file's
+    // AUTH_THROTTLE (30 auth/register per 60s, see auth.controller.ts) is a real anti-abuse
+    // control shared by every test in this describe block's single app instance, and this suite
+    // already runs close to that limit.
+    it('rejects enabling a module and inviting a member with SUBSCRIPTION_CANCELED after an immediate cancel, while the subscription summary keeps working', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'lockout-org@korva.test',
+        'Lockout Org',
+      );
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(organizationId),
+        systemKey: 'STAFF',
+      });
+
+      await request(server)
+        .post('/api/v1/subscriptions/cancel')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ immediate: true })
+        .expect(201);
+
+      const moduleRes = await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['crm'] })
+        .expect(403);
+      expect(asError(moduleRes.body).code).toBe('SUBSCRIPTION_CANCELED');
+
+      // assertSeatAvailable runs before the invited email is even looked up, so the lockout
+      // fires regardless of whether that email belongs to a real user — no need to register one.
+      const seatRes = await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          email: 'nonexistent-lockout-invitee@korva.test',
+          roleId: String(staffRole?._id),
+        })
+        .expect(403);
+      expect(asError(seatRes.body).code).toBe('SUBSCRIPTION_CANCELED');
+
+      const summaryRes = await request(server)
+        .get('/api/v1/subscriptions/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<SubscriptionSummaryPayload>(summaryRes.body).subscription
+          .status,
+      ).toBe('canceled');
+    });
+
+    it('rejects AI usage with SUBSCRIPTION_CANCELED after an immediate cancel, even under the usage quota', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'lockout-ai@korva.test',
+        'Lockout AI Org',
+      );
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['ai'] })
+        .expect(200);
+
+      await request(server)
+        .post('/api/v1/subscriptions/cancel')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ immediate: true })
+        .expect(201);
+
+      const res = await request(server)
+        .post('/api/v1/ai/chat')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ message: 'Bonjour' })
+        .expect(403);
+      expect(asError(res.body).code).toBe('SUBSCRIPTION_CANCELED');
+    });
+
+    it('a pending cancel-at-period-end (status still "active") does NOT lock out access — the grace period already granted by cancelAtPeriodEnd', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'lockout-grace@korva.test',
+        'Lockout Grace Org',
+      );
+
+      await request(server)
+        .post('/api/v1/subscriptions/cancel')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ immediate: false })
+        .expect(201);
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['crm'] })
+        .expect(200);
+    });
+  });
+
   describe('proration on plan change', () => {
     it('a mid-period upgrade stores a positive prorationAmount; a same-plan "change" right after a fresh period stores null', async () => {
       const { accessToken, organizationId } = await registerOrgAndToken(
