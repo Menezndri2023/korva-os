@@ -6,7 +6,8 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { captureApiException } from '../../core/observability/sentry';
 
 interface ErrorBody {
   code: string;
@@ -32,6 +33,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(error.message, (exception as Error)?.stack);
+
+      // Route path + method only — never the request body, headers, cookies, or query
+      // string, which can carry passwords, tokens, or tenant PII. No-op when SENTRY_DSN is
+      // unset.
+      const request = ctx.getRequest<Request>();
+      captureApiException(exception, {
+        method: request.method,
+        route: request.path,
+      });
     }
 
     response.status(status).json({ success: false, error });

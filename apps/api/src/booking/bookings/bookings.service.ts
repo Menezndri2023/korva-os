@@ -3,7 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection, Types } from 'mongoose';
 import type {
   CreateBookingInput,
   ListBookingsQuery,
@@ -28,6 +29,7 @@ export class BookingsService {
     private readonly offersService: OffersService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    @InjectConnection() private readonly connection: Connection,
   ) {}
 
   async create(
@@ -52,26 +54,49 @@ export class BookingsService {
 
     const startAt = new Date(input.startAt);
     const endAt = new Date(input.endAt);
-    await this.availabilityService.assertSlotAvailable(
-      organizationId,
-      input.resourceId,
-      startAt,
-      endAt,
-    );
 
-    const booking = await this.bookingsRepository.create({
-      organizationId: new Types.ObjectId(organizationId),
-      resourceId: new Types.ObjectId(input.resourceId),
-      offerId: new Types.ObjectId(input.offerId),
-      contactId: new Types.ObjectId(input.contactId),
-      startAt,
-      endAt,
-      pricing: {
-        amount: offer.pricing.amount,
-        currency: offer.pricing.currency,
-      },
-      notes: input.notes,
-    });
+    // The overlap-count read and the booking insert must be atomic w.r.t. any other concurrent
+    // create() for the same resource, or two requests can both read "under capacity" before
+    // either writes (double-booking). A MongoDB transaction, on its own, would NOT close this —
+    // two concurrent inserts of distinct Booking documents don't conflict with each other at the
+    // document level, so both would still commit. assertSlotAvailable's resource-lock increment
+    // (see bookingLockVersion on the Resource schema) forces a real WriteConflict between the
+    // two attempts on that shared document, so MongoDB serializes them: the loser is
+    // automatically retried by withTransaction against a fresh snapshot that already includes
+    // the winner's committed booking.
+    const session = await this.connection.startSession();
+    let booking: BookingDocument;
+    try {
+      booking = await session.withTransaction(async () => {
+        await this.availabilityService.assertSlotAvailable(
+          organizationId,
+          input.resourceId,
+          startAt,
+          endAt,
+          undefined,
+          session,
+        );
+
+        return this.bookingsRepository.create(
+          {
+            organizationId: new Types.ObjectId(organizationId),
+            resourceId: new Types.ObjectId(input.resourceId),
+            offerId: new Types.ObjectId(input.offerId),
+            contactId: new Types.ObjectId(input.contactId),
+            startAt,
+            endAt,
+            pricing: {
+              amount: offer.pricing.amount,
+              currency: offer.pricing.currency,
+            },
+            notes: input.notes,
+          },
+          session,
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
 
     await this.auditService.record({
       organizationId,

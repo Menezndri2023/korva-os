@@ -84,6 +84,19 @@ export class Resource {
 
   @Prop({ type: [BlockedSlotSchema], default: [] })
   blockedSlots!: BlockedSlot[];
+
+  /**
+   * Internal write-conflict trigger only — never read, no business meaning, kept out of API
+   * responses via `select: false`. Every booking-creation transaction increments it (see
+   * AvailabilityService.assertSlotAvailable) as part of the same MongoDB transaction that reads
+   * overlapping bookings and inserts the new Booking document. Two concurrent booking-creation
+   * transactions on the same resource both try to write this field, so MongoDB's WiredTiger
+   * transaction machinery detects a real WriteConflict between them and forces the loser to
+   * retry against a fresh snapshot (which by then includes the winner's committed booking) —
+   * this is what closes the check-then-insert double-booking race in BookingsService.create().
+   */
+  @Prop({ default: 0, select: false })
+  bookingLockVersion!: number;
 }
 
 export const ResourceSchema = SchemaFactory.createForClass(Resource);

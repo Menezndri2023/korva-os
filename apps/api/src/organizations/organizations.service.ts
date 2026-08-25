@@ -99,6 +99,23 @@ export class OrganizationsService {
       organization.id as string,
     );
 
+    // A freshly created organization must default to every module its assigned plan
+    // actually allows, not an empty set — otherwise every module (CRM, Catalog, Booking,
+    // Commerce, Finance, Analytics, Workflow, Communication, AI) stays undiscoverable until
+    // someone opts each one in manually via Settings. The plan can only be resolved once the
+    // default subscription above exists, and enabledModules must always stay a subset of the
+    // plan's own module list (never a hardcoded literal — see EntitlementsService.assertModulesAllowed).
+    const plan = await this.subscriptionsService.getActivePlan(
+      organization.id as string,
+    );
+    const withDefaultModules = await this.organizationsRepository.update(
+      organization.id as string,
+      { enabledModules: plan.modules },
+    );
+    if (!withDefaultModules) {
+      throw new Error('Failed to enable default modules for new organization');
+    }
+
     await this.auditService.record({
       organizationId: organization.id as string,
       userId: ownerUserId,
@@ -108,7 +125,7 @@ export class OrganizationsService {
       metadata: { name: organization.name },
     });
 
-    return organization;
+    return withDefaultModules;
   }
 
   async getBySlug(slug: string): Promise<OrganizationDocument> {

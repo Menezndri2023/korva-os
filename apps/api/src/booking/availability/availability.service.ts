@@ -3,9 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { ClientSession, Model } from 'mongoose';
 import { ResourcesRepository } from '../resources/resources.repository';
 import { BookingsRepository } from '../bookings/bookings.repository';
-import { ResourceDocument } from '../resources/schemas/resource.schema';
+import {
+  Resource,
+  ResourceDocument,
+} from '../resources/schemas/resource.schema';
 
 function timeToMinutes(time: string): number {
   const [hours, minutes] = time.split(':').map(Number);
@@ -56,15 +61,25 @@ export class AvailabilityService {
   constructor(
     private readonly resourcesRepository: ResourcesRepository,
     private readonly bookingsRepository: BookingsRepository,
+    @InjectModel(Resource.name)
+    private readonly resourceModel: Model<ResourceDocument>,
   ) {}
 
-  /** Throws if the slot cannot be booked; used by BookingsService before create/reschedule. */
+  /**
+   * Throws if the slot cannot be booked; used by BookingsService before create/reschedule.
+   *
+   * `session`, when given, ties the overlap read to the caller's MongoDB transaction and, before
+   * that read, claims a write on the resource's `bookingLockVersion` counter within that same
+   * transaction — see the field's doc comment on the Resource schema for why. Callers that don't
+   * pass a session (e.g. reschedule()) get exactly the previous, non-transactional behavior.
+   */
   async assertSlotAvailable(
     organizationId: string,
     resourceId: string,
     startAt: Date,
     endAt: Date,
     excludeBookingId?: string,
+    session?: ClientSession,
   ): Promise<ResourceDocument> {
     const resource = await this.resourcesRepository.findById(
       organizationId,
@@ -97,12 +112,28 @@ export class AvailabilityService {
       });
     }
 
+    if (session) {
+      // Forces a real MongoDB WriteConflict between any two concurrent booking-creation
+      // transactions targeting the same resource: the second writer aborts and
+      // session.withTransaction retries it against a fresh snapshot that includes the first
+      // writer's now-committed booking, so the capacity check below can never pass twice for
+      // the same slot. See bookingLockVersion's doc comment on the Resource schema.
+      await this.resourceModel
+        .updateOne(
+          { _id: resource._id },
+          { $inc: { bookingLockVersion: 1 } },
+          { session },
+        )
+        .exec();
+    }
+
     const overlapping = await this.bookingsRepository.findOverlapping(
       organizationId,
       resourceId,
       startAt,
       endAt,
       excludeBookingId,
+      session,
     );
     if (overlapping.length >= resource.capacity) {
       throw new BadRequestException({

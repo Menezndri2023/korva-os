@@ -5,8 +5,14 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { initSentry, captureApiException } from './core/observability/sentry';
 
 async function bootstrap() {
+  // Arm Sentry (no-op if SENTRY_DSN is unset) before anything else runs, so a crash during
+  // app/module initialization itself — e.g. Mongoose failing to connect — is still capturable
+  // via the bootstrap().catch() handler below.
+  initSentry();
+
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
@@ -48,5 +54,6 @@ async function bootstrap() {
 
 bootstrap().catch((error: unknown) => {
   console.error('Failed to start KORVA API', error);
+  captureApiException(error, { method: 'BOOTSTRAP', route: 'bootstrap' });
   process.exit(1);
 });

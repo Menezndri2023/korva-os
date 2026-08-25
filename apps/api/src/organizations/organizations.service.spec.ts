@@ -8,7 +8,7 @@ import type { EntitlementsService } from '../subscriptions/entitlements.service'
 import type { OrganizationsRepository } from './organizations.repository';
 import type { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import type { RoleDocument } from '../identity/schemas/role.schema';
-import type { SystemRole } from '@korva/types';
+import type { SystemRole, KorvaModule } from '@korva/types';
 
 describe('slugify', () => {
   it('lowercases and dasherizes a simple name', () => {
@@ -187,5 +187,130 @@ describe('OrganizationsService.addMember — role-hierarchy enforcement', () => 
     const asTarget = await attempt('role-owner', 'role-custom');
     await expect(asTarget.promise).rejects.toBeInstanceOf(ForbiddenException);
     expect(asTarget.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrganizationsService.createForOwner — default enabledModules (P0-ORG-01)', () => {
+  const OWNER_USER_ID = 'user-owner';
+  const ORG_ID = 'org-new';
+  const OWNER_ROLE_ID = 'role-owner';
+
+  const CREATE_INPUT = {
+    name: 'New Org',
+    type: 'commerce',
+    country: 'FR',
+    currency: 'EUR',
+    timezone: 'Europe/Paris',
+    language: 'fr',
+  };
+
+  function buildService(planModules: KorvaModule[]) {
+    const created = { id: ORG_ID, name: CREATE_INPUT.name, enabledModules: [] };
+    const countBySlugPrefix = jest.fn().mockResolvedValue(0);
+    const create = jest.fn().mockResolvedValue(created);
+    const update = jest
+      .fn()
+      .mockImplementation((id: string, data) =>
+        Promise.resolve({ ...created, ...data }),
+      );
+    const organizationsRepository = {
+      countBySlugPrefix,
+      create,
+      update,
+    } as unknown as OrganizationsRepository;
+
+    const seedSystemRoles = jest.fn().mockResolvedValue(undefined);
+    const getOwnerRole = jest.fn().mockResolvedValue({ id: OWNER_ROLE_ID });
+    const rolesService = {
+      seedSystemRoles,
+      getOwnerRole,
+    } as unknown as RolesService;
+
+    const membershipCreate = jest
+      .fn()
+      .mockResolvedValue({ id: 'membership-1' });
+    const membershipsService = {
+      create: membershipCreate,
+    } as unknown as MembershipsService;
+
+    const usersService = {} as unknown as UsersService;
+
+    const record = jest.fn().mockResolvedValue(undefined);
+    const auditService = { record } as unknown as AuditService;
+
+    const createDefaultSubscription = jest
+      .fn()
+      .mockResolvedValue({ id: 'sub-1' });
+    const getActivePlan = jest.fn().mockResolvedValue({
+      key: 'free',
+      name: 'Free',
+      modules: planModules,
+      limits: { seats: 3 },
+    });
+    const subscriptionsService = {
+      createDefaultSubscription,
+      getActivePlan,
+    } as unknown as SubscriptionsService;
+
+    const entitlementsService = {} as unknown as EntitlementsService;
+
+    const service = new OrganizationsService(
+      organizationsRepository,
+      rolesService,
+      membershipsService,
+      usersService,
+      auditService,
+      subscriptionsService,
+      entitlementsService,
+    );
+
+    return { service, update, createDefaultSubscription, getActivePlan };
+  }
+
+  it('defaults enabledModules to the resolved plan modules, not a hardcoded or empty list', async () => {
+    const planModules: KorvaModule[] = [
+      'crm',
+      'catalog',
+      'booking',
+      'commerce',
+      'finance',
+      'workflow',
+      'communication',
+      'analytics',
+      'ai',
+    ];
+    const { service, update, createDefaultSubscription, getActivePlan } =
+      buildService(planModules);
+
+    const result = await service.createForOwner(OWNER_USER_ID, CREATE_INPUT);
+
+    // The plan must be resolved only after the default subscription is created.
+    expect(createDefaultSubscription).toHaveBeenCalledWith(ORG_ID);
+    expect(getActivePlan).toHaveBeenCalledWith(ORG_ID);
+    expect(update).toHaveBeenCalledWith(ORG_ID, {
+      enabledModules: planModules,
+    });
+    expect(result.enabledModules).toEqual(planModules);
+  });
+
+  it('never grants more modules than the resolved plan allows, even for a restricted plan', async () => {
+    const starterModules: KorvaModule[] = [
+      'crm',
+      'catalog',
+      'booking',
+      'commerce',
+      'finance',
+      'communication',
+      'analytics',
+    ];
+    const { service, update } = buildService(starterModules);
+
+    const result = await service.createForOwner(OWNER_USER_ID, CREATE_INPUT);
+
+    expect(update).toHaveBeenCalledWith(ORG_ID, {
+      enabledModules: starterModules,
+    });
+    expect(result.enabledModules).not.toContain('workflow');
+    expect(result.enabledModules).not.toContain('ai');
   });
 });

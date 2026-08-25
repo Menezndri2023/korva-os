@@ -399,6 +399,92 @@ describe('Booking module (e2e)', () => {
     });
   });
 
+  describe('concurrent booking creation on a capacity-1 resource', () => {
+    // Regression test for P0-BOOKING-01: BookingsService.create() used to read the overlap
+    // count and insert the new Booking as two separate, non-atomic steps, so two concurrent
+    // requests for the same resource/slot at capacity-1 could both read "under capacity" before
+    // either wrote, double-booking the resource. Both requests below are dispatched before
+    // either is awaited — a genuine race, not two sequential calls (mirrors the concurrency
+    // tests in finance.e2e-spec.ts).
+    let accessToken: string;
+    let organizationId: string;
+    let contactId: string;
+    let offerId: string;
+    let resourceId: string;
+
+    beforeAll(async () => {
+      const ctx = await registerOrgContactOffer(
+        'race-owner@korva.test',
+        'Race Org',
+      );
+      accessToken = ctx.accessToken;
+      organizationId = ctx.organizationId;
+      contactId = ctx.contactId;
+      offerId = ctx.offerId;
+
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Single seat',
+          type: 'seat',
+          capacity: 1,
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+    });
+
+    it('two concurrent bookings for the same slot: exactly one succeeds, the other gets a clean SLOT_UNAVAILABLE, and only one booking is ever persisted', async () => {
+      const payload = {
+        resourceId,
+        offerId,
+        contactId,
+        startAt: `${monday}T14:00:00.000Z`,
+        endAt: `${monday}T15:00:00.000Z`,
+      };
+
+      const [resA, resB] = await Promise.all([
+        request(server)
+          .post('/api/v1/bookings')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send(payload),
+        request(server)
+          .post('/api/v1/bookings')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send(payload),
+      ]);
+
+      const results = [resA, resB];
+      const succeeded = results.filter((r) => r.status === 201);
+      const rejected = results.filter((r) => r.status === 400);
+      expect(succeeded).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(asError(rejected[0]!.body).code).toBe('SLOT_UNAVAILABLE');
+
+      // No orphaned/duplicate Booking document: exactly one active booking exists for this
+      // resource/slot, whichever request won the race.
+      const listRes = await request(server)
+        .get(`/api/v1/bookings?resourceId=${resourceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const bookings = asSuccess<BookingPayload[]>(listRes.body);
+      const forSlot = bookings.filter(
+        (b) => b.startAt === payload.startAt && b.endAt === payload.endAt,
+      );
+      expect(forSlot).toHaveLength(1);
+      expect(forSlot[0]!.id).toBe(
+        asSuccess<BookingPayload>(succeeded[0]!.body).id,
+      );
+    });
+  });
+
   describe('tenant isolation for booking resources', () => {
     it('denies a user from another organization reading resources via a foreign org id', async () => {
       const a = await registerOrgContactOffer(

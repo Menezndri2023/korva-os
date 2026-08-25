@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import { Booking, BookingDocument } from './schemas/booking.schema';
 import type { Paginated } from '../../crm/contacts/contacts.repository';
 
@@ -23,8 +23,17 @@ export class BookingsRepository {
     private readonly bookingModel: Model<BookingDocument>,
   ) {}
 
-  create(data: Partial<Booking>): Promise<BookingDocument> {
-    return this.bookingModel.create(data);
+  /**
+   * `session`, when given, must be honored via the array form of `create()` — Mongoose only
+   * attaches a session to the write when docs are passed as an array; `create(doc, { session })`
+   * silently ignores it. Matches Finance's PaymentsRepository.createPayment.
+   */
+  async create(
+    data: Partial<Booking>,
+    session?: ClientSession,
+  ): Promise<BookingDocument> {
+    const [booking] = await this.bookingModel.create([data], { session });
+    return booking!;
   }
 
   findById(
@@ -80,6 +89,7 @@ export class BookingsRepository {
     startAt: Date,
     endAt: Date,
     excludeBookingId?: string,
+    session?: ClientSession,
   ): Promise<BookingDocument[]> {
     const filter: FilterQuery<Booking> = {
       organizationId: new Types.ObjectId(organizationId),
@@ -90,7 +100,10 @@ export class BookingsRepository {
     };
     if (excludeBookingId)
       filter._id = { $ne: new Types.ObjectId(excludeBookingId) };
-    return this.bookingModel.find(filter).exec();
+    return this.bookingModel
+      .find(filter)
+      .session(session ?? null)
+      .exec();
   }
 
   findForResourceOnDay(
