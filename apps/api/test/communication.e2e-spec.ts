@@ -419,5 +419,76 @@ describe('Communication module (e2e)', () => {
         .expect(403);
       expect(asError(res.body).code).toBe('ORGANIZATION_ACCESS_DENIED');
     });
+
+    it("denies marking another organization's notification as read by its real id, even with a valid token for the caller's own organization", async () => {
+      const a = await registerOrgAndContact(
+        'comm-iso-notif-a@korva.test',
+        'Comm Iso Notif A',
+      );
+      const b = await registerOrgAndContact(
+        'comm-iso-notif-b@korva.test',
+        'Comm Iso Notif B',
+      );
+
+      // Real notification, created in B via the same internal_notification workflow mechanism
+      // used above — not a direct Mongo insert.
+      await request(server)
+        .post('/api/v1/workflows')
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .send({
+          name: 'Notify team on new customer',
+          trigger: 'customer.created',
+          actions: [
+            {
+              type: 'internal_notification',
+              config: { title: 'New customer: {{contactId}}' },
+            },
+          ],
+        })
+        .expect(201);
+
+      const contactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .send({ firstName: 'Cross Tenant' })
+        .expect(201);
+      const contactId = asSuccess<ContactPayload>(contactRes.body).id;
+
+      const notification = await waitFor(async () => {
+        const res = await request(server)
+          .get('/api/v1/notifications')
+          .set('Authorization', `Bearer ${b.accessToken}`)
+          .set('X-Organization-Id', b.organizationId)
+          .expect(200);
+        const notifications = asSuccess<NotificationPayload[]>(res.body);
+        return notifications.find(
+          (n) => n.title === `New customer: ${contactId}`,
+        );
+      }, 30000);
+      expect(notification.read).toBe(false);
+
+      // A's own token, A's own (valid) X-Organization-Id header, targeting B's real
+      // notification id — there is no GET /notifications/:id endpoint, so PATCH .../read is the
+      // only id-addressed endpoint available to prove NotificationsRepository.markRead is
+      // scoped by organizationId (and userId), not just by the notification's _id.
+      const res = await request(server)
+        .patch(`/api/v1/notifications/${notification.id}/read`)
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .set('X-Organization-Id', a.organizationId)
+        .expect(404);
+      expect(asError(res.body).code).toBe('NOTIFICATION_NOT_FOUND');
+
+      // And not just an error response — B's notification must genuinely still be unread, not
+      // silently flipped before the 404 was returned.
+      const stillUnreadRes = await request(server)
+        .get('/api/v1/notifications?read=false')
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .expect(200);
+      const stillUnread = asSuccess<NotificationPayload[]>(stillUnreadRes.body);
+      expect(stillUnread.some((n) => n.id === notification.id)).toBe(true);
+    }, 25000);
   });
 });

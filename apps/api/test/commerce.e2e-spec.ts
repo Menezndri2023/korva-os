@@ -624,5 +624,36 @@ describe('Commerce module (e2e)', () => {
         .expect(403);
       expect(asError(res.body).code).toBe('ORGANIZATION_ACCESS_DENIED');
     });
+
+    it("denies reading another organization's cart by its real id, even with a valid token for the caller's own organization", async () => {
+      const a = await registerOrgContact(
+        'commerce-iso-cart-a@korva.test',
+        'Commerce Iso Cart A',
+      );
+      const b = await registerOrgContact(
+        'commerce-iso-cart-b@korva.test',
+        'Commerce Iso Cart B',
+      );
+
+      // Real cart, created in B via the normal get-or-create endpoint — not a direct Mongo
+      // insert. Its id is the one an attacker in A would have to already know or guess.
+      const cartRes = await request(server)
+        .get(`/api/v1/carts?contactId=${b.contactId}`)
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .expect(200);
+      const cartId = asSuccess<CartPayload>(cartRes.body).id;
+
+      // A's own token, A's own (valid) X-Organization-Id header — this is not the
+      // ORGANIZATION_ACCESS_DENIED case above (a foreign header rejected by TenantGuard before
+      // reaching the controller); it proves CartsRepository.findById itself is scoped by
+      // organizationId, not just by the cart's _id.
+      const res = await request(server)
+        .get(`/api/v1/carts/${cartId}`)
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .set('X-Organization-Id', a.organizationId)
+        .expect(404);
+      expect(asError(res.body).code).toBe('CART_NOT_FOUND');
+    });
   });
 });
