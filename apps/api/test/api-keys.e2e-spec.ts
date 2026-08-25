@@ -219,6 +219,47 @@ describe('API keys (e2e)', () => {
         .expect(403);
       expect(asError(res.body).code).toBe('PERMISSION_DENIED');
     });
+
+    it('rejects an ADMIN issuing an OWNER-scoped key (role-hierarchy enforcement)', async () => {
+      const { accessToken: ownerToken, organization } =
+        await registerOrgAndToken(
+          'apikey-hierarchy-owner@korva.test',
+          'Hierarchy Org',
+        );
+      const admin = await request(server)
+        .post('/api/v1/auth/register')
+        .send({
+          email: 'apikey-hierarchy-admin@korva.test',
+          password: 'password123',
+        })
+        .expect(201);
+      const adminToken = asSuccess<AuthPayload>(admin.body).accessToken;
+      const adminRoleId = await roleId(ownerToken, organization.id, 'ADMIN');
+      const ownerRoleId = await roleId(ownerToken, organization.id, 'OWNER');
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organization.id)
+        .send({
+          email: 'apikey-hierarchy-admin@korva.test',
+          roleId: adminRoleId,
+        })
+        .expect(201);
+
+      const res = await request(server)
+        .post('/api/v1/organizations/me/api-keys')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-Organization-Id', organization.id)
+        .send({ name: 'owner-scoped from admin', roleId: ownerRoleId })
+        .expect(403);
+      expect(asError(res.body).code).toBe('ROLE_HIERARCHY_VIOLATION');
+
+      // Sanity: the same ADMIN can still issue a key scoped at or below their own rank.
+      await createApiKey(adminToken, organization.id, {
+        name: 'admin-scoped from admin',
+        roleId: adminRoleId,
+      });
+    });
   });
 
   describe('X-API-Key authentication', () => {

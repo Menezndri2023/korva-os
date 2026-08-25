@@ -41,6 +41,7 @@ export class ApiKeysController {
     return this.apiKeysService.create(
       tenant.organizationId,
       tenant.userId,
+      tenant.roleId,
       body,
     );
   }
