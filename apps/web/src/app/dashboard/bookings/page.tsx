@@ -184,64 +184,66 @@ export default function BookingsPage() {
       )}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
-            <tr>
-              <th className="px-4 py-2">Ressource</th>
-              <th className="px-4 py-2">Client</th>
-              <th className="px-4 py-2">Début</th>
-              <th className="px-4 py-2">Fin</th>
-              <th className="px-4 py-2">Statut</th>
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">Ressource</th>
+                <th className="px-4 py-2">Client</th>
+                <th className="px-4 py-2">Début</th>
+                <th className="px-4 py-2">Fin</th>
+                <th className="px-4 py-2">Statut</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
-            )}
-            {!isLoading && bookings?.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
-                  Aucune réservation.
-                </td>
-              </tr>
-            )}
-            {bookings?.map((booking) => (
-              <tr key={booking.id}>
-                <td className="px-4 py-2 font-medium">
-                  <Link
-                    href={`/dashboard/bookings/${booking.id}`}
-                    className="text-zinc-900 underline-offset-2 hover:underline"
-                  >
-                    {resourceName(booking.resourceId)}
-                  </Link>
-                </td>
-                <td className="px-4 py-2 text-zinc-600">{contactName(booking.contactId)}</td>
-                <td className="px-4 py-2 text-zinc-600">{new Date(booking.startAt).toLocaleString()}</td>
-                <td className="px-4 py-2 text-zinc-600">{new Date(booking.endAt).toLocaleString()}</td>
-                <td className="px-4 py-2">
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
-                    {STATUS_LABELS[booking.status]}
-                  </span>
-                </td>
-                <td className="px-4 py-2">
-                  {(booking.status === "pending" || booking.status === "confirmed") && (
-                    <button
-                      onClick={() => cancelMutation.mutate(booking.id)}
-                      className="text-xs text-red-600 hover:underline"
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+                    Chargement...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && bookings?.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+                    Aucune réservation.
+                  </td>
+                </tr>
+              )}
+              {bookings?.map((booking) => (
+                <tr key={booking.id}>
+                  <td className="px-4 py-2 font-medium">
+                    <Link
+                      href={`/dashboard/bookings/${booking.id}`}
+                      className="text-zinc-900 underline-offset-2 hover:underline"
                     >
-                      Annuler
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      {resourceName(booking.resourceId)}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 text-zinc-600">{contactName(booking.contactId)}</td>
+                  <td className="px-4 py-2 text-zinc-600">{new Date(booking.startAt).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-zinc-600">{new Date(booking.endAt).toLocaleString()}</td>
+                  <td className="px-4 py-2">
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
+                      {STATUS_LABELS[booking.status]}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2">
+                    {(booking.status === "pending" || booking.status === "confirmed") && (
+                      <button
+                        onClick={() => cancelMutation.mutate(booking.id)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Annuler
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Pagination

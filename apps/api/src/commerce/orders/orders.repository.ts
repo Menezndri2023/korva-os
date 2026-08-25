@@ -17,8 +17,19 @@ export class OrdersRepository {
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
   ) {}
 
-  create(data: Partial<Order>): Promise<OrderDocument> {
-    return this.orderModel.create(data);
+  /**
+   * `session`, when given, must be honored via the array form of `create()` — Mongoose only
+   * attaches a session to the write when docs are passed as an array; `create(doc, { session })`
+   * silently ignores it (same caveat as InvoicesRepository.create / PaymentsRepository). Passed
+   * by OrdersService.createFromCart so this write commits/aborts together with the Cart status
+   * update in the same MongoDB transaction.
+   */
+  async create(
+    data: Partial<Order>,
+    session?: ClientSession,
+  ): Promise<OrderDocument> {
+    const [order] = await this.orderModel.create([data], { session });
+    return order!;
   }
 
   findById(organizationId: string, id: string): Promise<OrderDocument | null> {

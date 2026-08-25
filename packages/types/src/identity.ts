@@ -6,6 +6,8 @@ export interface User {
   firstName?: string;
   lastName?: string;
   emailVerifiedAt?: string | null;
+  /** Never accompanied by the TOTP secret itself — see UserSchema.totpSecretEncrypted. */
+  totpEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -14,9 +14,14 @@ const apiOrigin = new URL(
  *  - script-src: 'strict-dynamic' + nonce, no third-party JS anywhere in this app.
  *  - style-src: 'self' only (no 'unsafe-inline') — unlike apps/web, this app has zero
  *    `style={{...}}` usage today (confirmed by search), so it can be stricter.
- *  - img-src: 'self' + data: only — the storefront's data model has org logos/offer image
- *    URLs, but the current UI doesn't render any <img> yet (confirmed by search); tighten
- *    this to the real external host(s) if/when offer images are added to the page.
+ *  - img-src: 'self' + data: + https: — the storefront now renders offer.images (Wave 2 Agent F,
+ *    catalog thumbnails + the offer detail page). Organization.logo is deliberately still not
+ *    rendered in the UI this wave (tenant branding is a cross-agent dependency, see this wave's
+ *    report). apps/api has no image upload/storage feature yet (grepped: no S3/CDN/media
+ *    module, only unused STORAGE_* env placeholders), so offer.images entries are arbitrary
+ *    tenant-supplied strings with no fixed host to allow-list. 'https:' is the narrowest
+ *    directive that still works against an unknown host; tighten this to a specific CDN/bucket
+ *    domain once apps/api actually ships one.
  *  - font-src: 'self' only — next/font/google self-hosts Geist/Geist Mono at build time.
  *  - connect-src: 'self' + the configured API origin — every fetch() call targets
  *    apps/api's public endpoints (NEXT_PUBLIC_API_URL), nothing else.
@@ -30,7 +35,7 @@ export function middleware(request: NextRequest) {
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isProduction ? "" : " 'unsafe-eval'"}`,
     `style-src 'self'`,
-    `img-src 'self' data:`,
+    `img-src 'self' data: https:`,
     `font-src 'self'`,
     `connect-src 'self' ${apiOrigin}`,
     `object-src 'none'`,

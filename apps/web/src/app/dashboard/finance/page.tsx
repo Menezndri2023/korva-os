@@ -161,78 +161,80 @@ export default function QuotesPage() {
       )}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-            <tr>
-              <th className="px-4 py-2">N°</th>
-              <th className="px-4 py-2">Client</th>
-              <th className="px-4 py-2">Total</th>
-              <th className="px-4 py-2">Statut</th>
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">N°</th>
+                <th className="px-4 py-2">Client</th>
+                <th className="px-4 py-2">Total</th>
+                <th className="px-4 py-2">Statut</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
-            )}
-            {!isLoading && quotes?.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                  Aucun devis.
-                </td>
-              </tr>
-            )}
-            {quotes?.map((quote) => (
-              <tr key={quote.id}>
-                <td className="px-4 py-2 font-medium">
-                  <Link
-                    href={`/dashboard/finance/${quote.id}`}
-                    className="text-text underline-offset-2 hover:underline"
-                  >
-                    {quote.number}
-                  </Link>
-                </td>
-                <td className="px-4 py-2 text-text-muted">{contactName(quote.contactId)}</td>
-                <td className="px-4 py-2 text-text-muted">
-                  {quote.total} {quote.currency}
-                </td>
-                <td className="px-4 py-2">
-                  <Badge>{STATUS_LABELS[quote.status]}</Badge>
-                </td>
-                <td className="px-4 py-2 space-x-2">
-                  {quote.status === "draft" && (
-                    <button
-                      onClick={() => sendMutation.mutate(quote.id)}
-                      className="text-xs text-text-muted hover:underline"
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
+                    Chargement...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && quotes?.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
+                    Aucun devis.
+                  </td>
+                </tr>
+              )}
+              {quotes?.map((quote) => (
+                <tr key={quote.id}>
+                  <td className="px-4 py-2 font-medium">
+                    <Link
+                      href={`/dashboard/finance/${quote.id}`}
+                      className="text-text underline-offset-2 hover:underline"
                     >
-                      Envoyer
-                    </button>
-                  )}
-                  {(quote.status === "sent" || quote.status === "viewed") && (
-                    <button
-                      onClick={() => acceptMutation.mutate(quote.id)}
-                      className="text-xs text-text-muted hover:underline"
-                    >
-                      Accepter
-                    </button>
-                  )}
-                  {quote.status === "accepted" && (
-                    <button
-                      onClick={() => convertMutation.mutate(quote.id)}
-                      className="text-xs text-text-muted hover:underline"
-                    >
-                      Convertir en facture
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      {quote.number}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 text-text-muted">{contactName(quote.contactId)}</td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {quote.total} {quote.currency}
+                  </td>
+                  <td className="px-4 py-2">
+                    <Badge>{STATUS_LABELS[quote.status]}</Badge>
+                  </td>
+                  <td className="px-4 py-2 space-x-2">
+                    {quote.status === "draft" && (
+                      <button
+                        onClick={() => sendMutation.mutate(quote.id)}
+                        className="text-xs text-text-muted hover:underline"
+                      >
+                        Envoyer
+                      </button>
+                    )}
+                    {(quote.status === "sent" || quote.status === "viewed") && (
+                      <button
+                        onClick={() => acceptMutation.mutate(quote.id)}
+                        className="text-xs text-text-muted hover:underline"
+                      >
+                        Accepter
+                      </button>
+                    )}
+                    {quote.status === "accepted" && (
+                      <button
+                        onClick={() => convertMutation.mutate(quote.id)}
+                        className="text-xs text-text-muted hover:underline"
+                      >
+                        Convertir en facture
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Pagination

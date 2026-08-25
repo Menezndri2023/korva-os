@@ -25,3 +25,15 @@ export const addMemberSchema = z.object({
   roleId: z.string().min(1),
 });
 export type AddMemberInput = z.infer<typeof addMemberSchema>;
+
+/**
+ * `password`/`firstName`/`lastName` are only required when the invited email has no existing
+ * KORVA account yet — InvitationsService.accept enforces that conditionally, since a static
+ * schema can't know in advance which branch applies (see PASSWORD_REQUIRED there).
+ */
+export const acceptInvitationSchema = z.object({
+  password: z.string().min(8).max(72).optional(),
+  firstName: z.string().min(1).max(120).optional(),
+  lastName: z.string().min(1).max(120).optional(),
+});
+export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;

@@ -33,6 +33,27 @@ export class OffersRepository {
       .exec();
   }
 
+  /**
+   * Batched `$in` lookup for a set of offer ids in one round trip — used by
+   * OrdersService.createFromCart instead of one findById() per cart line item (the N+1 the audit
+   * flagged). Invalid ids are silently dropped rather than throwing, matching findById()'s own
+   * "not a valid ObjectId means not found" behavior; the caller (OffersService.getManyByIds)
+   * is responsible for turning a missing id into OFFER_NOT_FOUND.
+   */
+  findByIds(organizationId: string, ids: string[]): Promise<OfferDocument[]> {
+    const validIds = ids
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (validIds.length === 0) return Promise.resolve([]);
+
+    return this.offerModel
+      .find({
+        organizationId: new Types.ObjectId(organizationId),
+        _id: { $in: validIds },
+      })
+      .exec();
+  }
+
   async findAll(
     organizationId: string,
     options: FindOffersOptions,

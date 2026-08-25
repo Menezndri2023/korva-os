@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { Cart, CartDocument } from './schemas/cart.schema';
 
 @Injectable()
@@ -105,18 +105,35 @@ export class CartsRepository {
       .exec();
   }
 
-  markConverted(
+  /**
+   * Atomic guard against concurrent createFromCart() calls for the same cart: the accept/reject
+   * decision ("is this cart still open") is made by MongoDB itself, in the SAME
+   * findOneAndUpdate as the write, via `status: 'open'` in the filter — not from the `cart`
+   * snapshot OrdersService.createFromCart read moments earlier. Two concurrent checkouts of the
+   * same cart can therefore never both match: only one findAndModify wins the document at a
+   * time. Resolves to null if the filter didn't match — either the cart doesn't exist or (the
+   * case this method exists for) it was already converted; the caller treats null as
+   * CART_NOT_OPEN. Same pattern as OrdersRepository.attachInvoiceIfUnset.
+   *
+   * `session`, when given, ties this update to the caller's MongoDB transaction so it
+   * commits/aborts together with the Order insert (see OrdersService.createFromCart) — a crash
+   * or thrown error between the two can never leave a 'converted' cart with no Order, or an
+   * Order created from a cart that stayed 'open' for a second checkout.
+   */
+  markConvertedIfOpen(
     organizationId: string,
     cartId: string,
+    session?: ClientSession,
   ): Promise<CartDocument | null> {
     return this.cartModel
       .findOneAndUpdate(
         {
           _id: new Types.ObjectId(cartId),
           organizationId: new Types.ObjectId(organizationId),
+          status: 'open',
         },
         { status: 'converted' },
-        { new: true },
+        { new: true, session },
       )
       .exec();
   }

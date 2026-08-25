@@ -66,3 +66,80 @@
      apply it uniformly everywhere in one place. */
   --color-focus: var(--color-zinc-900);
 }
+
+/*
+ * Dark palette — every semantic token above re-pointed to a dark-appropriate Tailwind shade
+ * under prefers-color-scheme: dark, same convention apps/web/src/app/globals.css already uses
+ * for --background/--foreground (see that file's own `@media (prefers-color-scheme: dark)`
+ * block). Without this block, only <body>'s raw --background/--foreground flip to dark — every
+ * semantic token here stayed hardcoded to its light shade, so a system-dark user got a
+ * near-black <body> behind fully light-mode cards/borders/text (Wave 2 audit finding).
+ *
+ * @theme only ever registers the *light* value as the token's definition; re-declaring the
+ * same --color-* custom properties on :root inside a plain @media block overrides them at
+ * paint time without touching how Tailwind generates the bg-app-background/bg-surface/...
+ * utility classes themselves — identical mechanism to the globals.css block above.
+ *
+ * Shade choices mirror each token's light-mode role one rung inverted on the zinc scale
+ * (light used 50/white/100/200/300/900/500/700 → dark uses 950/900/800/800/700/100/400/300),
+ * so contrast relationships (surface vs surface-muted vs border, text vs text-muted) are
+ * preserved rather than inverted 1:1 into disproportionate contrast.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Page background — was zinc-50 (near-white); dark equivalent is the darkest neutral so
+       cards (surface) still read as a visibly lighter layer above it. */
+    --color-app-background: var(--color-zinc-950);
+
+    /* Card/panel background — was white; dark equivalent is zinc-900, one step lighter than
+       app-background so cards remain visually distinct from the page behind them. */
+    --color-surface: var(--color-zinc-900);
+
+    /* Subtle fill inside a surface (table header row, hover background) — was zinc-100; dark
+       equivalent is zinc-800, one step lighter than surface for the same "subtle fill" role. */
+    --color-surface-muted: var(--color-zinc-800);
+
+    /* Container/separator border — was zinc-200; dark equivalent is zinc-800 (visible against
+       zinc-900 surface without glowing). */
+    --color-border: var(--color-zinc-800);
+
+    /* Form field border — was zinc-300 (one step darker than --color-border in light mode);
+       dark equivalent is zinc-700, one step lighter than --color-border for the same relative
+       contrast. */
+    --color-border-input: var(--color-zinc-700);
+
+    /* Default body text — was zinc-900 (near-black on white); dark equivalent is zinc-100
+       (near-white on the dark surface). */
+    --color-text: var(--color-zinc-100);
+
+    /* Secondary/help text — was zinc-500; dark equivalent is zinc-400, kept in the same
+       "readable but de-emphasized" register relative to --color-text. */
+    --color-text-muted: var(--color-zinc-400);
+
+    /* Neutral badge/tag text — was zinc-700 against a zinc-100 (--color-surface-muted) chip in
+       light mode; dark equivalent is zinc-300 against the dark --color-surface-muted
+       (zinc-800), preserving the same relative contrast. */
+    --color-badge-text: var(--color-zinc-300);
+
+    /* Text rendered ON a primary-filled surface — unchanged. Button's primary variant keeps
+       its own fixed bg-zinc-900 fill in both color schemes (F2-B.2 decision), so the label
+       color it needs stays white regardless of page theme. */
+    --color-text-primary: var(--color-white);
+
+    /* Form/mutation error state — was red-600 (readable on white); dark equivalent is red-400,
+       lightened so it still passes contrast on the dark zinc-900 surface. */
+    --color-destructive: var(--color-red-400);
+
+    /* Positive status — was green-700; dark equivalent is green-400, lightened for contrast on
+       dark surfaces while staying visually "green". */
+    --color-success: var(--color-green-400);
+
+    /* Warning status — was amber-700; dark equivalent is amber-400, same lightening rationale
+       as destructive/success above. */
+    --color-warning: var(--color-amber-400);
+
+    /* Keyboard focus ring/border — was zinc-900 (near-black on white); dark equivalent is
+       zinc-100 (near-white), so the ring stays visible against the dark surface it outlines. */
+    --color-focus: var(--color-zinc-100);
+  }
+}

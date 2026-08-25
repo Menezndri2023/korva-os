@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
+import { runWithRequestContext } from '../logging/request-context';
 
 export interface RequestWithId extends Request {
   id: string;
@@ -14,9 +15,15 @@ const UUID_PATTERN =
  * well-formed UUID — an arbitrary client value is never trusted or logged as-is (log-forging
  * risk); it's silently replaced with a fresh server-generated id instead of rejecting the
  * request. Attached to `req.id` and echoed on the response so a single request can be
- * correlated end-to-end. Deliberately local to this request only — no AsyncLocalStorage/CLS
- * context, no propagation to outbound calls (Anthropic/Resend/webhooks) or BullMQ jobs; nothing
- * in this codebase today needs more than that (see the pre-implementation audit for this lot).
+ * correlated end-to-end.
+ *
+ * `next()` runs inside an AsyncLocalStorage context carrying that id (see
+ * common/logging/request-context.ts), so every `Logger` call made anywhere downstream — guards,
+ * interceptors, controllers, services, however many `await`s deep — picks it up automatically
+ * via StructuredLogger without having to thread it through every function signature. Still
+ * deliberately local to *this process's* request lifecycle only: it is not propagated to
+ * outbound calls (Anthropic/Resend/webhooks) or BullMQ job payloads; nothing in this codebase
+ * today needs more than that (see the pre-implementation audit for this lot).
  */
 export function requestIdMiddleware(
   req: Request,
@@ -25,9 +32,10 @@ export function requestIdMiddleware(
 ): void {
   const incoming = req.headers[REQUEST_ID_HEADER];
   const candidate = Array.isArray(incoming) ? incoming[0] : incoming;
-  const id = candidate && UUID_PATTERN.test(candidate) ? candidate : randomUUID();
+  const id =
+    candidate && UUID_PATTERN.test(candidate) ? candidate : randomUUID();
 
   (req as RequestWithId).id = id;
   res.setHeader('X-Request-ID', id);
-  next();
+  runWithRequestContext({ requestId: id }, next);
 }

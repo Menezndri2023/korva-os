@@ -7,7 +7,17 @@ export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
 export const MESSAGE_DIRECTIONS = ["inbound", "outbound"] as const;
 export type MessageDirection = (typeof MESSAGE_DIRECTIONS)[number];
 
-export const MESSAGE_STATUSES = ["queued", "sent", "failed"] as const;
+// "delivered"/"bounced"/"complained" are reached only via the Resend delivery-status webhook
+// (see apps/api/src/communication/webhooks/) — an async update to a message that was already
+// "sent" from the synchronous provider call's point of view.
+export const MESSAGE_STATUSES = [
+  "queued",
+  "sent",
+  "failed",
+  "delivered",
+  "bounced",
+  "complained",
+] as const;
 export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
 
 export interface MessageTemplate {

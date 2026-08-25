@@ -87,30 +87,113 @@ export class OrdersService {
       });
     }
 
-    const offers = await Promise.all(
-      cart.items.map((item) =>
-        this.offersService.getById(organizationId, item.offerId.toString()),
-      ),
+    // One batched `$in` lookup instead of one getById() round trip per line item.
+    const offersById = await this.offersService.getManyByIds(
+      organizationId,
+      cart.items.map((item) => item.offerId.toString()),
     );
-    const currency = offers[0]?.pricing.currency ?? 'EUR';
-    const items = cart.items.map((item, index) => ({
-      offerId: item.offerId.toString(),
-      description: offers[index]!.name,
-      quantity: item.quantity,
-      unitPrice: offers[index]!.pricing.amount,
-      taxRate: offers[index]!.pricing.taxRate,
-    }));
+    const currency =
+      offersById.get(cart.items[0]!.offerId.toString())?.pricing.currency ??
+      'EUR';
+    const items = cart.items.map((item) => {
+      const offer = offersById.get(item.offerId.toString())!;
+      return {
+        offerId: item.offerId.toString(),
+        description: offer.name,
+        quantity: item.quantity,
+        unitPrice: offer.pricing.amount,
+        taxRate: offer.pricing.taxRate,
+      };
+    });
 
-    const order = await this.createOrderRecord(organizationId, userId, {
+    const order = await this.createOrderFromCartAtomically(
+      organizationId,
+      cartId,
+      {
+        contactId: cart.contactId.toString(),
+        items,
+        currency,
+      },
+    );
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'CREATE',
+      entity: 'order',
+      entityId: order.id as string,
+      metadata: { source: 'cart' },
+    });
+
+    await this.eventBus.publish(organizationId, 'order.created', {
+      orderId: order.id as string,
       contactId: cart.contactId.toString(),
-      items,
-      currency,
+      total: order.total,
       source: 'cart',
     });
 
-    await this.cartsRepository.markConverted(organizationId, cartId);
-
     return order;
+  }
+
+  /**
+   * Order insert + Cart status update ('open' -> 'converted'), in a single MongoDB transaction:
+   * either both writes commit, or neither does — closing the crash-between-writes gap identified
+   * by the audit (an Order created from the cart while the Cart stayed 'open', so it could be
+   * checked out a second time, or a Cart marked 'converted' with no Order actually persisted).
+   * Mirrors generateInvoiceAtomically below exactly: the Cart update is conditioned on
+   * `status: 'open'` (see CartsRepository.markConvertedIfOpen), evaluated by MongoDB at write
+   * time — not from the `cart` snapshot read by the caller moments earlier — so two concurrent
+   * checkouts of the same cart can never both win; the loser gets CART_NOT_OPEN, and the whole
+   * transaction (including its Order insert) is rolled back rather than left half-applied.
+   */
+  private async createOrderFromCartAtomically(
+    organizationId: string,
+    cartId: string,
+    input: {
+      contactId: string;
+      items: LineItemInput[];
+      currency: string;
+    },
+  ): Promise<OrderDocument> {
+    const totals = computeTotals(input.items);
+
+    const session = await this.connection.startSession();
+    try {
+      return await session.withTransaction(async () => {
+        const convertedCart = await this.cartsRepository.markConvertedIfOpen(
+          organizationId,
+          cartId,
+          session,
+        );
+        if (!convertedCart) {
+          throw new BadRequestException({
+            code: 'CART_NOT_OPEN',
+            message: 'This cart is not open',
+          });
+        }
+
+        const number = await this.countersService.nextFormatted(
+          organizationId,
+          'order',
+          'CMD',
+        );
+
+        return this.ordersRepository.create(
+          {
+            organizationId: new Types.ObjectId(organizationId),
+            contactId: new Types.ObjectId(input.contactId),
+            number,
+            source: 'cart',
+            items: toLineItemDocs(input.items),
+            currency: input.currency,
+            ...totals,
+          },
+          session,
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
   }
 
   async createFromBooking(

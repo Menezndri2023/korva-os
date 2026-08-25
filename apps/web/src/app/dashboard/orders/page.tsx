@@ -172,88 +172,90 @@ export default function OrdersPage() {
       )}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-            <tr>
-              <th className="px-4 py-2">N°</th>
-              <th className="px-4 py-2">Client</th>
-              <th className="px-4 py-2">Origine</th>
-              <th className="px-4 py-2">Total</th>
-              <th className="px-4 py-2">Statut</th>
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">N°</th>
+                <th className="px-4 py-2">Client</th>
+                <th className="px-4 py-2">Origine</th>
+                <th className="px-4 py-2">Total</th>
+                <th className="px-4 py-2">Statut</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
-            )}
-            {!isLoading && orders?.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
-                  Aucune commande.
-                </td>
-              </tr>
-            )}
-            {orders?.map((order) => (
-              <tr key={order.id}>
-                <td className="px-4 py-2 font-medium">
-                  <Link
-                    href={`/dashboard/orders/${order.id}`}
-                    className="text-text underline-offset-2 hover:underline"
-                  >
-                    {order.number}
-                  </Link>
-                </td>
-                <td className="px-4 py-2 text-text-muted">{contactName(order.contactId)}</td>
-                <td className="px-4 py-2 text-text-muted">{order.source}</td>
-                <td className="px-4 py-2 text-text-muted">
-                  {order.total} {order.currency}
-                </td>
-                <td className="px-4 py-2">
-                  <Badge>{STATUS_LABELS[order.status]}</Badge>
-                </td>
-                <td className="px-4 py-2 space-x-2">
-                  {order.status === "pending" && (
-                    <button
-                      onClick={() => confirmMutation.mutate(order.id)}
-                      className="text-xs text-text-muted hover:underline"
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
+                    Chargement...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && orders?.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
+                    Aucune commande.
+                  </td>
+                </tr>
+              )}
+              {orders?.map((order) => (
+                <tr key={order.id}>
+                  <td className="px-4 py-2 font-medium">
+                    <Link
+                      href={`/dashboard/orders/${order.id}`}
+                      className="text-text underline-offset-2 hover:underline"
                     >
-                      Confirmer
-                    </button>
-                  )}
-                  {order.status === "confirmed" && !order.invoiceId && (
-                    <button
-                      onClick={() => invoiceMutation.mutate(order.id)}
-                      className="text-xs text-text-muted hover:underline"
-                    >
-                      Facturer
-                    </button>
-                  )}
-                  {order.status === "confirmed" && (
-                    <button
-                      onClick={() => fulfillMutation.mutate(order.id)}
-                      className="text-xs text-text-muted hover:underline"
-                    >
-                      Livrer
-                    </button>
-                  )}
-                  {(order.status === "pending" || order.status === "confirmed") && (
-                    <button
-                      onClick={() => cancelMutation.mutate(order.id)}
-                      className="text-xs text-destructive hover:underline"
-                    >
-                      Annuler
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                      {order.number}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 text-text-muted">{contactName(order.contactId)}</td>
+                  <td className="px-4 py-2 text-text-muted">{order.source}</td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {order.total} {order.currency}
+                  </td>
+                  <td className="px-4 py-2">
+                    <Badge>{STATUS_LABELS[order.status]}</Badge>
+                  </td>
+                  <td className="px-4 py-2 space-x-2">
+                    {order.status === "pending" && (
+                      <button
+                        onClick={() => confirmMutation.mutate(order.id)}
+                        className="text-xs text-text-muted hover:underline"
+                      >
+                        Confirmer
+                      </button>
+                    )}
+                    {order.status === "confirmed" && !order.invoiceId && (
+                      <button
+                        onClick={() => invoiceMutation.mutate(order.id)}
+                        className="text-xs text-text-muted hover:underline"
+                      >
+                        Facturer
+                      </button>
+                    )}
+                    {order.status === "confirmed" && (
+                      <button
+                        onClick={() => fulfillMutation.mutate(order.id)}
+                        className="text-xs text-text-muted hover:underline"
+                      >
+                        Livrer
+                      </button>
+                    )}
+                    {(order.status === "pending" || order.status === "confirmed") && (
+                      <button
+                        onClick={() => cancelMutation.mutate(order.id)}
+                        className="text-xs text-destructive hover:underline"
+                      >
+                        Annuler
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Pagination

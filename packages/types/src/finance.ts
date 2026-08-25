@@ -80,3 +80,22 @@ export interface Refund {
   reason?: string;
   createdAt: string;
 }
+
+export const EXPENSE_STATUSES = ["recorded", "voided"] as const;
+export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
+
+export interface Expense {
+  id: string;
+  organizationId: string;
+  number: string;
+  status: ExpenseStatus;
+  category: string;
+  description: string;
+  amount: number;
+  currency: string;
+  date: string;
+  vendor?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}

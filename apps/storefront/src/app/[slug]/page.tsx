@@ -1,22 +1,7 @@
 import type { Metadata } from "next";
 import StorefrontClient from "./storefront-client";
 import { publicApiClient } from "@/lib/public-api-client";
-
-interface PublicOrganization {
-  name: string;
-  slug: string;
-  type: string;
-  currency: string;
-  language: string;
-  logo?: string;
-  enabledModules: string[];
-}
-interface PublicOffer {
-  id: string;
-  type: string;
-  name: string;
-  description?: string;
-}
+import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 
 // Server-side only (not NEXT_PUBLIC_*): generateMetadata and sitemap/robots run in the Node
 // runtime, never in the browser bundle, so there's no need to expose this to client code.

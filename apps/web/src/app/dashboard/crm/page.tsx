@@ -164,241 +164,243 @@ export default function ContactsPage() {
       )}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
-            <tr>
-              <th className="px-4 py-2">Nom</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2">Téléphone</th>
-              <th className="px-4 py-2">Tags</th>
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">Nom</th>
+                <th className="px-4 py-2">Email</th>
+                <th className="px-4 py-2">Téléphone</th>
+                <th className="px-4 py-2">Tags</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
-            )}
-            {!isLoading && data?.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
-                  Aucun contact.
-                </td>
-              </tr>
-            )}
-            {data?.map((contact) => {
-              const isEditing = editingId === contact.id;
-              const isThisPending =
-                updateContactMutation.isPending &&
-                updateContactMutation.variables?.id === contact.id;
-              const editError =
-                updateContactMutation.isError &&
-                updateContactMutation.variables?.id === contact.id
-                  ? updateContactMutation.error
-                  : null;
-              const isDeleteConfirming = deletingConfirmId === contact.id;
-              const isDeletePending =
-                deleteContactMutation.isPending &&
-                deleteContactMutation.variables?.id === contact.id;
-              const deleteError =
-                deleteContactMutation.isError &&
-                deleteContactMutation.variables?.id === contact.id
-                  ? deleteContactMutation.error
-                  : null;
-              return (
-                <Fragment key={contact.id}>
-                  <tr>
-                    <td className="px-4 py-2 font-medium">
-                      <Link
-                        href={`/dashboard/crm/${contact.id}`}
-                        className="text-text underline-offset-2 hover:underline"
-                      >
-                        {[contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
-                          contact.company ||
-                          "—"}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-zinc-600">{contact.email ?? "—"}</td>
-                    <td className="px-4 py-2 text-zinc-600">{contact.phone ?? "—"}</td>
-                    <td className="px-4 py-2">
-                      <div className="flex flex-wrap gap-1">
-                        {contact.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={isDeleteConfirming}
-                          onClick={() => (isEditing ? cancelEdit() : startEdit(contact))}
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {isLoading && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                    Chargement...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && data?.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                    Aucun contact.
+                  </td>
+                </tr>
+              )}
+              {data?.map((contact) => {
+                const isEditing = editingId === contact.id;
+                const isThisPending =
+                  updateContactMutation.isPending &&
+                  updateContactMutation.variables?.id === contact.id;
+                const editError =
+                  updateContactMutation.isError &&
+                  updateContactMutation.variables?.id === contact.id
+                    ? updateContactMutation.error
+                    : null;
+                const isDeleteConfirming = deletingConfirmId === contact.id;
+                const isDeletePending =
+                  deleteContactMutation.isPending &&
+                  deleteContactMutation.variables?.id === contact.id;
+                const deleteError =
+                  deleteContactMutation.isError &&
+                  deleteContactMutation.variables?.id === contact.id
+                    ? deleteContactMutation.error
+                    : null;
+                return (
+                  <Fragment key={contact.id}>
+                    <tr>
+                      <td className="px-4 py-2 font-medium">
+                        <Link
+                          href={`/dashboard/crm/${contact.id}`}
+                          className="text-text underline-offset-2 hover:underline"
                         >
-                          {isEditing ? "Annuler" : "Modifier"}
-                        </Button>
-                        {isDeleteConfirming ? (
-                          <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              loading={isDeletePending}
-                              onClick={() =>
-                                deleteContactMutation.mutate({ id: contact.id })
-                              }
+                          {[contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+                            contact.company ||
+                            "—"}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-zinc-600">{contact.email ?? "—"}</td>
+                      <td className="px-4 py-2 text-zinc-600">{contact.phone ?? "—"}</td>
+                      <td className="px-4 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          {contact.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
                             >
-                              {isDeletePending ? "Suppression..." : "Confirmer ?"}
-                            </Button>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={isDeleteConfirming}
+                            onClick={() => (isEditing ? cancelEdit() : startEdit(contact))}
+                          >
+                            {isEditing ? "Annuler" : "Modifier"}
+                          </Button>
+                          {isDeleteConfirming ? (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                loading={isDeletePending}
+                                onClick={() =>
+                                  deleteContactMutation.mutate({ id: contact.id })
+                                }
+                              >
+                                {isDeletePending ? "Suppression..." : "Confirmer ?"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isDeletePending}
+                                onClick={() => setDeletingConfirmId(null)}
+                              >
+                                Annuler
+                              </Button>
+                            </>
+                          ) : (
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={isDeletePending}
-                              onClick={() => setDeletingConfirmId(null)}
+                              disabled={isEditing}
+                              onClick={() => setDeletingConfirmId(contact.id)}
                             >
-                              Annuler
+                              Supprimer
                             </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isEditing}
-                            onClick={() => setDeletingConfirmId(contact.id)}
-                          >
-                            Supprimer
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {deleteError && (
-                    <tr>
-                      <td colSpan={5} className="px-4 pb-2 text-xs text-red-600">
-                        {deleteErrorMessage(deleteError)}
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  )}
-                  {isEditing && (
-                    <tr>
-                      <td colSpan={5} className="px-4 pb-4">
-                        <form
-                          onSubmit={handleEditSubmit((values) =>
-                            updateContactMutation.mutate({
-                              id: contact.id,
-                              ...values,
-                              tags: editTagsInput
-                                .split(",")
-                                .map((tag) => tag.trim())
-                                .filter(Boolean),
-                            }),
-                          )}
-                          className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
-                        >
-                          <div>
-                            <label
-                              className="mb-1 block text-xs font-medium text-zinc-700"
-                              htmlFor={`edit-firstName-${contact.id}`}
-                            >
-                              Prénom
-                            </label>
-                            <Input id={`edit-firstName-${contact.id}`} {...registerEdit("firstName")} />
-                          </div>
-                          <div>
-                            <label
-                              className="mb-1 block text-xs font-medium text-zinc-700"
-                              htmlFor={`edit-lastName-${contact.id}`}
-                            >
-                              Nom
-                            </label>
-                            <Input id={`edit-lastName-${contact.id}`} {...registerEdit("lastName")} />
-                          </div>
-                          <div>
-                            <label
-                              className="mb-1 block text-xs font-medium text-zinc-700"
-                              htmlFor={`edit-email-${contact.id}`}
-                            >
-                              Email
-                            </label>
-                            <Input
-                              id={`edit-email-${contact.id}`}
-                              type="email"
-                              error={!!editErrors.email}
-                              {...registerEdit("email")}
-                            />
-                            {editErrors.email && (
-                              <p className="mt-1 text-xs text-red-600">{editErrors.email.message}</p>
+                    {deleteError && (
+                      <tr>
+                        <td colSpan={5} className="px-4 pb-2 text-xs text-red-600">
+                          {deleteErrorMessage(deleteError)}
+                        </td>
+                      </tr>
+                    )}
+                    {isEditing && (
+                      <tr>
+                        <td colSpan={5} className="px-4 pb-4">
+                          <form
+                            onSubmit={handleEditSubmit((values) =>
+                              updateContactMutation.mutate({
+                                id: contact.id,
+                                ...values,
+                                tags: editTagsInput
+                                  .split(",")
+                                  .map((tag) => tag.trim())
+                                  .filter(Boolean),
+                              }),
                             )}
-                          </div>
-                          <div>
-                            <label
-                              className="mb-1 block text-xs font-medium text-zinc-700"
-                              htmlFor={`edit-phone-${contact.id}`}
-                            >
-                              Téléphone
-                            </label>
-                            <Input id={`edit-phone-${contact.id}`} {...registerEdit("phone")} />
-                          </div>
-                          <div className="col-span-2">
-                            <label
-                              className="mb-1 block text-xs font-medium text-zinc-700"
-                              htmlFor={`edit-company-${contact.id}`}
-                            >
-                              Entreprise
-                            </label>
-                            <Input
-                              id={`edit-company-${contact.id}`}
-                              className="w-full"
-                              {...registerEdit("company")}
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <label
-                              className="mb-1 block text-xs font-medium text-zinc-700"
-                              htmlFor={`edit-tags-${contact.id}`}
-                            >
-                              Tags (séparés par des virgules)
-                            </label>
-                            <Input
-                              id={`edit-tags-${contact.id}`}
-                              className="w-full"
-                              value={editTagsInput}
-                              onChange={(e) => setEditTagsInput(e.target.value)}
-                            />
-                          </div>
+                            className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
+                          >
+                            <div>
+                              <label
+                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                htmlFor={`edit-firstName-${contact.id}`}
+                              >
+                                Prénom
+                              </label>
+                              <Input id={`edit-firstName-${contact.id}`} {...registerEdit("firstName")} />
+                            </div>
+                            <div>
+                              <label
+                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                htmlFor={`edit-lastName-${contact.id}`}
+                              >
+                                Nom
+                              </label>
+                              <Input id={`edit-lastName-${contact.id}`} {...registerEdit("lastName")} />
+                            </div>
+                            <div>
+                              <label
+                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                htmlFor={`edit-email-${contact.id}`}
+                              >
+                                Email
+                              </label>
+                              <Input
+                                id={`edit-email-${contact.id}`}
+                                type="email"
+                                error={!!editErrors.email}
+                                {...registerEdit("email")}
+                              />
+                              {editErrors.email && (
+                                <p className="mt-1 text-xs text-red-600">{editErrors.email.message}</p>
+                              )}
+                            </div>
+                            <div>
+                              <label
+                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                htmlFor={`edit-phone-${contact.id}`}
+                              >
+                                Téléphone
+                              </label>
+                              <Input id={`edit-phone-${contact.id}`} {...registerEdit("phone")} />
+                            </div>
+                            <div className="col-span-2">
+                              <label
+                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                htmlFor={`edit-company-${contact.id}`}
+                              >
+                                Entreprise
+                              </label>
+                              <Input
+                                id={`edit-company-${contact.id}`}
+                                className="w-full"
+                                {...registerEdit("company")}
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label
+                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                htmlFor={`edit-tags-${contact.id}`}
+                              >
+                                Tags (séparés par des virgules)
+                              </label>
+                              <Input
+                                id={`edit-tags-${contact.id}`}
+                                className="w-full"
+                                value={editTagsInput}
+                                onChange={(e) => setEditTagsInput(e.target.value)}
+                              />
+                            </div>
 
-                          {editError && (
-                            <p className="col-span-2 text-sm text-red-600">
-                              {editError instanceof ApiError
-                                ? editError.message
-                                : "Impossible d'enregistrer le contact."}
-                            </p>
-                          )}
+                            {editError && (
+                              <p className="col-span-2 text-sm text-red-600">
+                                {editError instanceof ApiError
+                                  ? editError.message
+                                  : "Impossible d'enregistrer le contact."}
+                              </p>
+                            )}
 
-                          <div className="col-span-2 flex gap-2">
-                            <Button type="submit" loading={isThisPending}>
-                              {isThisPending ? "Enregistrement..." : "Enregistrer"}
-                            </Button>
-                            <Button type="button" variant="ghost" onClick={cancelEdit}>
-                              Annuler
-                            </Button>
-                          </div>
-                        </form>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                            <div className="col-span-2 flex gap-2">
+                              <Button type="submit" loading={isThisPending}>
+                                {isThisPending ? "Enregistrement..." : "Enregistrer"}
+                              </Button>
+                              <Button type="button" variant="ghost" onClick={cancelEdit}>
+                                Annuler
+                              </Button>
+                            </div>
+                          </form>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Pagination

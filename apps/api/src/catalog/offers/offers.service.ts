@@ -72,6 +72,32 @@ export class OffersService {
     return offer;
   }
 
+  /**
+   * Batched equivalent of calling getById() once per id — a single `$in` query
+   * (OffersRepository.findByIds) instead of N round trips. Used by
+   * OrdersService.createFromCart to price every cart line item without an N+1 query per
+   * checkout. Throws the same OFFER_NOT_FOUND as getById() if any requested id doesn't resolve
+   * to an offer in this organization, so callers get the exact same "which offer" story as
+   * before, just from one query instead of many.
+   */
+  async getManyByIds(
+    organizationId: string,
+    ids: string[],
+  ): Promise<Map<string, OfferDocument>> {
+    const offers = await this.offersRepository.findByIds(organizationId, ids);
+    const byId = new Map(offers.map((offer) => [offer.id as string, offer]));
+
+    const missing = ids.some((id) => !byId.has(id));
+    if (missing) {
+      throw new NotFoundException({
+        code: 'OFFER_NOT_FOUND',
+        message: 'Offer not found',
+      });
+    }
+
+    return byId;
+  }
+
   async list(
     organizationId: string,
     query: ListOffersQuery,

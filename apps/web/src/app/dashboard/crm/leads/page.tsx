@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useState } from "react";
+import { useState } from "react";
+import type { DragEvent } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +14,7 @@ import {
 } from "@korva/validation";
 import { LEAD_STATUSES } from "@korva/types";
 import type { Contact, Lead, Pipeline } from "@korva/types";
-import { Button, Card, Input, Pagination } from "@korva/ui";
+import { Button, Card, Input, Pagination, Select, cn } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { LEAD_STATUS_LABELS } from "@/lib/analytics-format";
@@ -99,6 +100,32 @@ export default function LeadsPage() {
     return [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.company || "—";
   }
 
+  // Drag-and-drop between stage columns, using the browser's native HTML5 DnD API (no extra
+  // dependency: packages/ui and apps/web only declare what F2-B already listed, and adding a
+  // DnD library here would touch package.json/the pnpm lockfile other agents are editing this
+  // same wave). Dropping a card calls the exact same updateLeadMutation.mutate({ id, stageId })
+  // already used by the per-card <Select> below — same endpoint, same optimistic-free
+  // "no rollback needed" reasoning documented above.
+  function handleCardDragStart(leadId: string) {
+    return (event: DragEvent<HTMLDivElement>) => {
+      event.dataTransfer.setData("text/plain", leadId);
+      event.dataTransfer.effectAllowed = "move";
+    };
+  }
+  function handleColumnDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }
+  function handleColumnDrop(stageId: string) {
+    return (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const leadId = event.dataTransfer.getData("text/plain");
+      const lead = leads?.find((l) => l.id === leadId);
+      if (!lead || lead.stageId === stageId) return;
+      updateLeadMutation.mutate({ id: leadId, stageId });
+    };
+  }
+
   if (!pipelinesLoading && pipelines?.length === 0) {
     return (
       <Card className="p-6 text-sm text-zinc-600">
@@ -126,11 +153,7 @@ export default function LeadsPage() {
           // dashboard/crm/page.tsx (F2-B.7).
           className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
         >
-          <select
-            className="col-span-2 rounded-md border border-zinc-300 px-3 py-2 text-sm"
-            defaultValue=""
-            {...register("contactId")}
-          >
+          <Select className="col-span-2" defaultValue="" {...register("contactId")}>
             <option value="" disabled>
               Choisir un contact
             </option>
@@ -139,23 +162,19 @@ export default function LeadsPage() {
                 {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email}
               </option>
             ))}
-          </select>
+          </Select>
           {errors.contactId && (
             <p className="col-span-2 text-xs text-red-600">{errors.contactId.message}</p>
           )}
 
           <input type="hidden" value={defaultPipeline.id} {...register("pipelineId")} />
-          <select
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
-            defaultValue={defaultPipeline.stages[0]?.id}
-            {...register("stageId")}
-          >
+          <Select defaultValue={defaultPipeline.stages[0]?.id} {...register("stageId")}>
             {defaultPipeline.stages.map((stage) => (
               <option key={stage.id} value={stage.id}>
                 {stage.name}
               </option>
             ))}
-          </select>
+          </Select>
           <Input
             type="number"
             placeholder="Valeur estimée"
@@ -173,104 +192,121 @@ export default function LeadsPage() {
         </form>
       )}
 
-      <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
-            <tr>
-              <th className="px-4 py-2">Contact</th>
-              <th className="px-4 py-2">Étape</th>
-              <th className="px-4 py-2">Statut</th>
-              <th className="px-4 py-2">Valeur estimée</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
-            {leadsLoading && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
-                  Chargement...
-                </td>
-              </tr>
-            )}
-            {!leadsLoading && leads?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
-                  Aucun prospect.
-                </td>
-              </tr>
-            )}
-            {leads?.map((lead) => {
-              const pipeline = pipelineForLead(lead);
-              const isRowPending =
-                updateLeadMutation.isPending && updateLeadMutation.variables?.id === lead.id;
-              const rowError =
-                updateLeadMutation.isError && updateLeadMutation.variables?.id === lead.id
-                  ? updateLeadMutation.error
-                  : null;
+      {leadsLoading && <p className="text-sm text-zinc-500">Chargement...</p>}
+      {!leadsLoading && leads?.length === 0 && (
+        <p className="text-sm text-zinc-500">Aucun prospect.</p>
+      )}
+
+      {/* Kanban board: one column per stage of the default pipeline, cards draggable between
+          columns (F2 audit — plain <select> for stage changes, no board). Each card keeps the
+          same per-lead stage/status <select> as before (same aria-label, same disabled-while-
+          pending, same rowError message) as a non-drag, keyboard-reachable fallback — native
+          HTML5 drag-and-drop has no keyboard equivalent on its own, so removing the select
+          entirely would regress accessibility even though the board makes it redundant for a
+          mouse/touch user. Only leads in the *default* pipeline are shown as columns (a board's
+          columns are one pipeline's stages); a lead belonging to a different pipeline is out of
+          scope for this board, same limitation as Pagination above only ever paging through the
+          flat /leads list, not a per-pipeline one. */}
+      <div className="overflow-x-auto pb-2">
+        <div className="flex gap-4">
+          {[...(defaultPipeline?.stages ?? [])]
+            .sort((a, b) => a.order - b.order)
+            .map((stage) => {
+              const stageLeads = leads?.filter(
+                (lead) => lead.pipelineId === defaultPipeline?.id && lead.stageId === stage.id,
+              );
               return (
-                <Fragment key={lead.id}>
-                  <tr>
-                    <td className="px-4 py-2 font-medium">
-                      <Link
-                        href={`/dashboard/crm/leads/${lead.id}`}
-                        className="text-zinc-900 underline-offset-2 hover:underline"
-                      >
-                        {contactName(lead)}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-zinc-600">
-                      <select
-                        aria-label={`Étape de ${contactName(lead)}`}
-                        value={lead.stageId}
-                        disabled={isRowPending || !pipeline}
-                        onChange={(e) =>
-                          updateLeadMutation.mutate({ id: lead.id, stageId: e.target.value })
-                        }
-                        className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {pipeline?.stages.map((stage) => (
-                          <option key={stage.id} value={stage.id}>
-                            {stage.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-2 text-zinc-600">
-                      <select
-                        aria-label={`Statut de ${contactName(lead)}`}
-                        value={lead.status}
-                        disabled={isRowPending}
-                        onChange={(e) =>
-                          updateLeadMutation.mutate({
-                            id: lead.id,
-                            status: e.target.value as Lead["status"],
-                          })
-                        }
-                        className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {LEAD_STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {LEAD_STATUS_LABELS[status] ?? status}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-4 py-2 text-zinc-600">{lead.estimatedValue ?? "—"}</td>
-                  </tr>
-                  {rowError && (
-                    <tr>
-                      <td colSpan={4} className="px-4 pb-2 text-xs text-red-600">
-                        {rowError instanceof ApiError
-                          ? rowError.message
-                          : "Impossible de mettre à jour le prospect."}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
+                <div
+                  key={stage.id}
+                  onDragOver={handleColumnDragOver}
+                  onDrop={handleColumnDrop(stage.id)}
+                  className="w-72 shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 p-3"
+                >
+                  <h3
+                    aria-label={`${stage.name} — ${stageLeads?.length ?? 0} prospect(s)`}
+                    className="mb-3 flex items-center justify-between text-xs font-medium uppercase text-zinc-500"
+                  >
+                    <span aria-hidden="true">{stage.name}</span>
+                    <span aria-hidden="true" className="rounded-full bg-zinc-200 px-2 py-0.5 text-zinc-600">
+                      {stageLeads?.length ?? 0}
+                    </span>
+                  </h3>
+                  <div className="space-y-2">
+                    {stageLeads?.map((lead) => {
+                      const pipeline = pipelineForLead(lead);
+                      const isRowPending =
+                        updateLeadMutation.isPending &&
+                        updateLeadMutation.variables?.id === lead.id;
+                      const rowError =
+                        updateLeadMutation.isError && updateLeadMutation.variables?.id === lead.id
+                          ? updateLeadMutation.error
+                          : null;
+                      return (
+                        <div
+                          key={lead.id}
+                          draggable={!isRowPending}
+                          onDragStart={handleCardDragStart(lead.id)}
+                          className={cn(
+                            "space-y-2 rounded-md border border-zinc-200 bg-white p-2 text-sm shadow-sm",
+                            isRowPending ? "cursor-wait opacity-60" : "cursor-grab",
+                          )}
+                        >
+                          <Link
+                            href={`/dashboard/crm/leads/${lead.id}`}
+                            className="block font-medium text-zinc-900 underline-offset-2 hover:underline"
+                          >
+                            {contactName(lead)}
+                          </Link>
+                          <p className="text-zinc-600">{lead.estimatedValue ?? "—"}</p>
+                          <select
+                            aria-label={`Étape de ${contactName(lead)}`}
+                            value={lead.stageId}
+                            disabled={isRowPending || !pipeline}
+                            onChange={(e) =>
+                              updateLeadMutation.mutate({ id: lead.id, stageId: e.target.value })
+                            }
+                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {pipeline?.stages.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            aria-label={`Statut de ${contactName(lead)}`}
+                            value={lead.status}
+                            disabled={isRowPending}
+                            onChange={(e) =>
+                              updateLeadMutation.mutate({
+                                id: lead.id,
+                                status: e.target.value as Lead["status"],
+                              })
+                            }
+                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {LEAD_STATUSES.map((status) => (
+                              <option key={status} value={status}>
+                                {LEAD_STATUS_LABELS[status] ?? status}
+                              </option>
+                            ))}
+                          </select>
+                          {rowError && (
+                            <p className="text-xs text-red-600">
+                              {rowError instanceof ApiError
+                                ? rowError.message
+                                : "Impossible de mettre à jour le prospect."}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
-          </tbody>
-        </table>
-      </Card>
+        </div>
+      </div>
 
       <Pagination
         page={page}

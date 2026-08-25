@@ -8,7 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { updateOfferSchema, type UpdateOfferInput } from "@korva/validation";
 import { OFFER_STATUSES, OFFER_TYPES, type Offer, type OfferType } from "@korva/types";
-import { Badge, Button, Card, Input } from "@korva/ui";
+import { Badge, Button, Card, Dialog, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
@@ -137,35 +137,14 @@ export default function OfferDetailPage() {
             >
               {isEditing ? "Annuler" : "Modifier"}
             </Button>
-            {deleteConfirming ? (
-              <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={deleteOfferMutation.isPending}
-                  onClick={() => deleteOfferMutation.mutate()}
-                >
-                  {deleteOfferMutation.isPending ? "Suppression..." : "Confirmer ?"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={deleteOfferMutation.isPending}
-                  onClick={() => setDeleteConfirming(false)}
-                >
-                  Annuler
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={isEditing}
-                onClick={() => setDeleteConfirming(true)}
-              >
-                Supprimer
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isEditing}
+              onClick={() => setDeleteConfirming(true)}
+            >
+              Supprimer
+            </Button>
           </div>
         </div>
 
@@ -174,6 +153,34 @@ export default function OfferDetailPage() {
             {deleteErrorMessage(deleteOfferMutation.error)}
           </p>
         )}
+
+        <Dialog
+          open={deleteConfirming}
+          onClose={() => setDeleteConfirming(false)}
+          title="Supprimer l'offre ?"
+        >
+          <p className="text-sm text-text-muted">
+            Cette action est définitive. Voulez-vous vraiment supprimer « {offer.name} » ?
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={deleteOfferMutation.isPending}
+              onClick={() => setDeleteConfirming(false)}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={deleteOfferMutation.isPending}
+              onClick={() => deleteOfferMutation.mutate()}
+            >
+              {deleteOfferMutation.isPending ? "Suppression..." : "Confirmer ?"}
+            </Button>
+          </div>
+        </Dialog>
 
         {!isEditing ? (
           <>
@@ -219,26 +226,20 @@ export default function OfferDetailPage() {
             onSubmit={handleSubmit((values) => updateMutation.mutate(values))}
             className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
           >
-            <select
-              className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
-              {...register("type")}
-            >
+            <Select aria-label="Type" {...register("type")}>
               {OFFER_TYPES.map((type) => (
                 <option key={type} value={type}>
                   {TYPE_LABELS[type]}
                 </option>
               ))}
-            </select>
-            <select
-              className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
-              {...register("status")}
-            >
+            </Select>
+            <Select aria-label="Statut" {...register("status")}>
               {OFFER_STATUSES.map((status) => (
                 <option key={status} value={status}>
                   {status}
                 </option>
               ))}
-            </select>
+            </Select>
             <Input placeholder="SKU" {...register("sku")} />
             <Input placeholder="Nom" className="col-span-2" {...register("name")} />
             {errors.name && (
@@ -285,28 +286,30 @@ export default function OfferDetailPage() {
 
       {offer.variants.length > 0 && (
         <Card className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-              <tr>
-                <th className="px-4 py-2">Variante</th>
-                <th className="px-4 py-2">SKU</th>
-                <th className="px-4 py-2">Prix</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {offer.variants.map((variant) => (
-                <tr key={variant.id}>
-                  <td className="px-4 py-2 font-medium">{variant.name}</td>
-                  <td className="px-4 py-2 text-text-muted">{variant.sku ?? "—"}</td>
-                  <td className="px-4 py-2 text-text-muted">
-                    {variant.priceOverride != null
-                      ? formatCurrency(variant.priceOverride, offer.pricing.currency)
-                      : "—"}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+                <tr>
+                  <th className="px-4 py-2">Variante</th>
+                  <th className="px-4 py-2">SKU</th>
+                  <th className="px-4 py-2">Prix</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {offer.variants.map((variant) => (
+                  <tr key={variant.id}>
+                    <td className="px-4 py-2 font-medium">{variant.name}</td>
+                    <td className="px-4 py-2 text-text-muted">{variant.sku ?? "—"}</td>
+                    <td className="px-4 py-2 text-text-muted">
+                      {variant.priceOverride != null
+                        ? formatCurrency(variant.priceOverride, offer.pricing.currency)
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
     </div>

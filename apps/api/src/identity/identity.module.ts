@@ -37,8 +37,18 @@ import { PasswordResetRepository } from './auth/password-reset.repository';
 import { PasswordResetService } from './auth/password-reset.service';
 import { EmailVerificationRepository } from './auth/email-verification.repository';
 import { EmailVerificationService } from './auth/email-verification.service';
+import { TwoFactorService } from './auth/two-factor.service';
+import { TwoFactorController } from './auth/two-factor.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailModule } from '../shared/email/email.module';
+import {
+  InvitationsController,
+  InvitationsAcceptController,
+} from './invitations/invitations.controller';
+import { InvitationsService } from './invitations/invitations.service';
+import { InvitationsRepository } from './invitations/invitations.repository';
+import { Invitation, InvitationSchema } from './schemas/invitation.schema';
+import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
@@ -52,6 +62,7 @@ import { EmailModule } from '../shared/email/email.module';
         name: EmailVerificationToken.name,
         schema: EmailVerificationTokenSchema,
       },
+      { name: Invitation.name, schema: InvitationSchema },
       // Registered here (not via OrganizationsModule) so MembershipsService can read
       // enabledModules while resolving TenantContext — OrganizationsModule already imports
       // IdentityModule, so depending on OrganizationsModule/OrganizationsRepository here would
@@ -60,6 +71,7 @@ import { EmailModule } from '../shared/email/email.module';
     ]),
     PassportModule,
     EmailModule,
+    AuditModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -72,7 +84,12 @@ import { EmailModule } from '../shared/email/email.module';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [
+    AuthController,
+    TwoFactorController,
+    InvitationsController,
+    InvitationsAcceptController,
+  ],
   providers: [
     UsersRepository,
     UsersService,
@@ -87,6 +104,9 @@ import { EmailModule } from '../shared/email/email.module';
     PasswordResetService,
     EmailVerificationRepository,
     EmailVerificationService,
+    TwoFactorService,
+    InvitationsRepository,
+    InvitationsService,
     JwtStrategy,
   ],
   exports: [UsersService, RolesService, MembershipsService],

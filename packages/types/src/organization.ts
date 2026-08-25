@@ -54,3 +54,18 @@ export interface Membership {
   roleId: string;
   status: MembershipStatus;
 }
+
+export const INVITATION_STATUSES = ["pending", "accepted"] as const;
+export type InvitationStatus = (typeof INVITATION_STATUSES)[number];
+
+export interface Invitation {
+  id: string;
+  organizationId: string;
+  email: string;
+  roleId: string;
+  invitedByUserId: string;
+  status: InvitationStatus;
+  expiresAt: string;
+  acceptedAt?: string | null;
+  createdAt: string;
+}

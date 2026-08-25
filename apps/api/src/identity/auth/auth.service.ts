@@ -11,6 +11,7 @@ import type { RegisterInput, LoginInput } from '@korva/validation';
 import { UsersService } from '../users/users.service';
 import { SessionsService } from './sessions.service';
 import { EmailVerificationService } from './email-verification.service';
+import { TwoFactorService } from './two-factor.service';
 import { UserDocument } from '../schemas/user.schema';
 import { hashToken } from './token-hash.util';
 
@@ -19,6 +20,11 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
+/** Consecutive failed attempts allowed before an account is temporarily locked. */
+const MAX_FAILED_ATTEMPTS = 5;
+/** How long an account stays locked once MAX_FAILED_ATTEMPTS is reached. */
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
 function toPublicUser(user: UserDocument) {
   return {
     id: user.id as string,
@@ -26,6 +32,7 @@ function toPublicUser(user: UserDocument) {
     firstName: user.firstName,
     lastName: user.lastName,
     emailVerifiedAt: user.emailVerifiedAt,
+    totpEnabled: user.totpEnabled,
   };
 }
 
@@ -43,6 +50,7 @@ export class AuthService {
     // directly with `new`, outside this lot's authorized scope) keeps compiling unchanged —
     // Nest's DI graph in identity.module.ts always provides a real instance at runtime.
     private readonly emailVerificationService?: EmailVerificationService,
+    private readonly twoFactorService?: TwoFactorService,
   ) {
     this.refreshTtlMs = this.parseTtlToMs(
       this.configService.get<string>('JWT_REFRESH_TTL') ?? '30d',
@@ -88,19 +96,74 @@ export class AuthService {
       });
     }
 
+    // Checked BEFORE password verification: a locked account must reject every attempt
+    // (correct password or not) until the cooldown elapses, and must never leak whether the
+    // password itself was right or wrong while locked.
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_LOCKED',
+        message:
+          'This account is temporarily locked due to too many failed login attempts. Try again later.',
+      });
+    }
+
     const valid = await this.usersService.verifyPassword(
       user.passwordHash,
       input.password,
     );
     if (!valid) {
+      await this.registerFailedAttempt(user);
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password',
       });
     }
 
+    if (user.totpEnabled) {
+      if (!input.totpCode) {
+        throw new UnauthorizedException({
+          code: 'TOTP_REQUIRED',
+          message: 'A verification code is required to complete login',
+        });
+      }
+      const secret = user.totpSecretEncrypted;
+      const codeValid =
+        !!secret &&
+        !!this.twoFactorService?.verifyActiveCode(secret, input.totpCode);
+      if (!codeValid) {
+        await this.registerFailedAttempt(user);
+        throw new UnauthorizedException({
+          code: 'INVALID_TOTP_CODE',
+          message: 'Invalid verification code',
+        });
+      }
+    }
+
+    // A genuinely successful login (password, and TOTP code if enabled) always clears any
+    // accumulated failed-attempt count — see AuthService.login's class-level lockout doc.
+    if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+      await this.usersService.resetFailedAttempts(user.id as string);
+    }
+
     const tokens = await this.issueTokens(user);
     return { user: toPublicUser(user), ...tokens };
+  }
+
+  /**
+   * Increments the failed-attempt counter and, once it reaches MAX_FAILED_ATTEMPTS, locks the
+   * account for LOCKOUT_DURATION_MS and resets the counter back to 0 so the next window (after
+   * unlock) starts fresh — see UsersRepository.lockAccount.
+   */
+  private async registerFailedAttempt(user: UserDocument): Promise<void> {
+    const attempts = await this.usersService.incrementFailedAttempts(
+      user.id as string,
+    );
+    if (attempts >= MAX_FAILED_ATTEMPTS) {
+      await this.usersService.lockAccount(
+        user.id as string,
+        new Date(Date.now() + LOCKOUT_DURATION_MS),
+      );
+    }
   }
 
   /**

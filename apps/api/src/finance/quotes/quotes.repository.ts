@@ -73,4 +73,44 @@ export class QuotesRepository {
       )
       .exec();
   }
+
+  /**
+   * Candidate list for QuoteExpirySchedulerService — mirrors PaymentsRepository.
+   * findProcessingPayments (a global, org-agnostic query; the sweep is system-wide, not
+   * per-tenant). A quote is expirable once `validUntil` has passed and it is still in a
+   * non-terminal status — 'accepted'/'rejected'/'expired' are terminal and excluded.
+   */
+  findExpirable(limit = 100): Promise<QuoteDocument[]> {
+    return this.quoteModel
+      .find({
+        status: { $in: ['draft', 'sent', 'viewed'] },
+        validUntil: { $lt: new Date() },
+      })
+      .limit(limit)
+      .exec();
+  }
+
+  /**
+   * Atomically transitions a single quote to 'expired', guarded by the SAME eligibility filter
+   * used by findExpirable — so a quote accepted/rejected concurrently between the sweep's read
+   * and this write (e.g. by the owning user, in the same tick) is left untouched rather than
+   * wrongly expired, and re-running this on an already-expired quote is a no-op (returns null).
+   */
+  expireIfEligible(
+    organizationId: string,
+    id: string,
+  ): Promise<QuoteDocument | null> {
+    return this.quoteModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          status: { $in: ['draft', 'sent', 'viewed'] },
+          validUntil: { $lt: new Date() },
+        },
+        { status: 'expired' },
+        { new: true },
+      )
+      .exec();
+  }
 }

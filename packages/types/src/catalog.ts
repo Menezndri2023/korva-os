@@ -26,6 +26,15 @@ export interface OfferVariant {
   priceOverride?: number;
 }
 
+export interface Category {
+  id: string;
+  organizationId: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Offer {
   id: string;
   organizationId: string;

@@ -61,108 +61,110 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-4">
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-            <tr>
-              <th className="px-4 py-2">N°</th>
-              <th className="px-4 py-2">Client</th>
-              <th className="px-4 py-2">Total</th>
-              <th className="px-4 py-2">Payé</th>
-              <th className="px-4 py-2">Statut</th>
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">N°</th>
+                <th className="px-4 py-2">Client</th>
+                <th className="px-4 py-2">Total</th>
+                <th className="px-4 py-2">Payé</th>
+                <th className="px-4 py-2">Statut</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
-            )}
-            {!isLoading && invoices?.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
-                  Aucune facture.
-                </td>
-              </tr>
-            )}
-            {invoices?.map((invoice) => (
-              <Fragment key={invoice.id}>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading && (
                 <tr>
-                  <td className="px-4 py-2 font-medium">
-                    <Link
-                      href={`/dashboard/finance/invoices/${invoice.id}`}
-                      className="text-text underline-offset-2 hover:underline"
-                    >
-                      {invoice.number}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-2 text-text-muted">{contactName(invoice.contactId)}</td>
-                  <td className="px-4 py-2 text-text-muted">
-                    {invoice.total} {invoice.currency}
-                  </td>
-                  <td className="px-4 py-2 text-text-muted">{invoice.amountPaid}</td>
-                  <td className="px-4 py-2">
-                    <Badge>{STATUS_LABELS[invoice.status]}</Badge>
-                  </td>
-                  <td className="px-4 py-2 space-x-2">
-                    {invoice.status === "draft" && (
-                      <button
-                        onClick={() => issueMutation.mutate(invoice.id)}
-                        className="text-xs text-text-muted hover:underline"
-                      >
-                        Émettre
-                      </button>
-                    )}
-                    {(invoice.status === "issued" || invoice.status === "partially_paid") && (
-                      <button
-                        onClick={() =>
-                          setPayingInvoiceId(payingInvoiceId === invoice.id ? null : invoice.id)
-                        }
-                        className="text-xs text-text-muted hover:underline"
-                      >
-                        Encaisser
-                      </button>
-                    )}
+                  <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
+                    Chargement...
                   </td>
                 </tr>
-                {payingInvoiceId === invoice.id && (
+              )}
+              {!isLoading && invoices?.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
+                    Aucune facture.
+                  </td>
+                </tr>
+              )}
+              {invoices?.map((invoice) => (
+                <Fragment key={invoice.id}>
                   <tr>
-                    <td colSpan={6} className="bg-surface-muted px-4 py-3">
-                      <form
-                        onSubmit={handleSubmit((values) =>
-                          payMutation.mutate({
-                            invoiceId: invoice.id,
-                            amount: Number(values.amount),
-                            method: values.method,
-                          }),
-                        )}
-                        className="flex items-center gap-2"
+                    <td className="px-4 py-2 font-medium">
+                      <Link
+                        href={`/dashboard/finance/invoices/${invoice.id}`}
+                        className="text-text underline-offset-2 hover:underline"
                       >
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="Montant"
-                          {...register("amount", { required: true, valueAsNumber: true })}
-                        />
-                        <Input placeholder="Méthode (cash, virement...)" {...register("method")} />
-                        <Button type="submit" loading={payMutation.isPending}>
-                          {payMutation.isPending ? "..." : "Enregistrer le paiement"}
-                        </Button>
-                        {payMutation.isError && (
-                          <span className="text-xs text-destructive">
-                            {payMutation.error instanceof ApiError ? payMutation.error.message : "Erreur"}
-                          </span>
-                        )}
-                      </form>
+                        {invoice.number}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-text-muted">{contactName(invoice.contactId)}</td>
+                    <td className="px-4 py-2 text-text-muted">
+                      {invoice.total} {invoice.currency}
+                    </td>
+                    <td className="px-4 py-2 text-text-muted">{invoice.amountPaid}</td>
+                    <td className="px-4 py-2">
+                      <Badge>{STATUS_LABELS[invoice.status]}</Badge>
+                    </td>
+                    <td className="px-4 py-2 space-x-2">
+                      {invoice.status === "draft" && (
+                        <button
+                          onClick={() => issueMutation.mutate(invoice.id)}
+                          className="text-xs text-text-muted hover:underline"
+                        >
+                          Émettre
+                        </button>
+                      )}
+                      {(invoice.status === "issued" || invoice.status === "partially_paid") && (
+                        <button
+                          onClick={() =>
+                            setPayingInvoiceId(payingInvoiceId === invoice.id ? null : invoice.id)
+                          }
+                          className="text-xs text-text-muted hover:underline"
+                        >
+                          Encaisser
+                        </button>
+                      )}
                     </td>
                   </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+                  {payingInvoiceId === invoice.id && (
+                    <tr>
+                      <td colSpan={6} className="bg-surface-muted px-4 py-3">
+                        <form
+                          onSubmit={handleSubmit((values) =>
+                            payMutation.mutate({
+                              invoiceId: invoice.id,
+                              amount: Number(values.amount),
+                              method: values.method,
+                            }),
+                          )}
+                          className="flex items-center gap-2"
+                        >
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="Montant"
+                            {...register("amount", { required: true, valueAsNumber: true })}
+                          />
+                          <Input placeholder="Méthode (cash, virement...)" {...register("method")} />
+                          <Button type="submit" loading={payMutation.isPending}>
+                            {payMutation.isPending ? "..." : "Enregistrer le paiement"}
+                          </Button>
+                          {payMutation.isError && (
+                            <span className="text-xs text-destructive">
+                              {payMutation.error instanceof ApiError ? payMutation.error.message : "Erreur"}
+                            </span>
+                          )}
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Pagination

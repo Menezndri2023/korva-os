@@ -105,51 +105,53 @@ export default function ResourcesPage() {
       )}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-            <tr>
-              <th className="px-4 py-2">Nom</th>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">Capacité</th>
-              <th className="px-4 py-2">Horaires</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">Nom</th>
+                <th className="px-4 py-2">Type</th>
+                <th className="px-4 py-2">Capacité</th>
+                <th className="px-4 py-2">Horaires</th>
               </tr>
-            )}
-            {!isLoading && resources?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                  Aucune ressource.
-                </td>
-              </tr>
-            )}
-            {resources?.map((resource) => (
-              <tr key={resource.id}>
-                <td className="px-4 py-2 font-medium">
-                  <Link
-                    href={`/dashboard/bookings/resources/${resource.id}`}
-                    className="text-text underline-offset-2 hover:underline"
-                  >
-                    {resource.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-2 text-text-muted">{resource.type}</td>
-                <td className="px-4 py-2 text-text-muted">{resource.capacity}</td>
-                <td className="px-4 py-2 text-text-muted">
-                  {resource.weeklyAvailability
-                    .map((w) => `${DAY_LABELS[w.dayOfWeek]} ${w.startTime}-${w.endTime}`)
-                    .join(", ") || "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+                    Chargement...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && resources?.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+                    Aucune ressource.
+                  </td>
+                </tr>
+              )}
+              {resources?.map((resource) => (
+                <tr key={resource.id}>
+                  <td className="px-4 py-2 font-medium">
+                    <Link
+                      href={`/dashboard/bookings/resources/${resource.id}`}
+                      className="text-text underline-offset-2 hover:underline"
+                    >
+                      {resource.name}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 text-text-muted">{resource.type}</td>
+                  <td className="px-4 py-2 text-text-muted">{resource.capacity}</td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {resource.weeklyAvailability
+                      .map((w) => `${DAY_LABELS[w.dayOfWeek]} ${w.startTime}-${w.endTime}`)
+                      .join(", ") || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );

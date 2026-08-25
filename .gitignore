@@ -31,3 +31,6 @@ coverage/
 
 # pnpm
 .pnpm-store/
+
+# Local file uploads (apps/api/src/shared/storage — local filesystem storage provider)
+apps/api/uploads/

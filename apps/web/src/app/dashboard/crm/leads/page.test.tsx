@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import LeadsPage from "./page";
 import { renderWithProviders } from "@/test/render";
@@ -304,5 +304,92 @@ describe("LeadsPage — update lead status/stage (LOT F3)", () => {
     expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
     // No invalidation on error — the select still reflects the untouched server value.
     expect(screen.getByLabelText("Statut de Ada Lovelace")).toHaveValue("open");
+  });
+});
+
+describe("LeadsPage — kanban board (WAVE 2 AGENT E)", () => {
+  const leadOne = {
+    id: "lead-1",
+    contactId: "contact-1",
+    pipelineId: "pipe-1",
+    stageId: "stage-1",
+    status: "open",
+    estimatedValue: 100,
+  };
+  const contactTwo = { id: "contact-2", firstName: "Grace", lastName: "Hopper", tags: [] };
+
+  beforeEach(() => {
+    getMock.mockReset();
+    getListMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path.startsWith("/pipelines")) return Promise.resolve([pipeline]);
+      if (path.startsWith("/contacts")) return Promise.resolve([contact, contactTwo]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+    mockLeadsPage([leadOne]);
+  });
+
+  // jsdom has no native DataTransfer; this minimal stand-in implements just the get/setData
+  // pair the drag handlers actually call, shared between the dragstart and drop fireEvent calls
+  // exactly like the real browser object is shared across a single drag gesture.
+  function createDataTransfer() {
+    const store: Record<string, string> = {};
+    return {
+      setData: (format: string, data: string) => {
+        store[format] = data;
+      },
+      getData: (format: string) => store[format] ?? "",
+      dropEffect: "move",
+      effectAllowed: "move",
+    };
+  }
+
+  it("renders one column per pipeline stage, with the lead placed under its own stage", async () => {
+    renderWithProviders(<LeadsPage />);
+
+    // The column heading's accessible name is "<stage name> <card count>" (two <span>s inside
+    // one <h3>) — asserting on it also proves the lead was placed in the right column, since
+    // "Nouveau" holds 1 card and "Gagné" holds 0.
+    expect(await screen.findByRole("heading", { name: /^Nouveau/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Gagné/ })).toBeInTheDocument();
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+  });
+
+  it("dragging a card onto a different stage column persists via PATCH /leads/:id with only { stageId }", async () => {
+    patchMock.mockResolvedValue({ ...leadOne, stageId: "stage-2" });
+    renderWithProviders(<LeadsPage />);
+
+    const card = (await screen.findByText("Ada Lovelace")).closest("[draggable]") as HTMLElement;
+    const targetColumn = screen
+      .getByRole("heading", { name: /^Gagné/ })
+      .closest("div") as HTMLElement;
+    expect(card).not.toBeNull();
+    expect(targetColumn).not.toBeNull();
+
+    const dataTransfer = createDataTransfer();
+    fireEvent.dragStart(card, { dataTransfer });
+    fireEvent.drop(targetColumn, { dataTransfer });
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/leads/lead-1", { stageId: "stage-2" }),
+    );
+  });
+
+  it("dropping a card back onto its own column sends no PATCH", async () => {
+    renderWithProviders(<LeadsPage />);
+
+    const card = (await screen.findByText("Ada Lovelace")).closest("[draggable]") as HTMLElement;
+    const sameColumn = screen
+      .getByRole("heading", { name: /^Nouveau/ })
+      .closest("div") as HTMLElement;
+
+    const dataTransfer = createDataTransfer();
+    fireEvent.dragStart(card, { dataTransfer });
+    fireEvent.drop(sameColumn, { dataTransfer });
+
+    expect(patchMock).not.toHaveBeenCalled();
   });
 });

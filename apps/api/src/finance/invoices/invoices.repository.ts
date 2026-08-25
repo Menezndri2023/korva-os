@@ -199,4 +199,45 @@ export class InvoicesRepository {
       )
       .exec();
   }
+
+  /**
+   * Candidate list for InvoiceOverdueSchedulerService — mirrors QuotesRepository.findExpirable /
+   * PaymentsRepository.findProcessingPayments (a global, org-agnostic query; the sweep is
+   * system-wide, not per-tenant). An invoice is overdue once `dueDate` has passed and it still
+   * carries an outstanding balance — 'issued' or 'partially_paid'; 'draft'/'paid'/'cancelled'/
+   * already-'overdue' are excluded.
+   */
+  findOverdueCandidates(limit = 100): Promise<InvoiceDocument[]> {
+    return this.invoiceModel
+      .find({
+        status: { $in: ['issued', 'partially_paid'] },
+        dueDate: { $lt: new Date() },
+      })
+      .limit(limit)
+      .exec();
+  }
+
+  /**
+   * Atomically transitions a single invoice to 'overdue', guarded by the SAME eligibility
+   * filter used by findOverdueCandidates — so an invoice paid/cancelled concurrently between the
+   * sweep's read and this write is left untouched, and re-running this on an already-overdue
+   * invoice is a no-op (returns null).
+   */
+  markOverdueIfEligible(
+    organizationId: string,
+    id: string,
+  ): Promise<InvoiceDocument | null> {
+    return this.invoiceModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          status: { $in: ['issued', 'partially_paid'] },
+          dueDate: { $lt: new Date() },
+        },
+        { status: 'overdue' },
+        { new: true },
+      )
+      .exec();
+  }
 }

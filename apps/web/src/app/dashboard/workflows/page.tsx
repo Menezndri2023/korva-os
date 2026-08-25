@@ -281,46 +281,48 @@ export default function WorkflowsPage() {
       )}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-            <tr>
-              <th className="px-4 py-2">Nom</th>
-              <th className="px-4 py-2">Déclencheur</th>
-              <th className="px-4 py-2">Statut</th>
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">Nom</th>
+                <th className="px-4 py-2">Déclencheur</th>
+                <th className="px-4 py-2">Statut</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
-            )}
-            {!isLoading && workflows?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                  Aucun workflow.
-                </td>
-              </tr>
-            )}
-            {workflows?.map((workflow) => (
-              <WorkflowRow
-                key={workflow.id}
-                workflow={workflow}
-                onToggleActive={(active) => toggleActiveMutation.mutate({ id: workflow.id, active })}
-                onDelete={() => deleteMutation.mutate(workflow.id)}
-                isDeleting={deleteMutation.isPending && deleteMutation.variables === workflow.id}
-                deleteError={
-                  deleteMutation.isError && deleteMutation.variables === workflow.id
-                    ? deleteMutation.error
-                    : null
-                }
-              />
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+                    Chargement...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && workflows?.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+                    Aucun workflow.
+                  </td>
+                </tr>
+              )}
+              {workflows?.map((workflow) => (
+                <WorkflowRow
+                  key={workflow.id}
+                  workflow={workflow}
+                  onToggleActive={(active) => toggleActiveMutation.mutate({ id: workflow.id, active })}
+                  onDelete={() => deleteMutation.mutate(workflow.id)}
+                  isDeleting={deleteMutation.isPending && deleteMutation.variables === workflow.id}
+                  deleteError={
+                    deleteMutation.isError && deleteMutation.variables === workflow.id
+                      ? deleteMutation.error
+                      : null
+                  }
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );

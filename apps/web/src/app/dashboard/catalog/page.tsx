@@ -145,51 +145,53 @@ export default function CatalogPage() {
       )}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-            <tr>
-              <th className="px-4 py-2">Nom</th>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">Prix</th>
-              <th className="px-4 py-2">Statut</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">Nom</th>
+                <th className="px-4 py-2">Type</th>
+                <th className="px-4 py-2">Prix</th>
+                <th className="px-4 py-2">Statut</th>
               </tr>
-            )}
-            {!isLoading && data?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                  Aucune offre.
-                </td>
-              </tr>
-            )}
-            {data?.map((offer) => (
-              <tr key={offer.id}>
-                <td className="px-4 py-2 font-medium">
-                  <Link
-                    href={`/dashboard/catalog/${offer.id}`}
-                    className="text-text underline-offset-2 hover:underline"
-                  >
-                    {offer.name}
-                  </Link>
-                </td>
-                <td className="px-4 py-2 text-text-muted">{TYPE_LABELS[offer.type]}</td>
-                <td className="px-4 py-2 text-text-muted">
-                  {offer.pricing.amount} {offer.pricing.currency}
-                </td>
-                <td className="px-4 py-2">
-                  <Badge variant={STATUS_VARIANT[offer.status]}>{offer.status}</Badge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+                    Chargement...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && data?.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+                    Aucune offre.
+                  </td>
+                </tr>
+              )}
+              {data?.map((offer) => (
+                <tr key={offer.id}>
+                  <td className="px-4 py-2 font-medium">
+                    <Link
+                      href={`/dashboard/catalog/${offer.id}`}
+                      className="text-text underline-offset-2 hover:underline"
+                    >
+                      {offer.name}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 text-text-muted">{TYPE_LABELS[offer.type]}</td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {offer.pricing.amount} {offer.pricing.currency}
+                  </td>
+                  <td className="px-4 py-2">
+                    <Badge variant={STATUS_VARIANT[offer.status]}>{offer.status}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Pagination

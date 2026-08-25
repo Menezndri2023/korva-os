@@ -11,8 +11,18 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  /** Only required when the account has 2FA enabled — see AuthService.login. */
+  totpCode: z
+    .string()
+    .regex(/^\d{6}$/, "totpCode must be a 6-digit code")
+    .optional(),
 });
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const totpCodeSchema = z.object({
+  code: z.string().regex(/^\d{6}$/, "code must be a 6-digit code"),
+});
+export type TotpCodeInput = z.infer<typeof totpCodeSchema>;
 
 export const refreshSchema = z.object({
   refreshToken: z.string().min(1),

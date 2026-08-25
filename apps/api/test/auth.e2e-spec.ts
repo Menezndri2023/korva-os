@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
+import * as OTPAuth from 'otpauth';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -16,7 +17,7 @@ interface ApiError {
 }
 
 interface AuthResponseBody {
-  user: { id: string; email: string };
+  user: { id: string; email: string; totpEnabled?: boolean };
   accessToken: string;
 }
 
@@ -236,5 +237,287 @@ describe('Auth — refresh-token cookie flow (e2e)', () => {
     // 0 or 1 remaining active sessions is a correct outcome. What must NEVER happen is 2: that
     // would mean the same original token produced two independently-valid sessions.
     expect(await countActiveSessions(userId)).toBeLessThanOrEqual(1);
+  });
+});
+
+/**
+ * TOTP-based 2FA — a real, un-mocked TOTP implementation on both sides: the API generates and
+ * verifies with `otpauth` (see TwoFactorService), and this test independently computes codes
+ * against the SAME secret with the same library, exactly the way a real authenticator app would.
+ */
+describe('Auth — two-factor authentication (TOTP) (e2e)', () => {
+  let app: INestApplication<App>;
+  let server: App;
+  let connection: Connection;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+    server = app.getHttpServer();
+    connection = app.get(getConnectionToken());
+    await connection.dropDatabase();
+    await Promise.all(
+      connection
+        .modelNames()
+        .map((name) => connection.model(name).syncIndexes()),
+    );
+  });
+
+  afterAll(async () => {
+    await connection.dropDatabase();
+    await app.close();
+  });
+
+  async function registerAndLogin(email: string): Promise<AuthResponseBody> {
+    const res = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    return asSuccess<AuthResponseBody>(res.body);
+  }
+
+  function codeFor(secret: string): string {
+    const totp = new OTPAuth.TOTP({
+      issuer: 'KORVA OS',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret: OTPAuth.Secret.fromBase32(secret),
+    });
+    return totp.generate();
+  }
+
+  /** Deterministically wrong: never equal to the real code, unlike a fixed guess such as
+   *  '000000' which has a (tiny but real) chance of colliding with it. */
+  function wrongCodeFor(secret: string): string {
+    const real = codeFor(secret);
+    const firstDigit = real[0] as string;
+    const flipped = firstDigit === '0' ? '1' : '0';
+    return flipped + real.slice(1);
+  }
+
+  it('full flow: setup -> confirm -> login without code fails/prompts -> wrong code fails -> correct code succeeds', async () => {
+    const email = 'totp-flow@korva.test';
+    const { accessToken } = await registerAndLogin(email);
+
+    const setupRes = await request(server)
+      .post('/api/v1/auth/2fa/setup')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(201);
+    const { secret, otpauthUrl } = asSuccess<{
+      secret: string;
+      otpauthUrl: string;
+    }>(setupRes.body);
+    expect(typeof secret).toBe('string');
+    expect(otpauthUrl).toContain('otpauth://totp/');
+
+    // Wrong code is rejected and must NOT arm 2FA.
+    await request(server)
+      .post('/api/v1/auth/2fa/confirm')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ code: wrongCodeFor(secret) })
+      .expect(401);
+
+    const confirmRes = await request(server)
+      .post('/api/v1/auth/2fa/confirm')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ code: codeFor(secret) })
+      .expect(201);
+    expect(asSuccess<{ enabled: boolean }>(confirmRes.body)).toEqual({
+      enabled: true,
+    });
+
+    // The secret is never re-exposed anywhere from this point on.
+    expect(JSON.stringify(confirmRes.body)).not.toContain(secret);
+
+    // Login without a code: rejected with a distinguishable "prompt for code" error, not a
+    // silent success and not a generic INVALID_CREDENTIALS.
+    const noCodeRes = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123' })
+      .expect(401);
+    expect(asError(noCodeRes.body).code).toBe('TOTP_REQUIRED');
+
+    // Login with a wrong code fails.
+    const wrongCodeRes = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123', totpCode: wrongCodeFor(secret) })
+      .expect(401);
+    expect(asError(wrongCodeRes.body).code).toBe('INVALID_TOTP_CODE');
+
+    // Login with the correct code succeeds.
+    const okRes = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123', totpCode: codeFor(secret) })
+      .expect(201);
+    const okBody = asSuccess<AuthResponseBody>(okRes.body);
+    expect(okBody.user.email).toBe(email);
+    expect(typeof okBody.accessToken).toBe('string');
+    expect(JSON.stringify(okRes.body)).not.toContain(secret);
+  });
+
+  it('disable requires a valid code, and login no longer requires one afterwards', async () => {
+    const email = 'totp-disable@korva.test';
+    const { accessToken } = await registerAndLogin(email);
+
+    const setupRes = await request(server)
+      .post('/api/v1/auth/2fa/setup')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(201);
+    const { secret } = asSuccess<{ secret: string }>(setupRes.body);
+    await request(server)
+      .post('/api/v1/auth/2fa/confirm')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ code: codeFor(secret) })
+      .expect(201);
+
+    // Wrong code cannot disable it.
+    await request(server)
+      .post('/api/v1/auth/2fa/disable')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ code: wrongCodeFor(secret) })
+      .expect(401);
+
+    await request(server)
+      .post('/api/v1/auth/2fa/disable')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ code: codeFor(secret) })
+      .expect(201);
+
+    // Login no longer requires a code.
+    const loginRes = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    expect(asSuccess<AuthResponseBody>(loginRes.body).user.email).toBe(email);
+  });
+});
+
+/**
+ * Per-account lockout, distinct from and layered on top of the global per-IP ThrottlerGuard —
+ * see AuthService.login's MAX_FAILED_ATTEMPTS/LOCKOUT_DURATION_MS.
+ */
+describe('Auth — per-account lockout (e2e)', () => {
+  let app: INestApplication<App>;
+  let server: App;
+  let connection: Connection;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+    server = app.getHttpServer();
+    connection = app.get(getConnectionToken());
+    await connection.dropDatabase();
+    await Promise.all(
+      connection
+        .modelNames()
+        .map((name) => connection.model(name).syncIndexes()),
+    );
+  });
+
+  afterAll(async () => {
+    await connection.dropDatabase();
+    await app.close();
+  });
+
+  async function register(email: string): Promise<AuthResponseBody> {
+    const res = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    return asSuccess<AuthResponseBody>(res.body);
+  }
+
+  async function failedLogin(email: string) {
+    return request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'wrong-password' });
+  }
+
+  it('locks the account after 5 consecutive failed attempts, and rejects the 6th attempt even with the correct password', async () => {
+    const email = 'lockout-flow@korva.test';
+    await register(email);
+
+    for (let i = 0; i < 5; i++) {
+      const res = await failedLogin(email);
+      expect(res.status).toBe(401);
+      expect(asError(res.body).code).toBe('INVALID_CREDENTIALS');
+    }
+
+    // The account is now locked — even the CORRECT password is rejected.
+    const lockedRes = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123' })
+      .expect(401);
+    expect(asError(lockedRes.body).code).toBe('ACCOUNT_LOCKED');
+  });
+
+  it('a successful login before the threshold resets the failed-attempt counter', async () => {
+    const email = 'lockout-reset@korva.test';
+    await register(email);
+
+    // 3 failures (below the threshold of 5) ...
+    for (let i = 0; i < 3; i++) {
+      await failedLogin(email);
+    }
+
+    // ... then a successful login must reset the counter back to 0.
+    await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123' })
+      .expect(201);
+
+    // 4 more failures afterwards must NOT lock the account (3 + 4 = 7 total failures across the
+    // whole test, but only 4 consecutive since the reset — below the threshold of 5).
+    for (let i = 0; i < 4; i++) {
+      const res = await failedLogin(email);
+      expect(res.status).toBe(401);
+      expect(asError(res.body).code).toBe('INVALID_CREDENTIALS');
+    }
+
+    // Correct password still works — the account was never locked.
+    await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123' })
+      .expect(201);
+  });
+
+  it('automatically unlocks once the cooldown window elapses', async () => {
+    const email = 'lockout-cooldown@korva.test';
+    const { user } = await register(email);
+
+    for (let i = 0; i < 5; i++) {
+      await failedLogin(email);
+    }
+    await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123' })
+      .expect(401); // still locked
+
+    // Force lockedUntil into the past — the only way to exercise real cooldown expiry
+    // deterministically without waiting out the real window, same technique as
+    // password-reset.e2e-spec.ts's expired-token test.
+    await connection
+      .collection('users')
+      .updateOne(
+        { _id: new Types.ObjectId(user.id) },
+        { $set: { lockedUntil: new Date(Date.now() - 1000) } },
+      );
+
+    const res = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    expect(asSuccess<AuthResponseBody>(res.body).user.email).toBe(email);
   });
 });

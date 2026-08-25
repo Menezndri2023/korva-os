@@ -31,6 +31,9 @@ import { NotificationsController } from './notifications/notifications.controlle
 import { MESSAGING_PROVIDER } from './providers/messaging-provider.interface';
 import { LogMessagingProvider } from './providers/log-messaging.provider';
 
+import { ResendWebhookController } from './webhooks/resend-webhook.controller';
+import { ResendWebhookService } from './webhooks/resend-webhook.service';
+
 import { CrmModule } from '../crm/crm.module';
 import { IdentityModule } from '../identity/identity.module';
 import { AuditModule } from '../audit/audit.module';
@@ -53,6 +56,7 @@ import { EmailModule } from '../shared/email/email.module';
     MessageTemplatesController,
     ConversationsController,
     NotificationsController,
+    ResendWebhookController,
   ],
   providers: [
     MessageTemplatesRepository,
@@ -62,6 +66,7 @@ import { EmailModule } from '../shared/email/email.module';
     ConversationsService,
     NotificationsRepository,
     NotificationsService,
+    ResendWebhookService,
     { provide: MESSAGING_PROVIDER, useClass: LogMessagingProvider },
   ],
   exports: [EmailModule, NotificationsService, ConversationsService],

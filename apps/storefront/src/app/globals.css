@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@korva/ui/tokens.css";
 
 :root {
   --background: #ffffff;

@@ -51,3 +51,19 @@ export const createMessageSchema = z.object({
   templateId: z.string().optional(),
 });
 export type CreateMessageInput = z.infer<typeof createMessageSchema>;
+
+// Resend's webhook event envelope (https://resend.com/docs/dashboard/webhooks/event-types) —
+// only the fields the delivery-status handler actually reads are asserted; `.passthrough()`
+// keeps the rest so an unrecognized-but-legitimate field Resend adds later doesn't fail parsing.
+export const resendWebhookEventSchema = z
+  .object({
+    type: z.string().min(1),
+    created_at: z.string().optional(),
+    data: z
+      .object({
+        email_id: z.string().min(1),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+export type ResendWebhookEvent = z.infer<typeof resendWebhookEventSchema>;

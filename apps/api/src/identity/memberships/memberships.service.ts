@@ -32,6 +32,16 @@ export class MembershipsService {
     });
   }
 
+  findByUserAndOrganization(
+    userId: string,
+    organizationId: string,
+  ): Promise<MembershipDocument | null> {
+    return this.membershipsRepository.findByUserAndOrganization(
+      userId,
+      organizationId,
+    );
+  }
+
   listOrganizationIdsForUser(userId: string): Promise<MembershipDocument[]> {
     return this.membershipsRepository.findAllForUser(userId);
   }

@@ -25,7 +25,7 @@ import { EntitlementsService } from '../subscriptions/entitlements.service';
  * (no systemKey, or an unrecognized one) have no known rank and must never be assumed to
  * outrank anything — callers must fail closed rather than fall back to a permissive default.
  */
-function requireSystemRoleRank(role: RoleDocument): number {
+export function requireSystemRoleRank(role: RoleDocument): number {
   const rank = role.systemKey ? SYSTEM_ROLE_RANK[role.systemKey] : undefined;
   if (rank === undefined) {
     throw new ForbiddenException({

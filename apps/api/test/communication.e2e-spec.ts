@@ -6,6 +6,10 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
+// Must be set before AppModule/ConfigModule compiles below (module-scope code runs before any
+// beforeAll) — see the "resend delivery webhook" describe block near the bottom of this file.
+process.env.RESEND_WEBHOOK_SECRET ??= 'whsec_ZTJlLXRlc3Qtd2ViaG9vay1zZWNyZXQ=';
+
 interface ApiSuccess<T> {
   success: true;
   data: T;
@@ -490,5 +494,38 @@ describe('Communication module (e2e)', () => {
       const stillUnread = asSuccess<NotificationPayload[]>(stillUnreadRes.body);
       expect(stillUnread.some((n) => n.id === notification.id)).toBe(true);
     }, 25000);
+  });
+
+  /**
+   * Full unit coverage of the actual signature-verification + status-update logic lives in
+   * resend-webhook.controller.spec.ts / resend-webhook.service.spec.ts / verify-svix-signature
+   * .spec.ts (constructing real signed payloads directly against the controller, no HTTP layer
+   * involved). What's left to prove here, through the real bootstrapped HTTP stack, is the part
+   * that's specific to going through an actual request: header validation, and the documented
+   * raw-body limitation (see resend-webhook.controller.ts's class doc) — this app is built the
+   * same way main.ts's bootstrap() builds it (no `{ rawBody: true }`), so `req.rawBody` is
+   * genuinely unavailable here too, the same as it would be in production today.
+   */
+  describe('resend delivery webhook (e2e)', () => {
+    it('rejects with 400 when svix signature headers are missing', async () => {
+      const res = await request(server)
+        .post('/api/v1/webhooks/resend')
+        .send({ type: 'email.delivered', data: { email_id: 'irrelevant' } })
+        .expect(400);
+      expect(asError(res.body).code).toBe('MISSING_SIGNATURE_HEADERS');
+    });
+
+    it('fails closed with 503 when headers are present but req.rawBody is unavailable (known limitation, see resend-webhook.controller.ts)', async () => {
+      const res = await request(server)
+        .post('/api/v1/webhooks/resend')
+        .set('svix-id', 'msg_e2e')
+        .set('svix-timestamp', String(Math.floor(Date.now() / 1000)))
+        .set('svix-signature', 'v1,irrelevant-because-rawbody-check-runs-first')
+        .send({ type: 'email.delivered', data: { email_id: 'irrelevant' } })
+        .expect(503);
+      expect(asError(res.body).code).toBe(
+        'RESEND_WEBHOOK_RAW_BODY_UNAVAILABLE',
+      );
+    });
   });
 });

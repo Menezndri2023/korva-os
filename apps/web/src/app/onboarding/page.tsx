@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { createOrganizationSchema, type CreateOrganizationInput } from "@korva/validation";
 import { KORVA_MODULES, type KorvaModule, type Organization } from "@korva/types";
-import { Button, Input } from "@korva/ui";
+import { Button, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -32,6 +32,14 @@ const COUNTRIES = [
 ];
 
 const CURRENCIES = ["EUR", "XOF", "MAD", "USD", "CAD"];
+
+// createOrganizationSchema (packages/validation/src/organization.ts) already requires and
+// accepts `timezone: z.string().min(1)` — the payload below was already sending it, just
+// silently defaulted to the browser's own resolved zone and never exposed as an editable
+// field (Wave 2 audit finding). Intl.supportedValuesOf("timeZone") gives the full real IANA
+// list without hardcoding one, and is available in every runtime this app targets (Node >=22.6
+// per the repo's engines field, and all evergreen browsers).
+const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -132,6 +140,22 @@ export default function OnboardingPage() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium" htmlFor="timezone">
+              Fuseau horaire
+            </label>
+            <Select id="timezone" className="mt-1 w-full" {...register("timezone")}>
+              {TIMEZONES.map((timezone) => (
+                <option key={timezone} value={timezone}>
+                  {timezone}
+                </option>
+              ))}
+            </Select>
+            {errors.timezone && (
+              <p className="mt-1 text-xs text-red-600">{errors.timezone.message}</p>
+            )}
           </div>
 
           <div>

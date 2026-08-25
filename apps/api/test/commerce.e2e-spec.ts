@@ -581,6 +581,184 @@ describe('Commerce module (e2e)', () => {
     });
   });
 
+  describe('createFromCart() Order/Cart MongoDB transaction integrity', () => {
+    async function createOpenCartWithItem(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+    ): Promise<{ cartId: string; offerId: string }> {
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Race Item',
+          pricing: { amount: 25, currency: 'EUR' },
+        })
+        .expect(201);
+      const offerId = asSuccess<OfferPayload>(offerRes.body).id;
+
+      const cartRes = await request(server)
+        .get(`/api/v1/carts?contactId=${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const cartId = asSuccess<CartPayload>(cartRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/carts/${cartId}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId, quantity: 1 })
+        .expect(201);
+
+      return { cartId, offerId };
+    }
+
+    async function listCartOrders(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+    ): Promise<OrderPayload[]> {
+      const res = await request(server)
+        .get(`/api/v1/orders?contactId=${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      // ResponseInterceptor flattens paginated results to { success, data: [...], pagination }.
+      return asSuccess<OrderPayload[]>(res.body).filter(
+        (order) => order.source === 'cart',
+      );
+    }
+
+    it('two concurrent checkout() calls for the same cart: exactly one Order is created, the Cart becomes converted, the loser gets CART_NOT_OPEN', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgContact(
+          'cart-checkout-race-owner@korva.test',
+          'Cart Checkout Race Org',
+        );
+      const { cartId } = await createOpenCartWithItem(
+        accessToken,
+        organizationId,
+        contactId,
+      );
+
+      // Dispatched before either is awaited — a genuine race against the same cart, not two
+      // sequential calls. Before this fix, both could read status='open' via the same stale
+      // Cart snapshot and both create an Order, leaving the Cart converted with two Orders (or
+      // an Order with the Cart never actually marked converted).
+      const [resA, resB] = await Promise.all([
+        request(server)
+          .post(`/api/v1/carts/${cartId}/checkout`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId),
+        request(server)
+          .post(`/api/v1/carts/${cartId}/checkout`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId),
+      ]);
+
+      const results = [resA, resB];
+      const succeeded = results.filter((r) => r.status === 201);
+      const rejected = results.filter((r) => r.status === 400);
+      expect(succeeded).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(asError(rejected[0]!.body).code).toBe('CART_NOT_OPEN');
+
+      const winningOrder = asSuccess<OrderPayload>(succeeded[0]!.body);
+      expect(winningOrder.source).toBe('cart');
+
+      const cartOrders = await listCartOrders(
+        accessToken,
+        organizationId,
+        contactId,
+      );
+      expect(cartOrders).toHaveLength(1);
+      expect(cartOrders[0]!.id).toBe(winningOrder.id);
+
+      const cartRes = await request(server)
+        .get(`/api/v1/carts/${cartId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<CartPayload>(cartRes.body).status).toBe('converted');
+    });
+
+    it('aborts the whole transaction when creating the Order fails after the Cart was staged as converted — no Order persists, the Cart stays open, and a retry succeeds normally', async () => {
+      const { accessToken, organizationId, contactId } =
+        await registerOrgContact(
+          'cart-checkout-rollback-owner@korva.test',
+          'Cart Checkout Rollback Org',
+        );
+      const { cartId } = await createOpenCartWithItem(
+        accessToken,
+        organizationId,
+        contactId,
+      );
+
+      // Real MongoDB transaction, real HTTP layer, real atomic Cart guard — the only thing
+      // faked is a failure injected at the "insert the Order" step, i.e. AFTER the Cart was
+      // staged 'converted' inside the transaction but BEFORE commit.
+      const ordersRepository = app.get(OrdersRepository);
+      const spy = jest
+        .spyOn(ordersRepository, 'create')
+        .mockImplementationOnce(() => {
+          throw new Error(
+            'deliberate failure to prove createFromCart transaction rollback',
+          );
+        });
+
+      try {
+        const res = await request(server)
+          .post(`/api/v1/carts/${cartId}/checkout`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId);
+        expect(res.status).toBe(500);
+        expect(asError(res.body).code).toBe('INTERNAL_SERVER_ERROR');
+      } finally {
+        spy.mockRestore();
+      }
+
+      // The staged Cart conversion must have been rolled back with the rest of the
+      // transaction — not left 'converted' with no Order behind it.
+      const ordersAfterAbort = await listCartOrders(
+        accessToken,
+        organizationId,
+        contactId,
+      );
+      expect(ordersAfterAbort).toHaveLength(0);
+
+      const cartAfterAbortRes = await request(server)
+        .get(`/api/v1/carts/${cartId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<CartPayload>(cartAfterAbortRes.body).status).toBe(
+        'open',
+      );
+
+      // And a retry right after proves the cart wasn't left in some corrupted intermediate
+      // state by the aborted attempt.
+      const retryRes = await request(server)
+        .post(`/api/v1/carts/${cartId}/checkout`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      const order = asSuccess<OrderPayload>(retryRes.body);
+      expect(order.source).toBe('cart');
+
+      const cartAfterRetryRes = await request(server)
+        .get(`/api/v1/carts/${cartId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<CartPayload>(cartAfterRetryRes.body).status).toBe(
+        'converted',
+      );
+    });
+  });
+
   describe('tenant isolation for commerce resources', () => {
     it('denies a user from another organization reading orders via a foreign org id', async () => {
       const a = await registerOrgContact(

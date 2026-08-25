@@ -189,35 +189,37 @@ export default function InvoiceDetailPage() {
       </Card>
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-            <tr>
-              <th className="px-4 py-2">Description</th>
-              <th className="px-4 py-2">Qté</th>
-              <th className="px-4 py-2">Prix unitaire</th>
-              <th className="px-4 py-2">TVA</th>
-              <th className="px-4 py-2">Total ligne</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {invoice.items.map((item, index) => (
-              <tr key={index}>
-                <td className="px-4 py-2 font-medium">{item.description}</td>
-                <td className="px-4 py-2 text-text-muted">{item.quantity}</td>
-                <td className="px-4 py-2 text-text-muted">
-                  {formatCurrency(item.unitPrice, invoice.currency)}
-                </td>
-                <td className="px-4 py-2 text-text-muted">{item.taxRate ?? 0}%</td>
-                <td className="px-4 py-2 text-text-muted">
-                  {formatCurrency(
-                    item.quantity * item.unitPrice * (1 + (item.taxRate ?? 0) / 100),
-                    invoice.currency,
-                  )}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+              <tr>
+                <th className="px-4 py-2">Description</th>
+                <th className="px-4 py-2">Qté</th>
+                <th className="px-4 py-2">Prix unitaire</th>
+                <th className="px-4 py-2">TVA</th>
+                <th className="px-4 py-2">Total ligne</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {invoice.items.map((item, index) => (
+                <tr key={index}>
+                  <td className="px-4 py-2 font-medium">{item.description}</td>
+                  <td className="px-4 py-2 text-text-muted">{item.quantity}</td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {formatCurrency(item.unitPrice, invoice.currency)}
+                  </td>
+                  <td className="px-4 py-2 text-text-muted">{item.taxRate ?? 0}%</td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {formatCurrency(
+                      item.quantity * item.unitPrice * (1 + (item.taxRate ?? 0) / 100),
+                      invoice.currency,
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="flex justify-end gap-8 border-t border-border px-4 py-3 text-sm">
           <div className="text-right text-text-muted">
             <p>Sous-total</p>

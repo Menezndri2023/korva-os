@@ -50,4 +50,32 @@ export class UsersService {
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     await this.usersRepository.updatePasswordHash(id, passwordHash);
   }
+
+  findByIdWithTotpSecret(id: string): Promise<UserDocument | null> {
+    return this.usersRepository.findByIdWithTotpSecret(id);
+  }
+
+  setPendingTotpSecret(id: string, encryptedSecret: string): Promise<void> {
+    return this.usersRepository.setPendingTotpSecret(id, encryptedSecret);
+  }
+
+  confirmTotpEnrollment(id: string, encryptedSecret: string): Promise<void> {
+    return this.usersRepository.confirmTotpEnrollment(id, encryptedSecret);
+  }
+
+  disableTotp(id: string): Promise<void> {
+    return this.usersRepository.disableTotp(id);
+  }
+
+  incrementFailedAttempts(id: string): Promise<number> {
+    return this.usersRepository.incrementFailedAttempts(id);
+  }
+
+  lockAccount(id: string, lockedUntil: Date): Promise<void> {
+    return this.usersRepository.lockAccount(id, lockedUntil);
+  }
+
+  resetFailedAttempts(id: string): Promise<void> {
+    return this.usersRepository.resetFailedAttempts(id);
+  }
 }

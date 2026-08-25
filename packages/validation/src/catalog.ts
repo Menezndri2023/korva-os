@@ -3,6 +3,15 @@ import { OFFER_STATUSES, OFFER_TYPES } from "@korva/types";
 
 const customFieldsSchema = z.record(z.string(), z.unknown()).optional();
 
+export const createCategorySchema = z.object({
+  name: z.string().min(1).max(120),
+  description: z.string().max(2000).optional(),
+});
+export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+
+export const updateCategorySchema = createCategorySchema.partial();
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+
 export const offerPricingSchema = z.object({
   amount: z.number().nonnegative(),
   currency: z.string().length(3),

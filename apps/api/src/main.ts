@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { StructuredLogger } from './common/logging/structured-logger.service';
 import { initSentry, captureApiException } from './core/observability/sentry';
 
 async function bootstrap() {
@@ -14,6 +15,14 @@ async function bootstrap() {
   initSentry();
 
   const app = await NestFactory.create(AppModule);
+
+  // Replaces Nest's default ConsoleLogger with a JSON-structured one that also stamps every log
+  // line with the current request's id (see common/logging/) — done as early as possible so it
+  // covers the rest of bootstrap too. This is the only reason main.ts is touched this wave; see
+  // common/logging/structured-logger.service.ts and common/middleware/request-id.middleware.ts
+  // for the actual logic.
+  app.useLogger(new StructuredLogger());
+
   const configService = app.get(ConfigService);
 
   // Without this, Nest never forwards SIGTERM to module lifecycle hooks (OnModuleDestroy) —

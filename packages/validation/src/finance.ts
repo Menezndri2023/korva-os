@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { INVOICE_STATUSES, QUOTE_STATUSES } from "@korva/types";
+import { EXPENSE_STATUSES, INVOICE_STATUSES, QUOTE_STATUSES } from "@korva/types";
 
 export const lineItemInputSchema = z.object({
   offerId: z.string().optional(),
@@ -72,3 +72,33 @@ export const createRefundSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 export type CreateRefundInput = z.infer<typeof createRefundSchema>;
+
+export const createExpenseSchema = z.object({
+  category: z.string().min(1).max(100),
+  description: z.string().min(1).max(300),
+  amount: z.number().positive(),
+  currency: z.string().length(3),
+  date: z.string().datetime(),
+  vendor: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
+
+export const updateExpenseSchema = z.object({
+  category: z.string().min(1).max(100).optional(),
+  description: z.string().min(1).max(300).optional(),
+  amount: z.number().positive().optional(),
+  currency: z.string().length(3).optional(),
+  date: z.string().datetime().optional(),
+  vendor: z.string().max(200).optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
+
+export const listExpensesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(EXPENSE_STATUSES).optional(),
+  category: z.string().optional(),
+});
+export type ListExpensesQuery = z.infer<typeof listExpensesQuerySchema>;

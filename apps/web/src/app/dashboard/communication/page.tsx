@@ -128,40 +128,42 @@ export default function ConversationsPage() {
       )}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
-            <tr>
-              <th className="px-4 py-2">Contact</th>
-              <th className="px-4 py-2">Canal</th>
-              <th className="px-4 py-2">Sujet</th>
-              <th className="px-4 py-2">Statut</th>
-              <th className="px-4 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                  Chargement...
-                </td>
+                <th className="px-4 py-2">Contact</th>
+                <th className="px-4 py-2">Canal</th>
+                <th className="px-4 py-2">Sujet</th>
+                <th className="px-4 py-2">Statut</th>
+                <th className="px-4 py-2">Actions</th>
               </tr>
-            )}
-            {!isLoading && conversations?.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                  Aucune conversation.
-                </td>
-              </tr>
-            )}
-            {conversations?.map((conversation) => (
-              <ConversationRow
-                key={conversation.id}
-                conversation={conversation}
-                contactName={contactName(conversation.contactId)}
-              />
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {isLoading && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
+                    Chargement...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && conversations?.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
+                    Aucune conversation.
+                  </td>
+                </tr>
+              )}
+              {conversations?.map((conversation) => (
+                <ConversationRow
+                  key={conversation.id}
+                  conversation={conversation}
+                  contactName={contactName(conversation.contactId)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Pagination

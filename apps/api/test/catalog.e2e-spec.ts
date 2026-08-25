@@ -686,4 +686,377 @@ describe('Catalog module (e2e)', () => {
         .expect(200);
     });
   });
+
+  describe('categories CRUD, delete-protection and tenant isolation', () => {
+    interface CategoryPayload {
+      id: string;
+      name: string;
+      description?: string;
+    }
+
+    it('creates, lists, fetches and updates a category', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'categories-owner@korva.test',
+        'Categories Org',
+      );
+
+      const createRes = await request(server)
+        .post('/api/v1/categories')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name: 'Clothing', description: 'Apparel and accessories' })
+        .expect(201);
+      const category = asSuccess<CategoryPayload>(createRes.body);
+      expect(category.name).toBe('Clothing');
+
+      const listRes = await request(server)
+        .get('/api/v1/categories')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<CategoryPayload[]>(listRes.body).map((c) => c.id),
+      ).toContain(category.id);
+
+      const getRes = await request(server)
+        .get(`/api/v1/categories/${category.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<CategoryPayload>(getRes.body).name).toBe('Clothing');
+
+      const updateRes = await request(server)
+        .patch(`/api/v1/categories/${category.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ description: 'Updated description' })
+        .expect(200);
+      expect(asSuccess<CategoryPayload>(updateRes.body).description).toBe(
+        'Updated description',
+      );
+    });
+
+    it('rejects creating two categories with the same name in the same organization', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'categories-dup@korva.test',
+        'Categories Dup Org',
+      );
+
+      await request(server)
+        .post('/api/v1/categories')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name: 'Furniture' })
+        .expect(201);
+
+      const res = await request(server)
+        .post('/api/v1/categories')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name: 'Furniture' })
+        .expect(409);
+      expect(asError(res.body).code).toBe('CATEGORY_EXISTS');
+    });
+
+    it('returns 404 for a category that does not exist', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'categories-missing@korva.test',
+        'Categories Missing Org',
+      );
+
+      const res = await request(server)
+        .get('/api/v1/categories/000000000000000000000000')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(404);
+      expect(asError(res.body).code).toBe('CATEGORY_NOT_FOUND');
+    });
+
+    it('deletes a category referenced by nothing', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'categories-delete-unused@korva.test',
+        'Categories Delete Unused Org',
+      );
+
+      const createRes = await request(server)
+        .post('/api/v1/categories')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name: 'Unused' })
+        .expect(201);
+      const categoryId = asSuccess<CategoryPayload>(createRes.body).id;
+
+      await request(server)
+        .delete(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+
+      await request(server)
+        .get(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(404);
+    });
+
+    it('blocks deletion of a category still referenced by an offer, and allows it once the reference is removed', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'categories-in-use@korva.test',
+        'Categories In Use Org',
+      );
+
+      const categoryRes = await request(server)
+        .post('/api/v1/categories')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name: 'Electronics' })
+        .expect(201);
+      const categoryId = asSuccess<CategoryPayload>(categoryRes.body).id;
+
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Headphones',
+          categories: ['Electronics'],
+          pricing: { amount: 49, currency: 'EUR' },
+        })
+        .expect(201);
+      const offerId = asSuccess<OfferPayload>(offerRes.body).id;
+
+      const blockedRes = await request(server)
+        .delete(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(409);
+      expect(asError(blockedRes.body).code).toBe('CATEGORY_IN_USE');
+
+      await request(server)
+        .get(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+
+      // Remove the offer's only reference to the category, then deletion succeeds.
+      await request(server)
+        .patch(`/api/v1/offers/${offerId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ categories: [] })
+        .expect(200);
+
+      await request(server)
+        .delete(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+    });
+
+    it('denies a user from another organization reading, updating or deleting a category via a foreign org id', async () => {
+      const a = await registerOrgAndToken(
+        'categories-iso-a@korva.test',
+        'Categories Iso A',
+      );
+      const b = await registerOrgAndToken(
+        'categories-iso-b@korva.test',
+        'Categories Iso B',
+      );
+
+      const categoryRes = await request(server)
+        .post('/api/v1/categories')
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .set('X-Organization-Id', a.organizationId)
+        .send({ name: 'Org A Only' })
+        .expect(201);
+      const categoryId = asSuccess<CategoryPayload>(categoryRes.body).id;
+
+      // Cross-org header entirely: TenantGuard rejects before the handler runs.
+      const crossOrgRes = await request(server)
+        .get(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', a.organizationId)
+        .expect(403);
+      expect(asError(crossOrgRes.body).code).toBe('ORGANIZATION_ACCESS_DENIED');
+
+      // Same-org header for B, but the category belongs to A: must 404, not leak/modify it.
+      const getRes = await request(server)
+        .get(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .expect(404);
+      expect(asError(getRes.body).code).toBe('CATEGORY_NOT_FOUND');
+
+      const updateRes = await request(server)
+        .patch(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .send({ description: 'hijacked' })
+        .expect(404);
+      expect(asError(updateRes.body).code).toBe('CATEGORY_NOT_FOUND');
+
+      const deleteRes = await request(server)
+        .delete(`/api/v1/categories/${categoryId}`)
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .expect(404);
+      expect(asError(deleteRes.body).code).toBe('CATEGORY_NOT_FOUND');
+
+      const listRes = await request(server)
+        .get('/api/v1/categories')
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .expect(200);
+      expect(asSuccess<CategoryPayload[]>(listRes.body)).toHaveLength(0);
+    });
+  });
+
+  describe('file/image uploads (shared/storage, local filesystem provider)', () => {
+    interface UploadPayload {
+      url: string;
+      filename: string;
+      mimeType: string;
+      size: number;
+    }
+
+    // Real PNG magic bytes (0x89 'PNG' \r\n \x1a \n) followed by filler content — the server
+    // never decodes image structure, only streams bytes back, so this is enough to prove a
+    // genuine byte-for-byte round trip without needing a fully valid PNG.
+    const pngBuffer = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(256, 7),
+    ]);
+
+    it('uploads an image and the returned URL serves back the exact same bytes', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'uploads-owner@korva.test',
+        'Uploads Org',
+      );
+
+      const uploadRes = await request(server)
+        .post('/api/v1/uploads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .attach('file', pngBuffer, 'photo.png')
+        .expect(201);
+      const upload = asSuccess<UploadPayload>(uploadRes.body);
+      expect(upload.mimeType).toBe('image/png');
+      expect(upload.size).toBe(pngBuffer.length);
+      expect(upload.url).toBe(
+        `${process.env.API_URL ?? 'http://localhost:4000'}/api/v1/uploads/${organizationId}/${upload.filename}`,
+      );
+
+      // GET is deliberately unauthenticated — these URLs are meant to be used as offer image
+      // <img src> on public storefront pages, which cannot attach an Authorization header.
+      // supertest concatenates its own ephemeral base onto whatever string it's given, so an
+      // absolute URL must be reduced to its path first.
+      const fileRes = await request(server)
+        .get(new URL(upload.url).pathname)
+        .expect(200);
+      expect(fileRes.headers['content-type']).toBe('image/png');
+      expect(Buffer.compare(fileRes.body as Buffer, pngBuffer)).toBe(0);
+
+      // And the URL is genuinely usable in Offer.images.
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Photographed Product',
+          images: [upload.url],
+          pricing: { amount: 15, currency: 'EUR' },
+        })
+        .expect(201);
+      expect(asSuccess<{ images: string[] }>(offerRes.body).images).toEqual([
+        upload.url,
+      ]);
+    });
+
+    it('rejects an upload with no file attached', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'uploads-empty@korva.test',
+        'Uploads Empty Org',
+      );
+
+      const res = await request(server)
+        .post('/api/v1/uploads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(400);
+      expect(asError(res.body).code).toBe('FILE_REQUIRED');
+    });
+
+    it('rejects a file whose type is not an allowed image mimetype', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'uploads-badtype@korva.test',
+        'Uploads Bad Type Org',
+      );
+
+      const res = await request(server)
+        .post('/api/v1/uploads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .attach('file', Buffer.from('just some text'), {
+          filename: 'notes.txt',
+          contentType: 'text/plain',
+        })
+        .expect(400);
+      expect(asError(res.body).code).toBe('UNSUPPORTED_FILE_TYPE');
+    });
+
+    it('rejects a file over the size limit', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'uploads-oversized@korva.test',
+        'Uploads Oversized Org',
+      );
+
+      const oversizedBuffer = Buffer.alloc(6 * 1024 * 1024, 1); // 6MB > 5MB limit
+      const res = await request(server)
+        .post('/api/v1/uploads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .attach('file', oversizedBuffer, 'big.png')
+        .expect(413);
+      expect(asError(res.body).code).toBe('PAYLOAD_TOO_LARGE');
+    });
+
+    it("denies deleting another organization's uploaded file, while the owning organization can", async () => {
+      const a = await registerOrgAndToken(
+        'uploads-iso-a@korva.test',
+        'Uploads Iso A',
+      );
+      const b = await registerOrgAndToken(
+        'uploads-iso-b@korva.test',
+        'Uploads Iso B',
+      );
+
+      const uploadRes = await request(server)
+        .post('/api/v1/uploads')
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .set('X-Organization-Id', a.organizationId)
+        .attach('file', pngBuffer, 'photo.png')
+        .expect(201);
+      const upload = asSuccess<UploadPayload>(uploadRes.body);
+
+      const deniedRes = await request(server)
+        .delete(`/api/v1/uploads/${a.organizationId}/${upload.filename}`)
+        .set('Authorization', `Bearer ${b.accessToken}`)
+        .set('X-Organization-Id', b.organizationId)
+        .expect(404);
+      expect(asError(deniedRes.body).code).toBe('FILE_NOT_FOUND');
+
+      // Still there — the denied attempt must not have deleted it.
+      await request(server).get(new URL(upload.url).pathname).expect(200);
+
+      await request(server)
+        .delete(`/api/v1/uploads/${a.organizationId}/${upload.filename}`)
+        .set('Authorization', `Bearer ${a.accessToken}`)
+        .set('X-Organization-Id', a.organizationId)
+        .expect(200);
+
+      await request(server).get(new URL(upload.url).pathname).expect(404);
+    });
+  });
 });
