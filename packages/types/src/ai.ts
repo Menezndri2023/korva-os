@@ -39,6 +39,7 @@ export interface AiMessage {
 
 export const AI_PENDING_ACTION_STATUSES = [
   "pending",
+  "confirming",
   "confirmed",
   "rejected",
 ] as const;
@@ -52,7 +53,9 @@ export interface AiPendingAction {
   toolName: string;
   input: Record<string, unknown>;
   status: AiPendingActionStatus;
+  confirmedBy?: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface AiChatResponse {

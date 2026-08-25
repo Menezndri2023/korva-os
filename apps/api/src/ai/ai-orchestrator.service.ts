@@ -312,6 +312,17 @@ export class AiOrchestratorService {
     );
   }
 
+  /**
+   * LOT P4: `pending` → atomic claim → `confirming` → `confirmed`/`pending` (on an ordinary
+   * error). The claim (claimForConfirmation) is the only step that actually arbitrates
+   * concurrency — everything before it is a deterministic, side-effect-free check (existence,
+   * permissions, tool lookup, input parsing) that's safe to evaluate against a possibly-stale
+   * read, because a loser of the real race below never reaches `tool.execute()` regardless of
+   * what this pre-check observed. See docs/ai.md and the LOT P4 design report for why this
+   * deliberately does NOT use a lease/reclaim: a process crash between `tool.execute()` and the
+   * `confirmed` write below leaves the action stuck in `confirming` rather than risk silently
+   * re-running a possibly non-idempotent external effect.
+   */
   async confirmAction(
     organizationId: string,
     user: CallingUser,
@@ -334,9 +345,47 @@ export class AiOrchestratorService {
         message: `Missing permission for tool "${pending.toolName}"`,
       });
     }
-
     const parsedInput = tool.parseInput(pending.input);
-    const output = await tool.execute(organizationId, user.userId, parsedInput);
+
+    const claimed = await this.pendingActionsRepository.claimForConfirmation(
+      organizationId,
+      actionId,
+      user.userId,
+    );
+    if (!claimed) {
+      // Someone else's confirm won the race since the read above (or resolved it outright) —
+      // this caller never touches tool.execute() below.
+      throw new BadRequestException({
+        code: 'AI_ACTION_ALREADY_RESOLVED',
+        message:
+          'This action has already been resolved or is currently being confirmed',
+      });
+    }
+
+    // LOT P4-FIX2: only a failure of tool.execute() itself means the business effect didn't
+    // happen — that's the only case the rollback below is for. Once tool.execute() has returned,
+    // the effect is real and irreversible from here; a failure in the audit write or the final
+    // status write past this point must never be treated as if the effect hadn't occurred, or a
+    // legitimate-looking retry could re-run it a second time. That's why those two calls are
+    // deliberately outside this try/catch — their errors propagate as-is (Nest's global
+    // exception filter handles them the same way it already does for every other service in
+    // this codebase), without any rollback.
+    let output: unknown;
+    try {
+      output = await tool.execute(organizationId, user.userId, parsedInput);
+    } catch (error) {
+      // An ordinary tool failure (validation, business-rule rejection, transient error) — not a
+      // process crash. Release the claim so a legitimate retry can attempt it again, the same
+      // role WorkflowsRepository.markActionFailed plays for a workflow action's lease.
+      await this.pendingActionsRepository.updateStatus(
+        organizationId,
+        actionId,
+        'confirming',
+        'pending',
+      );
+      throw error;
+    }
+
     await this.auditService.record({
       organizationId,
       userId: user.userId,
@@ -351,6 +400,7 @@ export class AiOrchestratorService {
     await this.pendingActionsRepository.updateStatus(
       organizationId,
       actionId,
+      'confirming',
       'confirmed',
     );
     return output;
@@ -358,11 +408,21 @@ export class AiOrchestratorService {
 
   async rejectAction(organizationId: string, actionId: string): Promise<void> {
     await this.getResolvablePendingAction(organizationId, actionId);
-    await this.pendingActionsRepository.updateStatus(
+    const rejected = await this.pendingActionsRepository.updateStatus(
       organizationId,
       actionId,
+      'pending',
       'rejected',
     );
+    if (!rejected) {
+      // Lost a race against a concurrent confirm's claim (or otherwise no longer pending) between
+      // the check above and this write — must never silently overwrite whatever that claim did.
+      throw new BadRequestException({
+        code: 'AI_ACTION_ALREADY_RESOLVED',
+        message:
+          'This action has already been resolved or is currently being confirmed',
+      });
+    }
   }
 
   private async getResolvablePendingAction(
@@ -380,9 +440,13 @@ export class AiOrchestratorService {
       });
     }
     if (pending.status !== 'pending') {
+      const message =
+        pending.status === 'confirming'
+          ? 'This action is currently being confirmed'
+          : `This action has already been ${pending.status}`;
       throw new BadRequestException({
         code: 'AI_ACTION_ALREADY_RESOLVED',
-        message: `This action has already been ${pending.status}`,
+        message,
       });
     }
     return pending;
