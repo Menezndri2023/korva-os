@@ -9,7 +9,13 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
   return {
     ...actual,
-    apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn(), patch: vi.fn() },
+    apiClient: {
+      ...actual.apiClient,
+      get: vi.fn(),
+      post: vi.fn(),
+      patch: vi.fn(),
+      delete: vi.fn(),
+    },
   };
 });
 
@@ -24,6 +30,7 @@ vi.mock("@/lib/auth-store", () => ({
 const getMock = vi.mocked(apiClient.get);
 const postMock = vi.mocked(apiClient.post);
 const patchMock = vi.mocked(apiClient.patch);
+const deleteMock = vi.mocked(apiClient.delete);
 
 const subscription = {
   subscription: { id: "sub-1", status: "active" },
@@ -62,6 +69,7 @@ describe("SettingsPage — Modules section (LOT F1)", () => {
     getMock.mockReset();
     postMock.mockReset();
     patchMock.mockReset();
+    deleteMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
@@ -69,6 +77,7 @@ describe("SettingsPage — Modules section (LOT F1)", () => {
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
     });
 
@@ -198,6 +207,7 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     getMock.mockReset();
     postMock.mockReset();
     patchMock.mockReset();
+    deleteMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
@@ -205,6 +215,7 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
       if (path === "/organizations/me/roles") return Promise.resolve(roles);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
     });
   });
@@ -362,6 +373,7 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
         return Promise.reject(new ApiError("NETWORK_ERROR", "Unable to reach the server"));
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
     });
     const user = userEvent.setup();
@@ -376,5 +388,317 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
         getMock.mock.calls.filter(([path]) => path === "/organizations/me/roles").length,
       ).toBeGreaterThan(1),
     );
+  });
+});
+
+describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () => {
+  const organization = makeOrganization(["crm", "analytics"]);
+
+  function mockIntegrationsGet(
+    integrationsResult: () => Promise<unknown> | unknown,
+  ) {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve(integrationsResult());
+      throw new Error(`unexpected GET ${path}`);
+    });
+  }
+
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    deleteMock.mockReset();
+    mockIntegrationsGet(() => []);
+  });
+
+  it("shows both known integration types as 'Non connecté' when none exist yet", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Paiements — Flutterwave")).toBeInTheDocument();
+    expect(screen.getByText("WhatsApp Business — 360dialog")).toBeInTheDocument();
+    expect(screen.getAllByText("Non connecté")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Connecter" })).toHaveLength(2);
+  });
+
+  it("renders a connected payment integration with its status, market, and last verification", async () => {
+    mockIntegrationsGet(() => [
+      {
+        id: "integ-pay-1",
+        domain: "payment",
+        provider: "flutterwave",
+        status: "active",
+        market: "CI",
+        lastVerifiedAt: "2026-08-20T10:00:00.000Z",
+        lastErrorAt: null,
+        lastErrorMessage: null,
+      },
+    ]);
+    renderWithProviders(<SettingsPage />);
+
+    const paymentCard = (await screen.findByText("Paiements — Flutterwave")).closest(
+      ".rounded-md",
+    ) as HTMLElement;
+    expect(within(paymentCard).getByText("Actif")).toBeInTheDocument();
+    expect(within(paymentCard).getByText("CI")).toBeInTheDocument();
+    expect(
+      within(paymentCard).getByRole("button", { name: "Tester la connexion" }),
+    ).toBeInTheDocument();
+    expect(within(paymentCard).getByRole("button", { name: "Déconnecter" })).toBeInTheDocument();
+    expect(within(paymentCard).queryByRole("button", { name: "Connecter" })).not.toBeInTheDocument();
+  });
+
+  it("shows lastErrorMessage for an integration in error status", async () => {
+    mockIntegrationsGet(() => [
+      {
+        id: "integ-msg-1",
+        domain: "messaging",
+        provider: "360dialog",
+        status: "error",
+        market: null,
+        lastVerifiedAt: null,
+        lastErrorAt: "2026-08-21T10:00:00.000Z",
+        lastErrorMessage: "Webhook signature invalide",
+      },
+    ]);
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Erreur")).toBeInTheDocument();
+    expect(screen.getByText("Webhook signature invalide")).toBeInTheDocument();
+  });
+
+  it("submits the payment connect form as ConnectPaymentPayoutInput's payoutDetails shape", async () => {
+    postMock.mockResolvedValue({
+      id: "integ-pay-2",
+      domain: "payment",
+      provider: "flutterwave",
+      status: "pending",
+      market: null,
+      lastVerifiedAt: null,
+      lastErrorAt: null,
+      lastErrorMessage: null,
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click((await screen.findAllByRole("button", { name: "Connecter" }))[0]);
+    const bankNameInput = await screen.findByLabelText("Nom de la banque");
+    await user.type(bankNameInput, "Ecobank");
+    await user.type(screen.getByLabelText("Numéro de compte"), "0123456789");
+    await user.type(screen.getByLabelText("Titulaire du compte"), "Ma Boutique SARL");
+    const paymentForm = bankNameInput.closest("form") as HTMLElement;
+    await user.click(within(paymentForm).getByRole("button", { name: "Connecter" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/organizations/me/integrations/payment/connect", {
+        payoutDetails: {
+          bankName: "Ecobank",
+          accountNumber: "0123456789",
+          accountHolderName: "Ma Boutique SARL",
+        },
+      }),
+    );
+  });
+
+  it("clears the payment form after a successful connect — never redisplays the submitted values", async () => {
+    postMock.mockResolvedValue({
+      id: "integ-pay-2",
+      domain: "payment",
+      provider: "flutterwave",
+      status: "pending",
+      market: null,
+      lastVerifiedAt: null,
+      lastErrorAt: null,
+      lastErrorMessage: null,
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click((await screen.findAllByRole("button", { name: "Connecter" }))[0]);
+    const bankNameInput = await screen.findByLabelText("Nom de la banque");
+    await user.type(bankNameInput, "Ecobank");
+    await user.type(screen.getByLabelText("Numéro de compte"), "0123456789");
+    await user.type(screen.getByLabelText("Titulaire du compte"), "Ma Boutique SARL");
+    const paymentForm = bankNameInput.closest("form") as HTMLElement;
+    await user.click(within(paymentForm).getByRole("button", { name: "Connecter" }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalled());
+    // Form closes on success; the entered values must not resurface anywhere on the page.
+    expect(screen.queryByLabelText("Nom de la banque")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ecobank")).not.toBeInTheDocument();
+  });
+
+  it("submits the messaging connect form as ConnectMessagingAccountInput exactly", async () => {
+    postMock.mockResolvedValue({
+      id: "integ-msg-2",
+      domain: "messaging",
+      provider: "360dialog",
+      status: "pending",
+      market: null,
+      lastVerifiedAt: null,
+      lastErrorAt: null,
+      lastErrorMessage: null,
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click((await screen.findAllByRole("button", { name: "Connecter" }))[1]);
+    const wabaIdInput = await screen.findByLabelText("WABA ID");
+    await user.type(wabaIdInput, "waba-123");
+    await user.type(screen.getByLabelText("ID du numéro de téléphone"), "phone-456");
+    await user.type(screen.getByLabelText("Nom affiché"), "Ma Boutique");
+    const messagingForm = wabaIdInput.closest("form") as HTMLElement;
+    await user.click(within(messagingForm).getByRole("button", { name: "Connecter" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/organizations/me/integrations/messaging/connect", {
+        wabaId: "waba-123",
+        phoneNumberId: "phone-456",
+        displayName: "Ma Boutique",
+      }),
+    );
+  });
+
+  it("test-connection calls the right endpoint and displays the returned ok/message", async () => {
+    mockIntegrationsGet(() => [
+      {
+        id: "integ-pay-1",
+        domain: "payment",
+        provider: "flutterwave",
+        status: "active",
+        market: "CI",
+        lastVerifiedAt: null,
+        lastErrorAt: null,
+        lastErrorMessage: null,
+      },
+    ]);
+    postMock.mockResolvedValue({ ok: true, message: "Connexion vérifiée avec succès." });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Tester la connexion" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/organizations/me/integrations/integ-pay-1/test-connection",
+      ),
+    );
+    expect(await screen.findByText("Connexion vérifiée avec succès.")).toBeInTheDocument();
+  });
+
+  it("disconnect requires a confirmation click before DELETE is called", async () => {
+    mockIntegrationsGet(() => [
+      {
+        id: "integ-pay-1",
+        domain: "payment",
+        provider: "flutterwave",
+        status: "active",
+        market: "CI",
+        lastVerifiedAt: null,
+        lastErrorAt: null,
+        lastErrorMessage: null,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Déconnecter" }));
+    expect(deleteMock).not.toHaveBeenCalled();
+
+    const confirmButton = await screen.findByRole("button", { name: "Confirmer ?" });
+    await user.click(confirmButton);
+
+    await waitFor(() =>
+      expect(deleteMock).toHaveBeenCalledWith("/organizations/me/integrations/integ-pay-1"),
+    );
+  });
+
+  it("cancelling the disconnect confirmation never calls DELETE", async () => {
+    mockIntegrationsGet(() => [
+      {
+        id: "integ-pay-1",
+        domain: "payment",
+        provider: "flutterwave",
+        status: "active",
+        market: "CI",
+        lastVerifiedAt: null,
+        lastErrorAt: null,
+        lastErrorMessage: null,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Déconnecter" }));
+    await user.click(await screen.findByRole("button", { name: "Annuler" }));
+
+    expect(screen.queryByRole("button", { name: "Confirmer ?" })).not.toBeInTheDocument();
+    expect(deleteMock).not.toHaveBeenCalled();
+  });
+
+  it("shows a loading state while integrations are being fetched", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return new Promise(() => {});
+      throw new Error(`unexpected GET ${path}`);
+    });
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Intégrations")).toBeInTheDocument();
+    expect(screen.getAllByText("Chargement...").length).toBeGreaterThan(0);
+  });
+
+  it("on a generic load error, shows the message with a retry that refetches", async () => {
+    let callCount = 0;
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") {
+        callCount += 1;
+        return Promise.reject(new ApiError("NETWORK_ERROR", "Unable to reach the server"));
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Unable to reach the server")).toBeInTheDocument();
+    const callsBeforeRetry = callCount;
+
+    await user.click(screen.getByRole("button", { name: "Réessayer" }));
+    await waitFor(() => expect(callCount).toBeGreaterThan(callsBeforeRetry));
+  });
+
+  it("on PERMISSION_DENIED, shows a plain admin-only notice instead of a retry-able error", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations")
+        return Promise.reject(
+          new ApiError("PERMISSION_DENIED", "Réservé aux administrateurs"),
+        );
+      throw new Error(`unexpected GET ${path}`);
+    });
+    renderWithProviders(<SettingsPage />);
+
+    expect(
+      await screen.findByText("Les intégrations sont réservées aux administrateurs."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Réessayer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connecter" })).not.toBeInTheDocument();
   });
 });
