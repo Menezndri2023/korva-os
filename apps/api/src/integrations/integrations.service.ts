@@ -178,6 +178,58 @@ export class IntegrationsService {
     return toIntegrationAccountRecord(revoked);
   }
 
+  /**
+   * Wave 4 Stage 2 addition (IntegrationsController's `POST /:id/test-connection`). Records the
+   * outcome of an authenticated provider healthcheck against a tenant's own
+   * `IntegrationAccount`. No existing method covers this — `rotateTenantAccountSecret` and
+   * `revokeTenantAccount` both insert-or-mark-revoked, which isn't the right shape for "this row
+   * is still the same connection, just re-verified" — so this is one narrow, additive method
+   * layered on the existing tenant-scope guard (`assertCanManageTenantIntegrations` +
+   * `requireOwnTenantAccount`) and the existing repository `updateStatus` (no repository change
+   * needed). A successful check promotes `status` to `'active'` and stamps `lastVerifiedAt`,
+   * clearing any prior error; a failed check leaves `status` exactly as it was (a previously
+   * `'active'` connection that starts failing shouldn't silently flip back to `'pending'` — that's
+   * an operator decision, not this method's) and only stamps `lastErrorAt`/`lastErrorMessage`.
+   * Mirrors `rotateTenantAccountSecret`'s revoked-account guard: you cannot "test" a row that's
+   * already been revoked.
+   */
+  async recordTenantAccountTestConnection(
+    actorOrganizationId: string,
+    actorPermissions: readonly string[],
+    id: string,
+    result: { ok: boolean; message?: string },
+  ): Promise<IntegrationAccountRecord> {
+    this.assertCanManageTenantIntegrations(actorPermissions);
+    const existing = await this.requireOwnTenantAccount(
+      actorOrganizationId,
+      id,
+    );
+
+    if (existing.status === 'revoked') {
+      throw new ForbiddenException({
+        code: 'INTEGRATION_ACCOUNT_REVOKED',
+        message: 'Cannot test an already-revoked integration account',
+      });
+    }
+
+    const now = new Date();
+    if (result.ok) {
+      await this.integrationsRepository.updateStatus(id, 'active', {
+        lastVerifiedAt: now,
+        lastErrorAt: null,
+        lastErrorMessage: null,
+      });
+    } else {
+      await this.integrationsRepository.updateStatus(id, existing.status, {
+        lastErrorAt: now,
+        lastErrorMessage: result.message ?? 'Test connection failed',
+      });
+    }
+
+    const updated = await this.requireOwnTenantAccount(actorOrganizationId, id);
+    return toIntegrationAccountRecord(updated);
+  }
+
   // ---------------------------------------------------------------------------------------
   // Platform-scope — see class doc above for why nothing here takes an actor/organizationId.
   // No controller in this Stage-1 lot exposes these; they exist for ops tooling / a future
