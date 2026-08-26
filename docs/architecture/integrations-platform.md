@@ -263,3 +263,160 @@ Per provider adapter: success, failure, timeout, malformed response, invalid sig
 webhook, replay webhook, wrong tenant, wrong currency, wrong amount (unit) — connection, payment,
 webhook, idempotency, failure, refund (e2e) — exactly the list in §13 of the original mandate,
 scoped to whichever adapters Stage 2 actually builds (Flutterwave, 360dialog).
+
+## 11. As-Built — Stage 1 (addendum, 2026-08-26)
+
+**Status.** Stage 1 (§8's four `FOUND-*` lots) has landed and merged to `main` at commit
+`adc4228` via four agent worktrees (`wave4/webhook-infra`, `wave4/provider-resolvers`,
+`wave4/settlement-service`, plus the `IntegrationsModule`/`CredentialEncryptionService` lot) and
+one orchestrator convergence commit. §1-§10 above are left exactly as owner-approved; this section
+records what the code actually does, verified file-by-file against the merged result, not against
+agent self-reports. All 15 Stage 1 spec files (114 tests) pass as of this commit.
+
+Everything below is scoped to **Stage 1 only** — no Stage 2 adapter (Flutterwave, 360dialog) exists
+in this codebase yet, so anything in §1-§10 that describes Stage 2 behavior is still purely
+prospective and out of scope for this addendum.
+
+### 11.1 Matches the design exactly
+
+- **`IntegrationAccount` shape (§2).** Every field in the design's table exists with the same name
+  and semantics: `scope`, `organizationId` (null iff platform), `domain`, `provider`, `role`,
+  `market`, `status`, `secretEncrypted` (`select: false`, mirroring `ApiKey.keyHash`), `metadata`,
+  `lastVerifiedAt`, `lastErrorAt`, `lastErrorMessage`. File:
+  `apps/api/src/integrations/schemas/integration-account.schema.ts`.
+- **Credential encryption (§3).** `CredentialEncryptionService`
+  (`apps/api/src/shared/crypto/credential-encryption.service.ts`) is AES-256-GCM with the same
+  `iv:authTag:ciphertext` hex encoding as `two-factor.service.ts`, keyed from its own
+  `INTEGRATION_CREDENTIALS_KEY` (added to `REQUIRED_VARS` in
+  `apps/api/src/core/config/env.validation.ts` and to `.env.example`), not `JWT_SECRET`. Never
+  touches `two-factor.service.ts`. No controller in this Stage 1 lot returns `secretEncrypted` or a
+  decrypted value — `IntegrationsService.getDecryptedPlatformSecret` is the only decrypt path and
+  has a signature that cannot be reached from any tenant-facing method.
+- **Rotation/revocation semantics (§3).** Both `IntegrationsService.rotateTenantAccountSecret` and
+  `rotatePlatformAccountSecret` insert a new row (`status: 'active'`) and mark the old one
+  `status: 'revoked'` — never delete, never mutate in place — exactly as designed.
+- **`PaymentProvider` interface (§4).** `payment-provider.interface.ts`'s
+  `createPayment`/`verifyPayment`/`getPaymentStatus`/`refundPayment` shape is byte-for-byte
+  unchanged.
+- **`PaymentProviderResolverService` (§4).** Resolves `flow: 'subscription'` to the
+  market-independent `role: 'subscription-billing'` platform account, and `flow: 'commerce'` to
+  `role: 'merchant-of-record'` keyed on the tenant's `Organization.country` (confirmed the field
+  exists: `apps/api/src/organizations/schemas/organization.schema.ts`). No match →
+  `PAYMENT_PROVIDER_NOT_CONFIGURED` (`UnprocessableEntityException`), never a silent
+  `ManualPaymentProvider` fallback. `PaymentProviderRegistry` registers only `'manual'` in Stage 1,
+  with the Flutterwave/ChariBaaS slots left as commented-out map entries for Stage 2 — exactly the
+  "single new Map entry" extension path §4 describes.
+- **Webhook idempotency (§6/§7).** `IntegrationWebhookEvent`'s unique index on
+  `(provider, providerEventId)` is enforced by MongoDB itself via a single atomic `create()`
+  (`IntegrationWebhookRepository.claimIfNew`), not a read-then-write — a losing concurrent insert
+  is caught as E11000 and reported as `{ inserted: false }`. `IntegrationWebhookService.process`
+  fails closed (nothing persisted, nothing published) on `verifier.verify() === false`, and only the
+  delivery that wins the insert calls `EventBusService.publish`. The structured log line
+  (`integration`, `provider`, `organizationId`, `eventType`, `eventId`, `status`, `durationMs`)
+  matches §6's spec field-for-field and never includes the raw payload/headers.
+- **New `SystemEvent`s (§6).** `'payment.webhook_received'` and `'whatsapp.status_updated'` are both
+  present in `packages/types/src/workflow.ts`'s `SYSTEM_EVENTS`.
+- **`Settlement` domain shape (§4 "Split settlement").** `packages/types/src/settlement.ts` and
+  `apps/api/src/finance/settlement/schemas/settlement.schema.ts` agree; `computeCommission` derives
+  `tenantAmount` as the exact remainder of `grossAmount - commissionAmount` (never independently
+  rounded), guaranteeing the invariant `commissionAmount + tenantAmount === grossAmount` holds for
+  every input. `SettlementService` never calls a `PaymentProvider` or any HTTP client — matches
+  "`SettlementService` calls the adapter, not the other way around" exactly, because Stage 1 builds
+  only the domain-logic skeleton, with no adapter to call yet.
+
+### 11.2 Real deviations from the design (verified against code)
+
+**1. Rotation-safe partial indexes (confirmed, as I described).** The design's §2 indexes
+(`{scope,domain,provider,market,role}` unique partial on `scope:'platform'`, and
+`{organizationId,domain,provider}` unique partial on `scope:'tenant'`) would indeed collide the
+instant a row was rotated, since inserting a new row with the same key fields while the old one
+still exists violates a uniqueness constraint keyed only on `scope`. The shipped schema
+(`integration-account.schema.ts` lines 92-120) resolves this by extending both partial filter
+expressions to also exclude `status: 'revoked'`: `partialFilterExpression: { scope: 'platform',
+status: { $ne: 'revoked' } }` (and the tenant equivalent). This preserves the intended invariant —
+at most one *live* (non-revoked) row per key — while letting unlimited revoked rows accumulate for
+audit history, which is exactly what §3's "insert new + mark old revoked, keep both" rotation
+contract requires. The reasoning is documented in the schema file's own comment, not just inferred.
+
+**2. `MessagingSendResult.status: 'read'` has no `Message.status` counterpart (confirmed, as I
+described, with one added detail).** `MessagingSendResult.status` in
+`messaging-provider.interface.ts` was extended to `'sent' | 'delivered' | 'read' | 'failed'` as
+designed, but `MessageStatus` in `packages/types/src/communication.ts` still has only `'queued' |
+'sent' | 'failed' | 'delivered' | 'bounced' | 'complained'` — no `'read'`. This was caught as a
+compile break during Wave 4 convergence (commit `adc4228`, outside any single agent's file
+ownership) and fixed in `conversations.service.ts`: the local `status` variable was widened from
+`'sent' | 'failed'` to the full `MessageStatus` type, and the mapping is `status = result.status ===
+'read' ? 'delivered' : result.status` — a `'read'` receipt from a provider is deliberately degraded
+to `'delivered'`, the closest state `Message` actually models, rather than widening the shared
+`MessageStatus` type for a value no Stage 1 provider ever produces (the only implementation,
+`LogMessagingProvider`, always returns `'sent'`). This is a real, intentional design gap left open
+for Stage 2 (a real WhatsApp read-receipt would need `Message.status` to grow a `'read'` value, plus
+a UI treatment for it) — recorded here rather than silently patched over.
+
+**3. None of the four Stage 1 modules are registered in `app.module.ts`/`finance.module.ts`/
+`communication.module.ts` (confirmed, as I described).** Verified directly:
+`IntegrationsModule`, `IntegrationWebhookModule`, `SettlementModule`, and `MessagingProviderModule`
+do not appear anywhere in `apps/api/src/app.module.ts`, `apps/api/src/finance/finance.module.ts`, or
+`apps/api/src/communication/communication.module.ts`. `FinanceModule` still binds `PAYMENT_PROVIDER`
+via the original `{ provide: PAYMENT_PROVIDER, useClass: ManualPaymentProvider }`, and
+`CommunicationModule` still binds `MESSAGING_PROVIDER` via the original
+`{ provide: MESSAGING_PROVIDER, useClass: LogMessagingProvider }`. Every new module's own doc
+comment states this is deliberate ("the orchestrator wires it in at Wave 4 convergence to avoid a
+shared-file collision with the other Stage 1 agents"), and the running app's behavior is
+byte-for-byte unchanged — this is a genuine zero-behavioral-change Stage 1, not an oversight.
+Additionally worth noting for Stage 2 scoping: `IntegrationWebhookModule` ships **no HTTP
+controller at all** yet (not just "unregistered" — there is no
+`flutterwave-webhook.controller.ts`/`360dialog-webhook.controller.ts` equivalent of
+`resend-webhook.controller.ts` in this lot), so wiring Stage 2 requires writing that controller in
+addition to registering the module. To wire each in for Stage 2:
+  - `IntegrationsModule` → import into `app.module.ts` (or a shared "platform" module); no other
+    change needed, it's self-contained.
+  - `IntegrationWebhookModule` → import into `app.module.ts`; also requires writing the actual
+    provider-specific webhook controller(s) that call `IntegrationWebhookService.process` with a
+    real `WebhookVerifier` and `extractEventId`, since Stage 1 ships no controller.
+  - `SettlementModule` → import into `finance.module.ts`; also requires a real call site (e.g. from
+    `PaymentsService` on payment completion) since nothing invokes `SettlementService` today outside
+    its own tests.
+  - `MessagingProviderModule` → see item 4 below; requires removing `CommunicationModule`'s existing
+    inline `useClass: LogMessagingProvider` binding and importing this module in its place.
+
+**4. `MessagingProviderModule`'s factory is not imported by `CommunicationModule`; it is fully
+standalone (confirmed, as I described).** `apps/api/src/communication/communication.module.ts` line
+70 still reads `{ provide: MESSAGING_PROVIDER, useClass: LogMessagingProvider }` — the pre-existing
+binding, untouched. `MessagingProviderModule`'s own doc comment confirms this explicitly: "This
+module is standalone in Stage 1: it is not yet imported by `CommunicationModule`... Rewiring
+`CommunicationModule` to import this module instead is Stage 2/later, not this task." The factory
+itself (`messaging-provider.module.ts`) also does not actually branch on `'360dialog'` yet — every
+config value, including `'360dialog'`, currently falls back to `LogMessagingProvider`, since no real
+adapter exists to construct. The `if (providerKey === '360dialog')` branch is left as a comment for
+Stage 2 to fill in, consistent with the "no fake completeness" mandate (never pretend to deliver a
+WhatsApp message via an adapter that doesn't exist).
+
+### 11.3 Additional deviations found (not on the known list)
+
+- **`send()` was never renamed to `sendSessionReply()`.** §5 specified `sendSessionReply` as "existing
+  `send()`, renamed for clarity." The shipped `MessagingProvider` interface
+  (`messaging-provider.interface.ts`) keeps the original `send({ to, body })` method name unchanged
+  and instead adds `sendTemplate` as a new, **optional** method (`sendTemplate?(...)`), explicitly
+  to avoid breaking existing implementers mid-Stage-1. `grep` for `sendSessionReply` across
+  `apps/api/src/` returns no matches. This is a smaller, backward-compatible version of §5's
+  intended shape — real behavior is unaffected (only `LogMessagingProvider` implements the
+  interface today, and it implements both `send` and `sendTemplate`), but a future Stage 2 caller
+  wanting `sendTemplate` semantics must still check for its presence (or a real adapter must always
+  implement it) since the interface makes it optional rather than mandatory.
+- **`Contact.consents` (the opt-in gate) was not built at all in Stage 1.** §5's "Opt-in gate"
+  paragraph specifies a new `Contact.consents` array field. No such field exists anywhere in the
+  codebase as of this commit (`grep -rn "consents" apps/api/src/crm/ packages/types/src/` returns
+  nothing). This tracks with §8's Stage 1 lot list, which does list `Contact.consents` under
+  `FOUND-MESSAGING-FACTORY` but the delivered lot only built the factory + interface extension, not
+  the consent model — worth flagging explicitly for Stage 2 scoping since `sendTemplate`'s
+  opt-in check has nothing to check against yet.
+
+### 11.4 Corrections to §1-§10's own prose (design claims that turned out subtly off)
+
+- None found. Every concrete codebase claim in §1-§10 that Stage 1 code could be checked against
+  (the `PaymentProvider` interface shape, `Organization.country`'s existence, `ApiKey` rotation's
+  insert-new/mark-old-revoked pattern, `two-factor.service.ts`'s own "marginally better hygiene"
+  doc comment, `EventBusService`/BullMQ as the publish target) held up exactly as described. The
+  design doc's own hedges (§9's "nothing here is production-ready," §8's "file-disjoint" agent
+  ownership) also held — no cross-agent file collisions surfaced in the merge history.
