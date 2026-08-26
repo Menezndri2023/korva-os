@@ -207,7 +207,7 @@ describe('IntegrationsRepository', () => {
 
       expect(model.updateOne).toHaveBeenCalledWith(
         { _id: 'id-1' },
-        { status: 'revoked' },
+        { status: 'revoked', isLive: false },
       );
     });
 

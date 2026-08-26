@@ -82,22 +82,18 @@ function buildFakeGlobalEventsModule(
 }
 
 /**
- * SECURITY/CORRECTNESS FINDING (see this agent's final report — HIGH severity, filed against
- * apps/api/src/integrations/schemas/integration-account.schema.ts lines 101-120): both
- * `uniq_platform_account` and `uniq_tenant_account` declare `partialFilterExpression: { ...,
- * status: { $ne: 'revoked' } }`. MongoDB's partial-index filter language does NOT support `$ne`
- * (or `$not`, which is how the server rewrites `$ne` internally) — only `$eq`, `$exists: true`,
- * `$gt(e)`, `$lt(e)`, `$type`, and a top-level `$and` combining those are allowed. Every other
- * Stage 1 test for this schema (integration-account.schema.spec.ts, integrations.repository.spec.ts)
- * only inspects the JS-side index *declaration* or uses a fully mocked Mongoose model — none of
- * them ever asks a real MongoDB server to actually build these indexes, so none could have caught
- * this. This describe block does exactly that, against the same real MongoDB every other Stage 1
- * real-DB spec in this repo uses, and documents the failure precisely so it isn't lost. This is
- * NOT fixed here per the Wave 4 mandate (no cross-agent-owned-file edits by the reviewing agent) —
- * see the final report for the proposed minimal fix (a boolean `isLive`-style field so the partial
- * filter only ever needs `$eq`, which IS supported).
+ * REGRESSION TEST for a real, orchestrator-fixed bug found by this agent's own review (see the
+ * final report's HIGH-severity finding). Originally, `uniq_platform_account`/`uniq_tenant_account`
+ * declared `partialFilterExpression: { ..., status: { $ne: 'revoked' } }` — MongoDB's partial-index
+ * filter language does not support `$ne`/`$not`, only `$eq`/`$exists`/`$gt(e)`/`$lt(e)`/`$type`
+ * (and a top-level `$and` of those), so `syncIndexes()` rejected outright on a real server. Fixed
+ * in apps/api/src/integrations/schemas/integration-account.schema.ts by adding a plain boolean
+ * `isLive` field (flipped to `false` by `IntegrationsRepository.revoke()`) and keying both partial
+ * filters on `isLive: true` instead — a pure `$eq`, which MongoDB does support. This test proves
+ * the fix: real index build succeeds, AND the uniqueness constraint it exists to enforce actually
+ * holds against a real server (not just the JS-side index declaration).
  */
-describe("Wave 4 Stage 1 — BUG DOCUMENTATION: IntegrationAccount's two unique partial indexes cannot be built on a real MongoDB server", () => {
+describe("Wave 4 Stage 1 — REGRESSION: IntegrationAccount's two unique partial indexes build and enforce uniqueness on a real MongoDB server", () => {
   let connection: Connection;
 
   afterAll(async () => {
@@ -107,16 +103,61 @@ describe("Wave 4 Stage 1 — BUG DOCUMENTATION: IntegrationAccount's two unique 
     }
   }, 30_000);
 
-  it('connection.syncIndexes() rejects with a MongoDB partial-index-expression error for uniq_platform_account / uniq_tenant_account ($ne is not a supported partial-filter operator)', async () => {
-    const uri = testMongoUri('idxbug');
+  it('connection.syncIndexes() succeeds for uniq_platform_account / uniq_tenant_account (isLive:true is a supported $eq partial filter)', async () => {
+    const uri = testMongoUri('idxfix');
     connection = await mongoose.createConnection(uri).asPromise();
     connection.model(
-      'IntegrationAccountIndexBugProbe',
+      'IntegrationAccountIndexFixProbe',
       IntegrationAccountSchema,
       'integration_accounts',
     );
 
-    await expect(connection.syncIndexes()).rejects.toThrow(/partial index/i);
+    // syncIndexes() resolves to { [modelName]: string[] } where the array lists any indexes it
+    // had to DROP-and-rebuild (empty when nothing needed dropping) — it throws (rejected promise)
+    // rather than resolving with an error list if a build itself fails, which is exactly the
+    // behavior the original $ne-based filter triggered and this fix resolves. A clean resolve with
+    // no dropped indexes is the proof both partial indexes built successfully on the first try.
+    await expect(connection.syncIndexes()).resolves.toEqual({
+      IntegrationAccountIndexFixProbe: [],
+    });
+    const rawIndexes: unknown = await connection
+      .model('IntegrationAccountIndexFixProbe')
+      .listIndexes();
+    const indexes = rawIndexes as Array<{ name: string }>;
+    expect(indexes.map((index) => index.name)).toEqual(
+      expect.arrayContaining(['uniq_platform_account', 'uniq_tenant_account']),
+    );
+  }, 30_000);
+
+  it('the built index actually rejects a second live platform account sharing the same (scope, domain, provider, market, role), and a revoked row never blocks a new one taking its place', async () => {
+    const Model = connection.model(
+      'IntegrationAccountIndexFixProbe',
+      IntegrationAccountSchema,
+      'integration_accounts',
+    );
+    const key = {
+      scope: 'platform',
+      domain: 'payment',
+      provider: 'flutterwave',
+      market: 'CI',
+      role: 'merchant-of-record',
+    };
+
+    const first = await Model.create({ ...key, secretEncrypted: 'a' });
+    await expect(
+      Model.create({ ...key, secretEncrypted: 'b' }),
+    ).rejects.toThrow(/duplicate key/i);
+
+    // Revoking the first (isLive:false) frees the slot — rotation, per architecture doc §3, must
+    // remain possible: this is the exact scenario the original $ne-based filter was trying (and
+    // failing at the MongoDB level) to support.
+    await Model.updateOne(
+      { _id: first._id },
+      { status: 'revoked', isLive: false },
+    );
+    await expect(
+      Model.create({ ...key, secretEncrypted: 'c' }),
+    ).resolves.toMatchObject({ isLive: true });
   }, 30_000);
 });
 

@@ -84,6 +84,15 @@ export class IntegrationAccount {
 
   @Prop({ type: String, default: null })
   lastErrorMessage!: string | null;
+
+  /** True for every row until it's revoked, then flipped to false — exists only so the two
+   *  partial unique indexes below can filter on a plain `$eq`. MongoDB's partial-index filter
+   *  language does not support `$ne`/`$not` (confirmed against a real server: `syncIndexes()`
+   *  throws "Expression not supported in partial index: $not" for a `status: {$ne:'revoked'}`
+   *  filter) — `isLive` exists purely to make "exclude revoked rows" expressible as `$eq`, it
+   *  carries no meaning beyond that and is never read anywhere except by these two indexes. */
+  @Prop({ type: Boolean, default: true, index: true })
+  isLive!: boolean;
 }
 
 export const IntegrationAccountSchema =
@@ -91,30 +100,31 @@ export const IntegrationAccountSchema =
 
 // One *live* platform-scope row per (domain, provider, market, role) combination — lets the
 // resolver (§4/§5 of the architecture doc) address a single unambiguous KORVA-owned credential.
-// The partial filter deliberately excludes `status: 'revoked'` in addition to `scope`: §3's
-// rotation contract ("insert new + mark old status:'revoked', keep both, no deletion") inserts a
-// second row sharing the same (domain, provider, market, role) as the one it replaces, which
-// would violate a uniqueness constraint keyed on those fields alone the instant a rotation
-// happened. Excluding revoked rows keeps the invariant the doc actually wants — at most one
-// non-revoked (pending/active/disabled/error) row per combination — while still allowing
-// unlimited revoked rows to accumulate for audit history.
+// The partial filter excludes revoked rows via `isLive: true` (a plain $eq — see the field's own
+// doc comment for why this isn't just `status: {$ne:'revoked'}`, which MongoDB's partial-index
+// filter language rejects outright): §3's rotation contract ("insert new + mark old
+// status:'revoked', keep both, no deletion") inserts a second row sharing the same
+// (domain, provider, market, role) as the one it replaces, which would violate a uniqueness
+// constraint keyed on those fields alone the instant a rotation happened. Excluding revoked rows
+// keeps the invariant the doc actually wants — at most one live row per combination — while still
+// allowing unlimited revoked rows to accumulate for audit history.
 IntegrationAccountSchema.index(
   { scope: 1, domain: 1, provider: 1, market: 1, role: 1 },
   {
     unique: true,
-    partialFilterExpression: { scope: 'platform', status: { $ne: 'revoked' } },
+    partialFilterExpression: { scope: 'platform', isLive: true },
     name: 'uniq_platform_account',
   },
 );
 
 // One *live* tenant-scope row per (organizationId, domain, provider) combination — a tenant
-// connects at most one non-revoked account per provider per domain. Same revoked-row exclusion
-// rationale as uniq_platform_account above, required for rotation to be possible at all.
+// connects at most one live account per provider per domain. Same isLive rationale as
+// uniq_platform_account above, required for rotation to be possible at all.
 IntegrationAccountSchema.index(
   { organizationId: 1, domain: 1, provider: 1 },
   {
     unique: true,
-    partialFilterExpression: { scope: 'tenant', status: { $ne: 'revoked' } },
+    partialFilterExpression: { scope: 'tenant', isLive: true },
     name: 'uniq_tenant_account',
   },
 );

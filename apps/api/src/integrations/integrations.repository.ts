@@ -113,9 +113,14 @@ export class IntegrationsRepository implements IntegrationAccountsReader {
     await this.model.updateOne({ _id: id }, { status, ...extra }).exec();
   }
 
-  /** Revocation is a status update, never a delete — see architecture doc §3. */
+  /** Revocation is a status update, never a delete — see architecture doc §3. Also clears
+   *  `isLive` so the row stops occupying its uniqueness slot in `uniq_platform_account` /
+   *  `uniq_tenant_account` (see integration-account.schema.ts's doc comment on that field for
+   *  why `status: 'revoked'` alone can't be the partial-index filter). */
   async revoke(id: string): Promise<void> {
-    await this.model.updateOne({ _id: id }, { status: 'revoked' }).exec();
+    await this.model
+      .updateOne({ _id: id }, { status: 'revoked', isLive: false })
+      .exec();
   }
 
   // -- IntegrationAccountsReader -------------------------------------------------------------
