@@ -2,6 +2,7 @@ import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 
 import type { PaymentProvider } from './payment-provider.interface';
 import { ManualPaymentProvider } from './manual-payment.provider';
+import { FlutterwaveProvider } from './flutterwave-payment.provider';
 
 type PaymentProviderFactory = () => PaymentProvider;
 
@@ -13,18 +14,26 @@ type PaymentProviderFactory = () => PaymentProvider;
  * class never talks to `IntegrationAccountsReader` itself, it only knows how to turn a provider
  * key into an adapter instance.
  *
- * Stage 1 registers only `'manual'` (the existing `ManualPaymentProvider`, used as a
+ * Stage 1 registered only `'manual'` (the existing `ManualPaymentProvider`, used as a
  * placeholder/fallback adapter for tests and for any account that intentionally settles
- * manually). Real PSP adapters (Flutterwave for Côte d'Ivoire, ChariBaaS/CMI for Morocco — see
- * docs/architecture/integrations-platform.md §4/§9) are Stage 2: adding one is a single new
- * `Map` entry here, never a refactor of this class, `PaymentProviderResolverService`, or any of
- * their callers.
+ * manually). Stage 2 (PAY-FLUTTERWAVE) adds `'flutterwave'` here as the single new `Map` entry
+ * the Stage 1 design predicted — no refactor of this class, `PaymentProviderResolverService`, or
+ * any of their callers.
+ *
+ * NOTE on the `'flutterwave'` factory below: this registry's factory signature (`() =>
+ * PaymentProvider`) takes no arguments, so there is no per-call context to plumb a decrypted
+ * secret key through yet — wiring a real key from `IntegrationsService`'s decrypt path
+ * (docs/architecture/integrations-platform.md §3) into this factory is explicitly out of scope
+ * for this lot (see `FlutterwaveProvider`'s own class doc comment). The empty-string placeholder
+ * below makes the adapter constructible and registered, exactly as this lot's mandate requires;
+ * any real call made through it before that wiring lands will correctly fail Flutterwave's own
+ * authentication check (HTTP 401) rather than silently pretending to work.
  */
 @Injectable()
 export class PaymentProviderRegistry {
   private readonly factories = new Map<string, PaymentProviderFactory>([
     ['manual', () => new ManualPaymentProvider()],
-    // Stage 2: ['flutterwave', () => new FlutterwaveProvider(...)],
+    ['flutterwave', () => new FlutterwaveProvider('')],
     // Stage 2: ['charibaas', () => new ChariBaaSProvider(...)],
   ]);
 
