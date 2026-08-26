@@ -14,11 +14,7 @@
 export type IntegrationDomain = 'payment' | 'messaging';
 export type IntegrationScope = 'platform' | 'tenant';
 export type IntegrationAccountStatus =
-  | 'pending'
-  | 'active'
-  | 'disabled'
-  | 'revoked'
-  | 'error';
+  'pending' | 'active' | 'disabled' | 'revoked' | 'error';
 
 /**
  * Read-side projection only — deliberately excludes secretEncrypted. Nothing that consumes this
@@ -44,7 +40,9 @@ export interface IntegrationAccountRecord {
   lastErrorMessage: string | null;
 }
 
-export const INTEGRATION_ACCOUNTS_READER = Symbol('INTEGRATION_ACCOUNTS_READER');
+export const INTEGRATION_ACCOUNTS_READER = Symbol(
+  'INTEGRATION_ACCOUNTS_READER',
+);
 
 /**
  * The only way a resolver (payment or messaging) may look up an IntegrationAccount. Read-only

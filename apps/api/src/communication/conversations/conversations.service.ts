@@ -11,7 +11,7 @@ import type {
   ListConversationsQuery,
   UpdateConversationInput,
 } from '@korva/validation';
-import type { Pagination } from '@korva/types';
+import type { MessageStatus, Pagination } from '@korva/types';
 import { ConversationsRepository } from './conversations.repository';
 import { MessagesRepository } from './messages.repository';
 import { ConversationDocument } from './schemas/conversation.schema';
@@ -189,7 +189,7 @@ export class ConversationsService {
           : undefined);
     }
 
-    let status: 'sent' | 'failed' = 'sent';
+    let status: MessageStatus = 'sent';
     let providerReference: string | undefined;
     let to: string | undefined;
 
@@ -220,7 +220,10 @@ export class ConversationsService {
         });
       }
       const result = await this.messagingProvider.send({ to, body });
-      status = result.status;
+      // Message doesn't model a 'read' receipt yet (that's a Stage 2 concern once a real
+      // delivery-status webhook exists) — degrade to 'delivered', the closest state it does
+      // model, rather than widening MessageStatus for a value no provider produces today.
+      status = result.status === 'read' ? 'delivered' : result.status;
       providerReference = result.providerReference;
     }
 
