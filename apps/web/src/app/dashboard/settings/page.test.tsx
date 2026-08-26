@@ -486,19 +486,29 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     renderWithProviders(<SettingsPage />);
 
     await user.click((await screen.findAllByRole("button", { name: "Connecter" }))[0]);
-    const bankNameInput = await screen.findByLabelText("Nom de la banque");
-    await user.type(bankNameInput, "Ecobank");
+    const bankCodeInput = await screen.findByLabelText("Code banque (Flutterwave)");
+    await user.type(bankCodeInput, "044");
     await user.type(screen.getByLabelText("Numéro de compte"), "0123456789");
-    await user.type(screen.getByLabelText("Titulaire du compte"), "Ma Boutique SARL");
-    const paymentForm = bankNameInput.closest("form") as HTMLElement;
+    await user.type(screen.getByLabelText("Nom de l'entreprise"), "Ma Boutique SARL");
+    // Pre-filled from the mocked organization's country ("FR") via defaultValue — clear it first
+    // so the assertion below reflects exactly what was typed, not "FRCI".
+    const countryInput = screen.getByLabelText("Pays (code ISO)");
+    await user.clear(countryInput);
+    await user.type(countryInput, "CI");
+    await user.selectOptions(screen.getByLabelText("Type de répartition"), "percentage");
+    await user.type(screen.getByLabelText("Valeur de répartition"), "2.5");
+    const paymentForm = bankCodeInput.closest("form") as HTMLElement;
     await user.click(within(paymentForm).getByRole("button", { name: "Connecter" }));
 
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith("/organizations/me/integrations/payment/connect", {
         payoutDetails: {
-          bankName: "Ecobank",
-          accountNumber: "0123456789",
-          accountHolderName: "Ma Boutique SARL",
+          account_bank: "044",
+          account_number: "0123456789",
+          business_name: "Ma Boutique SARL",
+          country: "CI",
+          split_type: "percentage",
+          split_value: "2.5",
         },
       }),
     );
@@ -519,17 +529,18 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     renderWithProviders(<SettingsPage />);
 
     await user.click((await screen.findAllByRole("button", { name: "Connecter" }))[0]);
-    const bankNameInput = await screen.findByLabelText("Nom de la banque");
-    await user.type(bankNameInput, "Ecobank");
+    const bankCodeInput = await screen.findByLabelText("Code banque (Flutterwave)");
+    await user.type(bankCodeInput, "044");
     await user.type(screen.getByLabelText("Numéro de compte"), "0123456789");
-    await user.type(screen.getByLabelText("Titulaire du compte"), "Ma Boutique SARL");
-    const paymentForm = bankNameInput.closest("form") as HTMLElement;
+    await user.type(screen.getByLabelText("Nom de l'entreprise"), "Ma Boutique SARL");
+    await user.type(screen.getByLabelText("Valeur de répartition"), "2.5");
+    const paymentForm = bankCodeInput.closest("form") as HTMLElement;
     await user.click(within(paymentForm).getByRole("button", { name: "Connecter" }));
 
     await waitFor(() => expect(postMock).toHaveBeenCalled());
     // Form closes on success; the entered values must not resurface anywhere on the page.
-    expect(screen.queryByLabelText("Nom de la banque")).not.toBeInTheDocument();
-    expect(screen.queryByText("Ecobank")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Code banque (Flutterwave)")).not.toBeInTheDocument();
+    expect(screen.queryByText("044")).not.toBeInTheDocument();
   });
 
   it("submits the messaging connect form as ConnectMessagingAccountInput exactly", async () => {

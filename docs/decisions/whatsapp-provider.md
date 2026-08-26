@@ -423,3 +423,30 @@ to add here beyond what's already written.
 - [WhatsApp Penetration in Africa: Country Statistics (2026) — Askyazi](https://www.askyazi.com/articles/whatsapp-penetration-across-africa-statistics-by-country)
 - [WhatsApp Usage Across Africa: Key Insights for 2025-2026 — Askyazi](https://www.askyazi.com/useful-data-sources-for-africa/whatsapp-usage-across-africa-key-statistics-insights-for-2025)
 - [Digital media in Morocco — Wikipedia](https://en.wikipedia.org/wiki/Digital_media_in_Morocco)
+
+## Wave 4 Stage 2 correction (2026-08-26) — 360dialog's webhook signature scheme
+
+While building the real `ThreeSixtyDialogProvider`/webhook receiver (Wave 4 Stage 2, MSG-360DIALOG
+lot), fetching 360dialog's own current documentation directly overturned an assumption this record
+made and explicitly flagged as unverified in the Wave 3 refinement section above ("What does NOT
+transfer... **360dialog** passes through Meta's native webhook format, so it follows the Meta Cloud
+API signature scheme above, not a scheme of its own" — that line is now known to be wrong).
+
+**What's actually true**, per
+[docs.360dialog.com/partner/onboarding/webhook-events-and-setup/signature-validation.md](https://docs.360dialog.com/partner/onboarding/webhook-events-and-setup/signature-validation.md)
+(fetched 2026-08-26): 360dialog signs its own webhook deliveries with a **distinct "platform
+secret"**, generated in the 360dialog Hub and separate from the `D360-API-KEY` used to *send*
+messages, via **HMAC-SHA256 (hex digest)** in a **`x-360dialog-signature`** header — not a passthrough
+of Meta's `X-Hub-Signature-256`. In hindsight this makes architectural sense and didn't need to wait
+for implementation to catch: KORVA never holds a Meta App Secret in the BSP-first model this record
+itself recommended (§"Recommendation" above), so a customer-verifiable Meta-signature passthrough was
+never actually possible — 360dialog necessarily has to sign with its own secret instead. The one-time
+`hub.mode`/`hub.challenge` GET handshake Meta requires for a *direct* Cloud API integration also does
+not apply to 360dialog's customer-facing webhook setup, which is a Hub-UI registration flow instead
+(URL + optional custom header, verified by an emailed code) — the adapter still implements a GET
+handshake handler for spec-completeness/defense-in-depth, but current docs show no evidence it is
+actually invoked in this flow.
+
+This does not change the provider recommendation (BSP-first, 360dialog as primary candidate) — it
+only corrects the technical mechanics of the webhook trust boundary, which any BSP integration would
+need to get right regardless of which one is ultimately chosen.

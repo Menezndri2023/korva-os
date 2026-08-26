@@ -94,15 +94,21 @@ const INTEGRATION_STATUS_BADGE: Record<
   error: { variant: "destructive", label: "Erreur" },
 };
 
-// Flutterwave's exact required payout field names are owned by a different Stage 2 lot
-// (the PaymentProvider adapter) that this frontend cannot see — see
-// ConnectPaymentPayoutInput's doc comment in packages/types/src/integrations.ts. These three
-// keys (bankName/accountNumber/accountHolderName) are a reasonable, clearly-labeled common
-// subset and are EXPECTED to need reconciling against the real adapter at convergence.
+// Reconciled at Wave 4 Stage 2 convergence against the real FlutterwaveProvider adapter's
+// REQUIRED_PAYOUT_DESTINATION_FIELDS (apps/api/src/finance/payments/providers/
+// flutterwave-payment.provider.ts) — these are Flutterwave's own Create Subaccount field names
+// verbatim (developer.flutterwave.com/v3.0.0/reference/create-a-sub-account.md), not a
+// provider-agnostic guess. `account_bank` is Flutterwave's numeric bank code, not a free-text
+// bank name — a real implementation would source it from Flutterwave's "Get all banks by
+// country" endpoint as a dropdown; a labeled text input is this reconciliation's honest,
+// bounded fix, not a finished UX.
 interface PaymentPayoutFormValues {
-  bankName: string;
-  accountNumber: string;
-  accountHolderName: string;
+  account_bank: string;
+  account_number: string;
+  business_name: string;
+  country: string;
+  split_type: "percentage" | "flat";
+  split_value: string;
 }
 
 export default function SettingsPage() {
@@ -277,9 +283,12 @@ export default function SettingsPage() {
   function submitPaymentForm(values: PaymentPayoutFormValues) {
     connectPaymentMutation.mutate({
       payoutDetails: {
-        bankName: values.bankName,
-        accountNumber: values.accountNumber,
-        accountHolderName: values.accountHolderName,
+        account_bank: values.account_bank,
+        account_number: values.account_number,
+        business_name: values.business_name,
+        country: values.country,
+        split_type: values.split_type,
+        split_value: values.split_value,
       },
     });
   }
@@ -740,16 +749,20 @@ export default function SettingsPage() {
                       <div>
                         <label
                           className="block text-sm font-medium text-text"
-                          htmlFor="payout-bank-name"
+                          htmlFor="payout-account-bank"
                         >
-                          Nom de la banque
+                          Code banque (Flutterwave)
                         </label>
                         <Input
-                          id="payout-bank-name"
+                          id="payout-account-bank"
                           className="mt-1 w-full"
-                          error={!!paymentErrors.bankName}
-                          {...registerPayment("bankName", { required: true })}
+                          placeholder="ex : 044"
+                          error={!!paymentErrors.account_bank}
+                          {...registerPayment("account_bank", { required: true })}
                         />
+                        <p className="mt-1 text-xs text-text-muted">
+                          Code numérique de la banque chez Flutterwave, pas son nom.
+                        </p>
                       </div>
                       <div>
                         <label
@@ -761,22 +774,70 @@ export default function SettingsPage() {
                         <Input
                           id="payout-account-number"
                           className="mt-1 w-full"
-                          error={!!paymentErrors.accountNumber}
-                          {...registerPayment("accountNumber", { required: true })}
+                          error={!!paymentErrors.account_number}
+                          {...registerPayment("account_number", { required: true })}
                         />
                       </div>
-                      <div className="sm:col-span-2">
+                      <div>
                         <label
                           className="block text-sm font-medium text-text"
-                          htmlFor="payout-account-holder"
+                          htmlFor="payout-business-name"
                         >
-                          Titulaire du compte
+                          Nom de l&apos;entreprise
                         </label>
                         <Input
-                          id="payout-account-holder"
+                          id="payout-business-name"
                           className="mt-1 w-full"
-                          error={!!paymentErrors.accountHolderName}
-                          {...registerPayment("accountHolderName", { required: true })}
+                          error={!!paymentErrors.business_name}
+                          {...registerPayment("business_name", { required: true })}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className="block text-sm font-medium text-text"
+                          htmlFor="payout-country"
+                        >
+                          Pays (code ISO)
+                        </label>
+                        <Input
+                          id="payout-country"
+                          className="mt-1 w-full"
+                          placeholder="ex : CI"
+                          defaultValue={organization?.country}
+                          error={!!paymentErrors.country}
+                          {...registerPayment("country", { required: true })}
+                        />
+                      </div>
+                      <div>
+                        <label
+                          className="block text-sm font-medium text-text"
+                          htmlFor="payout-split-type"
+                        >
+                          Type de répartition
+                        </label>
+                        <select
+                          id="payout-split-type"
+                          className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+                          {...registerPayment("split_type", { required: true })}
+                        >
+                          <option value="percentage">Pourcentage</option>
+                          <option value="flat">Montant fixe</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label
+                          className="block text-sm font-medium text-text"
+                          htmlFor="payout-split-value"
+                        >
+                          Valeur de répartition
+                        </label>
+                        <Input
+                          id="payout-split-value"
+                          type="number"
+                          step="any"
+                          className="mt-1 w-full"
+                          error={!!paymentErrors.split_value}
+                          {...registerPayment("split_value", { required: true })}
                         />
                       </div>
 

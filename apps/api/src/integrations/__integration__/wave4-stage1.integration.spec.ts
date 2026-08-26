@@ -264,7 +264,12 @@ describe('Wave 4 Stage 1 — payment provider resolution: real INTEGRATION_ACCOU
 
     const created = await integrationsService.createPlatformAccount({
       domain: 'payment',
-      provider: 'flutterwave', // real provider key, but Stage 1's registry has no factory for it
+      // 'flutterwave' was the original example here (Stage 1); Wave 4 Stage 2 registered a real
+      // FlutterwaveProvider adapter, which would make this specific assertion false — 'charibaas'
+      // is the still-unimplemented Morocco candidate from docs/decisions/psp-provider.md, kept
+      // deliberately unregistered so this test's premise (a real provider key with no adapter
+      // factory) stays true regardless of which adapters Stage 2 adds next.
+      provider: 'charibaas',
       role: 'merchant-of-record',
       market: 'SN',
       secret: 'not-yet-a-real-adapter',
