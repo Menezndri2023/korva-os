@@ -16,6 +16,8 @@ export const SYSTEM_EVENTS = [
   "booking.cancelled",
   "customer.created",
   "invoice.overdue",
+  "payment.webhook_received",
+  "whatsapp.status_updated",
 ] as const;
 export type SystemEvent = (typeof SYSTEM_EVENTS)[number];
 

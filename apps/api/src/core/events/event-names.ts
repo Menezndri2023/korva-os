@@ -25,6 +25,17 @@ export interface EventJobData {
  * valid trigger names (packages/types/src/workflow.ts) but never actually published anywhere yet
  * (no scheduler emits them) — the field names below are this module's best-guess convention for
  * whenever that scheduler is built, not verified against a real producer.
+ *
+ * 'payment.webhook_received'/'whatsapp.status_updated' (Wave 4 FOUND-WEBHOOK,
+ * see integration-webhook.service.ts) are in the same "declared but not yet verified against a
+ * real producer" bucket as quote.expired/invoice.overdue above — Stage 1 builds only the generic,
+ * provider-agnostic ingestion pipeline (no real Flutterwave/360dialog adapter exists yet), so
+ * 'paymentId'/'messageId' here are this module's chosen convention for what
+ * IntegrationWebhookService.process() actually publishes: the provider's own event id, since this
+ * generic layer has no Stage-2 IntegrationAccount mapping yet to resolve a real KORVA Payment/
+ * Message document. 'paymentId' was picked over e.g. 'providerEventId' to match this table's
+ * existing 'payment.completed': 'paymentId' entry; 'messageId' mirrors the Resend pipeline's own
+ * Message-shaped domain (see communication/webhooks/resend-webhook.service.ts).
  */
 export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'lead.created': 'leadId',
@@ -37,4 +48,6 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'booking.cancelled': 'bookingId',
   'customer.created': 'contactId',
   'invoice.overdue': 'invoiceId',
+  'payment.webhook_received': 'paymentId',
+  'whatsapp.status_updated': 'messageId',
 };
