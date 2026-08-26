@@ -29,9 +29,11 @@ function buildService(channel: 'email' | 'whatsapp') {
     subject: 'Subject',
   };
 
+  const createConversation = jest.fn().mockResolvedValue(conversation);
   const conversationsRepository = {
     findById: jest.fn().mockResolvedValue(conversation),
     update: jest.fn().mockResolvedValue(conversation),
+    create: createConversation,
   } as unknown as ConversationsRepository;
 
   const messagesRepository = {
@@ -74,7 +76,15 @@ function buildService(channel: 'email' | 'whatsapp') {
     messagingProvider,
   );
 
-  return { service, send, messagingSend };
+  return {
+    service,
+    send,
+    messagingSend,
+    contactsService,
+    conversationsRepository,
+    createConversation,
+    auditService,
+  };
 }
 
 describe('ConversationsService.sendMessage — channel-aware HTML escaping', () => {
@@ -85,7 +95,8 @@ describe('ConversationsService.sendMessage — channel-aware HTML escaping', () 
     await service.sendMessage(ORG_ID, USER_ID, CONVERSATION_ID, input);
 
     expect(send).toHaveBeenCalledTimes(1);
-    const sentBody = send.mock.calls[0][0].body as string;
+    const [[emailSendInput]] = send.mock.calls as [[{ body: string }]];
+    const sentBody = emailSendInput.body;
     expect(sentBody).toBe('Bonjour &lt;img src=x onerror=alert(1)&gt;,');
     expect(sentBody).not.toContain('<img');
   });
@@ -97,8 +108,92 @@ describe('ConversationsService.sendMessage — channel-aware HTML escaping', () 
     await service.sendMessage(ORG_ID, USER_ID, CONVERSATION_ID, input);
 
     expect(messagingSend).toHaveBeenCalledTimes(1);
-    const sentBody = messagingSend.mock.calls[0][0].body as string;
+    const [[messagingSendInput]] = messagingSend.mock.calls as [
+      [{ body: string }],
+    ];
+    const sentBody = messagingSendInput.body;
     expect(sentBody).toBe('Bonjour <img src=x onerror=alert(1)>,');
     expect(sentBody).not.toContain('&lt;img');
+  });
+});
+
+describe('ConversationsService.create — WhatsApp consent gate (Wave 4 Stage 2)', () => {
+  it('rejects opening a new whatsapp conversation for a contact with no consent on file', async () => {
+    const { service, contactsService } = buildService('whatsapp');
+    (contactsService.getById as jest.Mock).mockResolvedValue({
+      ...CONTACT,
+      consents: [],
+    });
+
+    await expect(
+      service.create(ORG_ID, USER_ID, {
+        contactId: CONTACT.id,
+        channel: 'whatsapp',
+      }),
+    ).rejects.toMatchObject({
+      response: { code: 'WHATSAPP_CONSENT_MISSING' },
+    });
+  });
+
+  it('rejects opening a new whatsapp conversation when the only consent on file was revoked', async () => {
+    const { service, contactsService } = buildService('whatsapp');
+    (contactsService.getById as jest.Mock).mockResolvedValue({
+      ...CONTACT,
+      consents: [
+        {
+          channel: 'whatsapp',
+          grantedAt: '2026-01-01T00:00:00.000Z',
+          source: 'onboarding form',
+          revokedAt: '2026-02-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    await expect(
+      service.create(ORG_ID, USER_ID, {
+        contactId: CONTACT.id,
+        channel: 'whatsapp',
+      }),
+    ).rejects.toMatchObject({
+      response: { code: 'WHATSAPP_CONSENT_MISSING' },
+    });
+  });
+
+  it('allows opening a new whatsapp conversation for a contact with an active whatsapp consent', async () => {
+    const { service, contactsService, createConversation } =
+      buildService('whatsapp');
+    (contactsService.getById as jest.Mock).mockResolvedValue({
+      ...CONTACT,
+      consents: [
+        {
+          channel: 'whatsapp',
+          grantedAt: '2026-01-01T00:00:00.000Z',
+          source: 'onboarding form',
+        },
+      ],
+    });
+
+    await service.create(ORG_ID, USER_ID, {
+      contactId: CONTACT.id,
+      channel: 'whatsapp',
+    });
+
+    expect(createConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not require consent to open a new EMAIL conversation', async () => {
+    const { service, contactsService, createConversation } =
+      buildService('email');
+    (contactsService.getById as jest.Mock).mockResolvedValue({
+      ...CONTACT,
+      consents: [],
+    });
+
+    await service.create(ORG_ID, USER_ID, {
+      contactId: CONTACT.id,
+      channel: 'email',
+    });
+
+    expect(createConversation).toHaveBeenCalledTimes(1);
   });
 });

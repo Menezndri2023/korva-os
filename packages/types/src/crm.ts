@@ -3,6 +3,21 @@ import type { CustomFieldValues } from "./custom-fields.ts";
 export const CONTACT_TYPES = ["person", "company"] as const;
 export type ContactType = (typeof CONTACT_TYPES)[number];
 
+// Generalized across channels rather than WhatsApp-specific, per
+// docs/architecture/integrations-platform.md §5 — a contact's opt-in history is the same shape
+// regardless of which channel it's for. `source` is a short free-text description of how consent
+// was obtained (e.g. "onboarding form", "storefront checkout checkbox") — Meta expects a business
+// to be able to demonstrate how and when consent was granted, not just a boolean.
+export const CONSENT_CHANNELS = ["whatsapp", "email", "sms"] as const;
+export type ConsentChannel = (typeof CONSENT_CHANNELS)[number];
+
+export interface ContactConsent {
+  channel: ConsentChannel;
+  grantedAt: string;
+  source: string;
+  revokedAt?: string;
+}
+
 export interface Contact {
   id: string;
   organizationId: string;
@@ -14,6 +29,7 @@ export interface Contact {
   phone?: string;
   tags: string[];
   customFields: CustomFieldValues;
+  consents: ContactConsent[];
   createdAt: string;
   updatedAt: string;
 }

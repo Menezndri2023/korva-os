@@ -24,6 +24,14 @@ export class SendWhatsappTool implements AiTool<z.infer<typeof inputSchema>> {
     },
   };
   readonly requiredPermission = 'conversations.create' as const;
+  /**
+   * Sensitive as of Wave 4 Stage 2: a real WhatsApp adapter (360dialog) now exists, so this tool
+   * can genuinely deliver a message to a real customer, not just log one — mirrors
+   * cancel_booking.tool.ts's own reasoning exactly. Reuses the existing AiPendingAction/CAS
+   * confirmation mechanism (see tool.interface.ts's doc comment) rather than introducing a new
+   * one, per docs/architecture/integrations-platform.md Wave 4 mandate §9.
+   */
+  readonly sensitive = true;
   readonly auditEntity = 'message';
 
   constructor(private readonly conversationsService: ConversationsService) {}

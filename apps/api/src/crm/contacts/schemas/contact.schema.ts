@@ -1,10 +1,36 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import type { ContactType, CustomFieldValues } from '@korva/types';
-import { CONTACT_TYPES } from '@korva/types';
+import type {
+  ConsentChannel,
+  ContactConsent,
+  ContactType,
+  CustomFieldValues,
+} from '@korva/types';
+import { CONSENT_CHANNELS, CONTACT_TYPES } from '@korva/types';
 import { idToJson } from '../../../core/mongoose/schema-options';
 
 export type ContactDocument = HydratedDocument<Contact>;
+
+/** See ContactConsent in @korva/types for the field-level rationale — this is its Mongoose
+ *  sub-document shape, kept in sync by hand since it's small and stable. */
+@Schema({ _id: false })
+export class ContactConsentSubdocument implements ContactConsent {
+  @Prop({ type: String, enum: CONSENT_CHANNELS, required: true })
+  channel!: ConsentChannel;
+
+  @Prop({ type: Date, required: true })
+  grantedAt!: string;
+
+  @Prop({ type: String, required: true })
+  source!: string;
+
+  @Prop({ type: Date })
+  revokedAt?: string;
+}
+
+export const ContactConsentSchema = SchemaFactory.createForClass(
+  ContactConsentSubdocument,
+);
 
 @Schema({ timestamps: true, collection: 'contacts', toJSON: idToJson })
 export class Contact {
@@ -39,6 +65,9 @@ export class Contact {
 
   @Prop({ type: Object, default: {} })
   customFields!: CustomFieldValues;
+
+  @Prop({ type: [ContactConsentSchema], default: [] })
+  consents!: ContactConsent[];
 }
 
 export const ContactSchema = SchemaFactory.createForClass(Contact);
