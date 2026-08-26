@@ -272,6 +272,132 @@ describe('IntegrationsService — rotation and revocation', () => {
   });
 });
 
+describe('IntegrationsService — recordTenantAccountTestConnection (Wave 4 Stage 2)', () => {
+  it('rejects a caller without settings.manage', async () => {
+    const { service, updateStatus } = buildService();
+
+    await expect(
+      service.recordTenantAccountTestConnection(
+        OWN_ORG_ID,
+        READ_ONLY_PERMISSIONS,
+        'id-1',
+        { ok: true },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it("cannot record a test-connection result for another org's account", async () => {
+    const { service, findByIdForOrganization, updateStatus } = buildService();
+    findByIdForOrganization.mockResolvedValue(null);
+
+    await expect(
+      service.recordTenantAccountTestConnection(
+        OTHER_ORG_ID,
+        MANAGE_PERMISSIONS,
+        'id-1',
+        { ok: true },
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('refuses to record a result for an already-revoked account', async () => {
+    const { service, findByIdForOrganization, updateStatus } = buildService();
+    const existing = makeDoc({ status: 'revoked' });
+    findByIdForOrganization.mockResolvedValue(existing);
+
+    await expect(
+      service.recordTenantAccountTestConnection(
+        OWN_ORG_ID,
+        MANAGE_PERMISSIONS,
+        String(existing._id),
+        { ok: true },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('a successful result promotes status to active and clears any prior error', async () => {
+    const { service, findByIdForOrganization, updateStatus } = buildService();
+    const existing = makeDoc({ status: 'pending' });
+    findByIdForOrganization
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(makeDoc({ _id: existing._id, status: 'active' }));
+
+    const result = await service.recordTenantAccountTestConnection(
+      OWN_ORG_ID,
+      MANAGE_PERMISSIONS,
+      String(existing._id),
+      { ok: true },
+    );
+
+    expect(updateStatus).toHaveBeenCalledTimes(1);
+    const [calledId, calledStatus, calledExtra] = updateStatus.mock
+      .calls[0] as [
+      string,
+      string,
+      { lastVerifiedAt: Date; lastErrorAt: null; lastErrorMessage: null },
+    ];
+    expect(calledId).toBe(String(existing._id));
+    expect(calledStatus).toBe('active');
+    expect(calledExtra.lastVerifiedAt).toBeInstanceOf(Date);
+    expect(calledExtra.lastErrorAt).toBeNull();
+    expect(calledExtra.lastErrorMessage).toBeNull();
+    expect(result.status).toBe('active');
+  });
+
+  it('a failed result leaves status unchanged and records the error message', async () => {
+    const { service, findByIdForOrganization, updateStatus } = buildService();
+    const existing = makeDoc({ status: 'active' });
+    findByIdForOrganization
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(existing);
+
+    await service.recordTenantAccountTestConnection(
+      OWN_ORG_ID,
+      MANAGE_PERMISSIONS,
+      String(existing._id),
+      { ok: false, message: 'invalid credentials' },
+    );
+
+    expect(updateStatus).toHaveBeenCalledTimes(1);
+    const [calledId, calledStatus, calledExtra] = updateStatus.mock
+      .calls[0] as [
+      string,
+      string,
+      { lastErrorAt: Date; lastErrorMessage: string },
+    ];
+    expect(calledId).toBe(String(existing._id));
+    expect(calledStatus).toBe('active');
+    expect(calledExtra.lastErrorAt).toBeInstanceOf(Date);
+    expect(calledExtra.lastErrorMessage).toBe('invalid credentials');
+  });
+
+  it('a failed result with no message falls back to a generic message', async () => {
+    const { service, findByIdForOrganization, updateStatus } = buildService();
+    const existing = makeDoc({ status: 'active' });
+    findByIdForOrganization
+      .mockResolvedValueOnce(existing)
+      .mockResolvedValueOnce(existing);
+
+    await service.recordTenantAccountTestConnection(
+      OWN_ORG_ID,
+      MANAGE_PERMISSIONS,
+      String(existing._id),
+      { ok: false },
+    );
+
+    expect(updateStatus).toHaveBeenCalledWith(
+      String(existing._id),
+      'active',
+      expect.objectContaining({
+        lastErrorMessage: 'Test connection failed',
+      }),
+    );
+  });
+});
+
 describe('IntegrationsService — secrets never leak into a returned DTO', () => {
   it('createTenantAccount never returns secretEncrypted or the plaintext secret', async () => {
     const { service, create } = buildService();

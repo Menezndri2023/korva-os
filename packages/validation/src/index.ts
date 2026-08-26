@@ -12,3 +12,4 @@ export * from "./ai.ts";
 export * from "./subscriptions.ts";
 export * from "./public.ts";
 export * from "./analytics.ts";
+export * from "./integrations.ts";
