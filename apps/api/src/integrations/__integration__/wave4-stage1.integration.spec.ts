@@ -14,7 +14,6 @@ import type { IntegrationAccountRecord } from '../integrations.types';
 import { IntegrationAccountSchema } from '../schemas/integration-account.schema';
 
 import { PaymentProviderResolverService } from '../../finance/payments/providers/payment-provider-resolver.service';
-import { PaymentProviderRegistry } from '../../finance/payments/providers/payment-provider.registry';
 import { ManualPaymentProvider } from '../../finance/payments/providers/manual-payment.provider';
 import { OrganizationsService } from '../../organizations/organizations.service';
 
@@ -178,6 +177,18 @@ describe('Wave 4 Stage 1 — payment provider resolution: real INTEGRATION_ACCOU
       getById,
     } as unknown as OrganizationsService;
 
+    // PaymentProviderResolverService/Registry are NOT declared in this test's own `providers:`
+    // (an earlier version of this test did, before the orchestrator's Wave 4 Stage 2 convergence
+    // fix moved both into the real IntegrationsModule — see integrations.module.ts's own doc
+    // comment on why). Declaring them here too would create a second, ambiguous instance of the
+    // same class token alongside IntegrationsModule's own internal one, which is exactly what
+    // broke this suite (moduleRef.get() started resolving IntegrationsModule's real,
+    // unmocked-OrganizationsService instance instead of a test-local one). `overrideProvider`
+    // instead replaces OrganizationsService wherever it's actually used in the compiled graph —
+    // including inside IntegrationsModule's own encapsulated OrganizationsModule import — so the
+    // resolver under test is the SAME real instance the app would use, just with a faked
+    // OrganizationsService underneath it. This is a stronger proof of the real wiring, not a
+    // weaker one.
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true }),
@@ -190,12 +201,10 @@ describe('Wave 4 Stage 1 — payment provider resolution: real INTEGRATION_ACCOU
         MongooseModule.forRoot(uri, { autoIndex: false }),
         IntegrationsModule,
       ],
-      providers: [
-        PaymentProviderResolverService,
-        PaymentProviderRegistry,
-        { provide: OrganizationsService, useValue: fakeOrganizationsService },
-      ],
-    }).compile();
+    })
+      .overrideProvider(OrganizationsService)
+      .useValue(fakeOrganizationsService)
+      .compile();
 
     connection = moduleRef.get(getConnectionToken());
 

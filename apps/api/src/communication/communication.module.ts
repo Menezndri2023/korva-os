@@ -28,16 +28,17 @@ import { NotificationsRepository } from './notifications/notifications.repositor
 import { NotificationsService } from './notifications/notifications.service';
 import { NotificationsController } from './notifications/notifications.controller';
 
-import { MESSAGING_PROVIDER } from './providers/messaging-provider.interface';
-import { LogMessagingProvider } from './providers/log-messaging.provider';
+import { MessagingProviderModule } from './providers/messaging-provider.module';
 
 import { ResendWebhookController } from './webhooks/resend-webhook.controller';
 import { ResendWebhookService } from './webhooks/resend-webhook.service';
+import { ThreeSixtyDialogWebhookController } from './webhooks/three-sixty-dialog-webhook.controller';
 
 import { CrmModule } from '../crm/crm.module';
 import { IdentityModule } from '../identity/identity.module';
 import { AuditModule } from '../audit/audit.module';
 import { EmailModule } from '../shared/email/email.module';
+import { IntegrationWebhookModule } from '../integrations/webhooks/integration-webhook.module';
 
 @Module({
   imports: [
@@ -51,12 +52,15 @@ import { EmailModule } from '../shared/email/email.module';
     IdentityModule,
     AuditModule,
     EmailModule,
+    MessagingProviderModule,
+    IntegrationWebhookModule,
   ],
   controllers: [
     MessageTemplatesController,
     ConversationsController,
     NotificationsController,
     ResendWebhookController,
+    ThreeSixtyDialogWebhookController,
   ],
   providers: [
     MessageTemplatesRepository,
@@ -67,7 +71,11 @@ import { EmailModule } from '../shared/email/email.module';
     NotificationsRepository,
     NotificationsService,
     ResendWebhookService,
-    { provide: MESSAGING_PROVIDER, useClass: LogMessagingProvider },
+    // MessagingProviderResolverService (Wave 4 Stage 2) lives in IntegrationsModule instead of
+    // here — same reasoning as PaymentProviderResolverService in finance.module.ts: it depends
+    // on INTEGRATION_ACCOUNTS_READER, which only IntegrationsModule provides, and importing
+    // IntegrationsModule from here to get it back would create a CommunicationModule ↔
+    // IntegrationsModule circular import.
   ],
   exports: [EmailModule, NotificationsService, ConversationsService],
 })
