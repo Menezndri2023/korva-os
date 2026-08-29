@@ -30,6 +30,16 @@ export class BlockedSlot {
 
   @Prop()
   reason?: string;
+
+  /**
+   * Absent (undefined) for every manually-added blocked slot (the only kind that existed
+   * before calendar sync) — only ever 'external_calendar' for slots CalendarSyncSchedulerService
+   * itself wrote. That service wholesale-replaces exactly the slots carrying this marker on
+   * every sync tick and never touches any other slot, so this is the one field that lets it
+   * tell "mine" apart from "a human added this by hand" without an extra collection.
+   */
+  @Prop({ type: String, enum: ['external_calendar'] })
+  source?: 'external_calendar';
 }
 export const BlockedSlotSchema = SchemaFactory.createForClass(BlockedSlot);
 
@@ -84,6 +94,17 @@ export class Resource {
 
   @Prop({ type: [BlockedSlotSchema], default: [] })
   blockedSlots!: BlockedSlot[];
+
+  /**
+   * An ICS (iCalendar) feed URL — e.g. a staff member's Google/Outlook/Apple Calendar "secret
+   * address" — CalendarSyncSchedulerService periodically fetches and turns into blocked slots
+   * on this resource, so a personal appointment the business owner already has on their own
+   * calendar blocks KORVA availability too. Validated as a safe (https, non-private-network)
+   * URL at write time — see ResourcesService#update — using the exact same check already
+   * applied to outgoing workflow webhook URLs (shared/safe-fetch.ts).
+   */
+  @Prop()
+  externalCalendarUrl?: string;
 
   /**
    * Internal write-conflict trigger only — never read, no business meaning, kept out of API

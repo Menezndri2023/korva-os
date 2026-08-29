@@ -18,6 +18,9 @@ export const createResourceSchema = z.object({
   description: z.string().max(2000).optional(),
   active: z.boolean().default(true),
   weeklyAvailability: z.array(weeklyAvailabilityWindowInputSchema).default([]),
+  /** ICS feed URL (e.g. a Google/Outlook/Apple Calendar "secret address") — see
+   *  apps/api/src/booking/resources/schemas/resource.schema.ts for the full rationale. */
+  externalCalendarUrl: z.string().url().max(2000).optional(),
 });
 export type CreateResourceInput = z.infer<typeof createResourceSchema>;
 

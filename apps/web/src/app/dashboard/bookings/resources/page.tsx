@@ -58,6 +58,10 @@ export default function ResourcesPage() {
             <Input placeholder="Type (room, vehicle...)" {...register("type")} />
           </div>
           <Input type="number" placeholder="Capacité" className="w-32" {...register("capacity", { valueAsNumber: true })} />
+          <Input
+            placeholder="URL calendrier externe (ICS, optionnel)"
+            {...register("externalCalendarUrl")}
+          />
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-text">Horaires hebdomadaires</p>

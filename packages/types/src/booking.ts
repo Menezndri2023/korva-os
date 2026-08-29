@@ -16,6 +16,7 @@ export interface BlockedSlot {
   startAt: string;
   endAt: string;
   reason?: string;
+  source?: "external_calendar";
 }
 
 export interface Resource {
@@ -28,6 +29,7 @@ export interface Resource {
   active: boolean;
   weeklyAvailability: WeeklyAvailabilityWindow[];
   blockedSlots: BlockedSlot[];
+  externalCalendarUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

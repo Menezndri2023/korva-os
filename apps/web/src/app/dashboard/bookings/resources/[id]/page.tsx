@@ -55,6 +55,7 @@ export default function ResourceDetailPage() {
       capacity: resource.capacity,
       active: resource.active,
       weeklyAvailability: resource.weeklyAvailability,
+      externalCalendarUrl: resource.externalCalendarUrl,
     });
   }
   function cancelEdit() {
@@ -154,12 +155,22 @@ export default function ResourceDetailPage() {
         </div>
 
         {!isEditing ? (
-          resource.description && (
-            <div className="mt-4">
-              <dt className="text-sm text-text-muted">Description</dt>
-              <dd className="mt-0.5 text-sm text-text">{resource.description}</dd>
-            </div>
-          )
+          <>
+            {resource.description && (
+              <div className="mt-4">
+                <dt className="text-sm text-text-muted">Description</dt>
+                <dd className="mt-0.5 text-sm text-text">{resource.description}</dd>
+              </div>
+            )}
+            {resource.externalCalendarUrl && (
+              <div className="mt-4">
+                <dt className="text-sm text-text-muted">Calendrier externe synchronisé</dt>
+                <dd className="mt-0.5 truncate text-sm text-text">
+                  {resource.externalCalendarUrl}
+                </dd>
+              </div>
+            )}
+          </>
         ) : (
           <form
             onSubmit={handleSubmit((values) => updateMutation.mutate(values))}
@@ -182,6 +193,13 @@ export default function ResourceDetailPage() {
                 Active
               </label>
             </div>
+            <Input
+              placeholder="URL calendrier externe (ICS, optionnel)"
+              {...register("externalCalendarUrl")}
+            />
+            {errors.externalCalendarUrl && (
+              <p className="text-xs text-destructive">{errors.externalCalendarUrl.message}</p>
+            )}
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-text">Horaires hebdomadaires</p>

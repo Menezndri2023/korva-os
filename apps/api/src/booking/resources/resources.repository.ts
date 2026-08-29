@@ -96,4 +96,47 @@ export class ResourcesRepository {
       )
       .exec();
   }
+
+  /**
+   * Used by CalendarSyncSchedulerService's global sweep (no organizationId — same cross-tenant
+   * background-job shape as the quote-expiry/invoice-overdue/customer-inactivity schedulers).
+   */
+  findAllWithExternalCalendar(limit = 200): Promise<ResourceDocument[]> {
+    return this.resourceModel
+      .find({ externalCalendarUrl: { $exists: true, $ne: null } })
+      .limit(limit)
+      .exec();
+  }
+
+  /**
+   * Wholesale-replaces every blocked slot this sync previously wrote (`source:
+   * 'external_calendar'`) with the freshly parsed set, leaving every manually-added slot (no
+   * `source` at all) completely untouched. MongoDB rejects $pull and $push on the same array
+   * path within a single update, hence the two separate calls — acceptable here since this is
+   * the only writer of `source: 'external_calendar'` slots and runs on its own schedule, not
+   * racing a concurrent user edit to this same field.
+   */
+  async replaceExternalCalendarBlockedSlots(
+    organizationId: string,
+    id: string,
+    slots: Partial<BlockedSlot>[],
+  ): Promise<boolean> {
+    if (!Types.ObjectId.isValid(id)) return false;
+    const filter = {
+      _id: new Types.ObjectId(id),
+      organizationId: new Types.ObjectId(organizationId),
+    };
+    const pulled = await this.resourceModel
+      .updateOne(filter, {
+        $pull: { blockedSlots: { source: 'external_calendar' } },
+      })
+      .exec();
+    if (pulled.matchedCount === 0) return false;
+    if (slots.length > 0) {
+      await this.resourceModel
+        .updateOne(filter, { $push: { blockedSlots: { $each: slots } } })
+        .exec();
+    }
+    return true;
+  }
 }

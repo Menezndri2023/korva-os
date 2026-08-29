@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Types } from 'mongoose';
 import type {
   AddBlockedSlotInput,
@@ -7,15 +11,38 @@ import type {
 } from '@korva/validation';
 import { ResourcesRepository } from './resources.repository';
 import { ResourceDocument } from './schemas/resource.schema';
+import {
+  UnsafeWebhookUrlError,
+  assertSafeWebhookUrl,
+} from '../../shared/safe-fetch';
+
+/** Same check already applied to outgoing workflow webhook URLs — an ICS feed URL is just as
+ *  capable of being pointed at an internal service or cloud metadata endpoint. */
+async function assertSafeCalendarUrl(url: string): Promise<void> {
+  try {
+    await assertSafeWebhookUrl(url);
+  } catch (error) {
+    if (error instanceof UnsafeWebhookUrlError) {
+      throw new BadRequestException({
+        code: 'UNSAFE_CALENDAR_URL',
+        message: error.message,
+      });
+    }
+    throw error;
+  }
+}
 
 @Injectable()
 export class ResourcesService {
   constructor(private readonly resourcesRepository: ResourcesRepository) {}
 
-  create(
+  async create(
     organizationId: string,
     input: CreateResourceInput,
   ): Promise<ResourceDocument> {
+    if (input.externalCalendarUrl) {
+      await assertSafeCalendarUrl(input.externalCalendarUrl);
+    }
     return this.resourcesRepository.create({
       organizationId: new Types.ObjectId(organizationId),
       name: input.name,
@@ -24,6 +51,7 @@ export class ResourcesService {
       description: input.description,
       active: input.active,
       weeklyAvailability: input.weeklyAvailability,
+      externalCalendarUrl: input.externalCalendarUrl,
     });
   }
 
@@ -53,6 +81,9 @@ export class ResourcesService {
     id: string,
     input: UpdateResourceInput,
   ): Promise<ResourceDocument> {
+    if (input.externalCalendarUrl) {
+      await assertSafeCalendarUrl(input.externalCalendarUrl);
+    }
     const updated = await this.resourcesRepository.update(
       organizationId,
       id,

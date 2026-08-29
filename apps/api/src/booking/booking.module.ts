@@ -14,6 +14,7 @@ import { BookingsController } from './bookings/bookings.controller';
 
 import { AvailabilityService } from './availability/availability.service';
 import { AvailabilityController } from './availability/availability.controller';
+import { CalendarSyncSchedulerService } from './resources/calendar-sync-scheduler.service';
 
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -40,6 +41,7 @@ import { AuditModule } from '../audit/audit.module';
     AvailabilityService,
     ResourcesService,
     BookingsService,
+    CalendarSyncSchedulerService,
   ],
   exports: [BookingsService, AvailabilityService, ResourcesService],
 })
