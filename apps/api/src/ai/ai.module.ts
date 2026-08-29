@@ -47,6 +47,9 @@ import { GetInvoiceTool } from './tools/get-invoice.tool';
 import { GetSalesReportTool } from './tools/get-sales-report.tool';
 import { SendEmailTool } from './tools/send-email.tool';
 import { SendWhatsappTool } from './tools/send-whatsapp.tool';
+import { ListRecommendationsTool } from './tools/list-recommendations.tool';
+import { DismissRecommendationTool } from './tools/dismiss-recommendation.tool';
+import { ResolveRecommendationTool } from './tools/resolve-recommendation.tool';
 
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -57,6 +60,7 @@ import { CommunicationModule } from '../communication/communication.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuditModule } from '../audit/audit.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { DecisionEngineModule } from '../decision-engine/decision-engine.module';
 
 @Module({
   imports: [
@@ -76,6 +80,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
     OrganizationsModule,
     AuditModule,
     SubscriptionsModule,
+    DecisionEngineModule,
   ],
   controllers: [AiController],
   providers: [
@@ -105,6 +110,9 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
     GetSalesReportTool,
     SendEmailTool,
     SendWhatsappTool,
+    ListRecommendationsTool,
+    DismissRecommendationTool,
+    ResolveRecommendationTool,
 
     {
       provide: AI_PROVIDER,

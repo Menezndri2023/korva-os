@@ -27,6 +27,6 @@ import { AuditModule } from '../audit/audit.module';
     CustomerReactivationRule,
     DecisionEngineService,
   ],
-  exports: [DecisionEngineService],
+  exports: [DecisionEngineService, RecommendationsService],
 })
 export class DecisionEngineModule {}
