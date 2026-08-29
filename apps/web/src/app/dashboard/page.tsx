@@ -1,18 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { Card } from "@korva/ui";
-import { ApiError } from "@/lib/api-client";
+import { useQuery } from "@tanstack/react-query";
+import type { ActionCenterItem, ActionCenterSummary } from "@korva/types";
+import { Badge, Card } from "@korva/ui";
+import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { useAuthReady } from "@/lib/use-auth-ready";
 import { useAnalyticsActivity, useAnalyticsOverview } from "@/lib/use-analytics";
 import { ACTIVITY_ACTION_LABELS, ACTIVITY_ENTITY_LABELS, formatCurrency } from "@/lib/analytics-format";
+
+const ACTION_ITEM_TYPE_LABELS: Record<ActionCenterItem["type"], string> = {
+  recommendation: "Recommandation",
+  pending_approval: "Approbation requise",
+  workflow_failure: "Échec d'automatisation",
+};
 
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
   const { data: organization, isLoading: isOrganizationLoading } = useActiveOrganization();
+  const authReady = useAuthReady();
   const overviewQuery = useAnalyticsOverview();
   const activityQuery = useAnalyticsActivity(5);
+
+  // Attention-first per docs/BUSINESS_OS_AUDIT.md §5/§10 ("dashboard philosophy shift") — every
+  // system role has recommendations.read (see packages/types/src/rbac.ts), and unlike analytics
+  // this isn't gated behind a KorvaModule at all, so no permission/module empty-state branch is
+  // needed here the way analytics below needs one.
+  const actionSummaryQuery = useQuery({
+    queryKey: ["action-center", "summary"],
+    queryFn: () => apiClient.get<ActionCenterSummary>("/action-center/summary"),
+    enabled: authReady,
+  });
+  const actionFeedQuery = useQuery({
+    queryKey: ["action-center", "feed"],
+    queryFn: () => apiClient.get<ActionCenterItem[]>("/action-center/feed"),
+    enabled: authReady,
+  });
+  const actionTotal = actionSummaryQuery.data
+    ? actionSummaryQuery.data.pendingApprovals +
+      actionSummaryQuery.data.recommendations +
+      actionSummaryQuery.data.failures
+    : 0;
 
   // Some roles (e.g. STAFF, SALES) legitimately don't have analytics.read — that's a
   // permission boundary, not a failure, so it must not render as a retry-able error.
@@ -43,6 +73,13 @@ export default function DashboardPage() {
           {isOrganizationLoading ? "Chargement..." : (organization?.name ?? "—")}
         </p>
       </div>
+
+      <AttentionSection
+        summary={actionSummaryQuery.data}
+        feed={actionFeedQuery.data}
+        isLoading={actionSummaryQuery.isLoading || actionFeedQuery.isLoading}
+        total={actionTotal}
+      />
 
       {overviewQuery.isLoading && <SummarySkeleton />}
 
@@ -145,6 +182,54 @@ export default function DashboardPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+function AttentionSection({
+  summary,
+  feed,
+  isLoading,
+  total,
+}: {
+  summary?: ActionCenterSummary;
+  feed?: ActionCenterItem[];
+  isLoading: boolean;
+  total: number;
+}) {
+  if (isLoading) {
+    return (
+      <Card className="p-6">
+        <div className="h-4 w-48 animate-pulse rounded bg-surface-muted" />
+        <div className="mt-3 h-10 w-full animate-pulse rounded bg-surface-muted" />
+      </Card>
+    );
+  }
+  if (!summary || !feed) return null;
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-text">Ce qui nécessite votre attention</h2>
+        <Link href="/dashboard/action-center" className="text-sm font-medium text-text underline">
+          Ouvrir le centre d&apos;action
+        </Link>
+      </div>
+
+      {total === 0 ? (
+        <p className="mt-3 text-sm text-text-muted">
+          Rien ne nécessite votre attention pour le moment — tout est sous contrôle.
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-border">
+          {feed.slice(0, 3).map((item) => (
+            <li key={`${item.type}-${item.id}`} className="flex items-center gap-2 py-2 text-sm">
+              <Badge>{ACTION_ITEM_TYPE_LABELS[item.type]}</Badge>
+              <span className="text-text">{item.title}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

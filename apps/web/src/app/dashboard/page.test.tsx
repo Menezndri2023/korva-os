@@ -37,10 +37,24 @@ const emptyOverview = {
   invoices: { total: 0, byStatus: {}, outstanding: 0, currency: null },
 };
 
-function mockGetByPath(overview: unknown, activity: unknown[]) {
+const zeroActionSummary = {
+  pendingApprovals: 0,
+  recommendations: 0,
+  automatedThisWeek: 0,
+  failures: 0,
+};
+
+function mockGetByPath(
+  overview: unknown,
+  activity: unknown[],
+  actionSummary: unknown = zeroActionSummary,
+  actionFeed: unknown[] = [],
+) {
   return (path: string) => {
     if (path.startsWith("/analytics/overview")) return Promise.resolve(overview);
     if (path.startsWith("/analytics/activity")) return Promise.resolve(activity);
+    if (path.startsWith("/action-center/summary")) return Promise.resolve(actionSummary);
+    if (path.startsWith("/action-center/feed")) return Promise.resolve(actionFeed);
     throw new Error(`unexpected GET ${path}`);
   };
 }
@@ -109,6 +123,45 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("link", { name: "Ouvrir les paramètres" })).toHaveAttribute(
       "href",
       "/dashboard/settings",
+    );
+  });
+
+  it("shows an all-clear message when nothing needs attention", async () => {
+    getMock.mockImplementation(mockGetByPath(emptyOverview, []));
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(
+      await screen.findByText("Rien ne nécessite votre attention pour le moment — tout est sous contrôle."),
+    ).toBeInTheDocument();
+  });
+
+  it("previews pending action-center items and links to the full Action Center", async () => {
+    getMock.mockImplementation(
+      mockGetByPath(
+        emptyOverview,
+        [],
+        { pendingApprovals: 1, recommendations: 2, automatedThisWeek: 5, failures: 0 },
+        [
+          {
+            type: "recommendation",
+            id: "rec-1",
+            title: "Relancer un client inactif",
+            occurredAt: "2026-08-20T10:00:00.000Z",
+          },
+        ],
+      ),
+    );
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText("Relancer un client inactif")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Rien ne nécessite votre attention pour le moment — tout est sous contrôle."),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ouvrir le centre d'action" })).toHaveAttribute(
+      "href",
+      "/dashboard/action-center",
     );
   });
 });
