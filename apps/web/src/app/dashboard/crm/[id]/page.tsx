@@ -20,9 +20,11 @@ import { ACTIVITY_TYPES, CONTACT_TYPES } from "@korva/types";
 import type {
   Activity,
   Booking,
+  BusinessGraphTimelineEntry,
   Cart,
   Contact,
   Conversation,
+  ContactTimeline,
   Invoice,
   Lead,
   Note,
@@ -35,6 +37,17 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
 import { RelationSection } from "@/components/relation-section";
+
+const TIMELINE_TYPE_LABELS: Record<BusinessGraphTimelineEntry["type"], string> = {
+  lead: "Prospect",
+  quote: "Devis",
+  invoice: "Facture",
+  payment: "Paiement",
+  booking: "Réservation",
+  order: "Commande",
+  conversation: "Conversation",
+  task: "Tâche",
+};
 
 function contactDisplayName(contact: Contact): string {
   return (
@@ -114,6 +127,13 @@ export default function ContactDetailPage() {
   const activitiesQuery = useQuery({
     queryKey: ["activities", "contact", id],
     queryFn: () => apiClient.get<Activity[]>(`/activities?entity=contact&entityId=${id}`),
+    enabled: authReady,
+  });
+  const timelineQuery = useQuery({
+    queryKey: ["business-graph", "contact-timeline", id],
+    queryFn: () =>
+      apiClient.get<ContactTimeline>(`/business-graph/contacts/${id}/timeline`),
+    select: (timeline) => timeline.entries,
     enabled: authReady,
   });
 
@@ -455,6 +475,26 @@ export default function ContactDetailPage() {
           </form>
         )}
       </Card>
+
+      <RelationSection<BusinessGraphTimelineEntry>
+        title="Chronologie"
+        query={timelineQuery}
+        emptyLabel="Aucun événement pour ce contact."
+        renderItem={(entry) => (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Badge>{TIMELINE_TYPE_LABELS[entry.type]}</Badge>
+              <span>{entry.summary}</span>
+            </div>
+            <div className="flex items-center gap-3 text-text-muted">
+              {entry.amount != null && entry.currency && (
+                <span>{formatCurrency(entry.amount, entry.currency)}</span>
+              )}
+              <span>{new Date(entry.occurredAt).toLocaleDateString("fr-FR")}</span>
+            </div>
+          </div>
+        )}
+      />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <RelationSection<Lead>
