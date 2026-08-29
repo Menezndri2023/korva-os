@@ -33,6 +33,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { BusinessGraphModule } from './business-graph/business-graph.module';
 import { DecisionEngineModule } from './decision-engine/decision-engine.module';
 import { ActionCenterModule } from './action-center/action-center.module';
+import { WebhookSubscriptionsModule } from './webhook-subscriptions/webhook-subscriptions.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { ActionCenterModule } from './action-center/action-center.module';
     BusinessGraphModule,
     DecisionEngineModule,
     ActionCenterModule,
+    WebhookSubscriptionsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

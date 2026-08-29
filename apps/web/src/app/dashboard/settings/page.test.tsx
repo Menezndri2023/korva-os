@@ -1221,3 +1221,130 @@ describe("SettingsPage — embeddable widget snippet (docs/BUSINESS_OS_AUDIT.md 
     expect(await screen.findByRole("button", { name: "Copié !" })).toBeInTheDocument();
   });
 });
+
+describe("SettingsPage — outbound webhook subscriptions (docs/BUSINESS_OS_AUDIT.md §6)", () => {
+  let organization: ReturnType<typeof makeOrganization>;
+  let subscriptionsList: Array<{
+    id: string;
+    url: string;
+    events: string[];
+    active: boolean;
+    description?: string;
+    lastDeliveryStatus?: string;
+  }>;
+
+  beforeEach(() => {
+    organization = makeOrganization(["crm"]);
+    subscriptionsList = [];
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    deleteMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      if (path === "/webhook-subscriptions") return Promise.resolve(subscriptionsList);
+      if (path.endsWith("/deliveries")) return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+
+    postMock.mockImplementation((path: string, body: unknown) => {
+      if (path === "/webhook-subscriptions") {
+        const input = body as { url: string; events: string[]; description?: string };
+        const created = {
+          id: "sub-1",
+          url: input.url,
+          events: input.events,
+          description: input.description,
+          active: true,
+        };
+        subscriptionsList = [...subscriptionsList, created];
+        return Promise.resolve({ ...created, secret: "whsec_generated-once" });
+      }
+      if (path === "/webhook-subscriptions/sub-1/rotate-secret") {
+        return Promise.resolve({ ...subscriptionsList[0], secret: "whsec_rotated" });
+      }
+      throw new Error(`unexpected POST ${path}`);
+    });
+
+    patchMock.mockImplementation((path: string, body: unknown) => {
+      if (path === "/webhook-subscriptions/sub-1") {
+        subscriptionsList = subscriptionsList.map((s) =>
+          s.id === "sub-1" ? { ...s, ...(body as object) } : s,
+        );
+        return Promise.resolve(subscriptionsList[0]);
+      }
+      throw new Error(`unexpected PATCH ${path}`);
+    });
+
+    deleteMock.mockImplementation((path: string) => {
+      if (path === "/webhook-subscriptions/sub-1") {
+        subscriptionsList = [];
+        return Promise.resolve({ deleted: true });
+      }
+      throw new Error(`unexpected DELETE ${path}`);
+    });
+  });
+
+  it("shows an empty state when no webhook is configured", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Webhooks sortants")).toBeInTheDocument();
+    expect(await screen.findByText("Aucun webhook sortant configuré.")).toBeInTheDocument();
+  });
+
+  it("creates a webhook, reveals the secret exactly once, and lists it without the secret", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Webhooks sortants");
+    await user.type(
+      screen.getByPlaceholderText("https://partenaire.example.com/webhooks/korva"),
+      "https://partner.test/hook",
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Dépense créée" }));
+    await user.click(screen.getByRole("button", { name: "Ajouter un webhook" }));
+
+    expect(
+      await screen.findByText("whsec_generated-once"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Clé secrète générée — notez-la maintenant, elle ne sera plus jamais affichée."),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("https://partner.test/hook")).toBeInTheDocument();
+  });
+
+  it("rotates the secret and shows the new one, distinct from the original", async () => {
+    subscriptionsList = [
+      { id: "sub-1", url: "https://partner.test/hook", events: ["expense.created"], active: true },
+    ];
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("https://partner.test/hook");
+    await user.click(screen.getByRole("button", { name: "Régénérer la clé" }));
+
+    expect(await screen.findByText("whsec_rotated")).toBeInTheDocument();
+  });
+
+  it("deletes a webhook subscription", async () => {
+    subscriptionsList = [
+      { id: "sub-1", url: "https://partner.test/hook", events: ["expense.created"], active: true },
+    ];
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("https://partner.test/hook");
+    await user.click(screen.getByRole("button", { name: "Supprimer" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("https://partner.test/hook")).not.toBeInTheDocument(),
+    );
+  });
+});

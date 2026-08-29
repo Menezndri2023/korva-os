@@ -3,6 +3,7 @@ import { EventsProcessor } from './events.processor';
 import type { WorkflowEngineService } from './workflow-engine.service';
 import type { DecisionEngineService } from '../decision-engine/decision-engine.service';
 import type { OrdersService } from '../commerce/orders/orders.service';
+import type { WebhookDispatchService } from '../webhook-subscriptions/webhook-dispatch.service';
 
 const workerOnMock = jest.fn();
 const workerCloseMock = jest.fn();
@@ -28,11 +29,13 @@ function buildService(): EventsProcessor {
   const workflowEngineService = {} as unknown as WorkflowEngineService;
   const decisionEngineService = {} as unknown as DecisionEngineService;
   const ordersService = {} as unknown as OrdersService;
+  const webhookDispatchService = {} as unknown as WebhookDispatchService;
   return new EventsProcessor(
     configService,
     workflowEngineService,
     decisionEngineService,
     ordersService,
+    webhookDispatchService,
   );
 }
 

@@ -22,6 +22,7 @@ import { CrmModule } from '../crm/crm.module';
 import { CommunicationModule } from '../communication/communication.module';
 import { DecisionEngineModule } from '../decision-engine/decision-engine.module';
 import { CommerceModule } from '../commerce/commerce.module';
+import { WebhookSubscriptionsModule } from '../webhook-subscriptions/webhook-subscriptions.module';
 
 @Module({
   imports: [
@@ -37,6 +38,9 @@ import { CommerceModule } from '../commerce/commerce.module';
     // method's doc) — safe to import directly: CommerceModule (and everything it in turn
     // imports) has no dependency back on WorkflowModule, so this isn't circular.
     CommerceModule,
+    // For EventsProcessor's WebhookDispatchService.dispatchEvent call — same no-reverse-edge
+    // safety check (WebhookSubscriptionsModule has no dependency back on WorkflowModule).
+    WebhookSubscriptionsModule,
   ],
   controllers: [WorkflowsController],
   providers: [

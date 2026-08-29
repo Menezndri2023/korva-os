@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KORVA_MODULES, STOREFRONT_SECTIONS } from "@korva/types";
+import { KORVA_MODULES, STOREFRONT_SECTIONS, SYSTEM_EVENTS } from "@korva/types";
 import type {
   ConnectMessagingAccountInput,
   ConnectPaymentPayoutInput,
@@ -16,11 +16,16 @@ import type {
   Plan,
   SubscriptionSummary,
   TestConnectionResult,
+  WebhookDelivery,
+  WebhookSubscription,
+  WebhookSubscriptionWithSecret,
 } from "@korva/types";
 import {
   addMemberSchema,
+  createWebhookSubscriptionSchema,
   updateOrganizationSchema,
   type AddMemberInput,
+  type CreateWebhookSubscriptionInput,
   type UpdateOrganizationInput,
 } from "@korva/validation";
 import { Badge, Button, Input, Select } from "@korva/ui";
@@ -1429,6 +1434,7 @@ export default function SettingsPage() {
       </section>
 
       {organization && <ExternalWebsiteSection slug={organization.slug} />}
+      <WebhookSubscriptionsSection />
     </div>
   );
 }
@@ -1485,6 +1491,273 @@ function ExternalWebsiteSection({ slug }: { slug: string }) {
       >
         {copied ? "Copié !" : "Copier le code"}
       </Button>
+    </section>
+  );
+}
+
+const WEBHOOK_EVENT_LABELS: Record<string, string> = {
+  "lead.created": "Prospect créé",
+  "quote.created": "Devis créé",
+  "quote.accepted": "Devis accepté",
+  "quote.expired": "Devis expiré",
+  "order.created": "Commande créée",
+  "payment.completed": "Paiement complété",
+  "booking.created": "Réservation créée",
+  "booking.cancelled": "Réservation annulée",
+  "customer.created": "Client créé",
+  "invoice.overdue": "Facture en retard",
+  "customer.inactive": "Client inactif",
+  "payment.webhook_received": "Webhook paiement reçu",
+  "whatsapp.status_updated": "Statut WhatsApp mis à jour",
+  "offer.created": "Offre créée",
+  "message.sent": "Message envoyé",
+  "subscription.plan_changed": "Plan d'abonnement changé",
+  "expense.created": "Dépense créée",
+};
+
+/**
+ * A first-class outbound-webhook subscription system for external partners — signed deliveries
+ * (HMAC), retry/backoff, and a per-subscription delivery log, distinct from the Workflow
+ * Engine's own `webhook` action (see docs/BUSINESS_OS_AUDIT.md §6). The secret is shown exactly
+ * once (at creation and at each rotation), same posture as any bearer credential in this product.
+ */
+function WebhookSubscriptionsSection() {
+  const queryClient = useQueryClient();
+  const authReady = useAuthReady();
+  const [revealedSecret, setRevealedSecret] = useState<{ id: string; secret: string } | null>(
+    null,
+  );
+  const [copied, setCopied] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const { data: subscriptions, isLoading } = useQuery({
+    queryKey: ["webhook-subscriptions"],
+    queryFn: () => apiClient.get<WebhookSubscription[]>("/webhook-subscriptions"),
+    enabled: authReady,
+  });
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CreateWebhookSubscriptionInput>({
+    resolver: zodResolver(createWebhookSubscriptionSchema),
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["webhook-subscriptions"] });
+
+  const createMutation = useMutation({
+    mutationFn: (input: CreateWebhookSubscriptionInput) =>
+      apiClient.post<WebhookSubscriptionWithSecret>("/webhook-subscriptions", input),
+    onSuccess: (created) => {
+      setRevealedSecret({ id: created.id, secret: created.secret });
+      reset();
+      return invalidate();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete<{ deleted: boolean }>(`/webhook-subscriptions/${id}`),
+    onSuccess: invalidate,
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      apiClient.patch<WebhookSubscription>(`/webhook-subscriptions/${id}`, { active }),
+    onSuccess: invalidate,
+  });
+
+  const rotateMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post<WebhookSubscriptionWithSecret>(`/webhook-subscriptions/${id}/rotate-secret`),
+    onSuccess: (rotated) => setRevealedSecret({ id: rotated.id, secret: rotated.secret }),
+  });
+
+  const deliveriesQuery = useQuery({
+    queryKey: ["webhook-subscriptions", expandedId, "deliveries"],
+    queryFn: () =>
+      apiClient.get<WebhookDelivery[]>(`/webhook-subscriptions/${expandedId}/deliveries`),
+    enabled: authReady && !!expandedId,
+  });
+
+  return (
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <h2 className="text-sm font-semibold text-text">Webhooks sortants</h2>
+      <p className="mt-1 text-sm text-text-muted">
+        Envoyez automatiquement les événements KORVA (signés, avec nouvelles tentatives) vers un
+        logiciel partenaire.
+      </p>
+
+      {revealedSecret && (
+        <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-900">
+            Clé secrète générée — notez-la maintenant, elle ne sera plus jamais affichée.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 overflow-x-auto rounded bg-white px-2 py-1 text-xs text-amber-950">
+              {revealedSecret.secret}
+            </code>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                void navigator.clipboard.writeText(revealedSecret.secret);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+            >
+              {copied ? "Copié !" : "Copier"}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setRevealedSecret(null)}>
+              Fermer
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <form
+        onSubmit={handleSubmit((values) => createMutation.mutate(values))}
+        className="mt-4 space-y-3 rounded-md border border-border p-4"
+      >
+        <div>
+          <Input
+            placeholder="https://partenaire.example.com/webhooks/korva"
+            className="w-full"
+            error={!!errors.url}
+            {...register("url")}
+          />
+          {errors.url && <p className="mt-1 text-xs text-destructive">{errors.url.message}</p>}
+        </div>
+        <Input placeholder="Description (optionnel)" className="w-full" {...register("description")} />
+        <div>
+          <p className="mb-1 text-xs font-medium text-text">Événements</p>
+          <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+            {SYSTEM_EVENTS.map((event) => (
+              <label key={event} className="flex items-center gap-2 text-sm text-text">
+                <input type="checkbox" value={event} {...register("events")} />
+                {WEBHOOK_EVENT_LABELS[event] ?? event}
+              </label>
+            ))}
+          </div>
+          {errors.events && (
+            <p className="mt-1 text-xs text-destructive">Sélectionnez au moins un événement.</p>
+          )}
+        </div>
+        {createMutation.isError && (
+          <p className="text-sm text-destructive">
+            {createMutation.error instanceof ApiError
+              ? createMutation.error.message
+              : "Impossible de créer ce webhook."}
+          </p>
+        )}
+        <Button type="submit" loading={createMutation.isPending}>
+          {createMutation.isPending ? "Création..." : "Ajouter un webhook"}
+        </Button>
+      </form>
+
+      <div className="mt-4 space-y-2">
+        {isLoading && <p className="text-sm text-text-muted">Chargement...</p>}
+        {!isLoading && subscriptions?.length === 0 && (
+          <p className="text-sm text-text-muted">Aucun webhook sortant configuré.</p>
+        )}
+        {subscriptions?.map((subscription) => (
+          <div key={subscription.id} className="rounded-md border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-text">{subscription.url}</p>
+                {subscription.description && (
+                  <p className="text-xs text-text-muted">{subscription.description}</p>
+                )}
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {subscription.events.map((event) => (
+                    <Badge key={event}>{WEBHOOK_EVENT_LABELS[event] ?? event}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={subscription.active ? "success" : "default"}>
+                  {subscription.active ? "Actif" : "Inactif"}
+                </Badge>
+                {subscription.lastDeliveryStatus && (
+                  <Badge variant={subscription.lastDeliveryStatus === "success" ? "success" : "destructive"}>
+                    Dernière livraison : {subscription.lastDeliveryStatus === "success" ? "OK" : "échec"}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  toggleActiveMutation.mutate({ id: subscription.id, active: !subscription.active })
+                }
+                loading={toggleActiveMutation.isPending && toggleActiveMutation.variables?.id === subscription.id}
+              >
+                {subscription.active ? "Désactiver" : "Activer"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => rotateMutation.mutate(subscription.id)}
+                loading={rotateMutation.isPending && rotateMutation.variables === subscription.id}
+              >
+                Régénérer la clé
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpandedId(expandedId === subscription.id ? null : subscription.id)}
+              >
+                {expandedId === subscription.id ? "Masquer les livraisons" : "Voir les livraisons"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => deleteMutation.mutate(subscription.id)}
+                loading={deleteMutation.isPending && deleteMutation.variables === subscription.id}
+              >
+                Supprimer
+              </Button>
+            </div>
+
+            {expandedId === subscription.id && (
+              <div className="mt-3 border-t border-border pt-3">
+                {deliveriesQuery.isLoading && (
+                  <p className="text-xs text-text-muted">Chargement des livraisons...</p>
+                )}
+                {deliveriesQuery.data?.length === 0 && (
+                  <p className="text-xs text-text-muted">Aucune livraison pour le moment.</p>
+                )}
+                {deliveriesQuery.data && deliveriesQuery.data.length > 0 && (
+                  <ul className="space-y-1">
+                    {deliveriesQuery.data.map((delivery) => (
+                      <li key={delivery.id} className="flex items-center justify-between text-xs">
+                        <span className="text-text-muted">
+                          {WEBHOOK_EVENT_LABELS[delivery.eventName] ?? delivery.eventName}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          {delivery.responseStatus && <span className="text-text-muted">HTTP {delivery.responseStatus}</span>}
+                          <span className="text-text-muted">{delivery.attempts} tentative(s)</span>
+                          <Badge variant={delivery.status === "success" ? "success" : delivery.status === "failed" ? "destructive" : "default"}>
+                            {delivery.status}
+                          </Badge>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

@@ -11,6 +11,7 @@ import { EVENTS_QUEUE_NAME, EventJobData } from '../core/events/event-names';
 import { WorkflowEngineService } from './workflow-engine.service';
 import { DecisionEngineService } from '../decision-engine/decision-engine.service';
 import { OrdersService } from '../commerce/orders/orders.service';
+import { WebhookDispatchService } from '../webhook-subscriptions/webhook-dispatch.service';
 
 /**
  * Consumes the 'events' queue and hands each event to both the WorkflowEngine (user-configured
@@ -23,7 +24,8 @@ import { OrdersService } from '../commerce/orders/orders.service';
  *
  * Also reacts to `payment.completed` specifically to sync `Booking.paymentStatus` — see
  * OrdersService.syncBookingPaymentStatusFromInvoice's own doc for why this lives there rather
- * than as a fourth standalone engine.
+ * than as a fourth standalone engine — and dispatches EVERY event to this organization's
+ * external webhook subscriptions (see WebhookDispatchService's own doc).
  */
 @Injectable()
 export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
@@ -36,6 +38,7 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     private readonly workflowEngineService: WorkflowEngineService,
     private readonly decisionEngineService: DecisionEngineService,
     private readonly ordersService: OrdersService,
+    private readonly webhookDispatchService: WebhookDispatchService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -48,11 +51,11 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<EventJobData>(
       EVENTS_QUEUE_NAME,
       async (job) => {
-        // DecisionEngineService and syncBookingPaymentStatusFromInvoice never throw (see their
-        // own handleEvent/doc) — both are included in Promise.all purely so they can run
-        // concurrently with the Workflow Engine, not because their failure needs isolating from
-        // WorkflowEngineService's own retryable-error contract (unchanged from before either
-        // existed).
+        // DecisionEngineService, syncBookingPaymentStatusFromInvoice, and dispatchEvent never
+        // throw (see their own handleEvent/doc) — all are included in Promise.all purely so they
+        // can run concurrently with the Workflow Engine, not because their failure needs
+        // isolating from WorkflowEngineService's own retryable-error contract (unchanged from
+        // before any of them existed).
         const tasks: Promise<void>[] = [
           this.workflowEngineService.handleEvent(
             job.data.organizationId,
@@ -61,6 +64,11 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
             job.data.eventKey,
           ),
           this.decisionEngineService.handleEvent(
+            job.data.organizationId,
+            job.data.name,
+            job.data.payload,
+          ),
+          this.webhookDispatchService.dispatchEvent(
             job.data.organizationId,
             job.data.name,
             job.data.payload,
