@@ -38,9 +38,33 @@ interface PaymentPayload {
   id: string;
   status: string;
 }
+interface WorkflowPayload {
+  id: string;
+}
+interface WorkflowExecutionPayload {
+  status: string;
+  eventName: string;
+  payload: Record<string, unknown>;
+}
 
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
+}
+
+async function waitFor<T>(
+  check: () => Promise<T | undefined>,
+  timeoutMs = 15000,
+  intervalMs = 300,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await check();
+    if (result !== undefined) return result;
+    if (Date.now() > deadline) {
+      throw new Error('waitFor: timed out waiting for condition');
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 /**
@@ -245,6 +269,70 @@ describe('Payment/Refund reconciliation (e2e)', () => {
 
     spy.mockRestore();
   });
+
+  it('publishes payment.completed from reconciliation too (not just create()), verified by a Workflow configured on it actually firing', async () => {
+    // 'workflow' wasn't part of this file's original enabledModules — added here rather than
+    // in beforeAll to keep the blast radius of this change scoped to just this test.
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ enabledModules: ['crm', 'finance', 'workflow'] })
+      .expect(200);
+
+    const workflowRes = await request(server)
+      .post('/api/v1/workflows')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({
+        name: 'On payment completed via reconciliation',
+        trigger: 'payment.completed',
+        conditions: [],
+        actions: [
+          {
+            type: 'create_task',
+            config: { title: 'Follow up on {{paymentId}}' },
+          },
+        ],
+      })
+      .expect(201);
+    const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
+
+    const invoiceId = await createIssuedInvoice(150);
+    const paymentId = await insertProcessingPayment(
+      invoiceId,
+      150,
+      'manual_recon_ref_event_coverage',
+    );
+
+    const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+    const spy = jest
+      .spyOn(paymentProvider, 'getPaymentStatus')
+      .mockResolvedValueOnce('completed');
+
+    const paymentsService = app.get(PaymentsService);
+    const reconciled = await paymentsService.reconcileProcessingPayment(
+      organizationId,
+      paymentId,
+    );
+    expect(reconciled.status).toBe('completed');
+    spy.mockRestore();
+
+    const executions = await waitFor(async () => {
+      const res = await request(server)
+        .get(`/api/v1/workflows/${workflowId}/executions`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const data = asSuccess<WorkflowExecutionPayload[]>(res.body);
+      return data.length > 0 ? data : undefined;
+    });
+
+    expect(executions).toHaveLength(1);
+    expect(executions[0]!.status).toBe('success');
+    expect(executions[0]!.eventName).toBe('payment.completed');
+    expect(executions[0]!.payload.paymentId).toBe(paymentId);
+  }, 20000);
 
   it('TEST 2 — Payment processing + provider FAILED: Payment failed, Invoice unchanged', async () => {
     const invoiceId = await createIssuedInvoice(300);

@@ -506,7 +506,7 @@ export class PaymentsService {
 
     if (providerStatus === 'completed') {
       try {
-        return await this.createCompletedPaymentAtomically(
+        const finalizedPayment = await this.createCompletedPaymentAtomically(
           organizationId,
           payment.invoiceId.toString(),
           payment.amount,
@@ -517,6 +517,17 @@ export class PaymentsService {
           paymentId,
           currentStatus,
         );
+        // Stage 2.6's original gap: reconciliation finalized the Payment/Invoice writes but
+        // never published payment.completed, so the Workflow/Decision Engine — and, as of the
+        // booking-payment-status sync, OrdersService.syncBookingPaymentStatusFromInvoice too —
+        // were blind to any payment confirmed asynchronously (webhook or periodic sweep) rather
+        // than synchronously inside create(). Mirrors create()'s own publish call exactly.
+        await this.eventBus.publish(organizationId, 'payment.completed', {
+          paymentId: finalizedPayment.id as string,
+          invoiceId: payment.invoiceId.toString(),
+          amount: payment.amount,
+        });
+        return finalizedPayment;
       } catch (error) {
         if (error instanceof IdempotencyClaimNoLongerProcessingError) {
           return (await this.paymentsRepository.findById(
