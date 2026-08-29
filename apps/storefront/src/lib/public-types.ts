@@ -16,6 +16,8 @@ export interface PublicOrganization {
   logo?: string;
   /** Hex color (e.g. "#1a73e8") — a single storefront accent, not a full theme. */
   brandColor?: string;
+  tagline?: string;
+  heroImage?: string;
   enabledModules: string[];
 }
 

@@ -193,9 +193,14 @@ export default function ResourceDetailPage() {
                 Active
               </label>
             </div>
+            {/* setValueAs: optional + format-constrained (.url()) — an untouched field always
+                submits "" (never undefined), which fails validation unless converted here; same
+                pattern as dashboard/settings/page.tsx's brandColor/logo/heroImage fields. */}
             <Input
               placeholder="URL calendrier externe (ICS, optionnel)"
-              {...register("externalCalendarUrl")}
+              {...register("externalCalendarUrl", {
+                setValueAs: (v: string) => (v === "" ? undefined : v),
+              })}
             />
             {errors.externalCalendarUrl && (
               <p className="text-xs text-destructive">{errors.externalCalendarUrl.message}</p>

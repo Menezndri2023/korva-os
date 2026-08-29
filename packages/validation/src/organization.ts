@@ -20,6 +20,10 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   legalName: z.string().max(200).optional(),
   logo: z.string().url().optional(),
   brandColor: hexColorSchema.optional(),
+  /** Short pitch shown under the org name in the public storefront hero. */
+  tagline: z.string().max(200).optional(),
+  /** Wide banner image for the storefront hero, distinct from `logo`. */
+  heroImage: z.string().url().optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
 });
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;

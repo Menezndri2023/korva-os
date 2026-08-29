@@ -199,6 +199,8 @@ describe("SettingsPage — Organization profile edit", () => {
     language?: string;
     logo?: string;
     brandColor?: string;
+    tagline?: string;
+    heroImage?: string;
   };
 
   beforeEach(() => {
@@ -208,6 +210,7 @@ describe("SettingsPage — Organization profile edit", () => {
       timezone: "Europe/Paris",
       language: "fr",
       brandColor: "#1a73e8",
+      tagline: "Le meilleur salon de la ville",
     };
     getMock.mockReset();
     postMock.mockReset();
@@ -233,6 +236,7 @@ describe("SettingsPage — Organization profile edit", () => {
     expect(screen.getByText("Org de test SARL")).toBeInTheDocument();
     expect(screen.getByText("Europe/Paris")).toBeInTheDocument();
     expect(screen.getByText("#1a73e8")).toBeInTheDocument();
+    expect(screen.getByText("Le meilleur salon de la ville")).toBeInTheDocument();
     expect(screen.queryByLabelText("Nom")).not.toBeInTheDocument();
   });
 
@@ -246,6 +250,9 @@ describe("SettingsPage — Organization profile edit", () => {
     expect(screen.getByLabelText("Nom")).toHaveValue("Org de test");
     expect(screen.getByLabelText("Raison sociale")).toHaveValue("Org de test SARL");
     expect(screen.getByLabelText("Couleur de marque")).toHaveValue("#1a73e8");
+    expect(screen.getByLabelText("Slogan (affiché sur votre page publique)")).toHaveValue(
+      "Le meilleur salon de la ville",
+    );
   });
 
   it("submits exactly the edited fields to PATCH /organizations/me and returns to read-only view on success", async () => {
@@ -285,6 +292,21 @@ describe("SettingsPage — Organization profile edit", () => {
     const colorInput = screen.getByLabelText("Couleur de marque");
     await user.clear(colorInput);
     await user.type(colorInput, "not-a-color");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() => expect(patchMock).not.toHaveBeenCalled());
+  });
+
+  it("rejects an invalid hero image URL and never calls the API", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    const heroInput = screen.getByLabelText("Image de bannière (URL, page publique)");
+    await user.clear(heroInput);
+    await user.type(heroInput, "not-a-url");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(patchMock).not.toHaveBeenCalled());

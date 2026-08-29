@@ -45,6 +45,14 @@ export class Organization {
   @Prop()
   brandColor?: string;
 
+  /** Short pitch shown under the org name in the storefront hero — see storefront-client.tsx. */
+  @Prop()
+  tagline?: string;
+
+  /** Wide banner image for the storefront hero, distinct from `logo` (which stays small, in the header). */
+  @Prop()
+  heroImage?: string;
+
   @Prop({ type: Object, default: { onboardingCompleted: false } })
   settings!: OrganizationSettings;
 

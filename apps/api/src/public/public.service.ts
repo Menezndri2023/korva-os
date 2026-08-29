@@ -103,6 +103,8 @@ export class PublicService {
       language: organization.language,
       logo: organization.logo,
       brandColor: organization.brandColor,
+      tagline: organization.tagline,
+      heroImage: organization.heroImage,
       enabledModules: organization.enabledModules,
     };
   }

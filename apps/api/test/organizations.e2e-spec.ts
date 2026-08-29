@@ -29,6 +29,8 @@ interface OrganizationPayload {
   enabledModules: string[];
   logo?: string;
   brandColor?: string;
+  tagline?: string;
+  heroImage?: string;
 }
 interface PlanPayload {
   key: string;
@@ -170,11 +172,17 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
       .send({
         brandColor: '#1a73e8',
         logo: 'https://cdn.korva.test/logos/branding-org.png',
+        tagline: 'Le meilleur salon de la ville',
+        heroImage: 'https://cdn.korva.test/hero/branding-org.png',
       })
       .expect(200);
     const patched = asSuccess<OrganizationPayload>(patchRes.body);
     expect(patched.brandColor).toBe('#1a73e8');
     expect(patched.logo).toBe('https://cdn.korva.test/logos/branding-org.png');
+    expect(patched.tagline).toBe('Le meilleur salon de la ville');
+    expect(patched.heroImage).toBe(
+      'https://cdn.korva.test/hero/branding-org.png',
+    );
 
     const meRes = await request(server)
       .get('/api/v1/organizations/me')

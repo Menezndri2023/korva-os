@@ -49,6 +49,8 @@ interface PublicOrganizationPayload {
   enabledModules: string[];
   logo?: string;
   brandColor?: string;
+  tagline?: string;
+  heroImage?: string;
 }
 interface TrackedOrderPayload {
   number: string;
@@ -275,6 +277,8 @@ describe('Public storefront API (e2e)', () => {
         .send({
           logo: 'https://cdn.korva.test/logos/branding-storefront.png',
           brandColor: '#ff6600',
+          tagline: 'Le meilleur salon de la ville',
+          heroImage: 'https://cdn.korva.test/hero/branding-storefront.png',
         })
         .expect(200);
 
@@ -286,6 +290,10 @@ describe('Public storefront API (e2e)', () => {
         'https://cdn.korva.test/logos/branding-storefront.png',
       );
       expect(info.brandColor).toBe('#ff6600');
+      expect(info.tagline).toBe('Le meilleur salon de la ville');
+      expect(info.heroImage).toBe(
+        'https://cdn.korva.test/hero/branding-storefront.png',
+      );
     });
   });
 

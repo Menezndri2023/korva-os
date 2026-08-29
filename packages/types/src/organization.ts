@@ -39,6 +39,8 @@ export interface Organization {
   language: string;
   logo?: string;
   brandColor?: string;
+  tagline?: string;
+  heroImage?: string;
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
   createdAt: string;

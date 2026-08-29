@@ -82,6 +82,10 @@ export default function StorefrontClient({ slug }: { slug: string }) {
         </div>
       </header>
 
+      {(organization.heroImage || organization.tagline) && (
+        <HeroSection organization={organization} />
+      )}
+
       <main className="mx-auto max-w-4xl space-y-4 px-6 py-8">
         {confirmation && (
           <div className="rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">
@@ -219,6 +223,37 @@ function OfferCard({
         </Link>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Fully optional — absent for every organization that hasn't set a tagline/heroImage, which
+ * leaves the storefront looking exactly as it did before this section existed (see the
+ * `organization.heroImage || organization.tagline` guard at the call site).
+ */
+function HeroSection({ organization }: { organization: PublicOrganization }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = organization.heroImage && !imageFailed;
+
+  return (
+    <div className="relative border-b border-border bg-surface-muted">
+      {showImage && (
+        // Arbitrary tenant-supplied host — same rationale as OfferCard's thumbnail above.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={organization.heroImage}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={() => setImageFailed(true)}
+          className="h-48 w-full object-cover sm:h-64"
+        />
+      )}
+      {organization.tagline && (
+        <div className="mx-auto max-w-4xl px-6 py-4">
+          <p className="text-sm text-text-muted sm:text-base">{organization.tagline}</p>
+        </div>
+      )}
+    </div>
   );
 }
 

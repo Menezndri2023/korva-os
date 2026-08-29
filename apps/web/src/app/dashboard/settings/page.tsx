@@ -207,7 +207,7 @@ export default function SettingsPage() {
   });
 
   // Organization profile edit (name/legalName/type/country/currency/timezone/language/logo/
-  // brandColor) — PATCH /organizations/me already supported all of these fields (see
+  // brandColor/tagline/heroImage) — PATCH /organizations/me already supported all of these fields (see
   // updateOrganizationSchema); only the Modules section actually called it. Same
   // toggle-open/reset-on-open/non-optimistic pattern as the CRM contact detail page's edit form.
   const [orgEditOpen, setOrgEditOpen] = useState(false);
@@ -231,6 +231,8 @@ export default function SettingsPage() {
       language: organization.language,
       logo: organization.logo,
       brandColor: organization.brandColor,
+      tagline: organization.tagline,
+      heroImage: organization.heroImage,
     });
   }
   function cancelOrgEdit() {
@@ -462,6 +464,14 @@ export default function SettingsPage() {
                 )}
               </dd>
             </div>
+            <div>
+              <dt className="text-text-muted">Slogan (page publique)</dt>
+              <dd className="mt-0.5">{organization?.tagline ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Image de bannière (page publique)</dt>
+              <dd className="mt-0.5 truncate">{organization?.heroImage ?? "—"}</dd>
+            </div>
           </dl>
         ) : (
           <form
@@ -575,6 +585,36 @@ export default function SettingsPage() {
               />
               {orgErrors.logo && (
                 <p className="mt-1 text-xs text-destructive">{orgErrors.logo.message}</p>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-tagline">
+                Slogan (affiché sur votre page publique)
+              </label>
+              <Input
+                id="org-tagline"
+                className="w-full"
+                placeholder="ex: Le meilleur salon de la ville"
+                error={!!orgErrors.tagline}
+                {...registerOrg("tagline", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+              />
+              {orgErrors.tagline && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.tagline.message}</p>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-hero-image">
+                Image de bannière (URL, page publique)
+              </label>
+              <Input
+                id="org-hero-image"
+                className="w-full"
+                placeholder="https://..."
+                error={!!orgErrors.heroImage}
+                {...registerOrg("heroImage", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+              />
+              {orgErrors.heroImage && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.heroImage.message}</p>
               )}
             </div>
 
