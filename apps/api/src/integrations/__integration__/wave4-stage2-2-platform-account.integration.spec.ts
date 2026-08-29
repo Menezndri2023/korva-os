@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { getConnectionToken, MongooseModule } from '@nestjs/mongoose';
@@ -8,6 +9,7 @@ import { IntegrationsModule } from '../integrations.module';
 import { IntegrationsService } from '../integrations.service';
 import { IntegrationsRepository } from '../integrations.repository';
 import type { IntegrationAccountRecord } from '../integrations.types';
+import { EventBusService } from '../../core/events/event-bus.service';
 
 /**
  * Wave 4 Stage 2.2 — TEST 4 (platform creation) and part of TEST 5 (secret exposure), exercising
@@ -28,6 +30,26 @@ function testMongoUri(label: string): string {
   return `${MONGO_HOST}/${dbName}?${MONGO_OPTS}`;
 }
 
+/**
+ * SubscriptionsService injects EventBusService (event coverage expansion), reached transitively
+ * via IntegrationsModule -> OrganizationsModule -> SubscriptionsModule. `EventBusService` is
+ * `@Global()` in the real app (core/events/events.module.ts) but a `Test.createTestingModule`
+ * root doesn't inherit that automatically, so it has to be replicated here — with a mock, since a
+ * real EventBusService opens a live Redis/BullMQ connection this Mongo-only spec must not need.
+ * Mirrors wave4-stage1.integration.spec.ts's own `buildFakeGlobalEventsModule` identically.
+ */
+function buildFakeGlobalEventsModule(
+  eventBus: Pick<EventBusService, 'publish'>,
+) {
+  @Global()
+  @Module({
+    providers: [{ provide: EventBusService, useValue: eventBus }],
+    exports: [EventBusService],
+  })
+  class FakeGlobalEventsModule {}
+  return FakeGlobalEventsModule;
+}
+
 describe('Wave 4 Stage 2.2 — platform IntegrationAccount creation mechanism (real service + repository + Mongo)', () => {
   let connection: Connection;
   let service: IntegrationsService;
@@ -39,12 +61,16 @@ describe('Wave 4 Stage 2.2 — platform IntegrationAccount creation mechanism (r
       'wave4-stage2-2-integration-spec-key';
 
     const uri = testMongoUri('platformaccount');
+    const FakeGlobalEventsModule = buildFakeGlobalEventsModule({
+      publish: jest.fn().mockResolvedValue(undefined),
+    });
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true }),
         // autoIndex: false — the schema's two partial unique indexes are covered by their own
         // dedicated regression test elsewhere; irrelevant to platform-account creation itself.
         MongooseModule.forRoot(uri, { autoIndex: false }),
+        FakeGlobalEventsModule,
         IntegrationsModule,
       ],
     }).compile();

@@ -44,12 +44,36 @@ interface SubscriptionSummaryPayload {
   plan: PlanPayload;
   usage: { metric: string; used: number; limit: number }[];
 }
+interface WorkflowPayload {
+  id: string;
+}
+interface WorkflowExecutionPayload {
+  status: string;
+  eventName: string;
+  payload: Record<string, unknown>;
+}
 
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
 }
 function asError(body: unknown): ApiError['error'] {
   return (body as ApiError).error;
+}
+
+async function waitFor<T>(
+  check: () => Promise<T | undefined>,
+  timeoutMs = 15000,
+  intervalMs = 300,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await check();
+    if (result !== undefined) return result;
+    if (Date.now() > deadline) {
+      throw new Error('waitFor: timed out waiting for condition');
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 describe('Subscriptions module (e2e)', () => {
@@ -661,6 +685,67 @@ describe('Subscriptions module (e2e)', () => {
       expect(body.prorationCurrency).toBe('EUR');
       expect(body.prorationAmount).toBeGreaterThan(90);
     });
+  });
+
+  describe('event coverage: subscription.plan_changed', () => {
+    it('publishes subscription.plan_changed, verified by a Workflow configured on it actually firing', async () => {
+      const { accessToken, organizationId } = await registerOrgAndToken(
+        'plan-change-event-e2e@korva.test',
+        'Plan Change Event Org',
+      );
+      // Brand-new orgs start with enabledModules: [] — 'workflow' must be turned on explicitly
+      // before POST /workflows (gated by @RequireModule('workflow')) will even accept this.
+      // 'pro' (not 'starter') on purpose: starter excludes the workflow module, and
+      // changePlan strips any enabledModules the new plan doesn't include — switching to
+      // starter would silently turn workflow back off before this test could observe it fire.
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['workflow'] })
+        .expect(200);
+
+      const workflowRes = await request(server)
+        .post('/api/v1/workflows')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'On plan changed',
+          trigger: 'subscription.plan_changed',
+          conditions: [],
+          actions: [
+            {
+              type: 'create_task',
+              config: { title: 'Review plan change {{subscriptionId}}' },
+            },
+          ],
+        })
+        .expect(201);
+      const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
+
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'pro' })
+        .expect(201);
+
+      const executions = await waitFor(async () => {
+        const res = await request(server)
+          .get(`/api/v1/workflows/${workflowId}/executions`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const data = asSuccess<WorkflowExecutionPayload[]>(res.body);
+        return data.length > 0 ? data : undefined;
+      });
+
+      expect(executions).toHaveLength(1);
+      expect(executions[0]!.status).toBe('success');
+      expect(executions[0]!.eventName).toBe('subscription.plan_changed');
+      expect(executions[0]!.payload.planKey).toBe('pro');
+      expect(executions[0]!.payload.previousPlanKey).toBe('free');
+    }, 20000);
   });
 
   /**

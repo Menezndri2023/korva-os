@@ -51,6 +51,14 @@ interface NotificationPayload {
   title: string;
   read: boolean;
 }
+interface WorkflowPayload {
+  id: string;
+}
+interface WorkflowExecutionPayload {
+  status: string;
+  eventName: string;
+  payload: Record<string, unknown>;
+}
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
 }
@@ -327,6 +335,57 @@ describe('Communication module (e2e)', () => {
         .expect(400);
       expect(asError(res.body).code).toBe('CONTACT_HAS_NO_EMAIL');
     });
+
+    it('publishes message.sent, verified by a Workflow configured on it actually firing', async () => {
+      const workflowRes = await request(server)
+        .post('/api/v1/workflows')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'On message sent',
+          trigger: 'message.sent',
+          conditions: [],
+          actions: [
+            {
+              type: 'create_task',
+              config: { title: 'Follow up on {{messageId}}' },
+            },
+          ],
+        })
+        .expect(201);
+      const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
+
+      const newConvoRes = await request(server)
+        .post('/api/v1/conversations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, channel: 'email', subject: 'Event coverage probe' })
+        .expect(201);
+      const newConvoId = asSuccess<ConversationPayload>(newConvoRes.body).id;
+
+      const messageRes = await request(server)
+        .post(`/api/v1/conversations/${newConvoId}/messages`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ body: 'Probing message.sent' })
+        .expect(201);
+      const newMessageId = asSuccess<MessagePayload>(messageRes.body).id;
+
+      const executions = await waitFor(async () => {
+        const res = await request(server)
+          .get(`/api/v1/workflows/${workflowId}/executions`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const data = asSuccess<WorkflowExecutionPayload[]>(res.body);
+        return data.length > 0 ? data : undefined;
+      });
+
+      expect(executions).toHaveLength(1);
+      expect(executions[0]!.status).toBe('success');
+      expect(executions[0]!.eventName).toBe('message.sent');
+      expect(executions[0]!.payload.messageId).toBe(newMessageId);
+    }, 20000);
   });
 
   describe('internal_notification workflow action broadcasts to org members', () => {

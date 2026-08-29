@@ -7,6 +7,7 @@ import type { AuditService } from '../../audit/audit.service';
 import type { EmailProvider } from '../providers/email-provider.interface';
 import type { MessagingProvider } from '../providers/messaging-provider.interface';
 import type { MessagingProviderResolverService } from '../providers/messaging-provider-resolver.service';
+import type { EventBusService } from '../../core/events/event-bus.service';
 import type { CreateMessageInput } from '@korva/validation';
 
 const ORG_ID = '507f1f77bcf86cd799439011';
@@ -73,6 +74,8 @@ function buildService(channel: 'email' | 'whatsapp') {
     resolveTenantProvider,
   } as unknown as MessagingProviderResolverService;
 
+  const eventBus = { publish: jest.fn() } as unknown as EventBusService;
+
   const service = new ConversationsService(
     conversationsRepository,
     messagesRepository,
@@ -81,6 +84,7 @@ function buildService(channel: 'email' | 'whatsapp') {
     auditService,
     emailProvider,
     messagingProviderResolver,
+    eventBus,
   );
 
   return {
@@ -92,6 +96,7 @@ function buildService(channel: 'email' | 'whatsapp') {
     conversationsRepository,
     createConversation,
     auditService,
+    eventBus,
   };
 }
 

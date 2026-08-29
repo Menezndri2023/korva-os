@@ -51,4 +51,8 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'customer.inactive': 'contactId',
   'payment.webhook_received': 'paymentId',
   'whatsapp.status_updated': 'messageId',
+  'offer.created': 'offerId',
+  'message.sent': 'messageId',
+  'subscription.plan_changed': 'subscriptionId',
+  'expense.created': 'expenseId',
 };

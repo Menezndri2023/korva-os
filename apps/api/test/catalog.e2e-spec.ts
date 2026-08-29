@@ -38,12 +38,36 @@ interface ContactPayload {
 interface ResourcePayload {
   id: string;
 }
+interface WorkflowPayload {
+  id: string;
+}
+interface WorkflowExecutionPayload {
+  status: string;
+  eventName: string;
+  payload: Record<string, unknown>;
+}
 
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
 }
 function asError(body: unknown): ApiError['error'] {
   return (body as ApiError).error;
+}
+
+async function waitFor<T>(
+  check: () => Promise<T | undefined>,
+  timeoutMs = 15000,
+  intervalMs = 300,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await check();
+    if (result !== undefined) return result;
+    if (Date.now() > deadline) {
+      throw new Error('waitFor: timed out waiting for condition');
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 describe('Catalog module (e2e)', () => {
@@ -218,6 +242,60 @@ describe('Catalog module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .expect(404);
     });
+
+    it('publishes offer.created, verified by a Workflow configured on it actually firing', async () => {
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['catalog', 'workflow'] })
+        .expect(200);
+
+      const workflowRes = await request(server)
+        .post('/api/v1/workflows')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'On offer created',
+          trigger: 'offer.created',
+          conditions: [],
+          actions: [
+            {
+              type: 'create_task',
+              config: { title: 'Review new offer {{offerId}}' },
+            },
+          ],
+        })
+        .expect(201);
+      const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
+
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Event-coverage probe offer',
+          pricing: { amount: 5, currency: 'EUR' },
+        })
+        .expect(201);
+      const newOfferId = asSuccess<OfferPayload>(offerRes.body).id;
+
+      const executions = await waitFor(async () => {
+        const res = await request(server)
+          .get(`/api/v1/workflows/${workflowId}/executions`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const data = asSuccess<WorkflowExecutionPayload[]>(res.body);
+        return data.length > 0 ? data : undefined;
+      });
+
+      expect(executions).toHaveLength(1);
+      expect(executions[0]!.status).toBe('success');
+      expect(executions[0]!.eventName).toBe('offer.created');
+      expect(executions[0]!.payload.offerId).toBe(newOfferId);
+    }, 20000);
   });
 
   describe('tenant isolation for offers', () => {

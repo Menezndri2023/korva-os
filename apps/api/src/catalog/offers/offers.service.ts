@@ -15,6 +15,7 @@ import { OfferReferencesRepository } from './offer-references.repository';
 import { OfferDocument } from './schemas/offer.schema';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
+import { EventBusService } from '../../core/events/event-bus.service';
 
 @Injectable()
 export class OffersService {
@@ -23,6 +24,7 @@ export class OffersService {
     private readonly offerReferencesRepository: OfferReferencesRepository,
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async create(
@@ -56,6 +58,12 @@ export class OffersService {
       action: 'CREATE',
       entity: 'offer',
       entityId: offer.id as string,
+    });
+
+    await this.eventBus.publish(organizationId, 'offer.created', {
+      offerId: offer.id as string,
+      type: offer.type,
+      name: offer.name,
     });
 
     return offer;

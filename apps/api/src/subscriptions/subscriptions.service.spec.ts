@@ -6,6 +6,7 @@ import type { Subscription } from './schemas/subscription.schema';
 import type { PlansService } from './plans.service';
 import type { AuditService } from '../audit/audit.service';
 import type { OrganizationDocument } from '../organizations/schemas/organization.schema';
+import type { EventBusService } from '../core/events/event-bus.service';
 
 describe('SubscriptionsService.changePlan — enabledModules synchronization', () => {
   const ORG_ID = 'org-1';
@@ -67,11 +68,14 @@ describe('SubscriptionsService.changePlan — enabledModules synchronization', (
       findById,
     } as unknown as Model<OrganizationDocument>;
 
+    const eventBus = { publish: jest.fn() } as unknown as EventBusService;
+
     const service = new SubscriptionsService(
       subscriptionsRepository,
       plansService,
       auditService,
       organizationModel,
+      eventBus,
     );
 
     return { service, update };
@@ -197,11 +201,14 @@ describe('SubscriptionsService.changePlan — proration', () => {
       findById,
     } as unknown as Model<OrganizationDocument>;
 
+    const eventBus = { publish: jest.fn() } as unknown as EventBusService;
+
     const service = new SubscriptionsService(
       subscriptionsRepository,
       plansService,
       auditService,
       organizationModel,
+      eventBus,
     );
 
     return { service, update };
@@ -289,6 +296,7 @@ describe('SubscriptionsService.cancel / reactivate', () => {
       {} as PlansService,
       auditService,
       {} as Model<OrganizationDocument>,
+      { publish: jest.fn() } as unknown as EventBusService,
     );
 
     return {

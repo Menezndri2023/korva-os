@@ -26,6 +26,7 @@ import {
   type EmailProvider,
 } from '../providers/email-provider.interface';
 import { MessagingProviderResolverService } from '../providers/messaging-provider-resolver.service';
+import { EventBusService } from '../../core/events/event-bus.service';
 
 /** e.g. '360dialog' — the only WhatsApp/SMS BSP provider key registered today (see
  *  MessagingProviderRegistry). Every tenant-scoped whatsapp/sms send resolves through this exact
@@ -43,6 +44,7 @@ export class ConversationsService {
     private readonly auditService: AuditService,
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
     private readonly messagingProviderResolver: MessagingProviderResolverService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async create(
@@ -278,6 +280,14 @@ export class ConversationsService {
       entity: 'message',
       entityId: message.id as string,
       metadata: { conversationId, channel: conversation.channel, status },
+    });
+
+    await this.eventBus.publish(organizationId, 'message.sent', {
+      messageId: message.id as string,
+      conversationId,
+      contactId: conversation.contactId.toString(),
+      channel: conversation.channel,
+      status,
     });
 
     return message;

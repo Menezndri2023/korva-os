@@ -10,6 +10,7 @@ import { ExpensesRepository, FindExpensesOptions } from './expenses.repository';
 import { ExpenseDocument } from './schemas/expense.schema';
 import { CountersService } from '../../core/counters/counters.service';
 import { AuditService } from '../../audit/audit.service';
+import { EventBusService } from '../../core/events/event-bus.service';
 
 @Injectable()
 export class ExpensesService {
@@ -17,6 +18,7 @@ export class ExpensesService {
     private readonly expensesRepository: ExpensesRepository,
     private readonly countersService: CountersService,
     private readonly auditService: AuditService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async create(
@@ -48,6 +50,13 @@ export class ExpensesService {
       action: 'CREATE',
       entity: 'expense',
       entityId: expense.id as string,
+    });
+
+    await this.eventBus.publish(organizationId, 'expense.created', {
+      expenseId: expense.id as string,
+      category: expense.category,
+      amount: expense.amount,
+      currency: expense.currency,
     });
 
     return expense;

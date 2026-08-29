@@ -14,6 +14,7 @@ import {
   Organization,
   OrganizationDocument,
 } from '../organizations/schemas/organization.schema';
+import { EventBusService } from '../core/events/event-bus.service';
 
 function addOneMonth(date: Date): Date {
   const result = new Date(date);
@@ -59,6 +60,7 @@ export class SubscriptionsService {
     // a circular module dependency — OrganizationsModule already imports SubscriptionsModule.
     @InjectModel(Organization.name)
     private readonly organizationModel: Model<OrganizationDocument>,
+    private readonly eventBus: EventBusService,
   ) {}
 
   /** Called once, from OrganizationsService.createForOwner — every organization starts on "free". */
@@ -128,13 +130,21 @@ export class SubscriptionsService {
     let prorationAmount: number | null = null;
     let prorationCurrency: string | null = null;
     const now = new Date();
-    if (existing && existing.currentPeriodEnd.getTime() > now.getTime()) {
-      const oldPlan = await this.plansService.getById(
-        existing.planId.toString(),
-      );
+    // Fetched unconditionally (not just inside the proration branch) because the
+    // 'subscription.plan_changed' event below wants the previous plan key regardless of
+    // whether the period was still running — proration is a pricing detail, "what plan was
+    // this before" is a signal the Decision Engine cares about either way (e.g. a downgrade).
+    const previousPlan = existing
+      ? await this.plansService.getById(existing.planId.toString())
+      : undefined;
+    if (
+      existing &&
+      previousPlan &&
+      existing.currentPeriodEnd.getTime() > now.getTime()
+    ) {
       prorationAmount = computeProration(
-        oldPlan.priceAmount,
-        oldPlan.priceCurrency,
+        previousPlan.priceAmount,
+        previousPlan.priceCurrency,
         plan.priceAmount,
         plan.priceCurrency,
         existing.currentPeriodStart,
@@ -171,6 +181,12 @@ export class SubscriptionsService {
       entity: 'subscription',
       entityId: updated.id as string,
       metadata: { plan: planKey, prorationAmount, prorationCurrency },
+    });
+
+    await this.eventBus.publish(organizationId, 'subscription.plan_changed', {
+      subscriptionId: updated.id as string,
+      planKey,
+      previousPlanKey: previousPlan?.key,
     });
 
     return updated;

@@ -33,12 +33,36 @@ interface ExpensePayload {
   amount: number;
   currency: string;
 }
+interface WorkflowPayload {
+  id: string;
+}
+interface WorkflowExecutionPayload {
+  status: string;
+  eventName: string;
+  payload: Record<string, unknown>;
+}
 
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
 }
 function asError(body: unknown): ApiError['error'] {
   return (body as ApiError).error;
+}
+
+async function waitFor<T>(
+  check: () => Promise<T | undefined>,
+  timeoutMs = 15000,
+  intervalMs = 300,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await check();
+    if (result !== undefined) return result;
+    if (Date.now() > deadline) {
+      throw new Error('waitFor: timed out waiting for condition');
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 // Split out of finance.e2e-spec.ts (which was otherwise approaching/exceeding
@@ -98,7 +122,7 @@ describe('Expenses module (e2e)', () => {
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Organization-Id', organizationId)
-      .send({ enabledModules: ['crm', 'finance'] })
+      .send({ enabledModules: ['crm', 'finance', 'workflow'] })
       .expect(200);
 
     const contactRes = await request(server)
@@ -364,5 +388,45 @@ describe('Expenses module (e2e)', () => {
         .expect(403);
       expect(asError(deleteAsStaffRes.body).code).toBe('PERMISSION_DENIED');
     });
+
+    it('publishes expense.created, verified by a Workflow configured on it actually firing', async () => {
+      const workflowRes = await request(server)
+        .post('/api/v1/workflows')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'On expense created',
+          trigger: 'expense.created',
+          conditions: [],
+          actions: [
+            {
+              type: 'create_task',
+              config: { title: 'Review expense {{expenseId}}' },
+            },
+          ],
+        })
+        .expect(201);
+      const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
+
+      const expenseRes = await createExpenseReq({
+        description: 'Event coverage probe expense',
+      }).expect(201);
+      const newExpenseId = asSuccess<ExpensePayload>(expenseRes.body).id;
+
+      const executions = await waitFor(async () => {
+        const res = await request(server)
+          .get(`/api/v1/workflows/${workflowId}/executions`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const data = asSuccess<WorkflowExecutionPayload[]>(res.body);
+        return data.length > 0 ? data : undefined;
+      });
+
+      expect(executions).toHaveLength(1);
+      expect(executions[0]!.status).toBe('success');
+      expect(executions[0]!.eventName).toBe('expense.created');
+      expect(executions[0]!.payload.expenseId).toBe(newExpenseId);
+    }, 20000);
   });
 });

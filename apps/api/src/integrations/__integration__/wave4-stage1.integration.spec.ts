@@ -176,6 +176,12 @@ describe('Wave 4 Stage 1 — payment provider resolution: real INTEGRATION_ACCOU
     const fakeOrganizationsService = {
       getById,
     } as unknown as OrganizationsService;
+    // SubscriptionsService now injects EventBusService too (event coverage expansion) — it's
+    // reached transitively via IntegrationsModule -> OrganizationsModule -> SubscriptionsModule,
+    // same rationale as buildFakeGlobalEventsModule's own doc comment above.
+    const FakeGlobalEventsModule = buildFakeGlobalEventsModule({
+      publish: jest.fn().mockResolvedValue(undefined),
+    });
 
     // PaymentProviderResolverService/Registry are NOT declared in this test's own `providers:`
     // (an earlier version of this test did, before the orchestrator's Wave 4 Stage 2 convergence
@@ -199,6 +205,7 @@ describe('Wave 4 Stage 1 — payment provider resolution: real INTEGRATION_ACCOU
         // tests depend on that index actually existing (they assert on query filters, not on a
         // uniqueness constraint), so this only routes around the unrelated, already-documented bug.
         MongooseModule.forRoot(uri, { autoIndex: false }),
+        FakeGlobalEventsModule,
         IntegrationsModule,
       ],
     })
@@ -329,6 +336,9 @@ describe('Wave 4 Stage 1 — IntegrationsService cross-organization tenant isola
       'wave4-stage1-integration-spec-key';
 
     const uri = testMongoUri('crossorg');
+    const FakeGlobalEventsModule = buildFakeGlobalEventsModule({
+      publish: jest.fn().mockResolvedValue(undefined),
+    });
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true }),
@@ -336,6 +346,7 @@ describe('Wave 4 Stage 1 — IntegrationsService cross-organization tenant isola
         // unique partial indexes don't build on real MongoDB); irrelevant to the query-filter-based
         // isolation properties this describe block tests.
         MongooseModule.forRoot(uri, { autoIndex: false }),
+        FakeGlobalEventsModule,
         IntegrationsModule,
       ],
     }).compile();
@@ -480,6 +491,9 @@ describe('Wave 4 Stage 1 — IntegrationAccountRecord never leaks secretEncrypte
       'wave4-stage1-integration-spec-key';
 
     const uri = testMongoUri('secretleak');
+    const FakeGlobalEventsModule = buildFakeGlobalEventsModule({
+      publish: jest.fn().mockResolvedValue(undefined),
+    });
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({ isGlobal: true }),
@@ -487,6 +501,7 @@ describe('Wave 4 Stage 1 — IntegrationAccountRecord never leaks secretEncrypte
         // unique partial indexes don't build on real MongoDB); irrelevant to the secret-leakage
         // properties this describe block tests.
         MongooseModule.forRoot(uri, { autoIndex: false }),
+        FakeGlobalEventsModule,
         IntegrationsModule,
       ],
     }).compile();

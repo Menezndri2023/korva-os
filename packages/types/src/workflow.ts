@@ -19,6 +19,10 @@ export const SYSTEM_EVENTS = [
   "customer.inactive",
   "payment.webhook_received",
   "whatsapp.status_updated",
+  "offer.created",
+  "message.sent",
+  "subscription.plan_changed",
+  "expense.created",
 ] as const;
 export type SystemEvent = (typeof SYSTEM_EVENTS)[number];
 
