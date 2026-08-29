@@ -3,6 +3,7 @@ import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import type { PaymentProvider } from './payment-provider.interface';
 import { ManualPaymentProvider } from './manual-payment.provider';
 import { FlutterwaveProvider } from './flutterwave-payment.provider';
+import { PaystackProvider } from './paystack-payment.provider';
 
 /**
  * `secret` is the platform `IntegrationAccount`'s decrypted credential (see
@@ -28,15 +29,18 @@ type PaymentProviderFactory = (secret: string | null) => PaymentProvider;
  * manually). Stage 2 (PAY-FLUTTERWAVE) added `'flutterwave'`. Stage 2.2 closed the gap Stage 2
  * left open on purpose: this registry's factory now genuinely receives and uses the decrypted
  * secret instead of a hardcoded `''` placeholder — a platform account with no secret stored
- * (`secret === null`) is treated as a missing-credential condition for `'flutterwave'` and fails
- * closed with a typed error, never silently constructing an adapter that would send
- * `Authorization: Bearer ` (undefined/empty) to a real API.
+ * (`secret === null`) is treated as a missing-credential condition for a credential-requiring
+ * provider and fails closed with a typed error, never silently constructing an adapter that
+ * would send `Authorization: Bearer ` (undefined/empty) to a real API. `'paystack'` (added per
+ * docs/BUSINESS_OS_AUDIT.md §6: "despite the abstraction being ready, only Flutterwave has a
+ * real adapter") follows the exact same `requireSecret` guard.
  */
 @Injectable()
 export class PaymentProviderRegistry {
   private readonly factories = new Map<string, PaymentProviderFactory>([
     ['manual', () => new ManualPaymentProvider()],
     ['flutterwave', (secret) => new FlutterwaveProvider(requireSecret(secret))],
+    ['paystack', (secret) => new PaystackProvider(requireSecret(secret))],
     // Stage 2: ['charibaas', (secret) => new ChariBaaSProvider(requireSecret(secret))],
   ]);
 

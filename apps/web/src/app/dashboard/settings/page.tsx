@@ -102,9 +102,14 @@ const INTEGRATION_SLOTS: Array<{
   connectedLabel: string;
 }> = [
   {
+    // Not yet connected: no provider name here — which PSP ends up handling this organization's
+    // payments is resolved server-side by market (see PaymentProviderResolverService), never
+    // chosen by the tenant, so naming one specific provider before a real connection exists would
+    // just be a guess. Once connected, the card below names the ACTUAL resolved provider via
+    // PAYMENT_PROVIDER_DISPLAY_NAMES — this static copy is only ever shown pre-connection.
     domain: "payment",
-    title: "Paiements — Flutterwave",
-    description: "Recevez vos règlements via Flutterwave.",
+    title: "Paiements",
+    description: "Recevez vos règlements en ligne.",
     connectedLabel: "Marché",
   },
   {
@@ -114,6 +119,21 @@ const INTEGRATION_SLOTS: Array<{
     connectedLabel: "Compte connecté",
   },
 ];
+
+/** Only `flutterwave`/`paystack` have real adapters (docs/BUSINESS_OS_AUDIT.md §6) — an unknown
+ *  future provider key just falls back to itself, capitalized, rather than a hardcoded name. */
+const PAYMENT_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+  flutterwave: "Flutterwave",
+  paystack: "Paystack",
+  manual: "Manuel",
+};
+
+function paymentProviderDisplayName(provider: string): string {
+  return (
+    PAYMENT_PROVIDER_DISPLAY_NAMES[provider] ??
+    provider.charAt(0).toUpperCase() + provider.slice(1)
+  );
+}
 
 const INTEGRATION_STATUS_BADGE: Record<
   IntegrationAccountStatus,
@@ -1089,13 +1109,24 @@ export default function SettingsPage() {
                 disconnectMutation.variables === integration.id
                   ? disconnectMutation.error
                   : null;
+              // Once connected, name the ACTUAL resolved provider (market-driven server-side,
+              // see PAYMENT_PROVIDER_DISPLAY_NAMES's own doc) rather than the pre-connection
+              // slot's deliberately provider-agnostic default copy.
+              const providerName =
+                integration && slot.domain === "payment"
+                  ? paymentProviderDisplayName(integration.provider)
+                  : undefined;
+              const title = providerName ? `${slot.title} — ${providerName}` : slot.title;
+              const description = providerName
+                ? `Recevez vos règlements via ${providerName}.`
+                : slot.description;
 
               return (
                 <div key={slot.domain} className="rounded-md border border-border p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-text">{slot.title}</p>
-                      <p className="text-xs text-text-muted">{slot.description}</p>
+                      <p className="text-sm font-medium text-text">{title}</p>
+                      <p className="text-xs text-text-muted">{description}</p>
                     </div>
                     <Badge
                       variant={

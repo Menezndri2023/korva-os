@@ -25,6 +25,7 @@ import { PaymentsController } from './payments/payments.controller';
 import { PAYMENT_PROVIDER } from './payments/providers/payment-provider.interface';
 import { ManualPaymentProvider } from './payments/providers/manual-payment.provider';
 import { FlutterwaveWebhookController } from './payments/providers/flutterwave-webhook.controller';
+import { PaystackWebhookController } from './payments/providers/paystack-webhook.controller';
 
 import { ExpensesRepository } from './expenses/expenses.repository';
 import { ExpensesService } from './expenses/expenses.service';
@@ -55,6 +56,7 @@ import { IntegrationWebhookModule } from '../integrations/webhooks/integration-w
     PaymentsController,
     ExpensesController,
     FlutterwaveWebhookController,
+    PaystackWebhookController,
   ],
   providers: [
     QuotesRepository,

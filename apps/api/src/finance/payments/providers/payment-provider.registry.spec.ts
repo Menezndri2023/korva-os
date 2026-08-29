@@ -3,6 +3,7 @@ import { UnprocessableEntityException } from '@nestjs/common';
 import { PaymentProviderRegistry } from './payment-provider.registry';
 import { ManualPaymentProvider } from './manual-payment.provider';
 import { FlutterwaveProvider } from './flutterwave-payment.provider';
+import { PaystackProvider } from './paystack-payment.provider';
 
 describe('PaymentProviderRegistry', () => {
   it('returns a ManualPaymentProvider instance for the known "manual" key regardless of secret', () => {
@@ -63,6 +64,29 @@ describe('PaymentProviderRegistry', () => {
     expect(() => registry.resolve('flutterwave', '')).toThrow(
       UnprocessableEntityException,
     );
+  });
+
+  // docs/BUSINESS_OS_AUDIT.md §6: a second real adapter, same credential-wiring/fail-closed
+  // guarantees as Flutterwave's own coverage above.
+  it('returns a PaystackProvider instance constructed with the real decrypted secret', () => {
+    const registry = new PaymentProviderRegistry();
+
+    const provider = registry.resolve('paystack', 'sk-real-secret-key');
+
+    expect(provider).toBeInstanceOf(PaystackProvider);
+    expect(provider.name).toBe('paystack');
+    expect((provider as unknown as { secretKey: string }).secretKey).toBe(
+      'sk-real-secret-key',
+    );
+  });
+
+  it('fails closed with a typed error when resolving "paystack" with a null secret (missing credential)', () => {
+    const registry = new PaymentProviderRegistry();
+
+    expect(() => registry.resolve('paystack', null)).toThrow(
+      UnprocessableEntityException,
+    );
+    expect(() => registry.resolve('paystack', null)).toThrow(/credential/i);
   });
 
   it('throws a typed error for an unregistered provider key', () => {

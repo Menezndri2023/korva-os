@@ -856,7 +856,10 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
   it("shows both known integration types as 'Non connecté' when none exist yet", async () => {
     renderWithProviders(<SettingsPage />);
 
-    expect(await screen.findByText("Paiements — Flutterwave")).toBeInTheDocument();
+    // No provider named here: which PSP ends up used is resolved server-side by market (see
+    // PAYMENT_PROVIDER_DISPLAY_NAMES's own doc comment) — never known before a real connection
+    // exists, unlike WhatsApp/360dialog (the only messaging adapter today).
+    expect(await screen.findByText("Paiements")).toBeInTheDocument();
     expect(screen.getByText("WhatsApp Business — 360dialog")).toBeInTheDocument();
     expect(screen.getAllByText("Non connecté")).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Connecter" })).toHaveLength(2);
@@ -887,6 +890,26 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     ).toBeInTheDocument();
     expect(within(paymentCard).getByRole("button", { name: "Déconnecter" })).toBeInTheDocument();
     expect(within(paymentCard).queryByRole("button", { name: "Connecter" })).not.toBeInTheDocument();
+  });
+
+  it("names the ACTUAL connected provider (not a hardcoded one) when it's Paystack instead of Flutterwave", async () => {
+    mockIntegrationsGet(() => [
+      {
+        id: "integ-pay-2",
+        domain: "payment",
+        provider: "paystack",
+        status: "active",
+        market: "NG",
+        lastVerifiedAt: "2026-08-20T10:00:00.000Z",
+        lastErrorAt: null,
+        lastErrorMessage: null,
+      },
+    ]);
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Paiements — Paystack")).toBeInTheDocument();
+    expect(screen.getByText("Recevez vos règlements via Paystack.")).toBeInTheDocument();
+    expect(screen.queryByText(/Flutterwave/)).not.toBeInTheDocument();
   });
 
   it("shows lastErrorMessage for an integration in error status", async () => {
