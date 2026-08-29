@@ -158,6 +158,40 @@ class ScriptedAIProvider implements AIProvider {
           ],
         });
       }
+      const sendEmailMatch = /SEND_EMAIL:(\S+)/.exec(last.content);
+      if (sendEmailMatch) {
+        return Promise.resolve({
+          type: 'tool_calls',
+          toolCalls: [
+            {
+              id: 'call_1',
+              name: 'send_email',
+              input: {
+                contactId: sendEmailMatch[1],
+                subject: 'Suivi',
+                body: 'Bonjour, je reviens vers vous.',
+              },
+            },
+          ],
+        });
+      }
+      const createOrderMatch = /CREATE_ORDER:(\S+)/.exec(last.content);
+      if (createOrderMatch) {
+        return Promise.resolve({
+          type: 'tool_calls',
+          toolCalls: [
+            {
+              id: 'call_1',
+              name: 'create_order',
+              input: {
+                contactId: createOrderMatch[1],
+                items: [{ description: 'Service', quantity: 1, unitPrice: 50 }],
+                currency: 'EUR',
+              },
+            },
+          ],
+        });
+      }
     }
 
     return Promise.resolve({
@@ -536,6 +570,93 @@ describe('AI module (e2e)', () => {
       expect(asError(confirmAfterReject.body).code).toBe(
         'AI_ACTION_ALREADY_RESOLVED',
       );
+    });
+
+    it('defers send_email as a pending action instead of executing it inline (docs/BUSINESS_OS_AUDIT.md roadmap item #6)', async () => {
+      // Verified directly against Mongo rather than GET /conversations: that route is gated
+      // behind the 'communication' module (@RequireModule), which registerFullOrg's org never
+      // enabled — irrelevant to this test, since AI tools call services directly and bypass
+      // that HTTP-layer guard entirely (same as every other tool test in this file).
+      //
+      // Uses its own contact (with an email), not the describe block's shared `contactId` —
+      // that one was created by registerFullOrg with no email at all, which
+      // ConversationsService.create correctly rejects (CONTACT_HAS_NO_EMAIL) for the 'email'
+      // channel specifically.
+      const emailContactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName: 'Email', email: 'email-contact@korva.test' })
+        .expect(201);
+      const emailContactId = asSuccess<ContactPayload>(emailContactRes.body).id;
+
+      const res = await request(server)
+        .post('/api/v1/ai/chat')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          agent: 'general_assistant',
+          message: `SEND_EMAIL:${emailContactId}`,
+        })
+        .expect(201);
+      const chat = asSuccess<AiChatResponsePayload>(res.body);
+      expect(chat.pendingActions).toHaveLength(1);
+      expect(chat.pendingActions[0]!.toolName).toBe('send_email');
+
+      const emailContactObjectId = new Types.ObjectId(emailContactId);
+      expect(
+        await connection.collection('conversations').countDocuments({
+          contactId: emailContactObjectId,
+          channel: 'email',
+        }),
+      ).toBe(0);
+
+      await request(server)
+        .post(`/api/v1/ai/actions/${chat.pendingActions[0]!.id}/confirm`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      expect(
+        await connection.collection('conversations').countDocuments({
+          contactId: emailContactObjectId,
+          channel: 'email',
+        }),
+      ).toBe(1);
+    });
+
+    it('defers create_order as a pending action instead of executing it inline (docs/BUSINESS_OS_AUDIT.md roadmap item #6)', async () => {
+      const res = await request(server)
+        .post('/api/v1/ai/chat')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          agent: 'general_assistant',
+          message: `CREATE_ORDER:${contactId}`,
+        })
+        .expect(201);
+      const chat = asSuccess<AiChatResponsePayload>(res.body);
+      expect(chat.pendingActions).toHaveLength(1);
+      expect(chat.pendingActions[0]!.toolName).toBe('create_order');
+
+      const contactObjectId = new Types.ObjectId(contactId);
+      expect(
+        await connection
+          .collection('orders')
+          .countDocuments({ contactId: contactObjectId }),
+      ).toBe(0);
+
+      await request(server)
+        .post(`/api/v1/ai/actions/${chat.pendingActions[0]!.id}/confirm`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      expect(
+        await connection
+          .collection('orders')
+          .countDocuments({ contactId: contactObjectId }),
+      ).toBe(1);
     });
   });
 

@@ -3,12 +3,19 @@ import { Injectable } from '@nestjs/common';
 import type { AiTool } from './tool.interface';
 import { OrdersService } from '../../commerce/orders/orders.service';
 
+/**
+ * Sensitive (docs/BUSINESS_OS_AUDIT.md roadmap item #6): an order is a real financial
+ * commitment on the organization's behalf — exactly the "engagements financiers" category the
+ * Business OS brief (§6) says the AI must never act on unsupervised. Unlike create_quote (a
+ * draft the customer hasn't agreed to anything on), a created Order is expected to be fulfilled/
+ * invoiced.
+ */
 @Injectable()
 export class CreateOrderTool implements AiTool<CreateOrderInput> {
   readonly definition = {
     name: 'create_order',
     description:
-      'Crée une commande manuelle pour un contact, avec une ou plusieurs lignes.',
+      'Crée une commande manuelle pour un contact, avec une ou plusieurs lignes. Nécessite une confirmation humaine.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -34,6 +41,7 @@ export class CreateOrderTool implements AiTool<CreateOrderInput> {
     },
   };
   readonly requiredPermission = 'orders.create' as const;
+  readonly sensitive = true;
   readonly auditEntity = 'order';
 
   constructor(private readonly ordersService: OrdersService) {}

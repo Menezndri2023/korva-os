@@ -9,13 +9,21 @@ const inputSchema = z.object({
   body: z.string().min(1),
 });
 
-/** Reuses (or opens) an email Conversation with the contact — a single AI-sent email is not the "send_mass_campaign" sensitive action from docs/ai.md, which isn't a tool in this MVP set. */
+/**
+ * Reuses (or opens) an email Conversation with the contact. The "single email isn't the
+ * send_mass_campaign sensitive action" reasoning this comment used to carry doesn't hold up:
+ * the criterion that actually made send_whatsapp.tool.ts sensitive (Wave 4 Stage 2) is "can this
+ * tool genuinely reach a real customer via a real provider, not just log one" — and
+ * ResendEmailProvider has been real since Phase 8, same as 360dialog is for WhatsApp now. A
+ * single AI-sent email reaching a real inbox is exactly that, so this tool is sensitive for the
+ * same reason, not a new one (docs/BUSINESS_OS_AUDIT.md roadmap item #6).
+ */
 @Injectable()
 export class SendEmailTool implements AiTool<z.infer<typeof inputSchema>> {
   readonly definition = {
     name: 'send_email',
     description:
-      'Envoie un e-mail à un contact (ouvre une conversation email si nécessaire).',
+      'Envoie un e-mail à un contact (ouvre une conversation email si nécessaire). Nécessite une confirmation humaine.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -27,6 +35,7 @@ export class SendEmailTool implements AiTool<z.infer<typeof inputSchema>> {
     },
   };
   readonly requiredPermission = 'conversations.create' as const;
+  readonly sensitive = true;
   readonly auditEntity = 'message';
 
   constructor(private readonly conversationsService: ConversationsService) {}
