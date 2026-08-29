@@ -51,6 +51,7 @@ interface PublicOrganizationPayload {
   brandColor?: string;
   tagline?: string;
   heroImage?: string;
+  visibleSections: string[];
 }
 interface TrackedOrderPayload {
   number: string;
@@ -294,6 +295,64 @@ describe('Public storefront API (e2e)', () => {
       expect(info.heroImage).toBe(
         'https://cdn.korva.test/hero/branding-storefront.png',
       );
+    });
+  });
+
+  describe('storefront section visibility', () => {
+    it('defaults to every section enabledModules allows when nothing is configured', async () => {
+      const { slug } = await setupStorefrontOrg(
+        'storefront-sections-default@korva.test',
+        'Sections Default Org',
+      );
+
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const info = asSuccess<PublicOrganizationPayload>(res.body);
+      expect(info.visibleSections.sort()).toEqual(['booking', 'catalog']);
+    });
+
+    it('hides a section via storefrontSections even though its module stays enabled', async () => {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        'storefront-sections-hide@korva.test',
+        'Sections Hide Org',
+      );
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ storefrontSections: ['catalog'] })
+        .expect(200);
+
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const info = asSuccess<PublicOrganizationPayload>(res.body);
+      expect(info.visibleSections).toEqual(['catalog']);
+      // The booking module itself is untouched — only its public visibility changed.
+      expect(info.enabledModules).toContain('booking');
+    });
+
+    it('never shows a section storefrontSections names but enabledModules does not allow', async () => {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        'storefront-sections-module-off@korva.test',
+        'Sections Module Off Org',
+        ['catalog', 'crm'],
+      );
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ storefrontSections: ['catalog', 'booking'] })
+        .expect(200);
+
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const info = asSuccess<PublicOrganizationPayload>(res.body);
+      expect(info.visibleSections).toEqual(['catalog']);
     });
   });
 

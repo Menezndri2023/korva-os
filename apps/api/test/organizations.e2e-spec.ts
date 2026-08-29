@@ -208,6 +208,40 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
       .expect(400);
     expect(asError(res.body).code).toBe('VALIDATION_ERROR');
   });
+
+  it('accepts a valid storefrontSections array and persists it', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'org-storefront-sections@korva.test',
+      'Storefront Sections Org',
+    );
+
+    const patchRes = await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ storefrontSections: ['catalog'] })
+      .expect(200);
+    expect(
+      asSuccess<OrganizationPayload & { storefrontSections?: string[] }>(
+        patchRes.body,
+      ).storefrontSections,
+    ).toEqual(['catalog']);
+  });
+
+  it('rejects a storefrontSections entry outside catalog/booking', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'org-storefront-sections-invalid@korva.test',
+      'Storefront Sections Invalid Org',
+    );
+
+    const res = await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ storefrontSections: ['finance'] })
+      .expect(400);
+    expect(asError(res.body).code).toBe('VALIDATION_ERROR');
+  });
 });
 
 interface RolePayload {

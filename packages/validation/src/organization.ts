@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { KORVA_MODULES } from "@korva/types";
+import { KORVA_MODULES, STOREFRONT_SECTIONS } from "@korva/types";
 
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(200),
@@ -24,6 +24,8 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   tagline: z.string().max(200).optional(),
   /** Wide banner image for the storefront hero, distinct from `logo`. */
   heroImage: z.string().url().optional(),
+  /** Omit to show every section `enabledModules` allows; pass an explicit array to restrict. */
+  storefrontSections: z.array(z.enum(STOREFRONT_SECTIONS)).optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
 });
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;

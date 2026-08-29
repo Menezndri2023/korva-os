@@ -342,6 +342,93 @@ describe("SettingsPage — Organization profile edit", () => {
   });
 });
 
+describe("SettingsPage — storefront section visibility", () => {
+  let organization: ReturnType<typeof makeOrganization> & {
+    language?: string;
+    timezone?: string;
+    storefrontSections?: string[];
+  };
+
+  beforeEach(() => {
+    organization = {
+      ...makeOrganization(["crm", "catalog", "booking"]),
+      language: "fr",
+      timezone: "Europe/Paris",
+    };
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    deleteMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+  });
+
+  it("shows 'Toutes' read-only when nothing is configured yet", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Toutes")).toBeInTheDocument();
+  });
+
+  it("pre-checks both section checkboxes when nothing is configured yet", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    expect(screen.getByRole("checkbox", { name: "Afficher le catalogue" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Afficher les réservations" })).toBeChecked();
+  });
+
+  it("unchecking a section submits storefrontSections without it", async () => {
+    patchMock.mockResolvedValue(organization);
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    await user.click(screen.getByRole("checkbox", { name: "Afficher les réservations" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith(
+        "/organizations/me",
+        expect.objectContaining({ storefrontSections: ["catalog"] }),
+      ),
+    );
+  });
+
+  it("does not show the section-visibility control for a module that isn't enabled", async () => {
+    organization = makeOrganization(["crm"]);
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    expect(screen.queryByText("Sections visibles sur la page publique")).not.toBeInTheDocument();
+  });
+});
+
 describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
   const organization = makeOrganization(["crm", "analytics"]);
   const existingMembers = [
@@ -1114,6 +1201,14 @@ describe("SettingsPage — embeddable widget snippet (docs/BUSINESS_OS_AUDIT.md 
 
     expect(await screen.findByText("Mon site existant")).toBeInTheDocument();
     expect(screen.getByText(/data-org="org-de-test"/)).toBeInTheDocument();
+  });
+
+  it("links to the organization's real storefront page", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    const link = await screen.findByRole("link", { name: /Voir ma page publique/ });
+    expect(link).toHaveAttribute("href", "http://localhost:3001/org-de-test");
+    expect(link).toHaveAttribute("target", "_blank");
   });
 
   it('clicking "Copier le code" shows a "Copié !" confirmation', async () => {

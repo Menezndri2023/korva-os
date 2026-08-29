@@ -1,7 +1,11 @@
 import { NotFoundException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import type { KorvaModule } from '@korva/types';
+import {
+  STOREFRONT_SECTIONS,
+  type KorvaModule,
+  type StorefrontSection,
+} from '@korva/types';
 import type {
   CreatePublicBookingInput,
   CreatePublicLeadInput,
@@ -106,7 +110,26 @@ export class PublicService {
       tagline: organization.tagline,
       heroImage: organization.heroImage,
       enabledModules: organization.enabledModules,
+      visibleSections: this.computeVisibleSections(organization),
     };
+  }
+
+  /**
+   * A section only ever shows when BOTH its module is enabled AND (if the org configured
+   * `storefrontSections` at all) it's included there — an org can only use this to hide a
+   * section it could otherwise show, never to show one its `enabledModules` doesn't allow.
+   * Returned (not the raw `storefrontSections`) so apps/storefront never has to re-derive this
+   * intersection itself.
+   */
+  private computeVisibleSections(
+    organization: OrganizationDocument,
+  ): StorefrontSection[] {
+    const configured = organization.storefrontSections;
+    return STOREFRONT_SECTIONS.filter(
+      (section) =>
+        organization.enabledModules.includes(section) &&
+        (!configured || configured.includes(section)),
+    );
   }
 
   async listOffers(slug: string, query: ListPublicOffersQuery) {

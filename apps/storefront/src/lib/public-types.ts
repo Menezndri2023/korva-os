@@ -19,6 +19,10 @@ export interface PublicOrganization {
   tagline?: string;
   heroImage?: string;
   enabledModules: string[];
+  /** Which of "catalog"/"booking" to actually render — already intersected with enabledModules
+   *  and the org's own storefrontSections choice server-side; render based on this, not
+   *  enabledModules, for the offer grid and booking panel. */
+  visibleSections: string[];
 }
 
 /**

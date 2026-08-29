@@ -21,7 +21,7 @@ export default function StorefrontClient({ slug }: { slug: string }) {
   const offersQuery = useQuery({
     queryKey: ["public-offers", slug],
     queryFn: () => publicApiClient.get<PublicOffer[]>(`/public/${slug}/offers`),
-    enabled: !!orgQuery.data?.enabledModules.includes("catalog"),
+    enabled: !!orgQuery.data?.visibleSections.includes("catalog"),
   });
 
   const { cart, addToCart, clearCart } = useCart(slug);
@@ -46,7 +46,8 @@ export default function StorefrontClient({ slug }: { slug: string }) {
     );
   }
   const organization = orgQuery.data;
-  const bookingEnabled = organization.enabledModules.includes("booking");
+  const catalogVisible = organization.visibleSections.includes("catalog");
+  const bookingEnabled = organization.visibleSections.includes("booking");
   const commerceEnabled = organization.enabledModules.includes("commerce");
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
   const brandColor = organization.brandColor;
@@ -93,13 +94,13 @@ export default function StorefrontClient({ slug }: { slug: string }) {
           </div>
         )}
 
-        {!organization.enabledModules.includes("catalog") && (
+        {!catalogVisible && (
           <p className="text-sm text-text-muted">Aucun catalogue disponible pour le moment.</p>
         )}
 
-        {offersQuery.isLoading && <OffersSkeleton />}
+        {catalogVisible && offersQuery.isLoading && <OffersSkeleton />}
 
-        {offersQuery.isError && (
+        {catalogVisible && offersQuery.isError && (
           <Card className="p-4 text-sm text-destructive">
             Impossible de charger les offres.{" "}
             <button onClick={() => offersQuery.refetch()} className="underline">
@@ -108,13 +109,13 @@ export default function StorefrontClient({ slug }: { slug: string }) {
           </Card>
         )}
 
-        {offersQuery.isSuccess && offersQuery.data.length === 0 && (
+        {catalogVisible && offersQuery.isSuccess && offersQuery.data.length === 0 && (
           <Card className="p-6 text-center text-sm text-text-muted">
             Aucune offre disponible pour le moment.
           </Card>
         )}
 
-        {offersQuery.isSuccess && offersQuery.data.length > 0 && (
+        {catalogVisible && offersQuery.isSuccess && offersQuery.data.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2">
             {offersQuery.data.map((offer) => (
               <OfferCard

@@ -22,6 +22,16 @@ export const KORVA_MODULES = [
 
 export type KorvaModule = (typeof KORVA_MODULES)[number];
 
+/**
+ * The two storefront areas an org owner can independently show/hide on their public page,
+ * regardless of `enabledModules` — e.g. booking stays enabled for internal/staff use but is
+ * hidden from the public page. A section only ever renders when BOTH its module is enabled AND
+ * (if `storefrontSections` is set) it's included here — see PublicService#getOrganization's
+ * `visibleSections` computation, which is what apps/storefront actually reads.
+ */
+export const STOREFRONT_SECTIONS = ["catalog", "booking"] as const;
+export type StorefrontSection = (typeof STOREFRONT_SECTIONS)[number];
+
 export interface OrganizationSettings {
   onboardingCompleted: boolean;
   [key: string]: unknown;
@@ -41,6 +51,8 @@ export interface Organization {
   brandColor?: string;
   tagline?: string;
   heroImage?: string;
+  /** Undefined means "show every section `enabledModules` allows" — see STOREFRONT_SECTIONS doc. */
+  storefrontSections?: StorefrontSection[];
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
   createdAt: string;

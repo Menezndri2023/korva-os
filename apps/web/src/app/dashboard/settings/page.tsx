@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KORVA_MODULES } from "@korva/types";
+import { KORVA_MODULES, STOREFRONT_SECTIONS } from "@korva/types";
 import type {
   ConnectMessagingAccountInput,
   ConnectPaymentPayoutInput,
@@ -233,6 +233,9 @@ export default function SettingsPage() {
       brandColor: organization.brandColor,
       tagline: organization.tagline,
       heroImage: organization.heroImage,
+      // Undefined (nothing configured yet) means "show everything modules allow" — pre-check
+      // both boxes in that case so the form's visual default matches the real current behavior.
+      storefrontSections: organization.storefrontSections ?? [...STOREFRONT_SECTIONS],
     });
   }
   function cancelOrgEdit() {
@@ -472,6 +475,16 @@ export default function SettingsPage() {
               <dt className="text-text-muted">Image de bannière (page publique)</dt>
               <dd className="mt-0.5 truncate">{organization?.heroImage ?? "—"}</dd>
             </div>
+            <div>
+              <dt className="text-text-muted">Sections visibles (page publique)</dt>
+              <dd className="mt-0.5">
+                {organization?.storefrontSections
+                  ? organization.storefrontSections
+                      .map((s) => (s === "catalog" ? "Catalogue" : "Réservations"))
+                      .join(", ") || "Aucune"
+                  : "Toutes"}
+              </dd>
+            </div>
           </dl>
         ) : (
           <form
@@ -617,6 +630,36 @@ export default function SettingsPage() {
                 <p className="mt-1 text-xs text-destructive">{orgErrors.heroImage.message}</p>
               )}
             </div>
+            {(organization?.enabledModules.includes("catalog") ||
+              organization?.enabledModules.includes("booking")) && (
+              <div className="sm:col-span-2">
+                <p className="mb-1 text-xs font-medium text-text">
+                  Sections visibles sur la page publique
+                </p>
+                <div className="flex flex-wrap gap-4">
+                  {organization.enabledModules.includes("catalog") && (
+                    <label className="flex items-center gap-2 text-sm text-text">
+                      <input
+                        type="checkbox"
+                        value="catalog"
+                        {...registerOrg("storefrontSections")}
+                      />
+                      Afficher le catalogue
+                    </label>
+                  )}
+                  {organization.enabledModules.includes("booking") && (
+                    <label className="flex items-center gap-2 text-sm text-text">
+                      <input
+                        type="checkbox"
+                        value="booking"
+                        {...registerOrg("storefrontSections")}
+                      />
+                      Afficher les réservations
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
 
             {updateOrgMutation.isError && (
               <p className="text-sm text-destructive sm:col-span-2">
@@ -1392,16 +1435,18 @@ export default function SettingsPage() {
 
 /**
  * Discoverability for the embeddable lead-capture widget (docs/BUSINESS_OS_AUDIT.md roadmap
- * item #8, apps/storefront/public/korva-widget.js) — without this, the feature would be
- * invisible to the business owner despite being fully functional. The storefront domain is left
- * as a placeholder (unlike the org slug and API URL, which are real): this dashboard has no
- * reliable way to know where apps/storefront is actually hosted for a given deployment.
+ * item #8, apps/storefront/public/korva-widget.js) and for KORVA's own hosted storefront page
+ * (item #9) — without this, both features would be invisible to the business owner despite
+ * being fully functional. `NEXT_PUBLIC_STOREFRONT_URL` makes the storefront domain real (unlike
+ * the prior placeholder "VOTRE-DOMAINE-STOREFRONT"), same pattern as NEXT_PUBLIC_API_URL.
  */
 function ExternalWebsiteSection({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+  const storefrontUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
+  const storefrontPageUrl = `${storefrontUrl}/${slug}`;
   const snippet = `<script
-  src="https://VOTRE-DOMAINE-STOREFRONT/korva-widget.js"
+  src="${storefrontUrl}/korva-widget.js"
   data-org="${slug}"
   data-api-url="${apiUrl}"
   async
@@ -1409,7 +1454,17 @@ function ExternalWebsiteSection({ slug }: { slug: string }) {
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold text-text">Mon site existant</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-text">Mon site existant</h2>
+        <a
+          href={storefrontPageUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium text-text underline-offset-2 hover:underline"
+        >
+          Voir ma page publique →
+        </a>
+      </div>
       <p className="mt-1 text-sm text-text-muted">
         Ajoutez ce widget sur votre site web actuel pour recevoir directement dans KORVA les
         demandes de contact de vos visiteurs.
@@ -1417,9 +1472,6 @@ function ExternalWebsiteSection({ slug }: { slug: string }) {
       <pre className="mt-4 overflow-x-auto rounded-md bg-surface-muted p-3 text-xs">
         <code>{snippet}</code>
       </pre>
-      <p className="mt-2 text-xs text-text-muted">
-        Remplacez <code>VOTRE-DOMAINE-STOREFRONT</code> par l&apos;adresse de votre site KORVA.
-      </p>
       <Button
         type="button"
         variant="secondary"

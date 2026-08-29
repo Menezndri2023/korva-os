@@ -1,6 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import type { KorvaModule, OrganizationSettings } from '@korva/types';
+import type {
+  KorvaModule,
+  OrganizationSettings,
+  StorefrontSection,
+} from '@korva/types';
 import { idToJson } from '../../core/mongoose/schema-options';
 
 export type OrganizationDocument = HydratedDocument<Organization>;
@@ -52,6 +56,16 @@ export class Organization {
   /** Wide banner image for the storefront hero, distinct from `logo` (which stays small, in the header). */
   @Prop()
   heroImage?: string;
+
+  /**
+   * Undefined means "show every section enabledModules allows" — see STOREFRONT_SECTIONS
+   * (@korva/types). `default: undefined` opts out of Mongoose's usual array-path behavior of
+   * auto-initializing an unset array to `[]` — that default empty array would be indistinguishable
+   * from "the org explicitly chose to show nothing," which PublicService#computeVisibleSections
+   * must tell apart from "never configured."
+   */
+  @Prop({ type: [String], default: undefined })
+  storefrontSections?: StorefrontSection[];
 
   @Prop({ type: Object, default: { onboardingCompleted: false } })
   settings!: OrganizationSettings;
