@@ -138,9 +138,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             />
           ))}
           <NavLink
-            href="/dashboard/recommendations"
-            label="Recommandations"
-            active={pathname === "/dashboard/recommendations"}
+            href="/dashboard/action-center"
+            label="Centre d'action"
+            active={pathname === "/dashboard/action-center"}
             onClick={() => setSidebarOpen(false)}
           />
           <NavLink
