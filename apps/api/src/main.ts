@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { publicCorsMiddleware } from './common/middleware/public-cors.middleware';
 import { StructuredLogger } from './common/logging/structured-logger.service';
 import { initSentry, captureApiException } from './core/observability/sentry';
 
@@ -37,6 +38,10 @@ async function bootstrap() {
   app.use(requestIdMiddleware);
   app.use(helmet());
   app.use(compression());
+
+  // Must run before app.enableCors() below — see publicCorsMiddleware's own doc comment for
+  // why a permissive /public/* policy and the dashboard's strict allowlist can safely coexist.
+  app.use(publicCorsMiddleware);
 
   // Reflecting any Origin with credentials:true would let any site make authenticated
   // requests on a logged-in user's behalf — always resolve to an explicit allowlist.

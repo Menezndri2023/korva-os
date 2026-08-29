@@ -42,6 +42,18 @@ export const createPublicOrderSchema = z.object({
 export type CreatePublicOrderInput = z.infer<typeof createPublicOrderSchema>;
 
 /**
+ * Backs the embeddable widget (apps/storefront/public/korva-widget.js) and any other external
+ * site's own "contact us" / lead-capture form — see createPublicBookingSchema/
+ * createPublicOrderSchema above for the identical contact-capture convention this reuses.
+ */
+export const createPublicLeadSchema = z.object({
+  message: z.string().min(1).max(2000),
+  source: z.string().min(1).max(100).optional(),
+  contact: publicContactSchema,
+});
+export type CreatePublicLeadInput = z.infer<typeof createPublicLeadSchema>;
+
+/**
  * Query for the customer-facing order/booking lookup endpoints. `email` is the ONLY proof of
  * ownership accepted — never the order number / booking id alone (that would let an attacker
  * enumerate valid order numbers by trying them without any credential). See PublicService#trackOrder

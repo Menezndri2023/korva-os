@@ -10,7 +10,7 @@ export class NotesService {
 
   create(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     input: CreateNoteInput,
   ): Promise<NoteDocument> {
     return this.notesRepository.create({
@@ -18,7 +18,7 @@ export class NotesService {
       entity: input.entity,
       entityId: new Types.ObjectId(input.entityId),
       content: input.content,
-      authorId: new Types.ObjectId(userId),
+      authorId: userId ? new Types.ObjectId(userId) : undefined,
     });
   }
 

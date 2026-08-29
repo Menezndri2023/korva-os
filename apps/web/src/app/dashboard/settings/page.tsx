@@ -1344,6 +1344,55 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
+
+      {organization && <ExternalWebsiteSection slug={organization.slug} />}
     </div>
+  );
+}
+
+/**
+ * Discoverability for the embeddable lead-capture widget (docs/BUSINESS_OS_AUDIT.md roadmap
+ * item #8, apps/storefront/public/korva-widget.js) — without this, the feature would be
+ * invisible to the business owner despite being fully functional. The storefront domain is left
+ * as a placeholder (unlike the org slug and API URL, which are real): this dashboard has no
+ * reliable way to know where apps/storefront is actually hosted for a given deployment.
+ */
+function ExternalWebsiteSection({ slug }: { slug: string }) {
+  const [copied, setCopied] = useState(false);
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+  const snippet = `<script
+  src="https://VOTRE-DOMAINE-STOREFRONT/korva-widget.js"
+  data-org="${slug}"
+  data-api-url="${apiUrl}"
+  async
+></script>`;
+
+  return (
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <h2 className="text-sm font-semibold text-text">Mon site existant</h2>
+      <p className="mt-1 text-sm text-text-muted">
+        Ajoutez ce widget sur votre site web actuel pour recevoir directement dans KORVA les
+        demandes de contact de vos visiteurs.
+      </p>
+      <pre className="mt-4 overflow-x-auto rounded-md bg-surface-muted p-3 text-xs">
+        <code>{snippet}</code>
+      </pre>
+      <p className="mt-2 text-xs text-text-muted">
+        Remplacez <code>VOTRE-DOMAINE-STOREFRONT</code> par l&apos;adresse de votre site KORVA.
+      </p>
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="mt-3"
+        onClick={() => {
+          void navigator.clipboard.writeText(snippet);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }}
+      >
+        {copied ? "Copié !" : "Copier le code"}
+      </Button>
+    </section>
   );
 }

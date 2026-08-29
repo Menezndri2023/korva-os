@@ -110,6 +110,12 @@ import { AuditModule } from '../audit/audit.module';
     TagsRepository,
     TagsService,
   ],
-  exports: [ContactsService, TasksService, LeadsService],
+  exports: [
+    ContactsService,
+    TasksService,
+    LeadsService,
+    NotesService,
+    PipelinesService,
+  ],
 })
 export class CrmModule {}

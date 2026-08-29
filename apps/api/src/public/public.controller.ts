@@ -3,11 +3,13 @@ import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
   createPublicBookingSchema,
+  createPublicLeadSchema,
   createPublicOrderSchema,
   listPublicOffersQuerySchema,
   publicAvailabilityQuerySchema,
   trackByEmailQuerySchema,
   type CreatePublicBookingInput,
+  type CreatePublicLeadInput,
   type CreatePublicOrderInput,
   type ListPublicOffersQuery,
   type PublicAvailabilityQuery,
@@ -88,6 +90,16 @@ export class PublicController {
     body: CreatePublicOrderInput,
   ) {
     return this.publicService.createOrder(slug, body);
+  }
+
+  /** Backs the embeddable widget's lead-capture form — see PublicService#createLead. */
+  @Post('leads')
+  createLead(
+    @Param('organizationSlug') slug: string,
+    @Body(new ZodValidationPipe(createPublicLeadSchema))
+    body: CreatePublicLeadInput,
+  ) {
+    return this.publicService.createLead(slug, body);
   }
 
   /**

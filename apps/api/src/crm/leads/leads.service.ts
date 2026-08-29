@@ -27,7 +27,7 @@ export class LeadsService {
 
   async create(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     input: CreateLeadInput,
   ): Promise<LeadDocument> {
     const contactExists = await this.contactsService.existsById(

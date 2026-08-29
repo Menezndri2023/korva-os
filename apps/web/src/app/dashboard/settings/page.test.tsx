@@ -1057,3 +1057,50 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     expect(screen.queryByRole("button", { name: "Connecter" })).not.toBeInTheDocument();
   });
 });
+
+describe("SettingsPage — embeddable widget snippet (docs/BUSINESS_OS_AUDIT.md roadmap item #8)", () => {
+  let organization: ReturnType<typeof makeOrganization>;
+
+  beforeEach(() => {
+    organization = makeOrganization(["crm"]);
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    deleteMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+
+    // jsdom's real Clipboard implementation rejects writeText() outside a user-activated,
+    // permission-granted context (neither is true under jsdom) — letting the real
+    // implementation run is harmless here (the component only ever `void`s the promise) and
+    // avoids fighting jsdom's own clipboard internals just to assert on it; the test below
+    // checks the actually-important user-visible outcome (the button's confirmation state)
+    // instead of the clipboard call itself.
+  });
+
+  it("shows an embed snippet carrying the organization's real slug", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Mon site existant")).toBeInTheDocument();
+    expect(screen.getByText(/data-org="org-de-test"/)).toBeInTheDocument();
+  });
+
+  it('clicking "Copier le code" shows a "Copié !" confirmation', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Mon site existant");
+    await user.click(screen.getByRole("button", { name: "Copier le code" }));
+
+    expect(await screen.findByRole("button", { name: "Copié !" })).toBeInTheDocument();
+  });
+});

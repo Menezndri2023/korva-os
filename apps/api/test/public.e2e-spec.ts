@@ -697,6 +697,147 @@ describe('Public storefront API (e2e)', () => {
     });
   });
 
+  describe('lead capture (embeddable widget, docs/BUSINESS_OS_AUDIT.md roadmap item #8)', () => {
+    it('creates a Contact, a Lead in a lazily-created default pipeline, and a Note carrying the message', async () => {
+      const { slug, accessToken, organizationId } = await setupStorefrontOrg(
+        'widget-owner@korva.test',
+        'Widget Org',
+      );
+
+      const res = await request(server)
+        .post(`/api/v1/public/${slug}/leads`)
+        .send({
+          message: "Bonjour, j'aimerais un devis pour un événement.",
+          contact: {
+            email: 'visitor@customer.test',
+            firstName: 'Visiteur',
+            phone: '+33600000000',
+          },
+        })
+        .expect(201);
+      const lead = asSuccess<{ id: string; status: string }>(res.body);
+      expect(lead.status).toBe('open');
+
+      const pipelinesRes = await request(server)
+        .get('/api/v1/pipelines')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const pipelines = asSuccess<
+        { id: string; name: string; isDefault: boolean }[]
+      >(pipelinesRes.body);
+      expect(pipelines).toHaveLength(1);
+      expect(pipelines[0]).toMatchObject({ name: 'Ventes', isDefault: true });
+
+      const leadsRes = await request(server)
+        .get('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const leads = asSuccess<
+        { id: string; source?: string; pipelineId: string }[]
+      >(leadsRes.body);
+      expect(leads.map((l) => l.id)).toContain(lead.id);
+      const createdLead = leads.find((l) => l.id === lead.id)!;
+      expect(createdLead.source).toBe('website_widget');
+      expect(createdLead.pipelineId).toBe(pipelines[0]!.id);
+
+      const contactsRes = await request(server)
+        .get('/api/v1/contacts?search=visitor@customer.test')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const contacts = asSuccess<{ id: string; firstName?: string }[]>(
+        contactsRes.body,
+      );
+      expect(contacts.some((c) => c.firstName === 'Visiteur')).toBe(true);
+    });
+
+    it("reuses the second lead's request on the same visitor's existing Contact instead of creating a duplicate, and reuses the same default pipeline", async () => {
+      const { slug, accessToken, organizationId } = await setupStorefrontOrg(
+        'widget-repeat-owner@korva.test',
+        'Widget Repeat Org',
+      );
+
+      await request(server)
+        .post(`/api/v1/public/${slug}/leads`)
+        .send({
+          message: 'Première demande',
+          contact: { email: 'repeat-visitor@customer.test' },
+        })
+        .expect(201);
+      await request(server)
+        .post(`/api/v1/public/${slug}/leads`)
+        .send({
+          message: 'Deuxième demande',
+          contact: { email: 'repeat-visitor@customer.test' },
+        })
+        .expect(201);
+
+      const contactsRes = await request(server)
+        .get('/api/v1/contacts?search=repeat-visitor@customer.test')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<{ id: string }[]>(contactsRes.body)).toHaveLength(1);
+
+      const pipelinesRes = await request(server)
+        .get('/api/v1/pipelines')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<{ id: string }[]>(pipelinesRes.body)).toHaveLength(1);
+    });
+
+    it('accepts a custom source and rejects a request missing the required message', async () => {
+      const { slug } = await setupStorefrontOrg(
+        'widget-source-owner@korva.test',
+        'Widget Source Org',
+      );
+
+      const customSourceRes = await request(server)
+        .post(`/api/v1/public/${slug}/leads`)
+        .send({
+          message: 'Demande depuis mon propre site',
+          source: 'my_existing_website',
+          contact: { email: 'custom-source@customer.test' },
+        })
+        .expect(201);
+      expect(asSuccess<{ id: string }>(customSourceRes.body).id).toBeTruthy();
+
+      const missingMessageRes = await request(server)
+        .post(`/api/v1/public/${slug}/leads`)
+        .send({ contact: { email: 'no-message@customer.test' } })
+        .expect(400);
+      expect(asError(missingMessageRes.body).code).toBe('VALIDATION_ERROR');
+    });
+
+    it('404s with MODULE_NOT_AVAILABLE when the organization has not enabled crm', async () => {
+      const { slug } = await setupStorefrontOrg(
+        'widget-no-crm-owner@korva.test',
+        'Widget No CRM Org',
+        ['catalog'],
+      );
+
+      const res = await request(server)
+        .post(`/api/v1/public/${slug}/leads`)
+        .send({
+          message: 'Bonjour',
+          contact: { email: 'x@customer.test' },
+        })
+        .expect(404);
+      expect(asError(res.body).code).toBe('MODULE_NOT_AVAILABLE');
+    });
+
+    // Permissive CORS on this path (so the embeddable widget works from any external site) is
+    // set by publicCorsMiddleware, which main.ts registers directly on the Express app inside
+    // bootstrap() — this file's app is built via Test.createTestingModule(...).compile() +
+    // createNestApplication(), which never runs main.ts/bootstrap() at all (same as every other
+    // e2e file in this repo: none of them exercise app.enableCors() either). See
+    // public-cors.middleware.spec.ts for a direct unit test of that middleware's behavior
+    // instead.
+  });
+
   describe('module gating and unknown organizations', () => {
     it('rejects a public request for a module the organization has not enabled', async () => {
       const { slug } = await setupStorefrontOrg(

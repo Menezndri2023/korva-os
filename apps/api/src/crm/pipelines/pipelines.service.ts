@@ -30,6 +30,31 @@ export class PipelinesService {
     return this.pipelinesRepository.findAllForOrganization(organizationId);
   }
 
+  /**
+   * Used by the public lead-capture endpoint (public.service.ts#createLead): an external
+   * website visitor submitting the embeddable widget can't be expected to know a pipeline/
+   * stage id, and may be the very first lead this organization ever receives. Mirrors the
+   * frontend's own lazy "Ventes" pipeline seed (apps/web's CRM leads page) exactly, so a lead
+   * captured this way lands in the same pipeline a human would have created by hand.
+   */
+  async getOrCreateDefault(organizationId: string): Promise<PipelineDocument> {
+    const pipelines =
+      await this.pipelinesRepository.findAllForOrganization(organizationId);
+    const existing =
+      pipelines.find((pipeline) => pipeline.isDefault) ?? pipelines[0];
+    if (existing) return existing;
+
+    return this.pipelinesRepository.create({
+      organizationId: new Types.ObjectId(organizationId),
+      name: 'Ventes',
+      isDefault: true,
+      stages: [
+        { name: 'Nouveau', order: 0 },
+        { name: 'Gagné', order: 1 },
+      ],
+    });
+  }
+
   async getById(organizationId: string, id: string): Promise<PipelineDocument> {
     const pipeline = await this.pipelinesRepository.findById(
       organizationId,
