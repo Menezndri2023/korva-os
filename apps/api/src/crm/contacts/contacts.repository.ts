@@ -110,4 +110,55 @@ export class ContactsRepository {
       .exec();
     return res.deletedCount > 0;
   }
+
+  /**
+   * Coarse, cheap pre-filter for CustomerInactivitySchedulerService's sweep: contacts that
+   * COULD possibly be past the inactivity threshold (old enough, and not already notified
+   * recently) — the precise check (real last-activity across other modules vs this contact's
+   * own `inactiveNotifiedAt`) happens in the scheduler itself once it has fetched that activity.
+   * Global, not organization-scoped, same shape as QuotesRepository.findExpirable.
+   */
+  findPotentiallyInactive(
+    thresholdDate: Date,
+    limit = 200,
+  ): Promise<ContactDocument[]> {
+    return this.contactModel
+      .find({
+        createdAt: { $lt: thresholdDate },
+        $or: [
+          { inactiveNotifiedAt: { $exists: false } },
+          { inactiveNotifiedAt: { $lt: thresholdDate } },
+        ],
+      })
+      .limit(limit)
+      .exec();
+  }
+
+  /**
+   * Atomically claims this contact's current inactivity episode, guarded so a concurrent sweep
+   * tick (another API instance) can't double-publish: only succeeds if this contact hasn't
+   * already been notified for an episode at least as recent as `lastActivityAt`. Mirrors
+   * QuotesRepository.expireIfEligible's "re-verify the guard in the same atomic write" pattern.
+   */
+  async claimInactivity(
+    organizationId: string,
+    id: string,
+    lastActivityAt: Date,
+    notifiedAt: Date,
+  ): Promise<boolean> {
+    const res = await this.contactModel
+      .updateOne(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          $or: [
+            { inactiveNotifiedAt: { $exists: false } },
+            { inactiveNotifiedAt: { $lt: lastActivityAt } },
+          ],
+        },
+        { inactiveNotifiedAt: notifiedAt },
+      )
+      .exec();
+    return res.modifiedCount > 0;
+  }
 }

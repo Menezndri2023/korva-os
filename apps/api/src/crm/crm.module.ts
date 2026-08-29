@@ -34,6 +34,7 @@ import { ContactsRepository } from './contacts/contacts.repository';
 import { ContactReferencesRepository } from './contacts/contact-references.repository';
 import { ContactsService } from './contacts/contacts.service';
 import { ContactsController } from './contacts/contacts.controller';
+import { CustomerInactivitySchedulerService } from './contacts/customer-inactivity-scheduler.service';
 
 import { LeadsRepository } from './leads/leads.repository';
 import { LeadsService } from './leads/leads.service';
@@ -95,6 +96,7 @@ import { AuditModule } from '../audit/audit.module';
     ContactsRepository,
     ContactReferencesRepository,
     ContactsService,
+    CustomerInactivitySchedulerService,
     LeadsRepository,
     LeadsService,
     PipelinesRepository,

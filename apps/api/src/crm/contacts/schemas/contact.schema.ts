@@ -68,12 +68,29 @@ export class Contact {
 
   @Prop({ type: [ContactConsentSchema], default: [] })
   consents!: ContactConsent[];
+
+  /**
+   * Set by CustomerInactivitySchedulerService when it publishes `customer.inactive` for this
+   * contact — not a status field, just a dedup marker so the same inactivity episode isn't
+   * re-published on every sweep tick. Compared against the contact's dynamically-computed last
+   * activity timestamp (not stored anywhere — derived from Quote/Invoice/Booking/Order/
+   * Conversation): a contact is eligible again once `inactiveNotifiedAt` predates that
+   * timestamp, which only becomes true after new activity moves it forward. Absent for every
+   * contact that has never (yet) gone through an inactivity episode.
+   */
+  @Prop({ type: Date })
+  inactiveNotifiedAt?: Date;
 }
 
 export const ContactSchema = SchemaFactory.createForClass(Contact);
 ContactSchema.index({ organizationId: 1, email: 1 });
 ContactSchema.index({ organizationId: 1, createdAt: -1 });
 ContactSchema.index({ organizationId: 1, tags: 1 });
+// Supports CustomerInactivitySchedulerService's global sweep (no organizationId in its query —
+// same cross-tenant-background-job shape as quote-expiry/invoice-overdue's own schedulers):
+// shrinks the candidate set to contacts old enough to possibly be inactive and not already
+// notified inside the current threshold window, before the per-contact activity computation.
+ContactSchema.index({ createdAt: 1, inactiveNotifiedAt: 1 });
 ContactSchema.index({
   organizationId: 1,
   firstName: 'text',

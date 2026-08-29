@@ -48,6 +48,7 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'booking.cancelled': 'bookingId',
   'customer.created': 'contactId',
   'invoice.overdue': 'invoiceId',
+  'customer.inactive': 'contactId',
   'payment.webhook_received': 'paymentId',
   'whatsapp.status_updated': 'messageId',
 };

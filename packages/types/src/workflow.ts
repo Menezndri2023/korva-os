@@ -16,6 +16,7 @@ export const SYSTEM_EVENTS = [
   "booking.cancelled",
   "customer.created",
   "invoice.overdue",
+  "customer.inactive",
   "payment.webhook_received",
   "whatsapp.status_updated",
 ] as const;
