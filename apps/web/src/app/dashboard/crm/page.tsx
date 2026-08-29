@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -11,8 +11,9 @@ import {
   type CreateContactInput,
   type UpdateContactInput,
 } from "@korva/validation";
+import { CONTACT_TYPES } from "@korva/types";
 import type { Contact } from "@korva/types";
-import { Button, Card, Input, Pagination } from "@korva/ui";
+import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
@@ -37,11 +38,27 @@ export default function ContactsPage() {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<CreateContactInput>({
     resolver: zodResolver(createContactSchema),
     defaultValues: { type: "person", tags: [] },
   });
+  const createType = watch("type");
+  // firstName/lastName mount by default (type starts as "person") and register as "" — an
+  // untouched RHF text field's default value, not undefined. react-hook-form keeps that "" in
+  // its internal state even after the fields unmount on switching to "company" (shouldUnregister
+  // defaults to false), and createContactSchema's `.min(1).optional()` rejects "" (only
+  // `undefined` satisfies `.optional()`) — so without this, switching to "Entreprise" without
+  // ever touching Prénom/Nom silently blocks submission with no visible error. Explicitly
+  // clearing them to undefined on switch keeps the schema's optional check meaningful.
+  useEffect(() => {
+    if (createType === "company") {
+      setValue("firstName", undefined);
+      setValue("lastName", undefined);
+    }
+  }, [createType, setValue]);
 
   const createMutation = useMutation({
     mutationFn: (input: CreateContactInput) => apiClient.post<Contact>("/contacts", input),
@@ -58,13 +75,26 @@ export default function ContactsPage() {
     register: registerEdit,
     handleSubmit: handleEditSubmit,
     reset: resetEditForm,
+    watch: watchEdit,
+    setValue: setEditValue,
     formState: { errors: editErrors },
   } = useForm<UpdateContactInput>({ resolver: zodResolver(updateContactSchema) });
+  const editType = watchEdit("type");
+  // Same fix as the create form above: clear firstName/lastName when switching an existing
+  // contact to "company" mid-edit, so a stale person-name value never gets silently resubmitted
+  // on (or block validation for) a contact that's now typed as a company.
+  useEffect(() => {
+    if (editType === "company") {
+      setEditValue("firstName", undefined);
+      setEditValue("lastName", undefined);
+    }
+  }, [editType, setEditValue]);
 
   function startEdit(contact: Contact) {
     setEditingId(contact.id);
     setEditTagsInput(contact.tags.join(", "));
     resetEditForm({
+      type: contact.type,
       firstName: contact.firstName,
       lastName: contact.lastName,
       company: contact.company,
@@ -146,12 +176,34 @@ export default function ContactsPage() {
           // today. Left as a native element with its existing classes (F2-B.7).
           className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
         >
-          <Input placeholder="Prénom" {...register("firstName")} />
-          <Input placeholder="Nom" {...register("lastName")} />
+          <select
+            className="col-span-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+            {...register("type")}
+          >
+            {CONTACT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type === "company" ? "Entreprise" : "Personne"}
+              </option>
+            ))}
+          </select>
+          {createType === "company" ? (
+            <Input
+              placeholder="Nom de l'entreprise"
+              className="col-span-2"
+              {...register("company")}
+            />
+          ) : (
+            <>
+              <Input placeholder="Prénom" {...register("firstName")} />
+              <Input placeholder="Nom" {...register("lastName")} />
+            </>
+          )}
           <Input placeholder="Email" type="email" error={!!errors.email} {...register("email")} />
           {errors.email && <p className="col-span-2 text-xs text-red-600">{errors.email.message}</p>}
           <Input placeholder="Téléphone" {...register("phone")} />
-          <Input placeholder="Entreprise" className="col-span-2" {...register("company")} />
+          {createType !== "company" && (
+            <Input placeholder="Entreprise" className="col-span-2" {...register("company")} />
+          )}
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-red-600">
               {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
@@ -213,14 +265,17 @@ export default function ContactsPage() {
                   <Fragment key={contact.id}>
                     <tr>
                       <td className="px-4 py-2 font-medium">
-                        <Link
-                          href={`/dashboard/crm/${contact.id}`}
-                          className="text-text underline-offset-2 hover:underline"
-                        >
-                          {[contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
-                            contact.company ||
-                            "—"}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/dashboard/crm/${contact.id}`}
+                            className="text-text underline-offset-2 hover:underline"
+                          >
+                            {[contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+                              contact.company ||
+                              "—"}
+                          </Link>
+                          {contact.type === "company" && <Badge>Entreprise</Badge>}
+                        </div>
                       </td>
                       <td className="px-4 py-2 text-zinc-600">{contact.email ?? "—"}</td>
                       <td className="px-4 py-2 text-zinc-600">{contact.phone ?? "—"}</td>
@@ -303,24 +358,61 @@ export default function ContactsPage() {
                             )}
                             className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
                           >
-                            <div>
+                            <div className="col-span-2">
                               <label
                                 className="mb-1 block text-xs font-medium text-zinc-700"
-                                htmlFor={`edit-firstName-${contact.id}`}
+                                htmlFor={`edit-type-${contact.id}`}
                               >
-                                Prénom
+                                Type
                               </label>
-                              <Input id={`edit-firstName-${contact.id}`} {...registerEdit("firstName")} />
-                            </div>
-                            <div>
-                              <label
-                                className="mb-1 block text-xs font-medium text-zinc-700"
-                                htmlFor={`edit-lastName-${contact.id}`}
+                              <select
+                                id={`edit-type-${contact.id}`}
+                                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                                {...registerEdit("type")}
                               >
-                                Nom
-                              </label>
-                              <Input id={`edit-lastName-${contact.id}`} {...registerEdit("lastName")} />
+                                {CONTACT_TYPES.map((type) => (
+                                  <option key={type} value={type}>
+                                    {type === "company" ? "Entreprise" : "Personne"}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
+                            {editType === "company" ? (
+                              <div className="col-span-2">
+                                <label
+                                  className="mb-1 block text-xs font-medium text-zinc-700"
+                                  htmlFor={`edit-company-name-${contact.id}`}
+                                >
+                                  Nom de l&apos;entreprise
+                                </label>
+                                <Input
+                                  id={`edit-company-name-${contact.id}`}
+                                  className="w-full"
+                                  {...registerEdit("company")}
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                <div>
+                                  <label
+                                    className="mb-1 block text-xs font-medium text-zinc-700"
+                                    htmlFor={`edit-firstName-${contact.id}`}
+                                  >
+                                    Prénom
+                                  </label>
+                                  <Input id={`edit-firstName-${contact.id}`} {...registerEdit("firstName")} />
+                                </div>
+                                <div>
+                                  <label
+                                    className="mb-1 block text-xs font-medium text-zinc-700"
+                                    htmlFor={`edit-lastName-${contact.id}`}
+                                  >
+                                    Nom
+                                  </label>
+                                  <Input id={`edit-lastName-${contact.id}`} {...registerEdit("lastName")} />
+                                </div>
+                              </>
+                            )}
                             <div>
                               <label
                                 className="mb-1 block text-xs font-medium text-zinc-700"
@@ -347,19 +439,21 @@ export default function ContactsPage() {
                               </label>
                               <Input id={`edit-phone-${contact.id}`} {...registerEdit("phone")} />
                             </div>
-                            <div className="col-span-2">
-                              <label
-                                className="mb-1 block text-xs font-medium text-zinc-700"
-                                htmlFor={`edit-company-${contact.id}`}
-                              >
-                                Entreprise
-                              </label>
-                              <Input
-                                id={`edit-company-${contact.id}`}
-                                className="w-full"
-                                {...registerEdit("company")}
-                              />
-                            </div>
+                            {editType !== "company" && (
+                              <div className="col-span-2">
+                                <label
+                                  className="mb-1 block text-xs font-medium text-zinc-700"
+                                  htmlFor={`edit-company-${contact.id}`}
+                                >
+                                  Entreprise
+                                </label>
+                                <Input
+                                  id={`edit-company-${contact.id}`}
+                                  className="w-full"
+                                  {...registerEdit("company")}
+                                />
+                              </div>
+                            )}
                             <div className="col-span-2">
                               <label
                                 className="mb-1 block text-xs font-medium text-zinc-700"

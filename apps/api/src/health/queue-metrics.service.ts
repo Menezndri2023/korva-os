@@ -59,9 +59,7 @@ export class QueueMetricsService {
       this.configService.getOrThrow<string>('REDIS_URL'),
       { maxRetriesPerRequest: null },
     );
-    const queues = QUEUE_NAMES.map(
-      (name) => new Queue(name, { connection }),
-    );
+    const queues = QUEUE_NAMES.map((name) => new Queue(name, { connection }));
     try {
       const entries = await Promise.all(
         queues.map(async (queue) => {

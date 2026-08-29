@@ -123,7 +123,7 @@ export default function InvoicesPage() {
                           }
                           className="text-xs text-text-muted hover:underline"
                         >
-                          Encaisser
+                          Enregistrer un paiement
                         </button>
                       )}
                     </td>
@@ -131,6 +131,10 @@ export default function InvoicesPage() {
                   {payingInvoiceId === invoice.id && (
                     <tr>
                       <td colSpan={6} className="bg-surface-muted px-4 py-3">
+                        <p className="mb-2 text-xs text-text-muted">
+                          Ceci enregistre un paiement déjà reçu (espèces, virement...) — ce
+                          n&apos;est pas un encaissement en ligne.
+                        </p>
                         <form
                           onSubmit={handleSubmit((values) =>
                             payMutation.mutate({

@@ -1,11 +1,21 @@
-import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   addMemberSchema,
   createOrganizationSchema,
+  updateMemberRoleSchema,
   updateOrganizationSchema,
   type AddMemberInput,
   type CreateOrganizationInput,
+  type UpdateMemberRoleInput,
   type UpdateOrganizationInput,
 } from '@korva/validation';
 import { OrganizationsService } from './organizations.service';
@@ -75,6 +85,39 @@ export class OrganizationsController {
       tenant.userId,
       tenant.roleId,
       body,
+    );
+  }
+
+  @RequirePermissions('settings.manage')
+  @Patch('me/members/:id')
+  updateMemberRole(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateMemberRoleSchema))
+    body: UpdateMemberRoleInput,
+  ) {
+    return this.organizationsService.updateMemberRole(
+      tenant.organizationId,
+      user.userId,
+      tenant.roleId,
+      id,
+      body.roleId,
+    );
+  }
+
+  @RequirePermissions('settings.manage')
+  @Delete('me/members/:id')
+  removeMember(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.organizationsService.removeMember(
+      tenant.organizationId,
+      user.userId,
+      tenant.roleId,
+      id,
     );
   }
 }

@@ -86,6 +86,7 @@ describe('IntegrationWebhookService', () => {
       providerEventId: 'evt-first',
       domain: 'payment',
       payload: { id: 'evt-first' },
+      organizationId: null,
     });
     expect(eventBus.publish).toHaveBeenCalledTimes(1);
     expect(eventBus.publish).toHaveBeenCalledWith(
@@ -123,6 +124,58 @@ describe('IntegrationWebhookService', () => {
       'org-123',
       'whatsapp.status_updated',
       expect.objectContaining({ messageId: 'evt-msg-1' }),
+    );
+  });
+
+  it('TEST 3b (Stage 2.5) — a resolved organizationId is persisted onto the claimed IntegrationWebhookEvent, not just threaded into EventBus', async () => {
+    const { verifier } = makeVerifier(true);
+    repository.claimIfNew.mockResolvedValue({
+      inserted: true,
+      event: null as never,
+    });
+    const rawBody = Buffer.from(JSON.stringify({ id: 'evt-msg-2' }), 'utf8');
+
+    await service.process({
+      provider: '360dialog',
+      domain: 'messaging',
+      rawBody,
+      headers: {},
+      verifier,
+      extractEventId,
+      organizationId: 'org-456',
+    });
+
+    expect(repository.claimIfNew).toHaveBeenCalledWith({
+      provider: '360dialog',
+      providerEventId: 'evt-msg-2',
+      domain: 'messaging',
+      payload: { id: 'evt-msg-2' },
+      organizationId: 'org-456',
+    });
+  });
+
+  it('TEST 2b (Stage 2.5, F9) — payment domain: a resolved organizationId reaches EventBus.publish exactly as resolved, never the unresolved sentinel', async () => {
+    const { verifier } = makeVerifier(true);
+    repository.claimIfNew.mockResolvedValue({
+      inserted: true,
+      event: null as never,
+    });
+    const rawBody = Buffer.from(JSON.stringify({ id: 'evt-pay-1' }), 'utf8');
+
+    await service.process({
+      provider: 'flutterwave',
+      domain: 'payment',
+      rawBody,
+      headers: {},
+      verifier,
+      extractEventId,
+      organizationId: 'org-flw-A',
+    });
+
+    expect(eventBus.publish).toHaveBeenCalledWith(
+      'org-flw-A',
+      'payment.webhook_received',
+      expect.objectContaining({ paymentId: 'evt-pay-1' }),
     );
   });
 

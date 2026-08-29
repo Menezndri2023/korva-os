@@ -101,7 +101,7 @@ describe('OrganizationsService.addMember — role-hierarchy enforcement', () => 
     return { service, create };
   }
 
-  async function attempt(actorRoleId: string, targetRoleId: string) {
+  function attempt(actorRoleId: string, targetRoleId: string) {
     const { service, create } = buildService();
     const promise = service.addMember(ORG_ID, ACTOR_USER_ID, actorRoleId, {
       email: TARGET_EMAIL,
@@ -111,80 +111,77 @@ describe('OrganizationsService.addMember — role-hierarchy enforcement', () => 
   }
 
   it('TEST 1 (critical): ADMIN cannot assign OWNER — 403, no membership created', async () => {
-    const { promise, create } = await attempt('role-admin', 'role-owner');
+    const { promise, create } = attempt('role-admin', 'role-owner');
     await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
     expect(create).not.toHaveBeenCalled();
   });
 
   it('TEST 2: OWNER can assign OWNER', async () => {
-    const { promise, create } = await attempt('role-owner', 'role-owner');
+    const { promise, create } = attempt('role-owner', 'role-owner');
     await expect(promise).resolves.toEqual({ id: 'membership-1' });
     expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('TEST 3: ADMIN can assign ADMIN', async () => {
-    const { promise, create } = await attempt('role-admin', 'role-admin');
+    const { promise, create } = attempt('role-admin', 'role-admin');
     await expect(promise).resolves.toEqual({ id: 'membership-1' });
     expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('TEST 4: ADMIN can assign MANAGER', async () => {
-    const { promise, create } = await attempt('role-admin', 'role-manager');
+    const { promise, create } = attempt('role-admin', 'role-manager');
     await expect(promise).resolves.toEqual({ id: 'membership-1' });
     expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('TEST 5: ADMIN can assign SALES', async () => {
-    const { promise, create } = await attempt('role-admin', 'role-sales');
+    const { promise, create } = attempt('role-admin', 'role-sales');
     await expect(promise).resolves.toEqual({ id: 'membership-1' });
     expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('TEST 6: ADMIN can assign FINANCE', async () => {
-    const { promise, create } = await attempt('role-admin', 'role-finance');
+    const { promise, create } = attempt('role-admin', 'role-finance');
     await expect(promise).resolves.toEqual({ id: 'membership-1' });
     expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('TEST 7: ADMIN can assign STAFF', async () => {
-    const { promise, create } = await attempt('role-admin', 'role-staff');
+    const { promise, create } = attempt('role-admin', 'role-staff');
     await expect(promise).resolves.toEqual({ id: 'membership-1' });
     expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('TEST 8: MANAGER cannot assign ADMIN — 403', async () => {
-    const { promise, create } = await attempt('role-manager', 'role-admin');
+    const { promise, create } = attempt('role-manager', 'role-admin');
     await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
     expect(create).not.toHaveBeenCalled();
   });
 
   it('TEST 9: MANAGER cannot assign OWNER — 403', async () => {
-    const { promise, create } = await attempt('role-manager', 'role-owner');
+    const { promise, create } = attempt('role-manager', 'role-owner');
     await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
     expect(create).not.toHaveBeenCalled();
   });
 
   it('TEST 10: STAFF cannot assign OWNER — 403', async () => {
-    const { promise, create } = await attempt('role-staff', 'role-owner');
+    const { promise, create } = attempt('role-staff', 'role-owner');
     await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
     expect(create).not.toHaveBeenCalled();
   });
 
   it('TEST 11: a roleId belonging to another organization is still ROLE_NOT_FOUND, no membership created', async () => {
-    const { promise, create } = await attempt(
-      'role-owner',
-      'role-other-org-owner',
-    );
+    const { promise, create } = attempt('role-owner', 'role-other-org-owner');
     await expect(promise).rejects.toBeInstanceOf(NotFoundException);
     expect(create).not.toHaveBeenCalled();
   });
 
   it('TEST 12: an unknown/custom role (no systemKey) fails closed with 403, no membership created', async () => {
-    const asActor = await attempt('role-custom', 'role-staff');
+    const asActor = attempt('role-custom', 'role-staff');
     await expect(asActor.promise).rejects.toBeInstanceOf(ForbiddenException);
     expect(asActor.create).not.toHaveBeenCalled();
 
-    const asTarget = await attempt('role-owner', 'role-custom');
+    const asTarget = attempt('role-owner', 'role-custom');
     await expect(asTarget.promise).rejects.toBeInstanceOf(ForbiddenException);
     expect(asTarget.create).not.toHaveBeenCalled();
   });

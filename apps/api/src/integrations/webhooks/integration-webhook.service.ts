@@ -46,11 +46,18 @@ export interface ProcessWebhookInput {
    */
   extractEventId: (payload: Record<string, unknown>) => string;
   /**
-   * Set only when the caller has already resolved which tenant this webhook belongs to (e.g. via
-   * an IntegrationAccount lookup keyed by the provider's subaccount/WABA id — Stage 2 territory).
-   * Omitted in every Stage 1 test since no real provider payload shape exists yet to resolve a
-   * tenant from. See UNRESOLVED_ORGANIZATION_ID for how EventBusService.publish() (which always
-   * requires a string) is called when this is absent.
+   * Set by the caller (the real webhook controller) once it has already resolved which tenant
+   * this webhook belongs to — Flutterwave: via the KORVA-created Payment matching the webhook's
+   * own `tx_ref`; 360dialog: via the tenant IntegrationAccount matching the webhook's own WABA id
+   * (see flutterwave-webhook.controller.ts / three-sixty-dialog-webhook.controller.ts, Stage 2.5).
+   * Both controllers resolve this from a payload that has ALREADY passed `verifier.verify()`
+   * themselves before ever calling `process()` — tenant identity is never derived from anything
+   * unverified, and this pipeline's own internal `verifier.verify()` call below still runs
+   * regardless, so attribution is never treated as proof of a webhook's validity. Omitted (or
+   * `undefined`) means the caller could not resolve a tenant — persisted as an explicit `null` on
+   * the IntegrationWebhookEvent document (see that schema's own doc comment) rather than guessed.
+   * See UNRESOLVED_ORGANIZATION_ID for how EventBusService.publish() (which always requires a
+   * string) is called when this is absent.
    */
   organizationId?: string;
 }
@@ -122,6 +129,7 @@ export class IntegrationWebhookService {
       providerEventId: eventId,
       domain,
       payload,
+      organizationId: organizationId ?? null,
     });
 
     if (!inserted) {

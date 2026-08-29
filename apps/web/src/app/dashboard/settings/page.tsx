@@ -17,11 +17,17 @@ import type {
   SubscriptionSummary,
   TestConnectionResult,
 } from "@korva/types";
-import { addMemberSchema, type AddMemberInput } from "@korva/validation";
-import { Badge, Button, Input } from "@korva/ui";
+import {
+  addMemberSchema,
+  updateOrganizationSchema,
+  type AddMemberInput,
+  type UpdateOrganizationInput,
+} from "@korva/validation";
+import { Badge, Button, Input, Select } from "@korva/ui";
 import type { BadgeVariant } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { useAuthStore } from "@/lib/auth-store";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
 interface MemberRow {
@@ -35,6 +41,14 @@ interface RoleOption {
   id: string;
   name: string;
   systemKey?: string;
+}
+
+interface PendingInvitation {
+  id: string;
+  email: string;
+  roleId: string;
+  status: string;
+  expiresAt: string;
 }
 
 const METRIC_LABELS: Record<string, string> = {
@@ -53,6 +67,19 @@ const MODULE_LABELS: Record<KorvaModule, string> = {
   analytics: "Statistiques",
   ai: "Assistant IA",
 };
+
+// Same list as apps/web/src/app/onboarding/page.tsx — kept local rather than shared, matching
+// that page's own precedent, since neither list is large enough yet to be worth extracting.
+const COUNTRIES = [
+  { code: "FR", label: "France" },
+  { code: "CI", label: "Côte d'Ivoire" },
+  { code: "SN", label: "Sénégal" },
+  { code: "MA", label: "Maroc" },
+  { code: "BE", label: "Belgique" },
+  { code: "CA", label: "Canada" },
+];
+const CURRENCIES = ["EUR", "XOF", "MAD", "USD", "CAD"];
+const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
 // Wave 4 Stage 2 — one card per known integration TYPE, not per row returned by the API: the
 // backend controller (built in a separate isolated worktree against the same
@@ -115,9 +142,16 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: organization } = useActiveOrganization();
   const authReady = useAuthReady();
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const { data: members, isLoading } = useQuery({
     queryKey: ["organizations", "me", "members"],
     queryFn: () => apiClient.get<MemberRow[]>("/organizations/me/members"),
+    enabled: authReady,
+  });
+  const { data: pendingInvitations } = useQuery({
+    queryKey: ["organizations", "me", "invitations"],
+    queryFn: () =>
+      apiClient.get<PendingInvitation[]>("/organizations/me/invitations"),
     enabled: authReady,
   });
   const { data: subscription } = useQuery({
@@ -150,15 +184,19 @@ export default function SettingsPage() {
     formState: { errors: inviteErrors },
   } = useForm<AddMemberInput>({ resolver: zodResolver(addMemberSchema) });
 
-  // Not optimistic, same reasoning as F1's modulesMutation: the member list is the source of
-  // truth, and onSuccess returns (not `void`) the invalidated refetch so isPending — and the
-  // submit button's disabled state — covers the full round trip, not just the POST itself.
+  // Sends a real email invitation (POST /organizations/me/invitations) rather than
+  // POST /organizations/me/members, which silently 404s (USER_NOT_FOUND) for anyone who doesn't
+  // already have a KORVA account — see InvitationsService. Inviting someone doesn't create a
+  // membership yet (they still have to accept), so this invalidates the pending-invitations
+  // list, not the members list; the member only shows up in the team list once they accept.
   const inviteMemberMutation = useMutation({
     mutationFn: (input: AddMemberInput) =>
-      apiClient.post<MemberRow>("/organizations/me/members", input),
+      apiClient.post<PendingInvitation>("/organizations/me/invitations", input),
     onSuccess: () => {
       resetInviteForm();
-      return queryClient.invalidateQueries({ queryKey: ["organizations", "me", "members"] });
+      return queryClient.invalidateQueries({
+        queryKey: ["organizations", "me", "invitations"],
+      });
     },
   });
 
@@ -166,6 +204,67 @@ export default function SettingsPage() {
     mutationFn: (planKey: string) =>
       apiClient.post("/subscriptions/change-plan", { planKey }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["subscriptions", "me"] }),
+  });
+
+  // Organization profile edit (name/legalName/type/country/currency/timezone/language/logo/
+  // brandColor) — PATCH /organizations/me already supported all of these fields (see
+  // updateOrganizationSchema); only the Modules section actually called it. Same
+  // toggle-open/reset-on-open/non-optimistic pattern as the CRM contact detail page's edit form.
+  const [orgEditOpen, setOrgEditOpen] = useState(false);
+  const {
+    register: registerOrg,
+    handleSubmit: handleOrgSubmit,
+    reset: resetOrgForm,
+    formState: { errors: orgErrors },
+  } = useForm<UpdateOrganizationInput>({ resolver: zodResolver(updateOrganizationSchema) });
+
+  function startOrgEdit() {
+    if (!organization) return;
+    setOrgEditOpen(true);
+    resetOrgForm({
+      name: organization.name,
+      legalName: organization.legalName,
+      type: organization.type,
+      country: organization.country,
+      currency: organization.currency,
+      timezone: organization.timezone,
+      language: organization.language,
+      logo: organization.logo,
+      brandColor: organization.brandColor,
+    });
+  }
+  function cancelOrgEdit() {
+    setOrgEditOpen(false);
+    resetOrgForm();
+  }
+
+  const updateOrgMutation = useMutation({
+    mutationFn: (input: UpdateOrganizationInput) =>
+      apiClient.patch<Organization>("/organizations/me", input),
+    onSuccess: () => {
+      setOrgEditOpen(false);
+      return queryClient.invalidateQueries({ queryKey: ["organizations", "me"] });
+    },
+  });
+
+  // Team management was previously add-only — PATCH/DELETE /organizations/me/members/:id now
+  // exist (role change, and removal as a status change to 'suspended', never a delete).
+  const updateMemberRoleMutation = useMutation({
+    mutationFn: ({ id, roleId }: { id: string; roleId: string }) =>
+      apiClient.patch<MemberRow>(`/organizations/me/members/${id}`, { roleId }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["organizations", "me", "members"] }),
+  });
+
+  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
+  const removeMemberMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiClient.delete<MemberRow>(`/organizations/me/members/${id}`),
+    onSuccess: () => {
+      setRemoveConfirmId(null);
+      return queryClient.invalidateQueries({ queryKey: ["organizations", "me", "members"] });
+    },
+    onError: () => setRemoveConfirmId(null),
   });
 
   // Kept non-optimistic on purpose: checked state always derives straight from
@@ -304,25 +403,199 @@ export default function SettingsPage() {
           <section>s — same exclusion as the raw <form> wrappers elsewhere (dashboard/crm,
           dashboard/bookings). */}
       <section className="rounded-lg border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-text">Organisation</h2>
-        <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <dt className="text-text-muted">Nom</dt>
-            <dd className="mt-0.5">{organization?.name ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-text-muted">Secteur</dt>
-            <dd className="mt-0.5">{organization?.type ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-text-muted">Pays</dt>
-            <dd className="mt-0.5">{organization?.country ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-text-muted">Devise</dt>
-            <dd className="mt-0.5">{organization?.currency ?? "—"}</dd>
-          </div>
-        </dl>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-text">Organisation</h2>
+          {organization && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => (orgEditOpen ? cancelOrgEdit() : startOrgEdit())}
+            >
+              {orgEditOpen ? "Annuler" : "Modifier"}
+            </Button>
+          )}
+        </div>
+
+        {!orgEditOpen ? (
+          <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-text-muted">Nom</dt>
+              <dd className="mt-0.5">{organization?.name ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Raison sociale</dt>
+              <dd className="mt-0.5">{organization?.legalName ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Secteur</dt>
+              <dd className="mt-0.5">{organization?.type ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Pays</dt>
+              <dd className="mt-0.5">{organization?.country ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Devise</dt>
+              <dd className="mt-0.5">{organization?.currency ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Fuseau horaire</dt>
+              <dd className="mt-0.5">{organization?.timezone ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Langue</dt>
+              <dd className="mt-0.5">{organization?.language ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Couleur de marque</dt>
+              <dd className="mt-0.5 flex items-center gap-2">
+                {organization?.brandColor ? (
+                  <>
+                    <span
+                      className="inline-block h-4 w-4 rounded-full border border-border"
+                      style={{ backgroundColor: organization.brandColor }}
+                    />
+                    {organization.brandColor}
+                  </>
+                ) : (
+                  "—"
+                )}
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <form
+            onSubmit={handleOrgSubmit((values) => updateOrgMutation.mutate(values))}
+            className="mt-4 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
+          >
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-name">
+                Nom
+              </label>
+              <Input
+                id="org-name"
+                className="w-full"
+                error={!!orgErrors.name}
+                {...registerOrg("name")}
+              />
+              {orgErrors.name && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.name.message}</p>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-legal-name">
+                Raison sociale
+              </label>
+              <Input id="org-legal-name" className="w-full" {...registerOrg("legalName")} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-type">
+                Secteur d&apos;activité
+              </label>
+              <Input
+                id="org-type"
+                className="w-full"
+                placeholder="ex: commerce, service, réservation..."
+                error={!!orgErrors.type}
+                {...registerOrg("type")}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-country">
+                Pays
+              </label>
+              <Select id="org-country" className="w-full" {...registerOrg("country")}>
+                {COUNTRIES.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-currency">
+                Devise
+              </label>
+              <Select id="org-currency" className="w-full" {...registerOrg("currency")}>
+                {CURRENCIES.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-timezone">
+                Fuseau horaire
+              </label>
+              <Select id="org-timezone" className="w-full" {...registerOrg("timezone")}>
+                {TIMEZONES.map((timezone) => (
+                  <option key={timezone} value={timezone}>
+                    {timezone}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-language">
+                Langue
+              </label>
+              <Input id="org-language" className="w-full" {...registerOrg("language")} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-brand-color">
+                Couleur de marque
+              </label>
+              {/* setValueAs: brandColor/logo are optional but format-constrained (hex/url) —
+                  an uncontrolled input left untouched by the user always submits "" (never
+                  `undefined`, regardless of what reset() set as the default), which fails the
+                  regex/.url() check even though the field is meant to be skippable. Converting
+                  "" to undefined here is what actually makes it skippable. */}
+              <Input
+                id="org-brand-color"
+                className="w-full"
+                placeholder="#1a73e8"
+                error={!!orgErrors.brandColor}
+                {...registerOrg("brandColor", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+              />
+              {orgErrors.brandColor && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.brandColor.message}</p>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-logo">
+                Logo (URL)
+              </label>
+              <Input
+                id="org-logo"
+                className="w-full"
+                placeholder="https://..."
+                error={!!orgErrors.logo}
+                {...registerOrg("logo", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+              />
+              {orgErrors.logo && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.logo.message}</p>
+              )}
+            </div>
+
+            {updateOrgMutation.isError && (
+              <p className="text-sm text-destructive sm:col-span-2">
+                {updateOrgMutation.error instanceof ApiError
+                  ? updateOrgMutation.error.message
+                  : "Impossible d'enregistrer les informations de l'organisation."}
+              </p>
+            )}
+
+            <div className="flex gap-2 sm:col-span-2">
+              <Button type="submit" loading={updateOrgMutation.isPending}>
+                {updateOrgMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={cancelOrgEdit}>
+                Annuler
+              </Button>
+            </div>
+          </form>
+        )}
       </section>
 
       <section className="rounded-lg border border-border bg-surface p-6">
@@ -528,7 +801,9 @@ export default function SettingsPage() {
             )}
 
             {inviteMemberMutation.isSuccess && (
-              <p className="text-sm text-text sm:col-span-2">Invitation envoyée.</p>
+              <p className="text-sm text-text sm:col-span-2">
+                Invitation envoyée par email. Elle apparaîtra ci-dessous jusqu&apos;à ce qu&apos;elle soit acceptée.
+              </p>
             )}
 
             <Button
@@ -544,20 +819,131 @@ export default function SettingsPage() {
 
         <div className="mt-4 divide-y divide-border">
           {isLoading && <p className="py-2 text-sm text-text-muted">Chargement...</p>}
-          {members?.map((member) => (
-            <div key={member.id} className="flex items-center justify-between py-2 text-sm">
-              <div>
-                <p className="font-medium">
-                  {member.userId.firstName
-                    ? `${member.userId.firstName} ${member.userId.lastName ?? ""}`.trim()
-                    : member.userId.email}
-                </p>
-                <p className="text-xs text-text-muted">{member.userId.email}</p>
-              </div>
-              <Badge>{member.roleId.name}</Badge>
-            </div>
-          ))}
+          {members
+            ?.filter((member) => member.status === "active")
+            .map((member) => {
+              const isSelf = member.userId.id === currentUserId;
+              const isRoleChangePending =
+                updateMemberRoleMutation.isPending &&
+                updateMemberRoleMutation.variables?.id === member.id;
+              const roleChangeError =
+                updateMemberRoleMutation.isError &&
+                updateMemberRoleMutation.variables?.id === member.id
+                  ? updateMemberRoleMutation.error
+                  : null;
+              const isRemoveConfirming = removeConfirmId === member.id;
+              const isRemovePending =
+                removeMemberMutation.isPending && removeMemberMutation.variables === member.id;
+              const removeError =
+                removeMemberMutation.isError && removeMemberMutation.variables === member.id
+                  ? removeMemberMutation.error
+                  : null;
+              return (
+                <div key={member.id} className="py-2 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">
+                        {member.userId.firstName
+                          ? `${member.userId.firstName} ${member.userId.lastName ?? ""}`.trim()
+                          : member.userId.email}
+                        {isSelf && <span className="text-xs text-text-muted"> (vous)</span>}
+                      </p>
+                      <p className="text-xs text-text-muted">{member.userId.email}</p>
+                    </div>
+                    {isSelf ? (
+                      <Badge>{member.roleId.name}</Badge>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={member.roleId.id}
+                          disabled={isRoleChangePending}
+                          onChange={(e) =>
+                            updateMemberRoleMutation.mutate({ id: member.id, roleId: e.target.value })
+                          }
+                          className="rounded-md border border-border-input bg-surface px-2 py-1 text-xs text-text focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {roles?.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </select>
+                        {isRemoveConfirming ? (
+                          <>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              loading={isRemovePending}
+                              onClick={() => removeMemberMutation.mutate(member.id)}
+                            >
+                              {isRemovePending ? "Retrait..." : "Confirmer ?"}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={isRemovePending}
+                              onClick={() => setRemoveConfirmId(null)}
+                            >
+                              Annuler
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRemoveConfirmId(member.id)}
+                          >
+                            Retirer
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {roleChangeError && (
+                    <p className="mt-1 text-xs text-destructive">
+                      {roleChangeError instanceof ApiError
+                        ? roleChangeError.message
+                        : "Impossible de modifier le rôle."}
+                    </p>
+                  )}
+                  {removeError && (
+                    <p className="mt-1 text-xs text-destructive">
+                      {removeError instanceof ApiError
+                        ? removeError.message
+                        : "Impossible de retirer ce membre."}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
         </div>
+
+        {pendingInvitations && pendingInvitations.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-xs font-semibold uppercase text-text-muted">
+              Invitations en attente
+            </h3>
+            <div className="mt-2 divide-y divide-border">
+              {pendingInvitations.map((invitation) => (
+                <div
+                  key={invitation.id}
+                  className="flex items-center justify-between py-2 text-sm"
+                >
+                  <div>
+                    <p className="font-medium">{invitation.email}</p>
+                    <p className="text-xs text-text-muted">
+                      Expire le {new Date(invitation.expiresAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Badge variant="warning">
+                    {roles?.find((role) => role.id === invitation.roleId)?.name ??
+                      "En attente"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg border border-border bg-surface p-6">
@@ -867,9 +1253,10 @@ export default function SettingsPage() {
                       className="mt-3 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
                     >
                       <p className="text-xs text-text-muted sm:col-span-2">
-                        Ces informations proviennent de l&apos;inscription WhatsApp Business que
-                        vous avez complétée directement chez 360dialog (embedded signup) — elles
-                        ne sont pas saisies ici pour la première fois.
+                        Le WABA ID, l&apos;ID du numéro de téléphone et la clé API proviennent de
+                        l&apos;inscription WhatsApp Business que vous avez complétée directement
+                        chez 360dialog (embedded signup) — ces informations ne sont pas saisies
+                        ici pour la première fois.
                       </p>
                       <div>
                         <label
@@ -912,6 +1299,26 @@ export default function SettingsPage() {
                           error={!!messagingErrors.displayName}
                           {...registerMessaging("displayName", { required: true })}
                         />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label
+                          className="block text-sm font-medium text-text"
+                          htmlFor="waba-api-key"
+                        >
+                          Clé API (D360-API-KEY)
+                        </label>
+                        <Input
+                          id="waba-api-key"
+                          type="password"
+                          autoComplete="off"
+                          className="mt-1 w-full"
+                          error={!!messagingErrors.apiKey}
+                          {...registerMessaging("apiKey", { required: true })}
+                        />
+                        <p className="mt-1 text-xs text-text-muted">
+                          Stockée chiffrée et jamais réaffichée ensuite — nécessaire pour tester
+                          la connexion et activer l&apos;intégration.
+                        </p>
                       </div>
 
                       {connectMessagingMutation.isError && (

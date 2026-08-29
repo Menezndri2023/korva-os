@@ -11,7 +11,11 @@ export type PasswordResetTokenDocument = HydratedDocument<PasswordResetToken>;
  * token itself is never stored: only its SHA-256 hash (tokenHash, see token-hash.util.ts),
  * the same pattern already used for refresh tokens on Session.refreshTokenHash.
  */
-@Schema({ timestamps: true, collection: 'password_reset_tokens', toJSON: idToJson })
+@Schema({
+  timestamps: true,
+  collection: 'password_reset_tokens',
+  toJSON: idToJson,
+})
 export class PasswordResetToken {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, unique: true })
   userId!: Types.ObjectId;

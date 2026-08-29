@@ -39,6 +39,7 @@ function buildService() {
   const listPlatformAccounts = jest.fn();
   const revoke = jest.fn().mockResolvedValue(undefined);
   const updateStatus = jest.fn().mockResolvedValue(undefined);
+  const findTenantAccountByWabaId = jest.fn();
 
   const integrationsRepository = {
     create,
@@ -48,6 +49,7 @@ function buildService() {
     listPlatformAccounts,
     revoke,
     updateStatus,
+    findTenantAccountByWabaId,
   } as unknown as IntegrationsRepository;
 
   const encrypt = jest.fn((plaintext: string) => `enc(${plaintext})`);
@@ -73,6 +75,7 @@ function buildService() {
     listPlatformAccounts,
     revoke,
     updateStatus,
+    findTenantAccountByWabaId,
     encrypt,
     decrypt,
   };
@@ -519,6 +522,35 @@ describe('IntegrationsService — platform scope is structurally unreachable fro
 
     expect(secret).toBeNull();
     expect(decrypt).not.toHaveBeenCalled();
+  });
+});
+
+describe('IntegrationsService — findTenantOrganizationIdByWabaId (Stage 2.5 — 360dialog webhook tenant attribution)', () => {
+  it("returns the connected account's own organizationId — never anything from a caller-supplied value, since this method takes none", async () => {
+    const { service, findTenantAccountByWabaId } = buildService();
+    const orgId = new Types.ObjectId(OWN_ORG_ID);
+    findTenantAccountByWabaId.mockResolvedValue(
+      makeDoc({
+        domain: 'messaging',
+        provider: '360dialog',
+        organizationId: orgId,
+      }),
+    );
+
+    const resolved = await service.findTenantOrganizationIdByWabaId('waba-A');
+
+    expect(findTenantAccountByWabaId).toHaveBeenCalledWith('waba-A');
+    expect(resolved).toBe(String(orgId));
+  });
+
+  it('returns null (fails closed) when no live tenant account is connected with this WABA id — never guesses a default tenant', async () => {
+    const { service, findTenantAccountByWabaId } = buildService();
+    findTenantAccountByWabaId.mockResolvedValue(null);
+
+    const resolved =
+      await service.findTenantOrganizationIdByWabaId('waba-unknown');
+
+    expect(resolved).toBeNull();
   });
 });
 

@@ -113,7 +113,8 @@ describe('HealthController — public endpoints never leak internal error detail
   });
 
   it('returns a generic message when queue metrics fail, and logs the real one server-side', async () => {
-    const internalMessage = 'Redis connection to redis://internal-redis.prod.local:6379 failed';
+    const internalMessage =
+      'Redis connection to redis://internal-redis.prod.local:6379 failed';
     const queueMetricsService = {
       getMetrics: jest.fn().mockRejectedValue(new Error(internalMessage)),
     };
@@ -205,7 +206,14 @@ describe('HealthController — GET /health/queues', () => {
     for (const counts of Object.values(result)) {
       const keys = Object.keys(counts);
       expect(keys.sort()).toEqual(
-        ['active', 'completed', 'delayed', 'failed', 'paused', 'waiting'].sort(),
+        [
+          'active',
+          'completed',
+          'delayed',
+          'failed',
+          'paused',
+          'waiting',
+        ].sort(),
       );
       for (const value of Object.values(counts)) {
         expect(typeof value).toBe('number');

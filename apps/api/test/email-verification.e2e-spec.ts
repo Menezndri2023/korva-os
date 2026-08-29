@@ -44,7 +44,11 @@ class CapturingEmailProvider implements EmailProvider {
   readonly name = 'capturing';
   readonly sent: { to: string; subject: string; body: string }[] = [];
 
-  send(input: { to: string; subject: string; body: string }): Promise<EmailSendResult> {
+  send(input: {
+    to: string;
+    subject: string;
+    body: string;
+  }): Promise<EmailSendResult> {
     this.sent.push(input);
     return Promise.resolve({ providerReference: 'captured', status: 'sent' });
   }
@@ -53,7 +57,8 @@ class CapturingEmailProvider implements EmailProvider {
     const last = this.sent[this.sent.length - 1];
     if (!last) throw new Error('No email captured');
     const match = /token=([0-9a-f]+)/.exec(last.body);
-    if (!match) throw new Error(`No token found in captured email body: ${last.body}`);
+    if (!match)
+      throw new Error(`No token found in captured email body: ${last.body}`);
     return match[1]!;
   }
 }
@@ -133,7 +138,9 @@ describe('Email verification (e2e)', () => {
       .post('/api/v1/auth/verify-email')
       .send({ token })
       .expect(201);
-    expect(asSuccess<{ success: boolean }>(res.body)).toEqual({ success: true });
+    expect(asSuccess<{ success: boolean }>(res.body)).toEqual({
+      success: true,
+    });
 
     expect(await findUserEmailVerifiedAt(user.id)).not.toBeNull();
   });

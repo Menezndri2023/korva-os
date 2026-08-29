@@ -62,6 +62,31 @@ export class MembershipsService {
     );
   }
 
+  findByIdForOrganization(
+    id: string,
+    organizationId: string,
+  ): Promise<MembershipDocument | null> {
+    return this.membershipsRepository.findByIdForOrganization(
+      id,
+      organizationId,
+    );
+  }
+
+  updateRole(id: string, roleId: string): Promise<MembershipDocument | null> {
+    return this.membershipsRepository.updateRole(id, roleId);
+  }
+
+  updateStatus(
+    id: string,
+    status: MembershipDocument['status'],
+  ): Promise<MembershipDocument | null> {
+    return this.membershipsRepository.updateStatus(id, status);
+  }
+
+  countActiveByRole(organizationId: string, roleId: string): Promise<number> {
+    return this.membershipsRepository.countActiveByRole(organizationId, roleId);
+  }
+
   /**
    * The single source of truth for tenant isolation: resolves whether `userId` genuinely
    * belongs to `organizationId`, and if so builds the TenantContext from their real role and

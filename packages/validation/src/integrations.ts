@@ -21,15 +21,22 @@ export type ConnectPaymentPayoutInput = z.infer<
 
 /**
  * Mirrors `ConnectMessagingAccountInput` (packages/types/src/integrations.ts) exactly — the
- * Settings → Integrations "Connect WhatsApp Business Account" form body. All three fields are
+ * Settings → Integrations "Connect WhatsApp Business Account" form body. All four fields are
  * obtained by the tenant from the BSP's own onboarding flow outside this app (see
  * docs/architecture/integrations-platform.md §5/§9), so this schema only guards against blank
  * submissions, not any provider-specific format.
+ *
+ * `apiKey` is the 360dialog D360-API-KEY credential — without it, `IntegrationsController`
+ * would persist an account that can never be tested/activated (there is no other route that can
+ * attach a secret to a tenant messaging account after the fact). It is encrypted at rest
+ * (`CredentialEncryptionService`) and never returned by any read endpoint — see
+ * `IntegrationSummary`'s own doc comment for why that type structurally cannot leak it.
  */
 export const connectMessagingAccountSchema = z.object({
   wabaId: z.string().min(1),
   phoneNumberId: z.string().min(1),
   displayName: z.string().min(1),
+  apiKey: z.string().min(1),
 });
 export type ConnectMessagingAccountInput = z.infer<
   typeof connectMessagingAccountSchema

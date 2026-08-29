@@ -43,11 +43,14 @@ export interface ConnectPaymentPayoutInput {
 /** Tenant-submitted WhatsApp Business Account details, obtained via the BSP's own onboarding
  *  flow (360dialog embedded signup) outside this app — see docs/architecture/
  *  integrations-platform.md §5 and §9 for why a fully automated Embedded Signup handshake is a
- *  further increment, not Stage 2 scope. */
+ *  further increment, not Stage 2 scope. `apiKey` is the D360-API-KEY credential — required so
+ *  the account can actually be test-connected/activated afterward; it is never echoed back by
+ *  any read endpoint (see IntegrationSummary below). */
 export interface ConnectMessagingAccountInput {
   wabaId: string;
   phoneNumberId: string;
   displayName: string;
+  apiKey: string;
 }
 
 export interface TestConnectionResult {

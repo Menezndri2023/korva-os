@@ -44,7 +44,11 @@ class CapturingEmailProvider implements EmailProvider {
   readonly name = 'capturing';
   readonly sent: { to: string; subject: string; body: string }[] = [];
 
-  send(input: { to: string; subject: string; body: string }): Promise<EmailSendResult> {
+  send(input: {
+    to: string;
+    subject: string;
+    body: string;
+  }): Promise<EmailSendResult> {
     this.sent.push(input);
     return Promise.resolve({ providerReference: 'captured', status: 'sent' });
   }
@@ -53,7 +57,8 @@ class CapturingEmailProvider implements EmailProvider {
     const last = this.sent[this.sent.length - 1];
     if (!last) throw new Error('No email captured');
     const match = /token=([0-9a-f]+)/.exec(last.body);
-    if (!match) throw new Error(`No token found in captured email body: ${last.body}`);
+    if (!match)
+      throw new Error(`No token found in captured email body: ${last.body}`);
     return match[1]!;
   }
 }
@@ -129,7 +134,9 @@ describe('Password reset (e2e)', () => {
       .post('/api/v1/auth/reset-password')
       .send({ token, password: 'newpassword456' })
       .expect(201);
-    expect(asSuccess<{ success: boolean }>(resetRes.body)).toEqual({ success: true });
+    expect(asSuccess<{ success: boolean }>(resetRes.body)).toEqual({
+      success: true,
+    });
 
     // All sessions predating the reset must be revoked.
     expect(await countActiveSessions(user.id)).toBe(0);
@@ -171,7 +178,10 @@ describe('Password reset (e2e)', () => {
     const tokenHash = createHash('sha256').update(token).digest('hex');
     await connection
       .collection('password_reset_tokens')
-      .updateOne({ tokenHash }, { $set: { expiresAt: new Date(Date.now() - 1000) } });
+      .updateOne(
+        { tokenHash },
+        { $set: { expiresAt: new Date(Date.now() - 1000) } },
+      );
 
     const res = await request(server)
       .post('/api/v1/auth/reset-password')

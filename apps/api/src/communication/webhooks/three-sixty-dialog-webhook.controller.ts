@@ -16,6 +16,7 @@ import type { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { IntegrationWebhookService } from '../../integrations/webhooks/integration-webhook.service';
 import type { ProcessWebhookResult } from '../../integrations/webhooks/integration-webhook.service';
+import { IntegrationsService } from '../../integrations/integrations.service';
 import { ThreeSixtyDialogWebhookVerifier } from './three-sixty-dialog-webhook-verifier';
 
 interface RequestWithRawBody extends Request {
@@ -71,6 +72,26 @@ export function extractThreeSixtyDialogEventId(
 }
 
 /**
+ * Stage 2.5 — the stable external identity this pipeline attributes tenants by: `entry[0].id` is
+ * the WABA (WhatsApp Business Account) id, per Meta's own documented webhook payload shape
+ * (confirmed at the same URL cited on `extractThreeSixtyDialogEventId` above) — present on every
+ * entry regardless of whether it carries a status or an inbound message, unlike `statuses[0].id`/
+ * `messages[0].id` which are per-event-type. This is exactly the value
+ * `IntegrationsController.connectMessaging` persists as `metadata.wabaId` when a tenant connects
+ * their WABA (see integrations.controller.ts), so it is never invented here — only read back.
+ * Returns `undefined` (not thrown) for a payload shape this doesn't recognize — attribution
+ * failing is never treated as the same failure mode as `extractEventId` throwing, since a
+ * webhook can be perfectly valid and still be unattributable (see IntegrationWebhookService's own
+ * fail-closed "unresolved" handling).
+ */
+export function extractThreeSixtyDialogAccountId(
+  payload: Record<string, unknown>,
+): string | undefined {
+  const typed = payload as ThreeSixtyDialogWebhookPayload;
+  return typed.entry?.[0]?.id;
+}
+
+/**
  * Receives 360dialog's webhook deliveries (message status updates sent/delivered/read/failed, and
  * inbound customer messages), verifies them via `ThreeSixtyDialogWebhookVerifier`'s
  * `x-360dialog-signature` HMAC (see that file's own doc comment for why this is NOT Meta's
@@ -103,6 +124,7 @@ export class ThreeSixtyDialogWebhookController {
   constructor(
     private readonly configService: ConfigService,
     private readonly integrationWebhookService: IntegrationWebhookService,
+    private readonly integrationsService: IntegrationsService,
   ) {}
 
   @Get()
@@ -160,6 +182,14 @@ export class ThreeSixtyDialogWebhookController {
 
     const verifier = new ThreeSixtyDialogWebhookVerifier(secret);
 
+    // Stage 2.5 — tenant attribution, resolved BEFORE calling the generic pipeline and only after
+    // independently verifying the signature ourselves first — same reasoning and same deliberate
+    // redundancy with process()'s own internal verify() as flutterwave-webhook.controller.ts's
+    // own resolveOrganizationId call (see that file's doc comment).
+    const organizationId = verifier.verify(rawBody, req.headers)
+      ? await this.resolveOrganizationId(rawBody)
+      : undefined;
+
     let result: ProcessWebhookResult;
     try {
       result = await this.integrationWebhookService.process({
@@ -169,6 +199,7 @@ export class ThreeSixtyDialogWebhookController {
         headers: req.headers,
         verifier,
         extractEventId: extractThreeSixtyDialogEventId,
+        organizationId,
       });
     } catch {
       throw new BadRequestException({
@@ -185,5 +216,31 @@ export class ThreeSixtyDialogWebhookController {
     }
 
     return { received: true };
+  }
+
+  /**
+   * Stage 2.5 — derives which KORVA organization this (already signature-verified) webhook
+   * belongs to, via `extractThreeSixtyDialogAccountId`'s WABA id mapped against the tenant
+   * IntegrationAccount that connected it (`IntegrationsService.findTenantOrganizationIdByWabaId`
+   * — see that method's own doc comment). A malformed body, a payload with no `entry[0].id`, or
+   * no tenant account connected with that WABA id all resolve to `undefined` (unresolved) — never
+   * thrown, never guessed at any tenant.
+   */
+  private async resolveOrganizationId(
+    rawBody: Buffer,
+  ): Promise<string | undefined> {
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(rawBody.toString('utf8')) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+
+    const wabaId = extractThreeSixtyDialogAccountId(payload);
+    if (!wabaId) return undefined;
+
+    const organizationId =
+      await this.integrationsService.findTenantOrganizationIdByWabaId(wabaId);
+    return organizationId ?? undefined;
   }
 }

@@ -5,8 +5,10 @@ import BookingDetailPage from "./page";
 import { renderWithProviders } from "@/test/render";
 import { apiClient, ApiError } from "@/lib/api-client";
 
+const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "booking-1" }),
+  useRouter: () => ({ push: pushMock }),
 }));
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
@@ -139,5 +141,67 @@ describe("BookingDetailPage", () => {
     await user.click(screen.getByRole("button", { name: "Annuler la réservation" }));
 
     expect(await screen.findByText("This booking is already cancelled")).toBeInTheDocument();
+  });
+
+  it("does not show 'Créer une commande' for a pending booking", async () => {
+    renderWithProviders(<BookingDetailPage />);
+    await screen.findByRole("heading", { name: "Salle 1" });
+
+    expect(screen.queryByRole("button", { name: "Créer une commande" })).not.toBeInTheDocument();
+  });
+
+  it("shows 'Créer une commande' for a confirmed booking, and navigates to the new order on success", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/bookings/booking-1") {
+        return Promise.resolve({ ...booking, status: "confirmed" as const });
+      }
+      return mockGetByPath(path);
+    });
+    postMock.mockResolvedValue({ id: "order-99" });
+    const user = userEvent.setup();
+    renderWithProviders(<BookingDetailPage />);
+    await screen.findByRole("heading", { name: "Salle 1" });
+
+    await user.click(screen.getByRole("button", { name: "Créer une commande" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/orders/from-booking", { bookingId: "booking-1" }),
+    );
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard/orders/order-99"));
+  });
+
+  it("shows a friendly message (not a raw error) when an order already exists for the booking", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/bookings/booking-1") {
+        return Promise.resolve({ ...booking, status: "confirmed" as const });
+      }
+      return mockGetByPath(path);
+    });
+    postMock.mockRejectedValue(
+      new ApiError("ORDER_ALREADY_EXISTS", "An order already exists for this booking"),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<BookingDetailPage />);
+    await screen.findByRole("heading", { name: "Salle 1" });
+
+    await user.click(screen.getByRole("button", { name: "Créer une commande" }));
+
+    expect(
+      await screen.findByText("Une commande existe déjà pour cette réservation."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("An order already exists for this booking")).not.toBeInTheDocument();
+  });
+
+  it("also shows 'Créer une commande' for a completed booking", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/bookings/booking-1") {
+        return Promise.resolve({ ...booking, status: "completed" as const });
+      }
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<BookingDetailPage />);
+    await screen.findByRole("heading", { name: "Salle 1" });
+
+    expect(screen.getByRole("button", { name: "Créer une commande" })).toBeInTheDocument();
   });
 });

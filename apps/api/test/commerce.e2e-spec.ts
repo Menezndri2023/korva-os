@@ -132,7 +132,9 @@ describe('Commerce module (e2e)', () => {
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Organization-Id', organizationId)
-      .send({ enabledModules: ['crm', 'catalog', 'booking', 'commerce', 'finance'] })
+      .send({
+        enabledModules: ['crm', 'catalog', 'booking', 'commerce', 'finance'],
+      })
       .expect(200);
 
     const contactRes = await request(server)

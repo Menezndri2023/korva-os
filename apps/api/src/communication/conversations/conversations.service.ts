@@ -25,10 +25,13 @@ import {
   EMAIL_PROVIDER,
   type EmailProvider,
 } from '../providers/email-provider.interface';
-import {
-  MESSAGING_PROVIDER,
-  type MessagingProvider,
-} from '../providers/messaging-provider.interface';
+import { MessagingProviderResolverService } from '../providers/messaging-provider-resolver.service';
+
+/** e.g. '360dialog' — the only WhatsApp/SMS BSP provider key registered today (see
+ *  MessagingProviderRegistry). Every tenant-scoped whatsapp/sms send resolves through this exact
+ *  provider key; adding a second messaging provider later is a MessagingProviderRegistry change,
+ *  not a change here. */
+const MESSAGING_TENANT_PROVIDER = '360dialog';
 
 @Injectable()
 export class ConversationsService {
@@ -39,8 +42,7 @@ export class ConversationsService {
     private readonly messageTemplatesService: MessageTemplatesService,
     private readonly auditService: AuditService,
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
-    @Inject(MESSAGING_PROVIDER)
-    private readonly messagingProvider: MessagingProvider,
+    private readonly messagingProviderResolver: MessagingProviderResolverService,
   ) {}
 
   async create(
@@ -237,7 +239,16 @@ export class ConversationsService {
           message: 'This contact has no phone number on file',
         });
       }
-      const result = await this.messagingProvider.send({ to, body });
+      // Stage 2.4: resolves the REAL tenant-scoped provider for this organization — never the
+      // old global process-wide messaging binding. Fails closed (WHATSAPP_NOT_CONNECTED) if this
+      // tenant has no active messaging IntegrationAccount; never silently falls back to another
+      // tenant's credential or a process-wide one.
+      const messagingProvider =
+        await this.messagingProviderResolver.resolveTenantProvider({
+          organizationId,
+          provider: MESSAGING_TENANT_PROVIDER,
+        });
+      const result = await messagingProvider.send({ to, body });
       // Message doesn't model a 'read' receipt yet (that's a Stage 2 concern once a real
       // delivery-status webhook exists) — degrade to 'delivered', the closest state it does
       // model, rather than widening MessageStatus for a value no provider produces today.

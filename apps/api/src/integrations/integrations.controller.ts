@@ -53,10 +53,8 @@ function toIntegrationSummary(
  * `IntegrationSummary`/`TestConnectionResult` contract from `packages/types/src/integrations.ts`
  * — never a raw Mongoose document, never `secretEncrypted`.
  *
- * Not yet registered in `integrations.module.ts`/`app.module.ts` — the Wave 4 orchestrator wires
- * this controller (and the `PaymentProviderResolverService`/`MessagingProviderResolverService`
- * providers it depends on) in at convergence, exactly like every other Stage 1/2 module in this
- * codebase (see docs/architecture/integrations-platform.md §11.2 item 3).
+ * Registered in `integrations.module.ts`, wired into `app.module.ts` since Wave 4 Stage 2
+ * convergence (see docs/architecture/integrations-platform.md §11.2 item 3).
  */
 @ApiTags('organizations')
 @Controller('organizations/me/integrations')
@@ -126,8 +124,11 @@ export class IntegrationsController {
   /**
    * No external call is made here — the tenant already completed 360dialog's own onboarding
    * outside this app (a fully automated Embedded Signup handshake is explicitly not Stage 2
-   * scope, per docs/architecture/integrations-platform.md §9). This just persists the submitted
-   * WABA details as a new tenant-scope `pending` `IntegrationAccount`.
+   * scope, per docs/architecture/integrations-platform.md §9). This persists the submitted WABA
+   * details AND the D360-API-KEY credential (`body.apiKey`, encrypted at rest by
+   * `IntegrationsService.createTenantAccount`) as a new tenant-scope `pending`
+   * `IntegrationAccount` — without the secret here, the account could never pass
+   * `testConnection` afterward (there is no other route that can attach one after the fact).
    */
   @RequirePermissions('settings.manage')
   @Post('messaging/connect')
@@ -142,6 +143,7 @@ export class IntegrationsController {
       {
         domain: 'messaging',
         provider: '360dialog',
+        secret: body.apiKey,
         metadata: {
           wabaId: body.wabaId,
           phoneNumberId: body.phoneNumberId,
@@ -163,15 +165,16 @@ export class IntegrationsController {
    * `PaymentProvider` instance, so this can call `.testConnection?.()` directly and persist the
    * result via `IntegrationsService.recordTenantAccountTestConnection`.
    *
-   * Messaging domain — Stage 2 gap, deliberately not papered over: `MessagingProviderResolverService`
-   * (a file this lot doesn't own) currently only exposes `assertTenantConnected()`, a boolean-style
-   * connectivity check — there is no method that returns a concrete `MessagingProvider` *instance*
-   * scoped to this tenant/provider the way the payment resolver does. Without an instance there is
-   * nothing to call `.testConnection()` on. Rather than inventing a new resolver method inside a
-   * file owned by a different Stage 2 lot, this calls `assertTenantConnected` (so a genuinely
-   * disconnected WABA still fails with the existing typed `WHATSAPP_NOT_CONNECTED` error) and then
-   * surfaces the missing-instance situation as `TEST_CONNECTION_NOT_SUPPORTED` — an honest gap, not
-   * a faked `{ ok: true }`. See this lot's final report for the same note.
+   * Messaging domain — uses `MessagingProviderResolverService.resolveForTest()`, NOT
+   * `resolveTenantProvider()`: the latter requires `status === 'active'` (the real-send-path
+   * gate), but the entire point of this endpoint is to test a still-`pending` account and let a
+   * successful result promote it to `active` (see `recordTenantAccountTestConnection`) — calling
+   * `resolveTenantProvider()` here would make a freshly connected account unable to ever pass
+   * its first test (a pending account can never resolve, so it can never become active, so it
+   * can never resolve...). `resolveForTest` decrypts the tenant's own stored secret directly
+   * (still ownership-scoped by `organizationId`) without the `active` precondition; the registry
+   * itself still fails closed with `MESSAGING_PROVIDER_CREDENTIAL_MISSING` if no secret was ever
+   * stored.
    */
   @RequirePermissions('settings.manage')
   @Post(':id/test-connection')
@@ -208,16 +211,31 @@ export class IntegrationsController {
       return result;
     }
 
-    // account.domain === 'messaging' — see this method's doc comment above for the Stage 2 gap.
-    await this.messagingProviderResolver.assertTenantConnected({
-      organizationId: tenant.organizationId,
-      provider: account.provider,
-    });
+    // account.domain === 'messaging' — see this method's doc comment above for why this calls
+    // resolveForTest (bootstrap-safe for a pending account), not resolveTenantProvider (the
+    // active-only real-send-path resolver).
+    const messagingProvider =
+      await this.messagingProviderResolver.resolveForTest({
+        organizationId: tenant.organizationId,
+        accountId: id,
+        provider: account.provider,
+      });
 
-    throw new UnprocessableEntityException({
-      code: 'TEST_CONNECTION_NOT_SUPPORTED',
-      message: `No per-tenant provider instance can be resolved for messaging provider "${account.provider}" yet (Stage 2 gap — see docs/architecture/integrations-platform.md)`,
-    });
+    if (!messagingProvider.testConnection) {
+      throw new UnprocessableEntityException({
+        code: 'TEST_CONNECTION_NOT_SUPPORTED',
+        message: `Messaging provider "${messagingProvider.name}" does not support connection testing`,
+      });
+    }
+
+    const result = await messagingProvider.testConnection();
+    await this.integrationsService.recordTenantAccountTestConnection(
+      tenant.organizationId,
+      tenant.permissions,
+      id,
+      result,
+    );
+    return result;
   }
 
   @RequirePermissions('settings.manage')

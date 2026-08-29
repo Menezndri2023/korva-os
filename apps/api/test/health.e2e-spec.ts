@@ -43,14 +43,23 @@ describe('Health module — GET /health/queues (e2e)', () => {
 
   it('returns 200 with numeric counts for both the events and payment-reconciliation queues, unauthenticated', async () => {
     const res = await request(server).get('/api/v1/health/queues').expect(200);
-    const metrics = asSuccess<Record<string, Record<string, unknown>>>(res.body);
+    const metrics = asSuccess<Record<string, Record<string, unknown>>>(
+      res.body,
+    );
 
     expect(Object.keys(metrics).sort()).toEqual(
       ['events', 'payment-reconciliation'].sort(),
     );
     for (const counts of Object.values(metrics)) {
       expect(Object.keys(counts).sort()).toEqual(
-        ['active', 'completed', 'delayed', 'failed', 'paused', 'waiting'].sort(),
+        [
+          'active',
+          'completed',
+          'delayed',
+          'failed',
+          'paused',
+          'waiting',
+        ].sort(),
       );
       for (const value of Object.values(counts)) {
         expect(typeof value).toBe('number');

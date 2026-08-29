@@ -6,8 +6,11 @@ interface MockQueueEventsInstance {
   name: string;
   connectionOptions: unknown;
   listeners: Record<string, ((...args: unknown[]) => void)[]>;
-  on: jest.Mock;
-  close: jest.Mock;
+  on: jest.Mock<
+    MockQueueEventsInstance,
+    [string, (...args: unknown[]) => void]
+  >;
+  close: jest.Mock<Promise<void>, []>;
   emit(event: string, ...args: unknown[]): void;
 }
 
@@ -54,16 +57,21 @@ function buildService(): QueueAlertingService {
 }
 
 describe('QueueAlertingService', () => {
-  let loggerWarnSpy: jest.SpyInstance;
-  let loggerErrorSpy: jest.SpyInstance;
+  let loggerWarnSpy: jest.SpyInstance<void, unknown[]>;
+  let loggerErrorSpy: jest.SpyInstance<void, unknown[]>;
 
   beforeEach(() => {
     instances.length = 0;
     closeShouldReject = false;
     jest.useRealTimers();
-    const { Logger } = jest.requireActual('@nestjs/common');
-    loggerWarnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
-    loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const { Logger } =
+      jest.requireActual<typeof import('@nestjs/common')>('@nestjs/common');
+    loggerWarnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -97,7 +105,10 @@ describe('QueueAlertingService', () => {
     const service = buildService();
     service.onModuleInit();
 
-    instances[0]!.emit('failed', { jobId: 'org-1:lead.created:lead-1', failedReason: 'boom' });
+    instances[0]!.emit('failed', {
+      jobId: 'org-1:lead.created:lead-1',
+      failedReason: 'boom',
+    });
 
     expect(loggerWarnSpy).toHaveBeenCalledTimes(1);
     const [message] = loggerWarnSpy.mock.calls[0]!;
@@ -113,13 +124,22 @@ describe('QueueAlertingService', () => {
 
     const sensitivePayload = {
       jobId: 'org-42:payment.completed:entity-99',
-      failedReason: 'organizationId=org-42 entityId=entity-99 eventKey=payment.completed:entity-99',
+      failedReason:
+        'organizationId=org-42 entityId=entity-99 eventKey=payment.completed:entity-99',
       prev: 'active',
-      data: { organizationId: 'org-42', workflowId: 'wf-1', actionIndex: 0, payload: { secret: true } },
+      data: {
+        organizationId: 'org-42',
+        workflowId: 'wf-1',
+        actionIndex: 0,
+        payload: { secret: true },
+      },
     };
     instances[0]!.emit('failed', sensitivePayload, 'stream-id-1');
 
-    const allLoggedText = [...loggerWarnSpy.mock.calls, ...loggerErrorSpy.mock.calls]
+    const allLoggedText = [
+      ...loggerWarnSpy.mock.calls,
+      ...loggerErrorSpy.mock.calls,
+    ]
       .flat()
       .map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg)))
       .join(' ');
@@ -186,7 +206,9 @@ describe('QueueAlertingService', () => {
     // Connection-level errors (Redis unreachable) are logged server-side exactly like
     // HealthController's own /health/redis check already does — that's infra diagnostics, not
     // the job-level business data (jobId/organizationId/entityId) this service must redact.
-    expect(() => instances[0]!.emit('error', new Error('ECONNREFUSED 10.0.0.9:6379'))).not.toThrow();
+    expect(() =>
+      instances[0]!.emit('error', new Error('ECONNREFUSED 10.0.0.9:6379')),
+    ).not.toThrow();
     expect(loggerErrorSpy).toHaveBeenCalledTimes(1);
     const [message, error] = loggerErrorSpy.mock.calls[0]!;
     expect(message).toContain(instances[0]!.name);
@@ -194,7 +216,9 @@ describe('QueueAlertingService', () => {
   });
 
   it('a construction failure on one queue does not prevent the other from starting', () => {
-    const { QueueEvents } = jest.requireMock('bullmq') as { QueueEvents: jest.Mock };
+    const { QueueEvents } = jest.requireMock<{ QueueEvents: jest.Mock }>(
+      'bullmq',
+    );
     QueueEvents.mockImplementationOnce(() => {
       throw new Error('failed to init');
     });
@@ -231,7 +255,9 @@ describe('QueueAlertingService', () => {
   });
 
   it('destroy after a partial initialization failure only closes the listener that actually started', async () => {
-    const { QueueEvents } = jest.requireMock('bullmq') as { QueueEvents: jest.Mock };
+    const { QueueEvents } = jest.requireMock<{ QueueEvents: jest.Mock }>(
+      'bullmq',
+    );
     QueueEvents.mockImplementationOnce(() => {
       throw new Error('failed to init');
     });

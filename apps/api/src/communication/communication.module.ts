@@ -39,6 +39,7 @@ import { IdentityModule } from '../identity/identity.module';
 import { AuditModule } from '../audit/audit.module';
 import { EmailModule } from '../shared/email/email.module';
 import { IntegrationWebhookModule } from '../integrations/webhooks/integration-webhook.module';
+import { IntegrationsModule } from '../integrations/integrations.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { IntegrationWebhookModule } from '../integrations/webhooks/integration-w
     EmailModule,
     MessagingProviderModule,
     IntegrationWebhookModule,
+    IntegrationsModule,
   ],
   controllers: [
     MessageTemplatesController,
@@ -71,11 +73,13 @@ import { IntegrationWebhookModule } from '../integrations/webhooks/integration-w
     NotificationsRepository,
     NotificationsService,
     ResendWebhookService,
-    // MessagingProviderResolverService (Wave 4 Stage 2) lives in IntegrationsModule instead of
-    // here — same reasoning as PaymentProviderResolverService in finance.module.ts: it depends
-    // on INTEGRATION_ACCOUNTS_READER, which only IntegrationsModule provides, and importing
-    // IntegrationsModule from here to get it back would create a CommunicationModule ↔
-    // IntegrationsModule circular import.
+    // MessagingProviderResolverService itself still lives in IntegrationsModule (it depends on
+    // INTEGRATION_ACCOUNTS_READER, which only that module provides) — but as of Stage 2.4,
+    // IntegrationsModule exports it and is imported above, specifically so ConversationsService
+    // can inject it for tenant-scoped provider resolution. This is safe and non-circular:
+    // IntegrationsModule imports nothing from CommunicationModule (verified by inspection and by
+    // a real compiled boot — see this module's own PaymentProviderResolverService precedent in
+    // finance.module.ts, where the reverse direction genuinely was circular and had to be fixed).
   ],
   exports: [EmailModule, NotificationsService, ConversationsService],
 })

@@ -107,6 +107,50 @@ describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () 
     );
   });
 
+  it("switching type to Entreprise swaps Prénom/Nom for a single company-name field and submits company + type only", async () => {
+    postMock.mockResolvedValue({ id: "2", type: "company", tags: [] });
+    const user = userEvent.setup();
+    renderWithProviders(<ContactsPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouveau contact" }));
+    await user.selectOptions(screen.getByRole("combobox"), "company");
+
+    expect(screen.queryByPlaceholderText("Prénom")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Nom")).not.toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText("Nom de l'entreprise"), "Analytical Engines Ltd");
+    // email/phone are z.string().min/.email().optional() — react-hook-form's default "" for an
+    // untouched field fails those (only `undefined` satisfies .optional()), same pre-existing
+    // quirk noted on the "loading state" test above, so both must be filled for submission to
+    // proceed.
+    await user.type(screen.getByPlaceholderText("Email"), "contact@analytical-engines.example");
+    await user.type(screen.getByPlaceholderText("Téléphone"), "0102030405");
+    await user.click(screen.getByRole("button", { name: "Créer le contact" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/contacts", {
+        type: "company",
+        tags: [],
+        company: "Analytical Engines Ltd",
+        email: "contact@analytical-engines.example",
+        phone: "0102030405",
+      }),
+    );
+  });
+
+  it("renders an 'Entreprise' badge next to company-type contacts in the list, not for person-type ones", async () => {
+    mockContactsPage([
+      { id: "c1", type: "company", company: "Acme SARL", tags: [] },
+      { id: "c2", type: "person", firstName: "Ada", lastName: "Lovelace", tags: [] },
+    ]);
+    renderWithProviders(<ContactsPage />);
+
+    const companyRow = (await screen.findByText("Acme SARL")).closest("tr")!;
+    expect(within(companyRow).getByText("Entreprise")).toBeInTheDocument();
+
+    const personRow = (await screen.findByText("Ada Lovelace")).closest("tr")!;
+    expect(within(personRow).queryByText("Entreprise")).not.toBeInTheDocument();
+  });
+
   it("shows a loading state on the submit button while the request is pending", async () => {
     postMock.mockImplementation(() => new Promise(() => {}));
     const user = userEvent.setup();
@@ -244,6 +288,7 @@ describe("ContactsPage — edit contact (LOT F4)", () => {
 
     await waitFor(() =>
       expect(patchMock).toHaveBeenCalledWith("/contacts/contact-1", {
+        type: "person",
         firstName: "Augusta",
         lastName: "Lovelace",
         email: "ada@example.com",

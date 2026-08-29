@@ -278,18 +278,24 @@ export default function InvoiceDetailPage() {
                 method: values.method,
               }),
             )}
-            className="mt-4 flex items-center gap-2 border-t border-border pt-4"
+            className="mt-4 flex flex-col gap-2 border-t border-border pt-4"
           >
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="Montant"
-              {...register("amount", { required: true, valueAsNumber: true })}
-            />
-            <Input placeholder="Méthode (cash, virement...)" {...register("method")} />
-            <Button type="submit" loading={payMutation.isPending}>
-              {payMutation.isPending ? "..." : "Enregistrer le paiement"}
-            </Button>
+            <p className="text-xs text-text-muted">
+              Ceci enregistre un paiement déjà reçu (espèces, virement...) — ce n&apos;est pas
+              un encaissement en ligne.
+            </p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Montant"
+                {...register("amount", { required: true, valueAsNumber: true })}
+              />
+              <Input placeholder="Méthode (cash, virement...)" {...register("method")} />
+              <Button type="submit" loading={payMutation.isPending}>
+                {payMutation.isPending ? "..." : "Enregistrer le paiement"}
+              </Button>
+            </div>
           </form>
         )}
       </Card>

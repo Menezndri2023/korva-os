@@ -30,6 +30,20 @@ describe('ThreeSixtyDialogProvider', () => {
     jest.restoreAllMocks();
   });
 
+  // Stage 2.4: independent, constructor-level fail-closed guard, mirroring FlutterwaveProvider's
+  // own (Stage 2.2) — must hold even if a future caller bypasses MessagingProviderRegistry's own
+  // requireSecret() check and constructs this class directly.
+  describe('constructor — fail-closed on a missing API key', () => {
+    it('throws when constructed with an empty string', () => {
+      expect(() => new ThreeSixtyDialogProvider('')).toThrow();
+    });
+
+    it('never leaves fetch reachable with an empty D360-API-KEY header', () => {
+      expect(() => new ThreeSixtyDialogProvider('')).toThrow();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe('send', () => {
     it('posts a text message to 360dialog and returns the provider reference on success', async () => {
       fetchMock.mockResolvedValue({

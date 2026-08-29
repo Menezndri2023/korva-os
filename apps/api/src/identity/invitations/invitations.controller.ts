@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -46,6 +46,16 @@ export class InvitationsController {
       tenant.roleId,
       body,
     );
+  }
+
+  /** Lists still-pending (not yet accepted/expired-filtered-by-status) invitations for the
+   *  current org, so the Settings UI can show "invited, awaiting acceptance" alongside active
+   *  members instead of the invite silently disappearing after submit. `tokenHash` is
+   *  `select:false` on the schema, so it is never present on these documents to begin with. */
+  @RequirePermissions('settings.manage')
+  @Get()
+  listPending(@CurrentTenant() tenant: TenantContext) {
+    return this.invitationsService.listPending(tenant.organizationId);
   }
 }
 

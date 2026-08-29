@@ -326,24 +326,29 @@ function buildPasswordResetServiceMock() {
 describe('AuthController — forgot/reset password', () => {
   it('forgotPassword delegates to PasswordResetService and returns its generic response as-is', async () => {
     const { authService } = buildAuthService();
-    const { passwordResetService, forgotPassword } = buildPasswordResetServiceMock();
+    const { passwordResetService, forgotPassword } =
+      buildPasswordResetServiceMock();
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
       passwordResetService,
     );
 
-    const result = await controller.forgotPassword({ email: 'ada@example.com' });
+    const result = await controller.forgotPassword({
+      email: 'ada@example.com',
+    });
 
     expect(forgotPassword).toHaveBeenCalledWith('ada@example.com');
     expect(result).toEqual({
-      message: 'If an account exists for this email, a reset link has been sent.',
+      message:
+        'If an account exists for this email, a reset link has been sent.',
     });
   });
 
   it('resetPassword delegates token+password to PasswordResetService and returns { success: true }', async () => {
     const { authService } = buildAuthService();
-    const { passwordResetService, resetPassword } = buildPasswordResetServiceMock();
+    const { passwordResetService, resetPassword } =
+      buildPasswordResetServiceMock();
     const controller = new AuthController(
       authService,
       buildConfigService('development'),
@@ -361,7 +366,8 @@ describe('AuthController — forgot/reset password', () => {
 
   it('resetPassword propagates PasswordResetService rejection (invalid/expired token) unchanged', async () => {
     const { authService } = buildAuthService();
-    const { passwordResetService, resetPassword } = buildPasswordResetServiceMock();
+    const { passwordResetService, resetPassword } =
+      buildPasswordResetServiceMock();
     resetPassword.mockRejectedValue(
       new UnauthorizedException({
         code: 'INVALID_RESET_TOKEN',
@@ -375,7 +381,10 @@ describe('AuthController — forgot/reset password', () => {
     );
 
     await expect(
-      controller.resetPassword({ token: 'bad-token', password: 'newpassword123' }),
+      controller.resetPassword({
+        token: 'bad-token',
+        password: 'newpassword123',
+      }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

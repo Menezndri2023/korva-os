@@ -29,7 +29,7 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     private readonly workflowEngineService: WorkflowEngineService,
   ) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
     this.connection = new IORedis(
       this.configService.getOrThrow<string>('REDIS_URL'),
       {
@@ -60,6 +60,23 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
         error,
       );
     });
+    // BullMQ's Worker re-emits any connection-level failure as its own 'error' event (e.g. from
+    // the async cleanup steps inside close()); an EventEmitter's 'error' event with no listener
+    // is a Node-level fatal — this must always have a handler, the same way queue-alerting.service.ts
+    // already does for its QueueEvents connections.
+    this.worker.on('error', (err) => {
+      this.logger.error('Events queue worker connection error', err);
+    });
+    // Ensures the connection has fully reached 'ready' before this method (and therefore
+    // onModuleInit) resolves. Without this, onModuleDestroy's worker.close() can run while the
+    // connection is still mid-handshake ('initializing'); BullMQ's close() then takes a
+    // hard-disconnect path on that connection and separately suppresses only one of the two
+    // internal listeners on its still-rejecting init promise — the other one re-emits 'error' on
+    // a connection wrapper this class never gets a handle on, with no listener attached anywhere,
+    // producing an unhandled "Connection is closed" error at the process level. Waiting for
+    // 'ready' here means close() always sees a fully-initialized connection and takes its normal
+    // graceful-quit path instead.
+    await this.worker.waitUntilReady();
   }
 
   async onModuleDestroy(): Promise<void> {

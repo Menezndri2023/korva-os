@@ -1,9 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection, Types } from 'mongoose';
-import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
+import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -12,14 +10,6 @@ import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
 } from '../src/finance/payments/providers/payment-provider.interface';
-import {
-  QUOTE_EXPIRY_QUEUE_NAME,
-  QUOTE_EXPIRY_SCHEDULER_ID,
-} from '../src/finance/quotes/quote-expiry-scheduler.service';
-import {
-  INVOICE_OVERDUE_QUEUE_NAME,
-  INVOICE_OVERDUE_SCHEDULER_ID,
-} from '../src/finance/invoices/invoice-overdue-scheduler.service';
 
 interface ApiSuccess<T> {
   success: true;
@@ -55,51 +45,12 @@ interface PaymentPayload {
   id: string;
   status: string;
 }
-interface ExpensePayload {
-  id: string;
-  number: string;
-  status: string;
-  category: string;
-  description: string;
-  amount: number;
-  currency: string;
-}
-interface WorkflowPayload {
-  id: string;
-}
-interface WorkflowExecutionPayload {
-  status: string;
-  eventName: string;
-  payload: Record<string, unknown>;
-}
 
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
 }
 function asError(body: unknown): ApiError['error'] {
   return (body as ApiError).error;
-}
-
-/**
- * Polls until `check` returns a defined value or `timeoutMs` elapses — used by the scheduler
- * describe blocks below to wait on a real BullMQ worker tick rather than a fixed sleep. Mirrors
- * workflow.e2e-spec.ts's own `waitFor` helper (that file is out of scope to import from, being
- * outside this wave's file ownership, hence the small duplication).
- */
-async function waitFor<T>(
-  check: () => Promise<T | undefined>,
-  timeoutMs = 15000,
-  intervalMs = 300,
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const result = await check();
-    if (result !== undefined) return result;
-    if (Date.now() > deadline) {
-      throw new Error('waitFor: timed out waiting for condition');
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
 }
 
 describe('Finance module (e2e)', () => {
@@ -373,6 +324,7 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-partial-60')
         .send({ paymentId, amount: 60, reason: 'goodwill' })
         .expect(201);
       expect(asSuccess<{ amount: number }>(res.body).amount).toBe(60);
@@ -392,6 +344,7 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-over-remaining')
         .send({ paymentId, amount: 50 })
         .expect(400);
       expect(asError(res.body).code).toBe('REFUND_EXCEEDS_PAYMENT');
@@ -402,6 +355,7 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-remaining-40')
         .send({ paymentId, amount: 40 })
         .expect(201);
 
@@ -409,6 +363,7 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-after-fully-refunded')
         .send({ paymentId, amount: 1 })
         .expect(400);
       expect(asError(res.body).code).toBe('PAYMENT_NOT_REFUNDABLE');
@@ -1230,11 +1185,13 @@ describe('Finance module (e2e)', () => {
           .post('/api/v1/payments/refunds')
           .set('Authorization', `Bearer ${accessToken}`)
           .set('X-Organization-Id', organizationId)
+          .set('Idempotency-Key', 'refund-race-a')
           .send({ paymentId, amount: 200 }),
         request(server)
           .post('/api/v1/payments/refunds')
           .set('Authorization', `Bearer ${accessToken}`)
           .set('X-Organization-Id', organizationId)
+          .set('Idempotency-Key', 'refund-race-b')
           .send({ paymentId, amount: 200 }),
       ]);
 
@@ -1288,6 +1245,7 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-successive-1')
         .send({ paymentId, amount: 100 })
         .expect(201);
 
@@ -1295,6 +1253,7 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-successive-2')
         .send({ paymentId, amount: 200 })
         .expect(201);
 
@@ -1336,6 +1295,7 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-sequential-overpay-1')
         .send({ paymentId, amount: 200 })
         .expect(201);
 
@@ -1343,12 +1303,13 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-sequential-overpay-2')
         .send({ paymentId, amount: 200 })
         .expect(400);
       expect(asError(secondRes.body).code).toBe('REFUND_EXCEEDS_PAYMENT');
     });
 
-    it('aborts the whole transaction when Invoice decrement fails after the Payment refundedAmount update was staged — refundedAmount and Invoice.amountPaid stay unchanged and no Refund is created', async () => {
+    it('a failure while claiming the Idempotency-Key prevents any refund from being attempted at all — no provider call, no Payment/Invoice mutation, and a retry with a fresh key succeeds normally', async () => {
       const { accessToken, organizationId, contactId } =
         await registerOrgAndContact(
           'refund-rollback-owner@korva.test',
@@ -1361,10 +1322,16 @@ describe('Finance module (e2e)', () => {
         300,
       );
 
-      // Real MongoDB transaction, real HTTP layer, real atomic refund guard — the only thing
-      // faked is a failure injected at the "create Refund" step, i.e. AFTER
-      // incrementRefundedAmountWithinLimit has staged the Payment write inside the same
-      // transaction but BEFORE commit.
+      // Stage 2.7B note: this test used to inject the failure inside the atomic transaction
+      // (createRefund called from refundAtomically's no-claim branch). Idempotency-Key is now
+      // mandatory for refunds, so PaymentsService.refund() always claims one via createRefund
+      // BEFORE ever entering a transaction or calling the provider (see refund()'s own claim
+      // step) — that no-claim branch inside refundAtomically is consequently unreachable from
+      // either of its callers (this method and reconcileProcessingRefund, which always passes
+      // an existing Refund id too). refundAtomically itself is unchanged (out of this stage's
+      // scope); this test now proves the equally important, earlier failure point instead: a
+      // failure while claiming the key must still leave zero trace and never block a genuine
+      // retry (with a new key).
       const paymentsRepository = app.get(PaymentsRepository);
       const spy = jest
         .spyOn(paymentsRepository, 'createRefund')
@@ -1379,6 +1346,7 @@ describe('Finance module (e2e)', () => {
           .post('/api/v1/payments/refunds')
           .set('Authorization', `Bearer ${accessToken}`)
           .set('X-Organization-Id', organizationId)
+          .set('Idempotency-Key', 'refund-rollback-trigger')
           .send({ paymentId, amount: 100 });
         expect(res.status).toBe(500);
         expect(asError(res.body).code).toBe('INTERNAL_SERVER_ERROR');
@@ -1414,6 +1382,7 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/payments/refunds')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
+        .set('Idempotency-Key', 'refund-rollback-retry')
         .send({ paymentId, amount: 100 })
         .expect(201);
 
@@ -1776,7 +1745,7 @@ describe('Finance module (e2e)', () => {
       spy.mockRestore();
     });
 
-    it('TEST 6 — legacy callers without an Idempotency-Key keep working exactly as before', async () => {
+    it('TEST 6 (Stage 2.7B) — a refund WITHOUT an Idempotency-Key is now rejected outright: REFUND_IDEMPOTENCY_KEY_REQUIRED, no provider call, no Refund claim, no mutation of any kind', async () => {
       const { accessToken, organizationId, contactId } =
         await registerOrgAndContact(
           'refund-idem-legacy-owner@korva.test',
@@ -1789,9 +1758,20 @@ describe('Finance module (e2e)', () => {
         300,
       );
 
-      // No Idempotency-Key header at all — two independent partial refunds, both must succeed.
-      await refundReq(accessToken, organizationId, paymentId, 100).expect(201);
-      await refundReq(accessToken, organizationId, paymentId, 100).expect(201);
+      const paymentProvider = app.get<PaymentProvider>(PAYMENT_PROVIDER);
+      const spy = jest.spyOn(paymentProvider, 'refundPayment');
+
+      // No Idempotency-Key header at all — Stage 2.7B made this mandatory for refunds
+      // specifically (never for POST /payments — see TEST 6 in the payment idempotency
+      // describe block above, unchanged).
+      const res = await refundReq(
+        accessToken,
+        organizationId,
+        paymentId,
+        100,
+      ).expect(400);
+      expect(asError(res.body).code).toBe('REFUND_IDEMPOTENCY_KEY_REQUIRED');
+      expect(spy).not.toHaveBeenCalled();
 
       const paymentRes = await request(server)
         .get(`/api/v1/payments?invoiceId=${invoiceId}`)
@@ -1801,14 +1781,16 @@ describe('Finance module (e2e)', () => {
       const payment = asSuccess<
         (PaymentPayload & { refundedAmount: number })[]
       >(paymentRes.body)[0]!;
-      expect(payment.refundedAmount).toBe(200);
+      expect(payment.refundedAmount).toBe(0);
 
       const invoiceRes = await request(server)
         .get(`/api/v1/invoices/${invoiceId}`)
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(100);
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).amountPaid).toBe(300);
+
+      spy.mockRestore();
     });
 
     it('TEST 7 — aborts the whole idempotent transaction when finalizing the Refund fails after the Payment increment was staged — no successful Refund persists, Payment/Invoice stay unchanged, and a retry succeeds normally', async () => {
@@ -1949,639 +1931,11 @@ describe('Finance module (e2e)', () => {
       expect(asError(res.body).code).toBe('ORGANIZATION_ACCESS_DENIED');
     });
   });
-
-  describe('Expenses module', () => {
-    let accessToken: string;
-    let organizationId: string;
-
-    beforeAll(async () => {
-      ({ accessToken, organizationId } = await registerOrgAndContact(
-        'expenses-owner@korva.test',
-        'Expenses Org',
-      ));
-    });
-
-    function createExpenseReq(overrides: Record<string, unknown> = {}) {
-      return request(server)
-        .post('/api/v1/expenses')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({
-          category: 'office_supplies',
-          description: 'Printer paper',
-          amount: 42.5,
-          currency: 'EUR',
-          date: new Date().toISOString(),
-          vendor: 'Office Depot',
-          ...overrides,
-        });
-    }
-
-    it('creates an expense with a server-assigned number and "recorded" status', async () => {
-      const res = await createExpenseReq().expect(201);
-      const expense = asSuccess<ExpensePayload>(res.body);
-      expect(expense.status).toBe('recorded');
-      expect(expense.amount).toBe(42.5);
-      expect(expense.number).toMatch(/^DEP-\d{4}$/);
-    });
-
-    it('rejects a non-positive amount', async () => {
-      const res = await createExpenseReq({ amount: 0 }).expect(400);
-      expect(asError(res.body).code).toBe('VALIDATION_ERROR');
-
-      const resNeg = await createExpenseReq({ amount: -10 }).expect(400);
-      expect(asError(resNeg.body).code).toBe('VALIDATION_ERROR');
-    });
-
-    it('rejects a currency code that is not exactly 3 letters', async () => {
-      const res = await createExpenseReq({ currency: 'EU' }).expect(400);
-      expect(asError(res.body).code).toBe('VALIDATION_ERROR');
-      await createExpenseReq({ currency: 'EURO' }).expect(400);
-    });
-
-    it('lists and reads back the created expense', async () => {
-      const createRes = await createExpenseReq({
-        description: 'Listable expense',
-      }).expect(201);
-      const expenseId = asSuccess<ExpensePayload>(createRes.body).id;
-
-      const listRes = await request(server)
-        .get('/api/v1/expenses')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(200);
-      const list = asSuccess<ExpensePayload[]>(listRes.body);
-      expect(list.some((e) => e.id === expenseId)).toBe(true);
-
-      const getRes = await request(server)
-        .get(`/api/v1/expenses/${expenseId}`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(200);
-      expect(asSuccess<ExpensePayload>(getRes.body).id).toBe(expenseId);
-    });
-
-    it('updates a recorded expense', async () => {
-      const createRes = await createExpenseReq({
-        description: 'To be updated',
-      }).expect(201);
-      const expenseId = asSuccess<ExpensePayload>(createRes.body).id;
-
-      const updateRes = await request(server)
-        .patch(`/api/v1/expenses/${expenseId}`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({ amount: 99.9, description: 'Updated description' })
-        .expect(200);
-      const updated = asSuccess<ExpensePayload>(updateRes.body);
-      expect(updated.amount).toBe(99.9);
-      expect(updated.description).toBe('Updated description');
-    });
-
-    it('voids a recorded expense, then rejects editing it and rejects voiding it again (invalid transition)', async () => {
-      const createRes = await createExpenseReq({
-        description: 'To be voided',
-      }).expect(201);
-      const expenseId = asSuccess<ExpensePayload>(createRes.body).id;
-
-      const voidRes = await request(server)
-        .post(`/api/v1/expenses/${expenseId}/void`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(201);
-      expect(asSuccess<ExpensePayload>(voidRes.body).status).toBe('voided');
-
-      const editRes = await request(server)
-        .patch(`/api/v1/expenses/${expenseId}`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({ amount: 1 })
-        .expect(400);
-      expect(asError(editRes.body).code).toBe('EXPENSE_NOT_EDITABLE');
-
-      const reVoidRes = await request(server)
-        .post(`/api/v1/expenses/${expenseId}/void`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(400);
-      expect(asError(reVoidRes.body).code).toBe('EXPENSE_INVALID_TRANSITION');
-    });
-
-    it('deletes an expense and then 404s reading it', async () => {
-      const createRes = await createExpenseReq({
-        description: 'To be deleted',
-      }).expect(201);
-      const expenseId = asSuccess<ExpensePayload>(createRes.body).id;
-
-      const deleteRes = await request(server)
-        .delete(`/api/v1/expenses/${expenseId}`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(200);
-      expect(asSuccess<{ deleted: boolean }>(deleteRes.body)).toEqual({
-        deleted: true,
-      });
-
-      const getRes = await request(server)
-        .get(`/api/v1/expenses/${expenseId}`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(404);
-      expect(asError(getRes.body).code).toBe('EXPENSE_NOT_FOUND');
-    });
-
-    it('404s deleting an expense that does not exist', async () => {
-      const res = await request(server)
-        .delete('/api/v1/expenses/000000000000000000000000')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(404);
-      expect(asError(res.body).code).toBe('EXPENSE_NOT_FOUND');
-    });
-
-    it('denies a user from another organization reading expenses via a foreign org id', async () => {
-      const a = await registerOrgAndContact(
-        'expenses-iso-a@korva.test',
-        'Expenses Iso A',
-      );
-      const b = await registerOrgAndContact(
-        'expenses-iso-b@korva.test',
-        'Expenses Iso B',
-      );
-
-      await request(server)
-        .post('/api/v1/expenses')
-        .set('Authorization', `Bearer ${a.accessToken}`)
-        .set('X-Organization-Id', a.organizationId)
-        .send({
-          category: 'travel',
-          description: 'Secret expense',
-          amount: 10,
-          currency: 'EUR',
-          date: new Date().toISOString(),
-        })
-        .expect(201);
-
-      const res = await request(server)
-        .get('/api/v1/expenses')
-        .set('Authorization', `Bearer ${b.accessToken}`)
-        .set('X-Organization-Id', a.organizationId)
-        .expect(403);
-      expect(asError(res.body).code).toBe('ORGANIZATION_ACCESS_DENIED');
-    });
-
-    it('denies a STAFF member (no invoices.create/update) from creating or deleting an expense, while still allowing read', async () => {
-      const owner = await registerOrgAndContact(
-        'expenses-rbac-owner@korva.test',
-        'Expenses RBAC Org',
-      );
-      const staffAuthRes = await request(server)
-        .post('/api/v1/auth/register')
-        .send({
-          email: 'expenses-rbac-staff@korva.test',
-          password: 'password123',
-        })
-        .expect(201);
-      const staffToken = asSuccess<AuthPayload>(staffAuthRes.body).accessToken;
-
-      const staffRole = await connection.collection('roles').findOne({
-        organizationId: new Types.ObjectId(owner.organizationId),
-        systemKey: 'STAFF',
-      });
-      expect(staffRole).not.toBeNull();
-
-      await request(server)
-        .post('/api/v1/organizations/me/members')
-        .set('Authorization', `Bearer ${owner.accessToken}`)
-        .set('X-Organization-Id', owner.organizationId)
-        .send({
-          email: 'expenses-rbac-staff@korva.test',
-          roleId: String(staffRole?._id),
-        })
-        .expect(201);
-
-      const createAsStaffRes = await request(server)
-        .post('/api/v1/expenses')
-        .set('Authorization', `Bearer ${staffToken}`)
-        .set('X-Organization-Id', owner.organizationId)
-        .send({
-          category: 'travel',
-          description: 'Should be denied',
-          amount: 5,
-          currency: 'EUR',
-          date: new Date().toISOString(),
-        })
-        .expect(403);
-      expect(asError(createAsStaffRes.body).code).toBe('PERMISSION_DENIED');
-
-      const createRes = await request(server)
-        .post('/api/v1/expenses')
-        .set('Authorization', `Bearer ${owner.accessToken}`)
-        .set('X-Organization-Id', owner.organizationId)
-        .send({
-          category: 'travel',
-          description: 'Owner-created',
-          amount: 5,
-          currency: 'EUR',
-          date: new Date().toISOString(),
-        })
-        .expect(201);
-      const expenseId = asSuccess<ExpensePayload>(createRes.body).id;
-
-      const readAsStaffRes = await request(server)
-        .get(`/api/v1/expenses/${expenseId}`)
-        .set('Authorization', `Bearer ${staffToken}`)
-        .set('X-Organization-Id', owner.organizationId)
-        .expect(200);
-      expect(asSuccess<ExpensePayload>(readAsStaffRes.body).id).toBe(expenseId);
-
-      const deleteAsStaffRes = await request(server)
-        .delete(`/api/v1/expenses/${expenseId}`)
-        .set('Authorization', `Bearer ${staffToken}`)
-        .set('X-Organization-Id', owner.organizationId)
-        .expect(403);
-      expect(asError(deleteAsStaffRes.body).code).toBe('PERMISSION_DENIED');
-    });
-  });
 });
 
-describe('Quote expiry scheduler (e2e)', () => {
-  let app: INestApplication<App>;
-  let server: App;
-  let connection: Connection;
-  let accessToken: string;
-  let organizationId: string;
-  let contactId: string;
-
-  const intervalMs = 1000;
-
-  beforeAll(async () => {
-    process.env.QUOTE_EXPIRY_ENABLED = 'true';
-    process.env.QUOTE_EXPIRY_INTERVAL_MS = String(intervalMs);
-
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api/v1');
-    await app.init();
-    server = app.getHttpServer();
-    connection = app.get(getConnectionToken());
-    await connection.dropDatabase();
-    await Promise.all(
-      connection
-        .modelNames()
-        .map((name) => connection.model(name).syncIndexes()),
-    );
-
-    const authRes = await request(server)
-      .post('/api/v1/auth/register')
-      .send({ email: 'quote-expiry-owner@korva.test', password: 'password123' })
-      .expect(201);
-    accessToken = asSuccess<AuthPayload>(authRes.body).accessToken;
-
-    const orgRes = await request(server)
-      .post('/api/v1/organizations')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({
-        name: 'Quote Expiry Org',
-        type: 'service',
-        country: 'FR',
-        currency: 'EUR',
-        timezone: 'Europe/Paris',
-        language: 'fr',
-      })
-      .expect(201);
-    organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
-
-    await request(server)
-      .patch('/api/v1/organizations/me')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .set('X-Organization-Id', organizationId)
-      .send({ enabledModules: ['crm', 'finance', 'workflow'] })
-      .expect(200);
-
-    const contactRes = await request(server)
-      .post('/api/v1/contacts')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .set('X-Organization-Id', organizationId)
-      .send({ firstName: 'Client', lastName: 'Test' })
-      .expect(201);
-    contactId = asSuccess<ContactPayload>(contactRes.body).id;
-  });
-
-  afterAll(async () => {
-    await connection.dropDatabase();
-    await app.close();
-
-    // The BullMQ repeatable schedule lives in Redis, keyed by QUOTE_EXPIRY_SCHEDULER_ID, not
-    // in-process — closing the app's Worker/Queue does not remove it (see
-    // payment-reconciliation-scheduler.e2e-spec.ts for the identical cleanup rationale).
-    const cleanupConnection = new IORedis(
-      process.env.REDIS_URL ?? 'redis://localhost:6380',
-      { maxRetriesPerRequest: null },
-    );
-    const cleanupQueue = new Queue(QUOTE_EXPIRY_QUEUE_NAME, {
-      connection: cleanupConnection,
-    });
-    await cleanupQueue.removeJobScheduler(QUOTE_EXPIRY_SCHEDULER_ID);
-    await cleanupQueue.close();
-    cleanupConnection.disconnect();
-
-    delete process.env.QUOTE_EXPIRY_ENABLED;
-    delete process.env.QUOTE_EXPIRY_INTERVAL_MS;
-  });
-
-  it(
-    'a quote past validUntil, still in a non-terminal status, is automatically transitioned to "expired" and publishes quote.expired — proven by a Workflow configured on that trigger actually firing',
-    async () => {
-      const workflowRes = await request(server)
-        .post('/api/v1/workflows')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({
-          name: 'On quote expired',
-          trigger: 'quote.expired',
-          conditions: [],
-          actions: [
-            {
-              type: 'create_task',
-              config: { title: 'Follow up on expired quote {{quoteId}}' },
-            },
-          ],
-        })
-        .expect(201);
-      const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
-
-      const quoteRes = await request(server)
-        .post('/api/v1/quotes')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({
-          contactId,
-          currency: 'EUR',
-          items: [
-            { description: 'Expiring service', quantity: 1, unitPrice: 100 },
-          ],
-          validUntil: new Date(Date.now() - 60_000).toISOString(),
-        })
-        .expect(201);
-      const quoteId = asSuccess<QuotePayload>(quoteRes.body).id;
-
-      await waitFor(async () => {
-        const res = await request(server)
-          .get(`/api/v1/quotes/${quoteId}`)
-          .set('Authorization', `Bearer ${accessToken}`)
-          .set('X-Organization-Id', organizationId)
-          .expect(200);
-        const quote = asSuccess<QuotePayload>(res.body);
-        return quote.status === 'expired' ? quote : undefined;
-      }, intervalMs * 8);
-
-      const executions = await waitFor(async () => {
-        const res = await request(server)
-          .get(`/api/v1/workflows/${workflowId}/executions`)
-          .set('Authorization', `Bearer ${accessToken}`)
-          .set('X-Organization-Id', organizationId)
-          .expect(200);
-        const data = asSuccess<WorkflowExecutionPayload[]>(res.body);
-        return data.length > 0 ? data : undefined;
-      }, intervalMs * 8);
-      expect(executions[0]!.status).toBe('success');
-      expect(executions[0]!.eventName).toBe('quote.expired');
-      expect(executions[0]!.payload.quoteId).toBe(quoteId);
-    },
-    intervalMs * 20,
-  );
-
-  it(
-    'a quote whose validUntil has not passed is left untouched by the sweep',
-    async () => {
-      const quoteRes = await request(server)
-        .post('/api/v1/quotes')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({
-          contactId,
-          currency: 'EUR',
-          items: [
-            { description: 'Not yet expiring', quantity: 1, unitPrice: 50 },
-          ],
-          validUntil: new Date(Date.now() + 3600_000).toISOString(),
-        })
-        .expect(201);
-      const quoteId = asSuccess<QuotePayload>(quoteRes.body).id;
-
-      // Let a couple of ticks pass, then confirm it is still 'draft'.
-      await new Promise((resolve) => setTimeout(resolve, intervalMs * 3));
-
-      const res = await request(server)
-        .get(`/api/v1/quotes/${quoteId}`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(200);
-      expect(asSuccess<QuotePayload>(res.body).status).toBe('draft');
-    },
-    intervalMs * 6,
-  );
-});
-
-describe('Invoice overdue scheduler (e2e)', () => {
-  let app: INestApplication<App>;
-  let server: App;
-  let connection: Connection;
-  let accessToken: string;
-  let organizationId: string;
-  let contactId: string;
-
-  const intervalMs = 1000;
-
-  beforeAll(async () => {
-    process.env.INVOICE_OVERDUE_ENABLED = 'true';
-    process.env.INVOICE_OVERDUE_INTERVAL_MS = String(intervalMs);
-
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api/v1');
-    await app.init();
-    server = app.getHttpServer();
-    connection = app.get(getConnectionToken());
-    await connection.dropDatabase();
-    await Promise.all(
-      connection
-        .modelNames()
-        .map((name) => connection.model(name).syncIndexes()),
-    );
-
-    const authRes = await request(server)
-      .post('/api/v1/auth/register')
-      .send({
-        email: 'invoice-overdue-owner@korva.test',
-        password: 'password123',
-      })
-      .expect(201);
-    accessToken = asSuccess<AuthPayload>(authRes.body).accessToken;
-
-    const orgRes = await request(server)
-      .post('/api/v1/organizations')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .send({
-        name: 'Invoice Overdue Org',
-        type: 'service',
-        country: 'FR',
-        currency: 'EUR',
-        timezone: 'Europe/Paris',
-        language: 'fr',
-      })
-      .expect(201);
-    organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
-
-    await request(server)
-      .patch('/api/v1/organizations/me')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .set('X-Organization-Id', organizationId)
-      .send({ enabledModules: ['crm', 'finance', 'workflow'] })
-      .expect(200);
-
-    const contactRes = await request(server)
-      .post('/api/v1/contacts')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .set('X-Organization-Id', organizationId)
-      .send({ firstName: 'Client', lastName: 'Test' })
-      .expect(201);
-    contactId = asSuccess<ContactPayload>(contactRes.body).id;
-  });
-
-  afterAll(async () => {
-    await connection.dropDatabase();
-    await app.close();
-
-    const cleanupConnection = new IORedis(
-      process.env.REDIS_URL ?? 'redis://localhost:6380',
-      { maxRetriesPerRequest: null },
-    );
-    const cleanupQueue = new Queue(INVOICE_OVERDUE_QUEUE_NAME, {
-      connection: cleanupConnection,
-    });
-    await cleanupQueue.removeJobScheduler(INVOICE_OVERDUE_SCHEDULER_ID);
-    await cleanupQueue.close();
-    cleanupConnection.disconnect();
-
-    delete process.env.INVOICE_OVERDUE_ENABLED;
-    delete process.env.INVOICE_OVERDUE_INTERVAL_MS;
-  });
-
-  it(
-    'an issued invoice past its dueDate, still carrying a balance, is automatically transitioned to "overdue" and publishes invoice.overdue — proven by a Workflow configured on that trigger actually firing',
-    async () => {
-      const workflowRes = await request(server)
-        .post('/api/v1/workflows')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({
-          name: 'On invoice overdue',
-          trigger: 'invoice.overdue',
-          conditions: [],
-          actions: [
-            {
-              type: 'create_task',
-              config: { title: 'Chase overdue invoice {{invoiceId}}' },
-            },
-          ],
-        })
-        .expect(201);
-      const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
-
-      const invoiceRes = await request(server)
-        .post('/api/v1/invoices')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({
-          contactId,
-          currency: 'EUR',
-          items: [
-            { description: 'Overdue service', quantity: 1, unitPrice: 300 },
-          ],
-          dueDate: new Date(Date.now() - 60_000).toISOString(),
-        })
-        .expect(201);
-      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
-
-      await request(server)
-        .post(`/api/v1/invoices/${invoiceId}/issue`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(201);
-
-      await waitFor(async () => {
-        const res = await request(server)
-          .get(`/api/v1/invoices/${invoiceId}`)
-          .set('Authorization', `Bearer ${accessToken}`)
-          .set('X-Organization-Id', organizationId)
-          .expect(200);
-        const invoice = asSuccess<InvoicePayload>(res.body);
-        return invoice.status === 'overdue' ? invoice : undefined;
-      }, intervalMs * 8);
-
-      const executions = await waitFor(async () => {
-        const res = await request(server)
-          .get(`/api/v1/workflows/${workflowId}/executions`)
-          .set('Authorization', `Bearer ${accessToken}`)
-          .set('X-Organization-Id', organizationId)
-          .expect(200);
-        const data = asSuccess<WorkflowExecutionPayload[]>(res.body);
-        return data.length > 0 ? data : undefined;
-      }, intervalMs * 8);
-      expect(executions[0]!.status).toBe('success');
-      expect(executions[0]!.eventName).toBe('invoice.overdue');
-      expect(executions[0]!.payload.invoiceId).toBe(invoiceId);
-    },
-    intervalMs * 20,
-  );
-
-  it(
-    'a paid invoice past its dueDate is left untouched by the sweep',
-    async () => {
-      const invoiceRes = await request(server)
-        .post('/api/v1/invoices')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({
-          contactId,
-          currency: 'EUR',
-          items: [{ description: 'Already paid', quantity: 1, unitPrice: 80 }],
-          dueDate: new Date(Date.now() - 60_000).toISOString(),
-        })
-        .expect(201);
-      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
-
-      await request(server)
-        .post(`/api/v1/invoices/${invoiceId}/issue`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(201);
-
-      await request(server)
-        .post('/api/v1/payments')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({ invoiceId, amount: 80 })
-        .expect(201);
-
-      // Let a couple of ticks pass, then confirm the paid invoice was never marked overdue.
-      await new Promise((resolve) => setTimeout(resolve, intervalMs * 3));
-
-      const res = await request(server)
-        .get(`/api/v1/invoices/${invoiceId}`)
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(200);
-      expect(asSuccess<InvoicePayload>(res.body).status).toBe('paid');
-    },
-    intervalMs * 6,
-  );
-});
+// Expenses module, Quote expiry scheduler, and Invoice overdue scheduler tests were moved to
+// their own e2e spec files (expenses.e2e-spec.ts, quote-expiry-scheduler.e2e-spec.ts,
+// invoice-overdue-scheduler.e2e-spec.ts) — this file alone had grown past AUTH_THROTTLE's 30
+// registrations/60s budget, and each e2e spec file boots its own app with its own throttle
+// storage (see the identical rationale already documented in catalog.e2e-spec.ts /
+// payment-reconciliation.e2e-spec.ts). No behavior change, pure relocation.

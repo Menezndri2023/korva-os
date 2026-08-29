@@ -18,6 +18,14 @@ export default function DashboardPage() {
   // permission boundary, not a failure, so it must not render as a retry-able error.
   const isPermissionDenied =
     overviewQuery.error instanceof ApiError && overviewQuery.error.code === "PERMISSION_DENIED";
+  // GET /analytics/overview is gated behind the "analytics" module (RequireModule), even though
+  // the KPIs it returns (leads/bookings/orders/invoices totals) are plain CRM/booking/commerce/
+  // finance data with no real dependency on that module — an org that has simply toggled
+  // Statistiques off in Settings still legitimately wants this landing page to work, not show a
+  // permanent, retry-able "Impossible de charger" error (retrying can never succeed here; only
+  // re-enabling the module would).
+  const isModuleNotEnabled =
+    overviewQuery.error instanceof ApiError && overviewQuery.error.code === "MODULE_NOT_ENABLED";
   const hasAnalytics = (organization?.enabledModules.includes("analytics") ?? false) && !isPermissionDenied;
   const totalActivity =
     (overviewQuery.data?.leads.total ?? 0) +
@@ -38,7 +46,7 @@ export default function DashboardPage() {
 
       {overviewQuery.isLoading && <SummarySkeleton />}
 
-      {overviewQuery.isError && !isPermissionDenied && (
+      {overviewQuery.isError && !isPermissionDenied && !isModuleNotEnabled && (
         <Card className="p-6">
           <p className="text-sm text-destructive">Impossible de charger l&apos;activité de votre organisation.</p>
           <button
@@ -55,6 +63,20 @@ export default function DashboardPage() {
           <p className="text-sm text-text-muted">
             Les statistiques globales de l&apos;organisation sont réservées aux administrateurs.
           </p>
+        </Card>
+      )}
+
+      {isModuleNotEnabled && (
+        <Card className="p-6">
+          <p className="text-sm text-text-muted">
+            Activez le module Statistiques pour voir un résumé de votre activité ici.
+          </p>
+          <Link
+            href="/dashboard/settings"
+            className="mt-2 inline-block text-sm font-medium text-text underline"
+          >
+            Ouvrir les paramètres
+          </Link>
         </Card>
       )}
 

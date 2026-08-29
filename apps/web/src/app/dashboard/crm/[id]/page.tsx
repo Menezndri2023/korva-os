@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +16,7 @@ import {
   type CreateTaskInput,
   type UpdateContactInput,
 } from "@korva/validation";
-import { ACTIVITY_TYPES } from "@korva/types";
+import { ACTIVITY_TYPES, CONTACT_TYPES } from "@korva/types";
 import type {
   Activity,
   Booking,
@@ -179,13 +179,27 @@ export default function ContactDetailPage() {
     register: registerEdit,
     handleSubmit: handleEditSubmit,
     reset: resetEditForm,
+    watch: watchEdit,
+    setValue: setEditValue,
     formState: { errors: editErrors },
   } = useForm<UpdateContactInput>({ resolver: zodResolver(updateContactSchema) });
+  const editType = watchEdit("type");
+  // Switching an existing person contact to "company" mid-edit would otherwise leave its
+  // firstName/lastName registered with their real (non-empty) prior values even after the
+  // fields unmount (react-hook-form's shouldUnregister defaults to false) — clearing them keeps
+  // a converted-to-company contact from silently keeping a stale person name.
+  useEffect(() => {
+    if (editType === "company") {
+      setEditValue("firstName", undefined);
+      setEditValue("lastName", undefined);
+    }
+  }, [editType, setEditValue]);
 
   function startEdit(contact: Contact) {
     setIsEditing(true);
     setEditTagsInput(contact.tags.join(", "));
     resetEditForm({
+      type: contact.type,
       firstName: contact.firstName,
       lastName: contact.lastName,
       company: contact.company,
@@ -251,7 +265,10 @@ export default function ContactDetailPage() {
 
       <Card className="p-6">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-xl font-semibold">{contactDisplayName(contact)}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold">{contactDisplayName(contact)}</h1>
+            {contact.type === "company" && <Badge>Entreprise</Badge>}
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
@@ -310,7 +327,9 @@ export default function ContactDetailPage() {
               <dd className="mt-0.5">{contact.phone ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Entreprise</dt>
+              <dt className="text-text-muted">
+                {contact.type === "company" ? "Nom de l'entreprise" : "Entreprise (employeur)"}
+              </dt>
               <dd className="mt-0.5">{contact.company ?? "—"}</dd>
             </div>
             <div>
@@ -335,18 +354,48 @@ export default function ContactDetailPage() {
             )}
             className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
           >
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="firstName">
-                Prénom
+            <div className="col-span-2">
+              <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="type">
+                Type
               </label>
-              <Input id="firstName" {...registerEdit("firstName")} />
+              <select
+                id="type"
+                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                {...registerEdit("type")}
+              >
+                {CONTACT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type === "company" ? "Entreprise" : "Personne"}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="lastName">
-                Nom
-              </label>
-              <Input id="lastName" {...registerEdit("lastName")} />
-            </div>
+            {editType === "company" ? (
+              <div className="col-span-2">
+                <label
+                  className="mb-1 block text-xs font-medium text-zinc-700"
+                  htmlFor="company-name"
+                >
+                  Nom de l&apos;entreprise
+                </label>
+                <Input id="company-name" className="w-full" {...registerEdit("company")} />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="firstName">
+                    Prénom
+                  </label>
+                  <Input id="firstName" {...registerEdit("firstName")} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="lastName">
+                    Nom
+                  </label>
+                  <Input id="lastName" {...registerEdit("lastName")} />
+                </div>
+              </>
+            )}
             <div>
               <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="email">
                 Email
@@ -367,12 +416,14 @@ export default function ContactDetailPage() {
               </label>
               <Input id="phone" {...registerEdit("phone")} />
             </div>
-            <div className="col-span-2">
-              <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="company">
-                Entreprise
-              </label>
-              <Input id="company" className="w-full" {...registerEdit("company")} />
-            </div>
+            {editType !== "company" && (
+              <div className="col-span-2">
+                <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="company">
+                  Entreprise
+                </label>
+                <Input id="company" className="w-full" {...registerEdit("company")} />
+              </div>
+            )}
             <div className="col-span-2">
               <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="tags">
                 Tags (séparés par des virgules)

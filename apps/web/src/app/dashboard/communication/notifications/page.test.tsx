@@ -74,4 +74,18 @@ describe("NotificationsPage — pagination", () => {
     await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/notifications?page=2"));
     expect(await screen.findByText("Page 2 sur 3")).toBeInTheDocument();
   });
+
+  it("shows an error message with a retry action when the fetch fails", async () => {
+    getListMock.mockRejectedValue(new Error("network error"));
+    const user = userEvent.setup();
+    renderWithProviders(<NotificationsPage />);
+
+    expect(await screen.findByText("Impossible de charger vos notifications.")).toBeInTheDocument();
+    expect(screen.queryByText("Aucune notification.")).not.toBeInTheDocument();
+
+    mockNotificationsPage([notification]);
+    await user.click(screen.getByRole("button", { name: "Réessayer" }));
+
+    expect(await screen.findByText("Nouvelle commande")).toBeInTheDocument();
+  });
 });

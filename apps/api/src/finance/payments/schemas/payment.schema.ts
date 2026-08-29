@@ -78,3 +78,14 @@ PaymentSchema.index(
     partialFilterExpression: { idempotencyKey: { $exists: true } },
   },
 );
+
+// Stage 2.10 — supports PaymentsRepository.findProcessingPayments (existing, unindexed until
+// now — used by PaymentReconciliationService's periodic sweep) and the new
+// findProcessingPaymentsPaginated (ops observability) without a collection scan on a growing
+// collection. Purely additive: no behavior change, no data change, no existing index removed.
+// Mirrors the identical `{status:1, createdAt:-1}` index Stage 2.8 already added to
+// RefundSchema for the exact same reason — see that schema's own comment on its own index.
+// `status` alone (not folded into the organizationId+idempotencyKey index above, which only
+// covers documents that HAVE a key) is what both queries filter on; `createdAt` covers their
+// shared sort-by-recency.
+PaymentSchema.index({ status: 1, createdAt: -1 });

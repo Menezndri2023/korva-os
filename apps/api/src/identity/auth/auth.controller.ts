@@ -101,7 +101,8 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @Post('forgot-password')
   forgotPassword(
-    @Body(new ZodValidationPipe(forgotPasswordSchema)) body: ForgotPasswordInput,
+    @Body(new ZodValidationPipe(forgotPasswordSchema))
+    body: ForgotPasswordInput,
   ) {
     return this.passwordResetService.forgotPassword(body.email);
   }

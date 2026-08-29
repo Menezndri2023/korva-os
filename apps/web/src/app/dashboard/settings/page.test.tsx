@@ -24,7 +24,11 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 // to mock either hook individually.
 vi.mock("@/lib/auth-store", () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ bootstrapped: true, activeOrganizationId: "org-1" }),
+    selector({
+      bootstrapped: true,
+      activeOrganizationId: "org-1",
+      user: { id: "user-1", email: "owner@korva.test" },
+    }),
 }));
 
 const getMock = vi.mocked(apiClient.get);
@@ -74,6 +78,7 @@ describe("SettingsPage — Modules section (LOT F1)", () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
       if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
@@ -187,6 +192,134 @@ describe("SettingsPage — Modules section (LOT F1)", () => {
   });
 });
 
+describe("SettingsPage — Organization profile edit", () => {
+  let organization: ReturnType<typeof makeOrganization> & {
+    legalName?: string;
+    timezone?: string;
+    language?: string;
+    logo?: string;
+    brandColor?: string;
+  };
+
+  beforeEach(() => {
+    organization = {
+      ...makeOrganization(["crm"]),
+      legalName: "Org de test SARL",
+      timezone: "Europe/Paris",
+      language: "fr",
+      brandColor: "#1a73e8",
+    };
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    deleteMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+  });
+
+  it("shows the organization's current profile fields read-only by default", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Org de test")).toBeInTheDocument();
+    expect(screen.getByText("Org de test SARL")).toBeInTheDocument();
+    expect(screen.getByText("Europe/Paris")).toBeInTheDocument();
+    expect(screen.getByText("#1a73e8")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Nom")).not.toBeInTheDocument();
+  });
+
+  it("Modifier reveals a form prefilled with the organization's current values", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    expect(screen.getByLabelText("Nom")).toHaveValue("Org de test");
+    expect(screen.getByLabelText("Raison sociale")).toHaveValue("Org de test SARL");
+    expect(screen.getByLabelText("Couleur de marque")).toHaveValue("#1a73e8");
+  });
+
+  it("submits exactly the edited fields to PATCH /organizations/me and returns to read-only view on success", async () => {
+    patchMock.mockResolvedValue({ ...organization, name: "Nouveau nom" });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    const nameInput = screen.getByLabelText("Nom");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Nouveau nom");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith(
+        "/organizations/me",
+        expect.objectContaining({ name: "Nouveau nom", legalName: "Org de test SARL" }),
+      ),
+    );
+    // Real refetch of the org query, not a manually-patched value.
+    await waitFor(() =>
+      expect(
+        getMock.mock.calls.filter(([path]) => path === "/organizations/me").length,
+      ).toBeGreaterThan(1),
+    );
+  });
+
+  it("rejects an invalid brand color and never calls the API", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    const colorInput = screen.getByLabelText("Couleur de marque");
+    await user.clear(colorInput);
+    await user.type(colorInput, "not-a-color");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() => expect(patchMock).not.toHaveBeenCalled());
+  });
+
+  it("Annuler discards changes without calling the API", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    const nameInput = screen.getByLabelText("Nom");
+    await user.type(nameInput, " modifié");
+    const form = nameInput.closest("form") as HTMLElement;
+    await user.click(within(form).getByRole("button", { name: "Annuler" }));
+
+    expect(screen.queryByLabelText("Nom")).not.toBeInTheDocument();
+    expect(screen.getByText("Org de test")).toBeInTheDocument();
+    expect(patchMock).not.toHaveBeenCalled();
+  });
+
+  it("on a failed mutation, shows the error and stays in edit mode", async () => {
+    patchMock.mockRejectedValue(new ApiError("PERMISSION_DENIED", "Réservé aux administrateurs"));
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nom")).toBeInTheDocument();
+  });
+});
+
 describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
   const organization = makeOrganization(["crm", "analytics"]);
   const existingMembers = [
@@ -212,6 +345,7 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
       if (path === "/organizations/me/members") return Promise.resolve(existingMembers);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve(roles);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
@@ -260,7 +394,9 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     await user.selectOptions(roleSelect, "role-admin");
     await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
 
-    await waitFor(() => expect(screen.queryByText("Invitation envoyée.")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByText(/invitation envoyée par email/i)).not.toBeInTheDocument(),
+    );
     expect(postMock).not.toHaveBeenCalled();
   });
 
@@ -272,12 +408,14 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     await user.type(screen.getByLabelText("Adresse email"), "new.member@korva.test");
     await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
 
-    await waitFor(() => expect(screen.queryByText("Invitation envoyée.")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByText(/invitation envoyée par email/i)).not.toBeInTheDocument(),
+    );
     expect(postMock).not.toHaveBeenCalled();
   });
 
-  it("submits exactly { email, roleId } to POST /organizations/me/members", async () => {
-    postMock.mockResolvedValue({ id: "member-2" });
+  it("submits exactly { email, roleId } to POST /organizations/me/invitations (real email invite, not the accountrequired /members add)", async () => {
+    postMock.mockResolvedValue({ id: "invitation-2", email: "new.member@korva.test", status: "pending" });
     const user = userEvent.setup();
     await openInviteForm(user);
 
@@ -287,7 +425,7 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
 
     await waitFor(() =>
-      expect(postMock).toHaveBeenCalledWith("/organizations/me/members", {
+      expect(postMock).toHaveBeenCalledWith("/organizations/me/invitations", {
         email: "new.member@korva.test",
         roleId: "role-admin",
       }),
@@ -310,8 +448,8 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     expect(postMock).toHaveBeenCalledTimes(1);
   });
 
-  it("on success: refetches the member list, clears the form, and shows a confirmation", async () => {
-    postMock.mockResolvedValue({ id: "member-2" });
+  it("on success: refetches the pending-invitations list, clears the form, and shows a confirmation", async () => {
+    postMock.mockResolvedValue({ id: "invitation-2", email: "new.member@korva.test", status: "pending" });
     const user = userEvent.setup();
     await openInviteForm(user);
 
@@ -321,11 +459,12 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     await user.selectOptions(roleSelect, "role-admin");
     await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
 
-    expect(await screen.findByText("Invitation envoyée.")).toBeInTheDocument();
+    expect(await screen.findByText(/invitation envoyée par email/i)).toBeInTheDocument();
     expect(emailInput).toHaveValue("");
-    // Real refetch of the members query, not a manually-patched list.
+    // Real refetch of the pending-invitations query, not a manually-patched list — the invited
+    // person isn't a member yet, so the members list itself is deliberately NOT refetched here.
     expect(
-      getMock.mock.calls.filter(([path]) => path === "/organizations/me/members").length,
+      getMock.mock.calls.filter(([path]) => path === "/organizations/me/invitations").length,
     ).toBeGreaterThan(1);
   });
 
@@ -344,13 +483,13 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     expect(emailInput).toHaveValue("new.member@korva.test");
   });
 
-  it("on a 403 PERMISSION_DENIED error: shows the message and never touches the member list", async () => {
+  it("on a 403 PERMISSION_DENIED error: shows the message and never touches the invitations list", async () => {
     postMock.mockRejectedValue(new ApiError("PERMISSION_DENIED", "Réservé aux administrateurs"));
     const user = userEvent.setup();
     await openInviteForm(user);
 
-    const membersCallsBefore = getMock.mock.calls.filter(
-      ([path]) => path === "/organizations/me/members",
+    const invitationsCallsBefore = getMock.mock.calls.filter(
+      ([path]) => path === "/organizations/me/invitations",
     ).length;
 
     const roleSelect = await screen.findByLabelText("Rôle");
@@ -359,16 +498,17 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     await user.click(screen.getByRole("button", { name: "Envoyer l'invitation" }));
 
     expect(await screen.findByText("Réservé aux administrateurs")).toBeInTheDocument();
-    // No invalidation fired on error — the member list was never asked to refetch.
+    // No invalidation fired on error — the invitations list was never asked to refetch.
     expect(
-      getMock.mock.calls.filter(([path]) => path === "/organizations/me/members").length,
-    ).toBe(membersCallsBefore);
+      getMock.mock.calls.filter(([path]) => path === "/organizations/me/invitations").length,
+    ).toBe(invitationsCallsBefore);
   });
 
   it("shows a clear error with a retry option when the roles fail to load", async () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
       if (path === "/organizations/me/members") return Promise.resolve(existingMembers);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles")
         return Promise.reject(new ApiError("NETWORK_ERROR", "Unable to reach the server"));
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
@@ -389,6 +529,193 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
       ).toBeGreaterThan(1),
     );
   });
+
+  it("renders pending invitations under 'Invitations en attente', resolving the role id to a role name", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve(existingMembers);
+      if (path === "/organizations/me/invitations")
+        return Promise.resolve([
+          {
+            id: "invitation-1",
+            email: "pending.invitee@korva.test",
+            roleId: "role-admin",
+            status: "pending",
+            expiresAt: "2099-01-01T00:00:00.000Z",
+          },
+        ]);
+      if (path === "/organizations/me/roles") return Promise.resolve(roles);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Invitations en attente")).toBeInTheDocument();
+    const invitationRow = screen.getByText("pending.invitee@korva.test").closest("div")!;
+    expect(within(invitationRow.parentElement!).getByText("ADMIN")).toBeInTheDocument();
+  });
+
+  it("shows no 'Invitations en attente' section when there are none pending", async () => {
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("owner@korva.test");
+    expect(screen.queryByText("Invitations en attente")).not.toBeInTheDocument();
+  });
+});
+
+describe("SettingsPage — member role change and removal", () => {
+  const organization = makeOrganization(["crm", "analytics"]);
+  const twoMembers = [
+    {
+      id: "member-1",
+      status: "active",
+      userId: { id: "user-1", email: "owner@korva.test", firstName: "Ada" },
+      roleId: { id: "role-owner", name: "OWNER", systemKey: "OWNER" },
+    },
+    {
+      id: "member-2",
+      status: "active",
+      userId: { id: "user-2", email: "staff@korva.test", firstName: "Grace" },
+      roleId: { id: "role-staff", name: "STAFF", systemKey: "STAFF" },
+    },
+  ];
+  const suspendedMember = {
+    id: "member-3",
+    status: "suspended",
+    userId: { id: "user-3", email: "removed@korva.test" },
+    roleId: { id: "role-staff", name: "STAFF", systemKey: "STAFF" },
+  };
+  const roles = [
+    { id: "role-owner", name: "OWNER", systemKey: "OWNER" },
+    { id: "role-admin", name: "ADMIN", systemKey: "ADMIN" },
+    { id: "role-staff", name: "STAFF", systemKey: "STAFF" },
+  ];
+
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    deleteMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members")
+        return Promise.resolve([...twoMembers, suspendedMember]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve(roles);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+  });
+
+  it("shows your own row as a plain badge (no role select, no Retirer) but a non-self member gets both", async () => {
+    renderWithProviders(<SettingsPage />);
+    await screen.findByText("owner@korva.test");
+
+    const ownRow = screen.getByText("owner@korva.test").closest("div")!.parentElement!;
+    expect(within(ownRow).getByText("OWNER")).toBeInTheDocument();
+    expect(within(ownRow).queryByRole("combobox")).not.toBeInTheDocument();
+
+    const staffRow = screen.getByText("staff@korva.test").closest("div")!.parentElement!;
+    expect(within(staffRow).getByRole("combobox")).toBeInTheDocument();
+    expect(within(staffRow).getByRole("button", { name: "Retirer" })).toBeInTheDocument();
+  });
+
+  it("never shows a suspended (removed) member in the active list", async () => {
+    renderWithProviders(<SettingsPage />);
+    await screen.findByText("owner@korva.test");
+
+    expect(screen.queryByText("removed@korva.test")).not.toBeInTheDocument();
+  });
+
+  it("changing a member's role calls PATCH /organizations/me/members/:id and refetches", async () => {
+    patchMock.mockResolvedValue({ ...twoMembers[1], roleId: roles[1] });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+    await screen.findByText("staff@korva.test");
+
+    const staffRow = screen.getByText("staff@korva.test").closest("div")!.parentElement!;
+    await user.selectOptions(within(staffRow).getByRole("combobox"), "role-admin");
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me/members/member-2", {
+        roleId: "role-admin",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        getMock.mock.calls.filter(([path]) => path === "/organizations/me/members").length,
+      ).toBeGreaterThan(1),
+    );
+  });
+
+  it("shows the backend error when a role change is rejected (e.g. hierarchy violation)", async () => {
+    patchMock.mockRejectedValue(
+      new ApiError("ROLE_HIERARCHY_VIOLATION", "You cannot assign a role with higher privileges than your own."),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+    await screen.findByText("staff@korva.test");
+
+    const staffRow = screen.getByText("staff@korva.test").closest("div")!.parentElement!;
+    await user.selectOptions(within(staffRow).getByRole("combobox"), "role-owner");
+
+    expect(
+      await screen.findByText("You cannot assign a role with higher privileges than your own."),
+    ).toBeInTheDocument();
+  });
+
+  it("removing a member requires a two-step confirmation and calls DELETE on confirm", async () => {
+    deleteMock.mockResolvedValue({ ...twoMembers[1], status: "suspended" });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+    await screen.findByText("staff@korva.test");
+
+    const staffRow = screen.getByText("staff@korva.test").closest("div")!.parentElement!;
+    await user.click(within(staffRow).getByRole("button", { name: "Retirer" }));
+    expect(deleteMock).not.toHaveBeenCalled();
+
+    await user.click(within(staffRow).getByRole("button", { name: "Confirmer ?" }));
+
+    await waitFor(() =>
+      expect(deleteMock).toHaveBeenCalledWith("/organizations/me/members/member-2"),
+    );
+  });
+
+  it("cancelling the remove confirmation never calls DELETE", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+    await screen.findByText("staff@korva.test");
+
+    const staffRow = screen.getByText("staff@korva.test").closest("div")!.parentElement!;
+    await user.click(within(staffRow).getByRole("button", { name: "Retirer" }));
+    await user.click(within(staffRow).getByRole("button", { name: "Annuler" }));
+
+    expect(deleteMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Retirer" })).toBeInTheDocument();
+  });
+
+  it("shows the backend error and resets the confirm state when removal fails", async () => {
+    deleteMock.mockRejectedValue(
+      new ApiError("CANNOT_REMOVE_LAST_OWNER", "An organization must always have at least one owner."),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+    await screen.findByText("staff@korva.test");
+
+    const staffRow = screen.getByText("staff@korva.test").closest("div")!.parentElement!;
+    await user.click(within(staffRow).getByRole("button", { name: "Retirer" }));
+    await user.click(within(staffRow).getByRole("button", { name: "Confirmer ?" }));
+
+    expect(
+      await screen.findByText("An organization must always have at least one owner."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retirer" })).toBeInTheDocument();
+  });
 });
 
 describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () => {
@@ -400,6 +727,7 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
       if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
@@ -562,6 +890,7 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     await user.type(wabaIdInput, "waba-123");
     await user.type(screen.getByLabelText("ID du numéro de téléphone"), "phone-456");
     await user.type(screen.getByLabelText("Nom affiché"), "Ma Boutique");
+    await user.type(screen.getByLabelText("Clé API (D360-API-KEY)"), "d360-secret-key");
     const messagingForm = wabaIdInput.closest("form") as HTMLElement;
     await user.click(within(messagingForm).getByRole("button", { name: "Connecter" }));
 
@@ -570,8 +899,20 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
         wabaId: "waba-123",
         phoneNumberId: "phone-456",
         displayName: "Ma Boutique",
+        apiKey: "d360-secret-key",
       }),
     );
+  });
+
+  it("the API key field is masked (type=password) and never pre-filled/re-displayed", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click((await screen.findAllByRole("button", { name: "Connecter" }))[1]);
+    const apiKeyInput = await screen.findByLabelText("Clé API (D360-API-KEY)");
+
+    expect(apiKeyInput).toHaveAttribute("type", "password");
+    expect(apiKeyInput).toHaveValue("");
   });
 
   it("test-connection calls the right endpoint and displays the returned ok/message", async () => {
@@ -655,6 +996,7 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
       if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
@@ -672,6 +1014,7 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
       if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);
@@ -695,6 +1038,7 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
       if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
       if (path === "/plans") return Promise.resolve([]);

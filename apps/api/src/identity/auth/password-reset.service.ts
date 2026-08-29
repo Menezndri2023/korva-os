@@ -1,4 +1,9 @@
-import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import {
@@ -15,8 +20,7 @@ const TOKEN_TTL_MS = 30 * 60 * 1000;
 
 /** Generic, identical response for every forgot-password call — see PasswordResetService.forgotPassword. */
 const FORGOT_PASSWORD_RESPONSE = {
-  message:
-    'If an account exists for this email, a reset link has been sent.',
+  message: 'If an account exists for this email, a reset link has been sent.',
 };
 
 const RESET_EMAIL_SUBJECT = 'Reset your KORVA OS password';
@@ -48,7 +52,9 @@ export class PasswordResetService {
    * real hashing/DB/email work, the other does none) — a residual, documented risk, not a hidden
    * one (see docs/PRODUCTION_READINESS.md-style risk acceptance elsewhere in this codebase).
    */
-  async forgotPassword(email: string): Promise<typeof FORGOT_PASSWORD_RESPONSE> {
+  async forgotPassword(
+    email: string,
+  ): Promise<typeof FORGOT_PASSWORD_RESPONSE> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
       return FORGOT_PASSWORD_RESPONSE;
@@ -58,11 +64,7 @@ export class PasswordResetService {
     const tokenHash = hashToken(token);
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 
-    await this.passwordResetRepository.issue(
-      user._id,
-      tokenHash,
-      expiresAt,
-    );
+    await this.passwordResetRepository.issue(user._id, tokenHash, expiresAt);
 
     const resetUrl = this.buildResetUrl(token);
     const body = interpolate(

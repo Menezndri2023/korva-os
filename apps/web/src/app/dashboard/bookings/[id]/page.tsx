@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Booking, Contact, Offer, Resource } from "@korva/types";
+import type { Booking, Contact, Offer, Order, Resource } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -32,6 +32,7 @@ interface RescheduleFormValues {
 
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [isRescheduling, setIsRescheduling] = useState(false);
@@ -80,9 +81,22 @@ export default function BookingDetailPage() {
     },
   });
 
-  const actionError = [cancelMutation, rescheduleMutation]
+  // Backend endpoint (POST /orders/from-booking) already existed with no way to reach it from
+  // the UI — the shared Order Engine's booking→order handoff was backend-only. There is no
+  // client-side signal for "an order already exists for this booking" (orders aren't filterable
+  // by bookingId), so ORDER_ALREADY_EXISTS is handled as a friendly, specific message here
+  // rather than pre-hiding the button.
+  const createOrderMutation = useMutation({
+    mutationFn: () => apiClient.post<Order>("/orders/from-booking", { bookingId: id }),
+    onSuccess: (order) => router.push(`/dashboard/orders/${order.id}`),
+  });
+
+  const actionError = [cancelMutation, rescheduleMutation, createOrderMutation]
     .map((mutation) => mutation.error)
     .find((error) => error instanceof ApiError);
+  const orderAlreadyExists =
+    createOrderMutation.error instanceof ApiError &&
+    createOrderMutation.error.code === "ORDER_ALREADY_EXISTS";
 
   function contactName(contactId: string): string {
     const contact = contactsQuery.data?.find((c) => c.id === contactId);
@@ -143,6 +157,17 @@ export default function BookingDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{STATUS_LABELS[booking.status]}</Badge>
             <Badge>{PAYMENT_STATUS_LABELS[booking.paymentStatus]}</Badge>
+            {(booking.status === "confirmed" || booking.status === "completed") && (
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={createOrderMutation.isPending}
+                disabled={isRescheduling}
+                onClick={() => createOrderMutation.mutate()}
+              >
+                {createOrderMutation.isPending ? "Création..." : "Créer une commande"}
+              </Button>
+            )}
             {(booking.status === "pending" || booking.status === "confirmed") && (
               <>
                 <Button
@@ -167,8 +192,14 @@ export default function BookingDetailPage() {
           </div>
         </div>
 
-        {actionError instanceof ApiError && (
-          <p className="mt-3 text-sm text-destructive">{actionError.message}</p>
+        {orderAlreadyExists ? (
+          <p className="mt-3 text-sm text-text-muted">
+            Une commande existe déjà pour cette réservation.
+          </p>
+        ) : (
+          actionError instanceof ApiError && (
+            <p className="mt-3 text-sm text-destructive">{actionError.message}</p>
+          )
         )}
 
         {!isRescheduling ? (

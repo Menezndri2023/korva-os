@@ -1,7 +1,8 @@
 import { EventBusService } from './event-bus.service';
 import type { ConfigService } from '@nestjs/config';
 
-const addMock = jest.fn();
+type QueueAddCall = [string, Record<string, unknown>, Record<string, unknown>];
+const addMock = jest.fn<Promise<void>, QueueAddCall>();
 const closeMock = jest.fn();
 const disconnectMock = jest.fn();
 
@@ -12,9 +13,11 @@ jest.mock('bullmq', () => ({
   })),
 }));
 
-jest.mock('ioredis', () => jest.fn().mockImplementation(() => ({
-  disconnect: disconnectMock,
-})));
+jest.mock('ioredis', () =>
+  jest.fn().mockImplementation(() => ({
+    disconnect: disconnectMock,
+  })),
+);
 
 function buildService(): EventBusService {
   const configService = {
@@ -34,7 +37,7 @@ describe('EventBusService — retry/backoff/jobId', () => {
     await service.publish('org-1', 'lead.created', { leadId: 'lead-1' });
 
     expect(addMock).toHaveBeenCalledTimes(1);
-    const [, , options] = addMock.mock.calls[0];
+    const [, , options] = addMock.mock.calls[0]!;
     expect(options).toMatchObject({
       attempts: 5,
       backoff: { type: 'exponential', delay: 2000 },
@@ -48,7 +51,7 @@ describe('EventBusService — retry/backoff/jobId', () => {
 
     await service.publish('org-1', 'lead.created', { leadId: 'lead-1' });
 
-    const [, data, options] = addMock.mock.calls[0];
+    const [, data, options] = addMock.mock.calls[0]!;
     expect(options.jobId).toBe('org-1:lead.created:lead-1');
     expect(data.eventKey).toBe('lead.created:lead-1');
   });
@@ -58,7 +61,7 @@ describe('EventBusService — retry/backoff/jobId', () => {
 
     await service.publish('org-1', 'lead.created', {});
 
-    const [, data, options] = addMock.mock.calls[0];
+    const [, data, options] = addMock.mock.calls[0]!;
     expect(options.jobId).toBeUndefined();
     expect(data.eventKey).toBeUndefined();
   });

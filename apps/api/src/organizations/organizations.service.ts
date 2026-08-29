@@ -255,4 +255,164 @@ export class OrganizationsService {
 
     return membership;
   }
+
+  /**
+   * Changes an existing member's role. Same hierarchy invariant as addMember (an actor can never
+   * assign a role that outranks their own), extended with a second check addMember doesn't need:
+   * the membership's CURRENT role must also not outrank the actor — otherwise an ADMIN could
+   * demote an OWNER despite never being allowed to grant OWNER-rank access in the first place.
+   * Also guards against demoting an organization's last active OWNER, which would otherwise leave
+   * the org with no one able to manage it.
+   */
+  async updateMemberRole(
+    organizationId: string,
+    actorUserId: string,
+    actorRoleId: string,
+    membershipId: string,
+    newRoleId: string,
+  ) {
+    const membership = await this.membershipsService.findByIdForOrganization(
+      membershipId,
+      organizationId,
+    );
+    if (!membership) {
+      throw new NotFoundException({
+        code: 'MEMBERSHIP_NOT_FOUND',
+        message: 'Membership not found',
+      });
+    }
+
+    const newRole = await this.rolesService.getRoleById(newRoleId);
+    if (!newRole || newRole.organizationId.toString() !== organizationId) {
+      throw new NotFoundException({
+        code: 'ROLE_NOT_FOUND',
+        message: 'Role not found in this organization',
+      });
+    }
+
+    const actorRole = await this.rolesService.getRoleById(actorRoleId);
+    if (!actorRole) {
+      throw new ForbiddenException({
+        code: 'ROLE_HIERARCHY_UNKNOWN',
+        message:
+          'You cannot assign a role with higher privileges than your own.',
+      });
+    }
+    const currentRole = membership.roleId as unknown as RoleDocument;
+    if (
+      requireSystemRoleRank(actorRole) > requireSystemRoleRank(newRole) ||
+      requireSystemRoleRank(actorRole) > requireSystemRoleRank(currentRole)
+    ) {
+      throw new ForbiddenException({
+        code: 'ROLE_HIERARCHY_VIOLATION',
+        message:
+          'You cannot assign a role with higher privileges than your own.',
+      });
+    }
+
+    if (
+      currentRole.systemKey === 'OWNER' &&
+      newRole.systemKey !== 'OWNER' &&
+      (await this.membershipsService.countActiveByRole(
+        organizationId,
+        currentRole.id as string,
+      )) <= 1
+    ) {
+      throw new ForbiddenException({
+        code: 'CANNOT_DEMOTE_LAST_OWNER',
+        message: 'An organization must always have at least one owner.',
+      });
+    }
+
+    const updated = await this.membershipsService.updateRole(
+      membershipId,
+      newRoleId,
+    );
+
+    await this.auditService.record({
+      organizationId,
+      userId: actorUserId,
+      action: 'ROLE_CHANGE',
+      entity: 'membership',
+      entityId: membershipId,
+      metadata: { previousRoleId: currentRole.id as string, roleId: newRoleId },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Removes a member — a status change to 'suspended', never a delete (same revoke-not-delete
+   * convention as invitations/integration accounts). Guards: an actor can never remove someone
+   * who outranks them, can never remove themselves via this route (self-removal from the org
+   * they're managing is not this action's job), and can never remove an organization's last
+   * active OWNER.
+   */
+  async removeMember(
+    organizationId: string,
+    actorUserId: string,
+    actorRoleId: string,
+    membershipId: string,
+  ) {
+    const membership = await this.membershipsService.findByIdForOrganization(
+      membershipId,
+      organizationId,
+    );
+    if (!membership) {
+      throw new NotFoundException({
+        code: 'MEMBERSHIP_NOT_FOUND',
+        message: 'Membership not found',
+      });
+    }
+
+    // membership.userId is POPULATED here (findByIdForOrganization populates it) — it is a full
+    // User sub-document at runtime despite the schema's static ObjectId type, so `.toString()`
+    // would stringify the object itself, not its id. `.id` is Mongoose's own virtual getter
+    // (present on every hydrated document by default), the same accessor already relied on for
+    // `currentRole.id` below.
+    const memberUserId = (membership.userId as unknown as { id: string }).id;
+    if (memberUserId === actorUserId) {
+      throw new ForbiddenException({
+        code: 'CANNOT_REMOVE_SELF',
+        message: 'You cannot remove your own membership.',
+      });
+    }
+
+    const actorRole = await this.rolesService.getRoleById(actorRoleId);
+    const currentRole = membership.roleId as unknown as RoleDocument;
+    if (
+      !actorRole ||
+      requireSystemRoleRank(actorRole) > requireSystemRoleRank(currentRole)
+    ) {
+      throw new ForbiddenException({
+        code: 'ROLE_HIERARCHY_VIOLATION',
+        message:
+          'You cannot remove a member with higher privileges than your own.',
+      });
+    }
+
+    // No separate "last owner" count guard here (unlike updateMemberRole, which does need one):
+    // the hierarchy check above only lets an OWNER-ranked actor remove an OWNER-ranked target
+    // (nothing outranks OWNER, so no lower-ranked actor can ever pass it), and CANNOT_REMOVE_SELF
+    // above already rejects an owner removing their own membership. Combined, the only way to
+    // reach "removing the organization's last active owner" would require the actor and target
+    // to be the same single remaining owner — which CANNOT_REMOVE_SELF already blocks. A distinct
+    // count-based check here would be unreachable dead code, not real defense-in-depth.
+
+    const updated = await this.membershipsService.updateStatus(
+      membershipId,
+      'suspended',
+    );
+
+    await this.auditService.record({
+      organizationId,
+      userId: actorUserId,
+      action: 'DELETE',
+      entity: 'membership',
+      entityId: membershipId,
+      metadata: { removedUserId: memberUserId },
+    });
+
+    return updated;
+  }
 }

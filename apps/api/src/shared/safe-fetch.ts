@@ -111,7 +111,7 @@ function parseIPv6ToBytes(address: string): Buffer | null {
   }
 
   const missing = doubleColonParts.length === 2 ? 8 - totalGroups : 0;
-  const groups = [...head, ...Array(missing).fill('0'), ...tail];
+  const groups = [...head, ...Array<string>(missing).fill('0'), ...tail];
   if (groups.length !== 8) return null;
 
   const buffer = Buffer.alloc(16);

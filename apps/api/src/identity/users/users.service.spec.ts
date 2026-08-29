@@ -27,6 +27,9 @@ describe('UsersService.hashPassword / updatePasswordHash', () => {
 
     await service.updatePasswordHash('user-1', 'precomputed-hash');
 
-    expect(updatePasswordHash).toHaveBeenCalledWith('user-1', 'precomputed-hash');
+    expect(updatePasswordHash).toHaveBeenCalledWith(
+      'user-1',
+      'precomputed-hash',
+    );
   });
 });

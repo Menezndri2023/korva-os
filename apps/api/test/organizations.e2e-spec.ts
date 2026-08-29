@@ -209,8 +209,8 @@ interface RolePayload {
 }
 interface MembershipPayload {
   id: string;
-  userId: string | { _id: string; email: string };
-  roleId: string | { _id: string; systemKey?: string };
+  userId: string | { id: string; email: string };
+  roleId: string | { id: string; systemKey?: string };
   status: string;
 }
 
@@ -489,5 +489,445 @@ describe('Organizations — team invitations (e2e)', () => {
       })
       .expect(403);
     expect(asError(res.body).code).toBe('ROLE_HIERARCHY_VIOLATION');
+  });
+
+  it('GET /organizations/me/invitations lists pending invitations and drops one once accepted', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'invite-pending-owner@korva.test',
+      'Invite Pending Org',
+    );
+    const managerRoleId = await roleId(accessToken, organization.id, 'MANAGER');
+    const inviteeEmail = 'invite-pending-invitee@korva.test';
+
+    await request(server)
+      .post('/api/v1/organizations/me/invitations')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ email: inviteeEmail, roleId: managerRoleId })
+      .expect(201);
+
+    const beforeAccept = await request(server)
+      .get('/api/v1/organizations/me/invitations')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+    const pendingBefore = asSuccess<
+      { email: string; status: string; tokenHash?: string }[]
+    >(beforeAccept.body);
+    expect(pendingBefore).toHaveLength(1);
+    expect(pendingBefore[0]?.email).toBe(inviteeEmail);
+    expect(pendingBefore[0]?.status).toBe('pending');
+    // The schema marks tokenHash select:false — it must never reach an HTTP response.
+    expect(pendingBefore[0]).not.toHaveProperty('tokenHash');
+
+    const token = emailProvider.lastTokenFor(inviteeEmail);
+    await request(server)
+      .post(`/api/v1/invitations/${token}/accept`)
+      .send({ password: 'brandnewpassword123' })
+      .expect(201);
+
+    const afterAccept = await request(server)
+      .get('/api/v1/organizations/me/invitations')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+    expect(asSuccess<unknown[]>(afterAccept.body)).toHaveLength(0);
+  });
+});
+
+/**
+ * Member role change and removal — PATCH/DELETE /organizations/me/members/:id. Team management
+ * was previously add-only (MembershipsService had no update/delete); these two routes close that
+ * gap with the same hierarchy invariants addMember already enforces, extended with two checks
+ * addMember doesn't need: the membership's CURRENT role must not outrank the actor either (an
+ * ADMIN can't touch an OWNER's role at all), and an organization's last active OWNER can never be
+ * demoted or removed.
+ */
+describe('Organizations — member role change and removal (e2e)', () => {
+  let app: INestApplication<App>;
+  let server: App;
+  let connection: Connection;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+    server = app.getHttpServer();
+    connection = app.get(getConnectionToken());
+    await connection.dropDatabase();
+    await Promise.all(
+      connection
+        .modelNames()
+        .map((name) => connection.model(name).syncIndexes()),
+    );
+  });
+
+  afterAll(async () => {
+    await connection.dropDatabase();
+    await app.close();
+  });
+
+  async function registerOrgAndToken(email: string, orgName: string) {
+    const authRes = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    const accessToken = asSuccess<AuthPayload>(authRes.body).accessToken;
+
+    const orgRes = await request(server)
+      .post('/api/v1/organizations')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        name: orgName,
+        type: 'services',
+        country: 'FR',
+        currency: 'EUR',
+        timezone: 'Europe/Paris',
+        language: 'fr',
+      })
+      .expect(201);
+    const organization = asSuccess<OrganizationPayload>(orgRes.body);
+
+    return { accessToken, organization };
+  }
+
+  async function roleId(
+    accessToken: string,
+    organizationId: string,
+    systemKey: string,
+  ): Promise<string> {
+    const res = await request(server)
+      .get('/api/v1/organizations/me/roles')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .expect(200);
+    const roles = asSuccess<RolePayload[]>(res.body);
+    const role = roles.find((r) => r.systemKey === systemKey);
+    if (!role) throw new Error(`Role ${systemKey} not found`);
+    return role.id;
+  }
+
+  /** Registers a second user and adds them to the org via the existing addMember route
+   *  (POST /organizations/me/members — requires the invited email to already have an account,
+   *  which this always satisfies). Returns the new membership's id and the member's own token. */
+  async function addMemberWithRole(
+    ownerToken: string,
+    organizationId: string,
+    memberRoleId: string,
+    email: string,
+  ) {
+    const memberAuthRes = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    const memberToken = asSuccess<AuthPayload>(memberAuthRes.body).accessToken;
+
+    const addRes = await request(server)
+      .post('/api/v1/organizations/me/members')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ email, roleId: memberRoleId })
+      .expect(201);
+    const membershipId = asSuccess<MembershipPayload>(addRes.body).id;
+
+    return { membershipId, memberToken };
+  }
+
+  it('an OWNER can change a member from STAFF to MANAGER', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'role-change-owner@korva.test',
+      'Role Change Org',
+    );
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+    const managerRoleId = await roleId(accessToken, organization.id, 'MANAGER');
+    const { membershipId } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      staffRoleId,
+      'role-change-member@korva.test',
+    );
+
+    const res = await request(server)
+      .patch(`/api/v1/organizations/me/members/${membershipId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ roleId: managerRoleId })
+      .expect(200);
+    const updated = asSuccess<MembershipPayload>(res.body);
+    const updatedRoleId =
+      typeof updated.roleId === 'string' ? updated.roleId : updated.roleId.id;
+    expect(updatedRoleId).toBe(managerRoleId);
+  });
+
+  it('an ADMIN cannot promote a member to OWNER (role-hierarchy violation, same as addMember)', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'role-change-owner2@korva.test',
+      'Role Change Org 2',
+    );
+    const adminRoleId = await roleId(accessToken, organization.id, 'ADMIN');
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+    const ownerRoleId = await roleId(accessToken, organization.id, 'OWNER');
+
+    const { memberToken: adminToken } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      adminRoleId,
+      'role-change-admin@korva.test',
+    );
+    const { membershipId: staffMembershipId } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      staffRoleId,
+      'role-change-staff@korva.test',
+    );
+
+    const res = await request(server)
+      .patch(`/api/v1/organizations/me/members/${staffMembershipId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ roleId: ownerRoleId })
+      .expect(403);
+    expect(asError(res.body).code).toBe('ROLE_HIERARCHY_VIOLATION');
+  });
+
+  it("an ADMIN cannot change an OWNER's role at all, even to a lower one (current-role hierarchy check)", async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'role-change-owner3@korva.test',
+      'Role Change Org 3',
+    );
+    const adminRoleId = await roleId(accessToken, organization.id, 'ADMIN');
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+
+    const { memberToken: adminToken } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      adminRoleId,
+      'role-change-admin3@korva.test',
+    );
+
+    // The org creator's own membership is OWNER — find it via the members list.
+    const membersRes = await request(server)
+      .get('/api/v1/organizations/me/members')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+    const ownerMembership = asSuccess<MembershipPayload[]>(
+      membersRes.body,
+    ).find((m) =>
+      typeof m.userId === 'string'
+        ? false
+        : m.userId.email === 'role-change-owner3@korva.test',
+    );
+    expect(ownerMembership).toBeDefined();
+
+    const res = await request(server)
+      .patch(`/api/v1/organizations/me/members/${ownerMembership!.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ roleId: staffRoleId })
+      .expect(403);
+    expect(asError(res.body).code).toBe('ROLE_HIERARCHY_VIOLATION');
+  });
+
+  it("cannot demote an organization's last active OWNER", async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'role-change-owner4@korva.test',
+      'Role Change Org 4',
+    );
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+
+    const membersRes = await request(server)
+      .get('/api/v1/organizations/me/members')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+    const ownerMembership = asSuccess<MembershipPayload[]>(membersRes.body)[0]!;
+
+    const res = await request(server)
+      .patch(`/api/v1/organizations/me/members/${ownerMembership.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ roleId: staffRoleId })
+      .expect(403);
+    expect(asError(res.body).code).toBe('CANNOT_DEMOTE_LAST_OWNER');
+  });
+
+  it('an OWNER can remove a member, which suspends (not deletes) the membership', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'remove-owner@korva.test',
+      'Remove Member Org',
+    );
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+    const { membershipId } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      staffRoleId,
+      'remove-member@korva.test',
+    );
+
+    await request(server)
+      .delete(`/api/v1/organizations/me/members/${membershipId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+
+    const membersRes = await request(server)
+      .get('/api/v1/organizations/me/members')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+    const removed = asSuccess<MembershipPayload[]>(membersRes.body).find(
+      (m) => m.id === membershipId,
+    );
+    expect(removed?.status).toBe('suspended');
+  });
+
+  it('a removed member loses access to the organization (their token can no longer resolve tenant context)', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'remove-owner2@korva.test',
+      'Remove Access Org',
+    );
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+    const { membershipId, memberToken } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      staffRoleId,
+      'remove-member2@korva.test',
+    );
+
+    await request(server)
+      .delete(`/api/v1/organizations/me/members/${membershipId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+
+    const res = await request(server)
+      .get('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${memberToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(403);
+    expect(asError(res.body).code).toBe('ORGANIZATION_ACCESS_DENIED');
+  });
+
+  it('removing a co-owner is allowed while a second owner remains, leaving exactly one active owner — who is then only protected by CANNOT_REMOVE_SELF, since only an owner can ever act on an owner', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'remove-owner3@korva.test',
+      'Remove Last Owner Org',
+    );
+    const membersRes = await request(server)
+      .get('/api/v1/organizations/me/members')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+    const firstOwnerMembership = asSuccess<MembershipPayload[]>(
+      membersRes.body,
+    )[0]!;
+
+    const ownerRoleId = await roleId(accessToken, organization.id, 'OWNER');
+    const { membershipId: secondOwnerMembershipId } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      ownerRoleId,
+      'remove-owner3b@korva.test',
+    );
+
+    // Two active owners exist now — removing one is allowed (leaves exactly one, not zero).
+    await request(server)
+      .delete(`/api/v1/organizations/me/members/${secondOwnerMembershipId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+
+    // Only the remaining owner themselves could pass the hierarchy check against their own
+    // OWNER-ranked membership now — making this a self-removal attempt, correctly rejected.
+    const res = await request(server)
+      .delete(`/api/v1/organizations/me/members/${firstOwnerMembership.id}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(403);
+    expect(asError(res.body).code).toBe('CANNOT_REMOVE_SELF');
+  });
+
+  it('cannot remove your own membership', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'remove-self@korva.test',
+      'Remove Self Org',
+    );
+    const adminRoleId = await roleId(accessToken, organization.id, 'ADMIN');
+    const { membershipId: adminMembershipId, memberToken: adminToken } =
+      await addMemberWithRole(
+        accessToken,
+        organization.id,
+        adminRoleId,
+        'remove-self-admin@korva.test',
+      );
+
+    const res = await request(server)
+      .delete(`/api/v1/organizations/me/members/${adminMembershipId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(403);
+    expect(asError(res.body).code).toBe('CANNOT_REMOVE_SELF');
+  });
+
+  it('an ADMIN cannot remove an OWNER (role-hierarchy violation)', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'remove-hierarchy-owner@korva.test',
+      'Remove Hierarchy Org',
+    );
+    const adminRoleId = await roleId(accessToken, organization.id, 'ADMIN');
+    const { memberToken: adminToken } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      adminRoleId,
+      'remove-hierarchy-admin@korva.test',
+    );
+
+    const membersRes = await request(server)
+      .get('/api/v1/organizations/me/members')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(200);
+    const ownerMembership = asSuccess<MembershipPayload[]>(
+      membersRes.body,
+    ).find((m) =>
+      typeof m.userId === 'string'
+        ? false
+        : m.userId.email === 'remove-hierarchy-owner@korva.test',
+    )!;
+
+    const res = await request(server)
+      .delete(`/api/v1/organizations/me/members/${ownerMembership.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('X-Organization-Id', organization.id)
+      .expect(403);
+    expect(asError(res.body).code).toBe('ROLE_HIERARCHY_VIOLATION');
+  });
+
+  it("propagates a cross-org 404 rather than modifying another org's membership", async () => {
+    const { accessToken: ownerAToken, organization: orgA } =
+      await registerOrgAndToken('cross-org-a@korva.test', 'Cross Org A');
+    const { accessToken: ownerBToken, organization: orgB } =
+      await registerOrgAndToken('cross-org-b@korva.test', 'Cross Org B');
+    const staffRoleIdA = await roleId(ownerAToken, orgA.id, 'STAFF');
+    const { membershipId } = await addMemberWithRole(
+      ownerAToken,
+      orgA.id,
+      staffRoleIdA,
+      'cross-org-member@korva.test',
+    );
+
+    // orgB's own owner (a real, active member of orgB — TenantGuard resolves fine) tries to
+    // reach orgA's membership by id.
+    const res = await request(server)
+      .delete(`/api/v1/organizations/me/members/${membershipId}`)
+      .set('Authorization', `Bearer ${ownerBToken}`)
+      .set('X-Organization-Id', orgB.id)
+      .expect(404);
+    expect(asError(res.body).code).toBe('MEMBERSHIP_NOT_FOUND');
   });
 });

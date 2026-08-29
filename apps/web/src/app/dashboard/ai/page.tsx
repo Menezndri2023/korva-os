@@ -85,12 +85,15 @@ export default function AiPage() {
   const pendingOnly = pendingActions?.filter((a) => a.status === "pending") ?? [];
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
+    <div className="flex h-[calc(100vh-8rem)] flex-col gap-4 md:flex-row">
       <aside
         // Not migrated to <Card>: Card always renders a <div>, and this element must stay a
         // real <aside> for document semantics — same exclusion as the raw <form> wrappers
         // elsewhere (dashboard/crm, dashboard/bookings).
-        className="w-64 shrink-0 space-y-3 overflow-y-auto rounded-lg border border-border bg-surface p-3"
+        // Stacked above the chat and height-capped below md (a fixed w-64 sidebar next to the
+        // chat would leave almost no room for it on a phone-width viewport); reverts to the
+        // original side-by-side, full-height layout at md: and up.
+        className="max-h-48 shrink-0 space-y-3 overflow-y-auto rounded-lg border border-border bg-surface p-3 md:h-auto md:max-h-none md:w-64"
       >
         <Button className="w-full" onClick={() => setConversationId(null)}>
           Nouvelle conversation
@@ -142,30 +145,51 @@ export default function AiPage() {
           {messages?.map((m) => (
             <MessageBubble key={m.id} message={m} />
           ))}
-          {pendingOnly.map((action) => (
-            <div key={action.id} className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
-              <p className="font-medium text-amber-900">
-                Confirmation requise : {action.toolName}
-              </p>
-              <p className="mt-1 text-xs text-warning">{JSON.stringify(action.input)}</p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={() => confirmMutation.mutate(action.id)}
-                  disabled={confirmMutation.isPending}
-                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60"
-                >
-                  Confirmer
-                </button>
-                <button
-                  onClick={() => rejectMutation.mutate(action.id)}
-                  disabled={rejectMutation.isPending}
-                  className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                >
-                  Rejeter
-                </button>
+          {pendingOnly.map((action) => {
+            // Per-action, not global: several pending actions can be on screen at once, and
+            // `variables` scopes the mutation's last error to the specific action id it was
+            // called with — the same pattern already used for per-row errors elsewhere (e.g.
+            // crm/page.tsx's delete-confirm). Without this, a rejected WhatsApp-consent confirm
+            // or a lost-claim race (AI_ACTION_ALREADY_RESOLVED) failed silently: the button just
+            // stopped loading with no visible reason.
+            const actionError =
+              confirmMutation.isError && confirmMutation.variables === action.id
+                ? confirmMutation.error
+                : rejectMutation.isError && rejectMutation.variables === action.id
+                  ? rejectMutation.error
+                  : null;
+            return (
+              <div key={action.id} className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+                <p className="font-medium text-amber-900">
+                  Confirmation requise : {action.toolName}
+                </p>
+                <p className="mt-1 text-xs text-warning">{JSON.stringify(action.input)}</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => confirmMutation.mutate(action.id)}
+                    disabled={confirmMutation.isPending}
+                    className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    Confirmer
+                  </button>
+                  <button
+                    onClick={() => rejectMutation.mutate(action.id)}
+                    disabled={rejectMutation.isPending}
+                    className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                  >
+                    Rejeter
+                  </button>
+                </div>
+                {actionError && (
+                  <p className="mt-2 text-xs text-destructive">
+                    {actionError instanceof ApiError
+                      ? actionError.message
+                      : "Une erreur est survenue. Réessayez."}
+                  </p>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="border-t border-border p-3">
           {error && <p className="mb-2 text-sm text-destructive">{error}</p>}

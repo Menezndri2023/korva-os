@@ -6,6 +6,7 @@ import type { MessageTemplatesService } from '../message-templates/message-templ
 import type { AuditService } from '../../audit/audit.service';
 import type { EmailProvider } from '../providers/email-provider.interface';
 import type { MessagingProvider } from '../providers/messaging-provider.interface';
+import type { MessagingProviderResolverService } from '../providers/messaging-provider-resolver.service';
 import type { CreateMessageInput } from '@korva/validation';
 
 const ORG_ID = '507f1f77bcf86cd799439011';
@@ -65,6 +66,12 @@ function buildService(channel: 'email' | 'whatsapp') {
     name: 'stub',
     send: messagingSend,
   } as unknown as MessagingProvider;
+  // Stage 2.4: ConversationsService no longer injects MESSAGING_PROVIDER directly — it resolves
+  // a tenant-scoped provider through MessagingProviderResolverService on every whatsapp/sms send.
+  const resolveTenantProvider = jest.fn().mockResolvedValue(messagingProvider);
+  const messagingProviderResolver = {
+    resolveTenantProvider,
+  } as unknown as MessagingProviderResolverService;
 
   const service = new ConversationsService(
     conversationsRepository,
@@ -73,13 +80,14 @@ function buildService(channel: 'email' | 'whatsapp') {
     messageTemplatesService,
     auditService,
     emailProvider,
-    messagingProvider,
+    messagingProviderResolver,
   );
 
   return {
     service,
     send,
     messagingSend,
+    resolveTenantProvider,
     contactsService,
     conversationsRepository,
     createConversation,
@@ -114,6 +122,32 @@ describe('ConversationsService.sendMessage — channel-aware HTML escaping', () 
     const sentBody = messagingSendInput.body;
     expect(sentBody).toBe('Bonjour <img src=x onerror=alert(1)>,');
     expect(sentBody).not.toContain('&lt;img');
+  });
+
+  // Stage 2.4: a WhatsApp/SMS send always resolves the provider through
+  // MessagingProviderResolverService.resolveTenantProvider, scoped to THIS organization — never
+  // the old global MESSAGING_PROVIDER binding, which no longer exists in this constructor at all.
+  it('resolves the messaging provider through resolveTenantProvider, scoped to the sending organization, for every whatsapp send', async () => {
+    const { service, resolveTenantProvider } = buildService('whatsapp');
+
+    const input: CreateMessageInput = { body: 'hello' };
+    await service.sendMessage(ORG_ID, USER_ID, CONVERSATION_ID, input);
+
+    expect(resolveTenantProvider).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      provider: '360dialog',
+    });
+  });
+
+  // Stage 2.4 — TEST K (global env fallback): static proof that the old global MESSAGING_PROVIDER
+  // token cannot bypass tenant-scoped resolution in production, because ConversationsService's
+  // source no longer references it at all — there is no code path left for it to be reached
+  // through. MessagingProviderModule/WHATSAPP_API_KEY still exist (kept as an explicitly
+  // documented DEV/TEST-only binding, per docs/architecture/integrations-platform.md's Stage 2.4
+  // addendum and .env.example's own comment) but are structurally unreachable from any real send.
+  it("TEST K: ConversationsService's own source contains no reference to MESSAGING_PROVIDER — the old global binding cannot be reached from the real send path", () => {
+    const serviceSource = ConversationsService.toString();
+    expect(serviceSource).not.toMatch(/MESSAGING_PROVIDER/);
   });
 });
 

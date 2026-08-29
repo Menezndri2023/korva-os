@@ -110,7 +110,7 @@ describe("InvoiceDetailPage", () => {
     });
     renderWithProviders(<InvoiceDetailPage />);
 
-    expect(await screen.findByText(/virement/)).toBeInTheDocument();
+    expect(await screen.findByText(/— virement/)).toBeInTheDocument();
   });
 
   it("shows the empty payments message when there are none", async () => {

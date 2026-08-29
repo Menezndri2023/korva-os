@@ -34,16 +34,20 @@ const REFRESH_COOKIE_NAME = 'korva_refresh_token';
  *  header(s), for forwarding on a subsequent request — never logs/returns the full raw header
  *  (which also carries Path/HttpOnly/etc., not just the token). */
 function extractRefreshCookiePair(res: request.Response): string {
-  const raw = (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+  const raw =
+    (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
   const line = raw.find((c) => c.startsWith(`${REFRESH_COOKIE_NAME}=`));
   if (!line) {
-    throw new Error(`${REFRESH_COOKIE_NAME} cookie not found in Set-Cookie header`);
+    throw new Error(
+      `${REFRESH_COOKIE_NAME} cookie not found in Set-Cookie header`,
+    );
   }
   return line.split(';')[0]!;
 }
 
 function findRefreshCookieHeader(res: request.Response): string | undefined {
-  const raw = (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+  const raw =
+    (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
   return raw.find((c) => c.startsWith(`${REFRESH_COOKIE_NAME}=`));
 }
 
@@ -183,7 +187,9 @@ describe('Auth — refresh-token cookie flow (e2e)', () => {
   it('D — logout revokes the session server-side and clears the cookie; a subsequent refresh fails', async () => {
     const registerRes = await register('logout-flow@korva.test');
     const cookie = extractRefreshCookiePair(registerRes);
-    const accessToken = asSuccess<AuthResponseBody>(registerRes.body).accessToken;
+    const accessToken = asSuccess<AuthResponseBody>(
+      registerRes.body,
+    ).accessToken;
 
     // logout is authenticated (no @Public()) — unlike register/login/refresh, it requires the
     // real Bearer access token, not just the refresh cookie.

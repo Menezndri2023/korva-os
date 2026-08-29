@@ -12,7 +12,7 @@ export default function NotificationsPage() {
   const authReady = useAuthReady();
   const [page, setPage] = useState(1);
 
-  const { data: notificationsPage, isLoading } = useQuery({
+  const { data: notificationsPage, isLoading, isError, refetch } = useQuery({
     queryKey: ["notifications", page],
     queryFn: () => apiClient.getList<Notification>(`/notifications?page=${page}`),
     enabled: authReady,
@@ -51,43 +51,59 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      <Card className="divide-y divide-border overflow-hidden">
-        {isLoading && <p className="px-4 py-6 text-center text-sm text-text-muted">Chargement...</p>}
-        {!isLoading && notifications?.length === 0 && (
-          <p className="px-4 py-6 text-center text-sm text-text-muted">Aucune notification.</p>
-        )}
-        {notifications?.map((notification) => (
-          <div
-            key={notification.id}
-            className={`flex items-start justify-between gap-3 px-4 py-3 ${
-              notification.read ? "" : "bg-surface-muted"
-            }`}
+      {isError && (
+        <Card className="p-6">
+          <p className="text-sm text-destructive">Impossible de charger vos notifications.</p>
+          <button
+            onClick={() => void refetch()}
+            className="mt-2 text-sm font-medium text-text underline"
           >
-            <div>
-              <p className="text-sm font-medium text-text">{notification.title}</p>
-              {notification.body && <p className="mt-0.5 text-sm text-text-muted">{notification.body}</p>}
-              <p className="mt-1 text-xs text-text-muted">
-                {new Date(notification.createdAt).toLocaleString("fr-FR")}
-              </p>
-            </div>
-            {!notification.read && (
-              <button
-                onClick={() => markReadMutation.mutate(notification.id)}
-                className="shrink-0 text-xs text-text-muted hover:underline"
-              >
-                Marquer comme lu
-              </button>
-            )}
-          </div>
-        ))}
-      </Card>
+            Réessayer
+          </button>
+        </Card>
+      )}
 
-      <Pagination
-        page={page}
-        totalPages={notificationsPage?.pagination.totalPages ?? 1}
-        onPageChange={setPage}
-        disabled={isLoading}
-      />
+      {!isError && (
+        <Card className="divide-y divide-border overflow-hidden">
+          {isLoading && <p className="px-4 py-6 text-center text-sm text-text-muted">Chargement...</p>}
+          {!isLoading && notifications?.length === 0 && (
+            <p className="px-4 py-6 text-center text-sm text-text-muted">Aucune notification.</p>
+          )}
+          {notifications?.map((notification) => (
+            <div
+              key={notification.id}
+              className={`flex items-start justify-between gap-3 px-4 py-3 ${
+                notification.read ? "" : "bg-surface-muted"
+              }`}
+            >
+              <div>
+                <p className="text-sm font-medium text-text">{notification.title}</p>
+                {notification.body && <p className="mt-0.5 text-sm text-text-muted">{notification.body}</p>}
+                <p className="mt-1 text-xs text-text-muted">
+                  {new Date(notification.createdAt).toLocaleString("fr-FR")}
+                </p>
+              </div>
+              {!notification.read && (
+                <button
+                  onClick={() => markReadMutation.mutate(notification.id)}
+                  className="shrink-0 text-xs text-text-muted hover:underline"
+                >
+                  Marquer comme lu
+                </button>
+              )}
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {!isError && (
+        <Pagination
+          page={page}
+          totalPages={notificationsPage?.pagination.totalPages ?? 1}
+          onPageChange={setPage}
+          disabled={isLoading}
+        />
+      )}
     </div>
   );
 }

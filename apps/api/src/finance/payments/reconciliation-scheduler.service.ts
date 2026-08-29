@@ -90,6 +90,19 @@ export class ReconciliationSchedulerService
     this.worker.on('failed', (job, error) => {
       this.logger.error(`Reconciliation sweep job ${job?.id} failed`, error);
     });
+    // See EventsProcessor for why both the Worker and the Queue need an 'error' handler and a
+    // waitUntilReady() before this method resolves: an unhandled connection error on either
+    // (surfaced by BullMQ's own close() internals) is otherwise fatal at the process level.
+    this.worker.on('error', (err) => {
+      this.logger.error('Reconciliation queue worker connection error', err);
+    });
+    this.queue.on('error', (err) => {
+      this.logger.error('Reconciliation queue connection error', err);
+    });
+    await Promise.all([
+      this.worker.waitUntilReady(),
+      this.queue.waitUntilReady(),
+    ]);
 
     await this.queue.upsertJobScheduler(
       RECONCILIATION_SCHEDULER_ID,

@@ -37,6 +37,20 @@ describe('FlutterwaveProvider', () => {
     });
   });
 
+  // Stage 2.2: independent, constructor-level fail-closed guard — must hold even if a future
+  // caller bypasses PaymentProviderRegistry's own requireSecret() check and constructs this
+  // class directly.
+  describe('constructor — fail-closed on a missing secret', () => {
+    it('throws when constructed with an empty string', () => {
+      expect(() => new FlutterwaveProvider('')).toThrow(FlutterwaveApiError);
+    });
+
+    it('never leaves fetch reachable with an empty Authorization header', () => {
+      expect(() => new FlutterwaveProvider('')).toThrow();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('createPayment', () => {
     const baseInput = {
       amount: 5000,
@@ -164,6 +178,90 @@ describe('FlutterwaveProvider', () => {
         /Network error calling Flutterwave/,
       );
     });
+
+    it('TEST (Stage 2.6) — network error/timeout is marked `ambiguous: true` (no HTTP response was ever received — Flutterwave may have genuinely processed this); a definite non-2xx response is NOT marked ambiguous', async () => {
+      fetchSpy.mockRejectedValue(new Error('The operation was aborted'));
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+
+      let networkError: FlutterwaveApiError | undefined;
+      try {
+        await provider.createPayment(baseInput);
+      } catch (error) {
+        networkError = error as FlutterwaveApiError;
+      }
+      expect(networkError?.ambiguous).toBe(true);
+
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(400, { status: 'error', message: 'bad request' }),
+      );
+      let definiteError: FlutterwaveApiError | undefined;
+      try {
+        await provider.createPayment(baseInput);
+      } catch (error) {
+        definiteError = error as FlutterwaveApiError;
+      }
+      expect(definiteError?.ambiguous).toBeUndefined();
+    });
+
+    it('TEST (Stage 2.12 / P3) — ambiguous (network) error still carries the tx_ref already generated and sent, via `generatedReference`', async () => {
+      fetchSpy.mockRejectedValue(new Error('The operation was aborted'));
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+
+      let error: FlutterwaveApiError | undefined;
+      try {
+        await provider.createPayment(baseInput);
+      } catch (caught) {
+        error = caught as FlutterwaveApiError;
+      }
+
+      expect(error?.ambiguous).toBe(true);
+      expect(error?.generatedReference).toMatch(/^korva_inv_123_[0-9a-f]{16}$/);
+    });
+
+    it('TEST (Stage 2.12 / P4) — a DEFINITE (non-2xx) error also carries `generatedReference` (evidence attachment is unconditional on error type; only the `ambiguous` flag distinguishes what the reference is allowed to mean)', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(401, { status: 'error', message: 'Invalid API key' }),
+      );
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+
+      let error: FlutterwaveApiError | undefined;
+      try {
+        await provider.createPayment(baseInput);
+      } catch (caught) {
+        error = caught as FlutterwaveApiError;
+      }
+
+      expect(error?.ambiguous).toBeUndefined();
+      expect(error?.generatedReference).toMatch(/^korva_inv_123_[0-9a-f]{16}$/);
+    });
+
+    it('TEST (Stage 2.12 / P5) — a thrown error that is NOT a FlutterwaveApiError (defensive: request() itself never throws anything else today, but createPayment must not assume) propagates completely unchanged, with no generatedReference attached', async () => {
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+      const rawError = new TypeError('some unrelated failure');
+      jest
+        .spyOn(
+          provider as unknown as { request: () => Promise<unknown> },
+          'request',
+        )
+        .mockRejectedValue(rawError);
+
+      await expect(provider.createPayment(baseInput)).rejects.toBe(rawError);
+    });
+
+    it('TEST (Stage 2.12 / P6) — success path result shape is completely unchanged (no generatedReference leaks onto a successful result)', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, {
+          status: 'success',
+          data: { link: 'https://checkout.flutterwave.com/v3/hosted/pay/abc' },
+        }),
+      );
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+      const result = await provider.createPayment(baseInput);
+
+      expect(Object.keys(result).sort()).toEqual(
+        ['providerReference', 'status'].sort(),
+      );
+    });
   });
 
   describe('verifyPayment / getPaymentStatus', () => {
@@ -276,6 +374,10 @@ describe('FlutterwaveProvider', () => {
       expect(result).toEqual({
         providerReference: 'korva_inv_123_abcdef',
         status: 'refunded',
+        // Stage 2.12 — this fixture's refund response includes `id: 1`, which is now
+        // correctly captured as providerRefundId (no flw_ref in this fixture, so that
+        // field stays absent — see the R1+R2/R3 tests above for both captured together).
+        providerRefundId: '1',
       });
 
       expect(fetchSpy).toHaveBeenCalledTimes(2);
@@ -291,6 +393,35 @@ describe('FlutterwaveProvider', () => {
       expect(JSON.parse(refundInit.body as string)).toEqual({ amount: 5000 });
     });
 
+    it('TEST (Stage 2.7A) — a localReferenceForReconciliation, when given, is sent as the documented `comments` field; when omitted, the request body carries no comments field at all', async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          mockJsonResponse(200, {
+            status: 'success',
+            data: { id: 285959875, status: 'successful' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          mockJsonResponse(200, {
+            status: 'success',
+            data: { id: 1, amount_refunded: 5000, status: 'succeeded' },
+          }),
+        );
+
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+      await provider.refundPayment(
+        'korva_inv_123_abcdef',
+        5000,
+        'local-refund-id-abc123',
+      );
+
+      const [, refundInit] = fetchSpy.mock.calls[1] as [string, RequestInit];
+      expect(JSON.parse(refundInit.body as string)).toEqual({
+        amount: 5000,
+        comments: 'local-refund-id-abc123',
+      });
+    });
+
     it('TEST — verify step fails to resolve an id: throws FlutterwaveApiError without attempting the refund call', async () => {
       fetchSpy.mockResolvedValue(
         mockJsonResponse(200, { status: 'success', data: {} }),
@@ -301,6 +432,90 @@ describe('FlutterwaveProvider', () => {
         provider.refundPayment('korva_inv_123_abcdef', 5000),
       ).rejects.toThrow(FlutterwaveApiError);
       expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('TEST (Stage 2.12 / R1+R2) — captures both providerRefundId and providerRefundReference when the refund response contains id and flw_ref', async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          mockJsonResponse(200, {
+            status: 'success',
+            data: { id: 285959875, status: 'successful' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          mockJsonResponse(200, {
+            status: 'success',
+            data: {
+              id: 999888,
+              flw_ref: 'FLW-REF-abc123',
+              amount_refunded: 5000,
+              status: 'succeeded',
+            },
+          }),
+        );
+
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+      const result = await provider.refundPayment('korva_inv_123_abcdef', 5000);
+
+      expect(result).toEqual({
+        providerReference: 'korva_inv_123_abcdef',
+        status: 'refunded',
+        providerRefundId: '999888',
+        providerRefundReference: 'FLW-REF-abc123',
+      });
+    });
+
+    it('TEST (Stage 2.12 / R3) — when the refund response contains neither id nor flw_ref, neither field is invented and the existing return shape is unchanged', async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          mockJsonResponse(200, {
+            status: 'success',
+            data: { id: 285959875, status: 'successful' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          mockJsonResponse(200, {
+            status: 'success',
+            data: { amount_refunded: 5000, status: 'succeeded' },
+          }),
+        );
+
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+      const result = await provider.refundPayment('korva_inv_123_abcdef', 5000);
+
+      expect(result).toEqual({
+        providerReference: 'korva_inv_123_abcdef',
+        status: 'refunded',
+      });
+      expect(Object.keys(result).sort()).toEqual(
+        ['providerReference', 'status'].sort(),
+      );
+    });
+
+    it('TEST (Stage 2.12 / R3b) — a malformed/wrong-typed id or flw_ref (e.g. an object) is never coerced or invented, only a real string id is still accepted', async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          mockJsonResponse(200, {
+            status: 'success',
+            data: { id: 285959875, status: 'successful' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          mockJsonResponse(200, {
+            status: 'success',
+            data: {
+              id: { nested: 'not-a-valid-id' },
+              flw_ref: 42,
+              status: 'succeeded',
+            },
+          }),
+        );
+
+      const provider = new FlutterwaveProvider(SECRET_KEY);
+      const result = await provider.refundPayment('korva_inv_123_abcdef', 5000);
+
+      expect(result.providerRefundId).toBeUndefined();
+      expect(result.providerRefundReference).toBeUndefined();
     });
 
     it('TEST — refund call itself fails (non-2xx): throws FlutterwaveApiError', async () => {

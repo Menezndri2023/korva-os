@@ -230,6 +230,46 @@ export class IntegrationsService {
     return toIntegrationAccountRecord(updated);
   }
 
+  /**
+   * Stage 2.4 — the tenant-equivalent of `getDecryptedPlatformSecret` below. The only method
+   * allowed to decrypt a TENANT account's secret, and the only one gated by `organizationId`
+   * ownership checked in the same DB query (`findByIdForOrganizationWithSecret`, same pattern as
+   * `requireOwnTenantAccount`) rather than by `actorPermissions` — this is an internal resolution
+   * step called by `MessagingProviderResolverService` deep inside an already-authorized send
+   * path (permission to send was already checked upstream, e.g. `conversations.create`), not a
+   * new user-facing action that needs its own permission gate. Returns `null` if the account
+   * doesn't belong to `organizationId`, or holds no secret.
+   */
+  async getDecryptedTenantSecret(
+    organizationId: string,
+    id: string,
+  ): Promise<string | null> {
+    const doc =
+      await this.integrationsRepository.findByIdForOrganizationWithSecret(
+        id,
+        organizationId,
+      );
+    if (!doc || !doc.secretEncrypted) return null;
+    return this.credentialEncryptionService.decrypt(doc.secretEncrypted);
+  }
+
+  /**
+   * Stage 2.5 — webhook tenant attribution. Resolves the organizationId of the tenant whose
+   * messaging IntegrationAccount is externally identified by this WABA id. Called by
+   * `ThreeSixtyDialogWebhookController` AFTER it has already verified the webhook's signature
+   * itself — this method has no actor/permission context of its own (there is none: a webhook is
+   * not a user request, see docs/architecture/integrations-platform.md §8 addendum) and never
+   * returns a secret, only the account's own `organizationId`. Returns `null` if no live tenant
+   * account is connected with this WABA id — fails closed, never guesses/defaults to any tenant.
+   */
+  async findTenantOrganizationIdByWabaId(
+    wabaId: string,
+  ): Promise<string | null> {
+    const account =
+      await this.integrationsRepository.findTenantAccountByWabaId(wabaId);
+    return account?.organizationId ? String(account.organizationId) : null;
+  }
+
   // ---------------------------------------------------------------------------------------
   // Platform-scope — see class doc above for why nothing here takes an actor/organizationId.
   // No controller in this Stage-1 lot exposes these; they exist for ops tooling / a future

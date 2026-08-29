@@ -8,6 +8,7 @@ import {
   INTEGRATION_ACCOUNTS_READER,
   type IntegrationAccountsReader,
 } from '../../../integrations/integrations.types';
+import { IntegrationsService } from '../../../integrations/integrations.service';
 import { OrganizationsService } from '../../../organizations/organizations.service';
 import type { PaymentProvider } from './payment-provider.interface';
 import { PaymentProviderRegistry } from './payment-provider.registry';
@@ -44,6 +45,7 @@ export class PaymentProviderResolverService {
     private readonly integrationAccountsReader: IntegrationAccountsReader,
     private readonly organizationsService: OrganizationsService,
     private readonly registry: PaymentProviderRegistry,
+    private readonly integrationsService: IntegrationsService,
   ) {}
 
   async resolve(input: ResolvePaymentProviderInput): Promise<PaymentProvider> {
@@ -75,6 +77,16 @@ export class PaymentProviderResolverService {
       });
     }
 
-    return this.registry.resolve(account.provider);
+    // Stage 2.2: `account` comes from IntegrationAccountsReader, which is deliberately
+    // secret-free (see IntegrationAccountRecord's own doc comment) — the decrypted secret can
+    // only be obtained through IntegrationsService's own narrow, audited decrypt path, never
+    // read off `account` directly. `null` here means the platform account genuinely has no
+    // secret stored yet; PaymentProviderRegistry decides per-provider whether that's acceptable
+    // (it isn't, for 'flutterwave' — see requireSecret in payment-provider.registry.ts).
+    const secret = await this.integrationsService.getDecryptedPlatformSecret(
+      account.id,
+    );
+
+    return this.registry.resolve(account.provider, secret);
   }
 }

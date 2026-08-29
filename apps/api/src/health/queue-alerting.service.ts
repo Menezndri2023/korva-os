@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { QueueEvents } from 'bullmq';
 import { EVENTS_QUEUE_NAME } from '../core/events/event-names';
@@ -94,7 +99,9 @@ export class QueueAlertingService implements OnModuleInit, OnModuleDestroy {
     this.lastAlertAt.set(queueName, now);
     // Deliberately just the fixed queue name and a grep-able code — see class doc for why
     // nothing from the 'failed' event's own arguments is ever read or included here.
-    this.logger.warn(`QUEUE_JOB_FAILED — queue "${queueName}" has a definitively failed job`);
+    this.logger.warn(
+      `QUEUE_JOB_FAILED — queue "${queueName}" has a definitively failed job`,
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -103,7 +110,10 @@ export class QueueAlertingService implements OnModuleInit, OnModuleDestroy {
         queueEvents
           .close()
           .catch((error: unknown) =>
-            this.logger.error('Failed to close a queue alerting listener', error),
+            this.logger.error(
+              'Failed to close a queue alerting listener',
+              error,
+            ),
           ),
       ),
     );

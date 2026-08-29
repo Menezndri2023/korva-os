@@ -57,6 +57,27 @@ export class Refund {
    */
   @Prop()
   providerReference?: string;
+
+  /**
+   * Stage 2.12 — a genuinely REFUND-specific provider identifier (e.g. Flutterwave's own numeric
+   * refund `id`), distinct from `providerReference` above (which is always the underlying
+   * Payment's own merchant reference/tx_ref, never a refund-specific value — see
+   * FlutterwaveProvider.refundPayment's own doc comment). Optional: only ever populated when the
+   * provider's refund-creation response actually contains it — never fabricated, never required.
+   * Legacy Refunds (created before this stage, or via ManualPaymentProvider) simply never set it.
+   */
+  @Prop()
+  providerRefundId?: string;
+
+  /**
+   * Stage 2.12 — Flutterwave's own `flw_ref`-style refund reference, if the response actually
+   * contains one. Same rules as `providerRefundId`: optional, only ever populated when present,
+   * never fabricated. Kept as a SEPARATE field from `providerRefundId` because Flutterwave's own
+   * documented refund-listing schema treats `id` and `flw_ref` as two distinct fields on the same
+   * refund record — collapsing them into one field would destroy that distinction for no reason.
+   */
+  @Prop()
+  providerRefundReference?: string;
 }
 
 export const RefundSchema = SchemaFactory.createForClass(Refund);
@@ -70,3 +91,10 @@ RefundSchema.index(
     partialFilterExpression: { idempotencyKey: { $exists: true } },
   },
 );
+
+// Stage 2.8 — supports PaymentsRepository.findProcessingRefunds (existing, unindexed until now)
+// and the new findRefundsRequiringAttention (ops observability) without a collection scan on a
+// growing collection. Purely additive: no behavior change, no data change. `status` alone (not
+// bundled into the organizationId+idempotencyKey index above, which only covers documents that
+// HAVE a key) is what both queries filter on; `createdAt` covers their shared sort-by-recency.
+RefundSchema.index({ status: 1, createdAt: -1 });

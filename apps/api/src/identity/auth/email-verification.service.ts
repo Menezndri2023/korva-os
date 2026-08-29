@@ -1,4 +1,9 @@
-import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import {
@@ -57,7 +62,11 @@ export class EmailVerificationService {
     const tokenHash = hashToken(token);
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 
-    await this.emailVerificationRepository.issue(user._id, tokenHash, expiresAt);
+    await this.emailVerificationRepository.issue(
+      user._id,
+      tokenHash,
+      expiresAt,
+    );
 
     const verificationUrl = this.buildVerificationUrl(token);
     const body = interpolate(

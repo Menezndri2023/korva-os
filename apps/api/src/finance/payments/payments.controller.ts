@@ -49,14 +49,21 @@ export class PaymentsController {
     );
   }
 
+  /**
+   * Stage 2.7B — `Idempotency-Key` is MANDATORY here (unlike `create()` above, which keeps it
+   * optional): a refund's provider call is the case where retrying after an ambiguous timeout
+   * can move real money a second time (see Stage 2.6/2.7A's audits) — requiring a key is what
+   * makes a safe retry (same key → returns the existing claim, never calls the provider again)
+   * the only way to retry at all. Enforced in `PaymentsService.refund()` itself
+   * (`REFUND_IDEMPOTENCY_KEY_REQUIRED`, a 400), not here, so the rule holds for every caller of
+   * that service method, not only this HTTP route.
+   */
   @RequirePermissions('payments.refund')
   @Post('refunds')
   refund(
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(createRefundSchema)) body: CreateRefundInput,
-    // Optional — legacy callers that don't send it keep today's exact (non-idempotent)
-    // behavior, mirroring PaymentsController.create.
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.paymentsService.refund(

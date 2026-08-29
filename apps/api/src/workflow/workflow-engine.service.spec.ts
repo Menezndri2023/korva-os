@@ -27,13 +27,20 @@ describe('WorkflowEngineService — retry propagation and execution logging', ()
       recordExecution,
     } as unknown as WorkflowsRepository;
     const actionsService = {
-      execute: jest.fn().mockResolvedValue({ type: 'create_task', success: true }),
+      execute: jest
+        .fn()
+        .mockResolvedValue({ type: 'create_task', success: true }),
     } as unknown as WorkflowActionsService;
 
     const engine = new WorkflowEngineService(repository, actionsService);
 
     await expect(
-      engine.handleEvent('org-1', 'lead.created', { leadId: 'lead-1' }, 'lead.created:lead-1'),
+      engine.handleEvent(
+        'org-1',
+        'lead.created',
+        { leadId: 'lead-1' },
+        'lead.created:lead-1',
+      ),
     ).resolves.toBeUndefined();
     expect(recordExecution).toHaveBeenCalledTimes(1);
     expect(recordExecution).toHaveBeenCalledWith(
@@ -60,7 +67,12 @@ describe('WorkflowEngineService — retry propagation and execution logging', ()
     const engine = new WorkflowEngineService(repository, actionsService);
 
     await expect(
-      engine.handleEvent('org-1', 'lead.created', { leadId: 'lead-1' }, 'lead.created:lead-1'),
+      engine.handleEvent(
+        'org-1',
+        'lead.created',
+        { leadId: 'lead-1' },
+        'lead.created:lead-1',
+      ),
     ).rejects.toThrow();
     // The log for this attempt must exist regardless of the eventual job-level retry.
     expect(recordExecution).toHaveBeenCalledTimes(1);
@@ -71,8 +83,13 @@ describe('WorkflowEngineService — retry propagation and execution logging', ()
 
   it('never throws for a non-retryable action failure (send_email/webhook)', async () => {
     const workflow = buildWorkflow({
-      actions: [{ type: 'send_email', config: { to: 'a@b.com', subject: 's', body: 'b' } }],
-    } as Partial<WorkflowDocument>);
+      actions: [
+        {
+          type: 'send_email',
+          config: { to: 'a@b.com', subject: 's', body: 'b' },
+        },
+      ],
+    });
     const recordExecution = jest.fn().mockResolvedValue(undefined);
     const repository = {
       findActiveByTrigger: jest.fn().mockResolvedValue([workflow]),
@@ -98,11 +115,17 @@ describe('WorkflowEngineService — retry propagation and execution logging', ()
   });
 
   it('runs every matching workflow even when an earlier one has a retryable failure, and reports only once', async () => {
-    const failingWorkflow = buildWorkflow({ name: 'Failing' } as Partial<WorkflowDocument>);
-    const healthyWorkflow = buildWorkflow({ name: 'Healthy' } as Partial<WorkflowDocument>);
+    const failingWorkflow = buildWorkflow({
+      name: 'Failing',
+    });
+    const healthyWorkflow = buildWorkflow({
+      name: 'Healthy',
+    });
     const recordExecution = jest.fn().mockResolvedValue(undefined);
     const repository = {
-      findActiveByTrigger: jest.fn().mockResolvedValue([failingWorkflow, healthyWorkflow]),
+      findActiveByTrigger: jest
+        .fn()
+        .mockResolvedValue([failingWorkflow, healthyWorkflow]),
       recordExecution,
     } as unknown as WorkflowsRepository;
     const execute = jest

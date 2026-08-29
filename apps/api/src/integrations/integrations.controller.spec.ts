@@ -65,8 +65,12 @@ function buildController() {
   } as unknown as PaymentProviderResolverService;
 
   const assertTenantConnected = jest.fn().mockResolvedValue(undefined);
+  const resolveTenantProvider = jest.fn();
+  const resolveForTest = jest.fn();
   const messagingProviderResolver = {
     assertTenantConnected,
+    resolveTenantProvider,
+    resolveForTest,
   } as unknown as MessagingProviderResolverService;
 
   const controller = new IntegrationsController(
@@ -84,6 +88,8 @@ function buildController() {
     recordTenantAccountTestConnection,
     resolve,
     assertTenantConnected,
+    resolveTenantProvider,
+    resolveForTest,
   };
 }
 
@@ -144,11 +150,13 @@ describe('connectPaymentPayoutSchema / connectMessagingAccountSchema (via ZodVal
         wabaId: 'waba-1',
         phoneNumberId: 'phone-1',
         displayName: 'Acme Support',
+        apiKey: 'd360-secret-key',
       }),
     ).toEqual({
       wabaId: 'waba-1',
       phoneNumberId: 'phone-1',
       displayName: 'Acme Support',
+      apiKey: 'd360-secret-key',
     });
   });
 
@@ -158,6 +166,7 @@ describe('connectPaymentPayoutSchema / connectMessagingAccountSchema (via ZodVal
         wabaId: '',
         phoneNumberId: 'phone-1',
         displayName: 'x',
+        apiKey: 'd360-secret-key',
       }),
     ).toThrow(BadRequestException);
   });
@@ -165,6 +174,16 @@ describe('connectPaymentPayoutSchema / connectMessagingAccountSchema (via ZodVal
   it('rejects a messaging connect payload missing a required field', () => {
     expect(() =>
       parseMessagingBody({ wabaId: 'waba-1', phoneNumberId: 'phone-1' }),
+    ).toThrow(BadRequestException);
+  });
+
+  it('rejects a messaging connect payload with no apiKey — an account with no stored secret could never pass test-connection', () => {
+    expect(() =>
+      parseMessagingBody({
+        wabaId: 'waba-1',
+        phoneNumberId: 'phone-1',
+        displayName: 'Acme Support',
+      }),
     ).toThrow(BadRequestException);
   });
 });
@@ -256,6 +275,61 @@ describe('IntegrationsController.connectPayment', () => {
     );
     expect(createTenantAccount).not.toHaveBeenCalled();
   });
+
+  // Stage 2.2 — TEST 3 (platform authorization): a normal tenant has no way to create a
+  // platform-scope IntegrationAccount through this endpoint, structurally, not by a permission
+  // check that could be misconfigured. Two independent proofs:
+  it('strips a client-supplied "scope" field before it ever reaches the controller — connectPaymentPayoutSchema has no such field', () => {
+    const raw = {
+      payoutDetails: { bankCode: '001', accountNumber: '123' },
+      scope: 'platform',
+      organizationId: 'attacker-supplied-org-id',
+    };
+
+    const parsed = parsePaymentBody(raw) as Record<string, unknown>;
+
+    expect(parsed).not.toHaveProperty('scope');
+    expect(parsed).not.toHaveProperty('organizationId');
+    expect(parsed).toEqual({ payoutDetails: raw.payoutDetails });
+  });
+
+  it('always calls createTenantAccount with the AUTHENTICATED tenant\'s own organizationId, never one from the request body, even if a "scope"/"organizationId" field is smuggled into the raw body', async () => {
+    const { controller, resolve, createTenantAccount } = buildController();
+    const createPayoutDestination = jest
+      .fn()
+      .mockResolvedValue({ destinationRef: 'sub-123' });
+    resolve.mockResolvedValue({ name: 'flutterwave', createPayoutDestination });
+    createTenantAccount.mockResolvedValue(makeRecord({ id: 'acct-new' }));
+
+    const body = parsePaymentBody({
+      payoutDetails: { bankCode: '001', accountNumber: '123' },
+      scope: 'platform',
+      organizationId: 'attacker-supplied-org-id',
+    }) as { payoutDetails: Record<string, string> };
+
+    await controller.connectPayment(TENANT, body);
+
+    // resolve() and createTenantAccount() are both called with TENANT.organizationId
+    // (OWN_ORG_ID, from the authenticated @CurrentTenant() context) — never the smuggled value,
+    // and createTenantAccount has no parameter through which a caller could even pass a scope.
+    expect(resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: OWN_ORG_ID }),
+    );
+    expect(createTenantAccount).toHaveBeenCalledWith(
+      OWN_ORG_ID,
+      MANAGE_PERMISSIONS,
+      expect.objectContaining({ domain: 'payment', provider: 'flutterwave' }),
+    );
+  });
+
+  it('has no controller method anywhere that accepts or forwards a caller-supplied scope', () => {
+    // IntegrationsController's own prototype — every route handler takes (tenant, body) or
+    // (tenant, id[, body]); none accepts a raw "scope" parameter, and createPlatformAccount
+    // (the only method that can produce a platform-scope row) is not called anywhere in this
+    // controller — confirmed by static inspection of its source, not just this test's mocks.
+    const controllerSource = IntegrationsController.toString();
+    expect(controllerSource).not.toContain('createPlatformAccount');
+  });
 });
 
 describe('IntegrationsController.connectMessaging', () => {
@@ -274,10 +348,12 @@ describe('IntegrationsController.connectMessaging', () => {
       wabaId: 'waba-1',
       phoneNumberId: 'phone-1',
       displayName: 'Acme Support',
+      apiKey: 'd360-secret-key',
     }) as {
       wabaId: string;
       phoneNumberId: string;
       displayName: string;
+      apiKey: string;
     };
 
     const result = await controller.connectMessaging(TENANT, body);
@@ -289,6 +365,7 @@ describe('IntegrationsController.connectMessaging', () => {
       expect.objectContaining({
         domain: 'messaging',
         provider: '360dialog',
+        secret: 'd360-secret-key',
         metadata: {
           wabaId: 'waba-1',
           phoneNumberId: 'phone-1',
@@ -366,38 +443,92 @@ describe('IntegrationsController.testConnection — payment domain', () => {
   });
 });
 
-describe('IntegrationsController.testConnection — messaging domain (Stage 2 gap)', () => {
-  it('checks tenant connectivity, then reports the missing provider-instance resolution as a typed error rather than faking success', async () => {
-    const { controller, getTenantAccount, assertTenantConnected } =
-      buildController();
+describe('IntegrationsController.testConnection — messaging domain (Stage 2.4: gap closed; bootstrap deadlock fixed)', () => {
+  it('resolves via resolveForTest (not resolveTenantProvider), calls testConnection, and records the result — a still-pending account can be tested', async () => {
+    const {
+      controller,
+      getTenantAccount,
+      resolveForTest,
+      resolveTenantProvider,
+      recordTenantAccountTestConnection,
+    } = buildController();
+    getTenantAccount.mockResolvedValue(
+      makeRecord({
+        id: 'acct-2',
+        domain: 'messaging',
+        provider: '360dialog',
+        status: 'pending',
+      }),
+    );
+    const testConnection = jest
+      .fn()
+      .mockResolvedValue({ ok: true, message: 'looks good' });
+    resolveForTest.mockResolvedValue({
+      name: '360dialog',
+      testConnection,
+    });
+
+    const result = await controller.testConnection(TENANT, 'acct-2');
+
+    expect(resolveForTest).toHaveBeenCalledWith({
+      organizationId: OWN_ORG_ID,
+      accountId: 'acct-2',
+      provider: '360dialog',
+    });
+    // resolveTenantProvider is the active-only, real-send-path resolver — testConnection must
+    // never use it, since a freshly connected (still-pending) account could then never pass its
+    // first test (this is exactly the bootstrap deadlock this fix closes).
+    expect(resolveTenantProvider).not.toHaveBeenCalled();
+    expect(testConnection).toHaveBeenCalled();
+    expect(recordTenantAccountTestConnection).toHaveBeenCalledWith(
+      OWN_ORG_ID,
+      MANAGE_PERMISSIONS,
+      'acct-2',
+      { ok: true, message: 'looks good' },
+    );
+    expect(result).toEqual({ ok: true, message: 'looks good' });
+  });
+
+  it('propagates MESSAGING_PROVIDER_CREDENTIAL_MISSING (not a fake success) when the account was connected with no stored secret', async () => {
+    const { controller, getTenantAccount, resolveForTest } = buildController();
+    getTenantAccount.mockResolvedValue(
+      makeRecord({
+        id: 'acct-2',
+        domain: 'messaging',
+        provider: '360dialog',
+        status: 'pending',
+      }),
+    );
+    const missingCredentialError = Object.assign(
+      new Error('missing credential'),
+      {
+        response: { code: 'MESSAGING_PROVIDER_CREDENTIAL_MISSING' },
+      },
+    );
+    resolveForTest.mockRejectedValue(missingCredentialError);
+
+    await expect(controller.testConnection(TENANT, 'acct-2')).rejects.toBe(
+      missingCredentialError,
+    );
+  });
+
+  it('returns a typed error, not a fake {ok:true}, when the resolved provider lacks testConnection', async () => {
+    const {
+      controller,
+      getTenantAccount,
+      resolveForTest,
+      recordTenantAccountTestConnection,
+    } = buildController();
     getTenantAccount.mockResolvedValue(
       makeRecord({ id: 'acct-2', domain: 'messaging', provider: '360dialog' }),
     );
+    resolveForTest.mockResolvedValue({ name: '360dialog' });
 
     await expectRejectedWithCode(
       controller.testConnection(TENANT, 'acct-2'),
       'TEST_CONNECTION_NOT_SUPPORTED',
     );
-    expect(assertTenantConnected).toHaveBeenCalledWith({
-      organizationId: OWN_ORG_ID,
-      provider: '360dialog',
-    });
-  });
-
-  it('propagates WHATSAPP_NOT_CONNECTED when the tenant has no active messaging account, instead of masking it', async () => {
-    const { controller, getTenantAccount, assertTenantConnected } =
-      buildController();
-    getTenantAccount.mockResolvedValue(
-      makeRecord({ id: 'acct-2', domain: 'messaging', provider: '360dialog' }),
-    );
-    const notConnectedError = Object.assign(new Error('not connected'), {
-      response: { code: 'WHATSAPP_NOT_CONNECTED' },
-    });
-    assertTenantConnected.mockRejectedValue(notConnectedError);
-
-    await expect(controller.testConnection(TENANT, 'acct-2')).rejects.toBe(
-      notConnectedError,
-    );
+    expect(recordTenantAccountTestConnection).not.toHaveBeenCalled();
   });
 });
 

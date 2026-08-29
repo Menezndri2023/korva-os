@@ -71,10 +71,7 @@ export default function CatalogPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Catalogue</h1>
-        <p className="mt-1 text-sm text-text-muted">Produits, services et autres offres.</p>
-      </div>
+      <p className="text-sm text-text-muted">Produits, services et autres offres.</p>
 
       <div className="flex items-center justify-between gap-3">
         <select
@@ -92,7 +89,9 @@ export default function CatalogPage() {
             </option>
           ))}
         </select>
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouvelle offre"}</Button>
+        <Button onClick={() => setShowForm((v) => !v)}>
+          {showForm ? "Annuler" : "Nouvelle offre"}
+        </Button>
       </div>
 
       {showForm && (

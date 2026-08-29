@@ -4,15 +4,18 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHmac } from 'node:crypto';
 import {
   ThreeSixtyDialogWebhookController,
   extractThreeSixtyDialogEventId,
+  extractThreeSixtyDialogAccountId,
 } from './three-sixty-dialog-webhook.controller';
 import type {
   IntegrationWebhookService,
   ProcessWebhookInput,
   ProcessWebhookResult,
 } from '../../integrations/webhooks/integration-webhook.service';
+import type { IntegrationsService } from '../../integrations/integrations.service';
 
 describe('ThreeSixtyDialogWebhookController', () => {
   const secret = 'platform-secret-abc';
@@ -23,6 +26,9 @@ describe('ThreeSixtyDialogWebhookController', () => {
   };
   let webhookService: {
     process: jest.Mock<Promise<ProcessWebhookResult>, [ProcessWebhookInput]>;
+  };
+  let integrationsService: {
+    findTenantOrganizationIdByWabaId: jest.Mock;
   };
 
   beforeEach(() => {
@@ -41,22 +47,41 @@ describe('ThreeSixtyDialogWebhookController', () => {
         .fn<Promise<ProcessWebhookResult>, [ProcessWebhookInput]>()
         .mockResolvedValue({ status: 'processed' }),
     };
+    // Unresolved by default — individual tests (D1/D2/D3/D4) override this to prove real
+    // attribution/isolation behavior.
+    integrationsService = {
+      findTenantOrganizationIdByWabaId: jest.fn().mockResolvedValue(null),
+    };
     controller = new ThreeSixtyDialogWebhookController(
       configService as unknown as ConfigService,
       webhookService as unknown as IntegrationWebhookService,
+      integrationsService as unknown as IntegrationsService,
     );
   });
 
-  function makeRequest(body: string) {
-    return { rawBody: Buffer.from(body, 'utf8'), headers: {} } as never;
+  /** Signs `body` with the same HMAC-SHA256 scheme ThreeSixtyDialogWebhookVerifier expects, so
+   *  tests that need `verifier.verify()` to actually return true (Stage 2.5's own
+   *  resolveOrganizationId call, made directly by the controller) don't have to fake it. */
+  function sign(body: string): string {
+    return createHmac('sha256', secret).update(body, 'utf8').digest('hex');
   }
 
-  function statusPayload() {
+  function makeRequest(body: string, signed = true) {
+    return {
+      rawBody: Buffer.from(body, 'utf8'),
+      headers: signed ? { 'x-360dialog-signature': sign(body) } : {},
+    } as never;
+  }
+
+  function statusPayload(
+    wabaId = 'waba1',
+    extra: Record<string, unknown> = {},
+  ) {
     return JSON.stringify({
       object: 'whatsapp_business_account',
       entry: [
         {
-          id: 'waba1',
+          id: wabaId,
           changes: [
             {
               field: 'messages',
@@ -65,6 +90,7 @@ describe('ThreeSixtyDialogWebhookController', () => {
               },
             },
           ],
+          ...extra,
         },
       ],
     });
@@ -190,6 +216,83 @@ describe('ThreeSixtyDialogWebhookController', () => {
       expect(() =>
         controller.verifyHandshake('unsubscribe', verifyToken, 'chal-123'),
       ).toThrow(UnauthorizedException);
+    });
+  });
+
+  describe('extractThreeSixtyDialogAccountId (Stage 2.5)', () => {
+    it('extracts the WABA id from entry[0].id', () => {
+      const payload = JSON.parse(statusPayload('waba-xyz')) as Record<
+        string,
+        unknown
+      >;
+      expect(extractThreeSixtyDialogAccountId(payload)).toBe('waba-xyz');
+    });
+
+    it('returns undefined (never throws) when entry is missing/empty', () => {
+      expect(extractThreeSixtyDialogAccountId({ entry: [] })).toBeUndefined();
+      expect(extractThreeSixtyDialogAccountId({})).toBeUndefined();
+    });
+  });
+
+  describe('Stage 2.5 — webhook tenant attribution (D1–D9)', () => {
+    it('D1 — a valid signed webhook resolves to the correct tenant via IntegrationsService, looked up by WABA id', async () => {
+      integrationsService.findTenantOrganizationIdByWabaId.mockResolvedValue(
+        'org-A',
+      );
+
+      await controller.handle(makeRequest(statusPayload('waba-A')));
+
+      expect(
+        integrationsService.findTenantOrganizationIdByWabaId,
+      ).toHaveBeenCalledWith('waba-A');
+      const call = webhookService.process.mock.calls[0]![0];
+      expect(call.organizationId).toBe('org-A');
+    });
+
+    it('D2 — a valid signed webhook for an unknown WABA id is passed through with organizationId undefined (unresolved), never rejected outright', async () => {
+      integrationsService.findTenantOrganizationIdByWabaId.mockResolvedValue(
+        null,
+      );
+
+      await controller.handle(makeRequest(statusPayload('waba-unknown')));
+
+      const call = webhookService.process.mock.calls[0]![0];
+      expect(call.organizationId).toBeUndefined();
+    });
+
+    it('D3 — a forged organizationId field in the payload is completely ignored: attribution comes only from the WABA id lookup, never from the payload', async () => {
+      integrationsService.findTenantOrganizationIdByWabaId.mockResolvedValue(
+        'org-A',
+      );
+
+      await controller.handle(
+        makeRequest(statusPayload('waba-A', { organizationId: 'org-FORGED' })),
+      );
+
+      const call = webhookService.process.mock.calls[0]![0];
+      expect(call.organizationId).toBe('org-A');
+    });
+
+    it('D4 — tenant A / tenant B isolation: two deliveries with different WABA ids resolve to their own, distinct organizationId, never crossed', async () => {
+      integrationsService.findTenantOrganizationIdByWabaId.mockImplementation(
+        (wabaId: string) =>
+          Promise.resolve(wabaId === 'waba-A' ? 'org-A' : 'org-B'),
+      );
+
+      await controller.handle(makeRequest(statusPayload('waba-A')));
+      await controller.handle(makeRequest(statusPayload('waba-B')));
+
+      const calls = webhookService.process.mock.calls;
+      expect(calls[0]![0].organizationId).toBe('org-A');
+      expect(calls[1]![0].organizationId).toBe('org-B');
+    });
+
+    it('D6 — an invalid HMAC signature never triggers tenant attribution: IntegrationsService is not even called', async () => {
+      await controller.handle(makeRequest(statusPayload('waba-A'), false));
+
+      expect(
+        integrationsService.findTenantOrganizationIdByWabaId,
+      ).not.toHaveBeenCalled();
     });
   });
 });

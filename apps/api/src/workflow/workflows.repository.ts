@@ -297,6 +297,8 @@ function isDuplicateActionClaimError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   const { code, message } = error as Record<string, unknown>;
   return (
-    code === 11000 && typeof message === 'string' && message.includes('eventKey')
+    code === 11000 &&
+    typeof message === 'string' &&
+    message.includes('eventKey')
   );
 }

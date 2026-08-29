@@ -80,6 +80,31 @@ export class IntegrationsRepository implements IntegrationAccountsReader {
       .exec();
   }
 
+  /** Tenant-equivalent of `findByIdWithSecret` — same organizationId-in-the-query guarantee as
+   *  `findByIdForOrganization` above, but additionally re-selects `secretEncrypted`. Reserved for
+   *  `IntegrationsService.getDecryptedTenantSecret`, the only method allowed to decrypt a tenant
+   *  account's credential (Stage 2.4). Never call this from any read-only/lookup path a resolver
+   *  can reach directly. */
+  findByIdForOrganizationWithSecret(
+    id: string,
+    organizationId: string,
+  ): Promise<IntegrationAccountDocument | null> {
+    if (
+      !Types.ObjectId.isValid(id) ||
+      !Types.ObjectId.isValid(organizationId)
+    ) {
+      return Promise.resolve(null);
+    }
+    return this.model
+      .findOne({
+        _id: id,
+        scope: 'tenant',
+        organizationId: new Types.ObjectId(organizationId),
+      })
+      .select('+secretEncrypted')
+      .exec();
+  }
+
   listByOrganization(
     organizationId: string,
     domain?: IntegrationDomain,
@@ -120,6 +145,33 @@ export class IntegrationsRepository implements IntegrationAccountsReader {
   async revoke(id: string): Promise<void> {
     await this.model
       .updateOne({ _id: id }, { status: 'revoked', isLive: false })
+      .exec();
+  }
+
+  /**
+   * Stage 2.5 — cross-tenant BY NECESSITY, mirroring
+   * PaymentsRepository.findOrganizationIdByProviderReference's own reasoning: a verified
+   * 360dialog webhook arrives with no tenant/JWT context at all (see
+   * three-sixty-dialog-webhook.controller.ts), so this is how its own WABA id
+   * (`entry[0].id` in the Meta-shaped payload) maps back to the tenant that connected it.
+   * `metadata.wabaId` already stores this exact value at connect time
+   * (IntegrationsController.connectMessaging) — queried by dot-path directly on the existing
+   * `Object`-typed `metadata` field, no schema change needed. Scoped to `isLive: true` so a
+   * revoked/rotated-out account can never resurrect its old tenant attribution for a later
+   * webhook delivery (the same rotation-safety reasoning as `uniq_tenant_account`'s partial
+   * index — see integration-account.schema.ts).
+   */
+  findTenantAccountByWabaId(
+    wabaId: string,
+  ): Promise<IntegrationAccountDocument | null> {
+    return this.model
+      .findOne({
+        scope: 'tenant',
+        domain: 'messaging',
+        provider: '360dialog',
+        isLive: true,
+        'metadata.wabaId': wabaId,
+      })
       .exec();
   }
 

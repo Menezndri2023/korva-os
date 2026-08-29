@@ -45,7 +45,18 @@ export class ThreeSixtyDialogProvider implements MessagingProvider {
   readonly name = '360dialog';
   private readonly logger = new Logger(ThreeSixtyDialogProvider.name);
 
-  constructor(private readonly apiKey: string) {}
+  /** Stage 2.4: an independent, constructor-level fail-closed guard mirroring
+   *  `FlutterwaveProvider`'s own (Stage 2.2) — must hold even if a future caller bypasses
+   *  `MessagingProviderRegistry`'s own `requireSecret` check and constructs this class directly.
+   *  This class never reads `process.env`/`ConfigService` itself; the credential is always
+   *  handed in by whoever constructs it (the registry, given a tenant's decrypted secret). */
+  constructor(private readonly apiKey: string) {
+    if (!apiKey) {
+      throw new Error(
+        'ThreeSixtyDialogProvider requires a non-empty API key — refusing to construct an adapter that would send D360-API-KEY: <empty>',
+      );
+    }
+  }
 
   send(input: { to: string; body: string }): Promise<MessagingSendResult> {
     return this.postMessage(

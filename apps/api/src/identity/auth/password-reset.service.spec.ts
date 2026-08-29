@@ -28,7 +28,8 @@ function fakeClaim(userId: string) {
 
 function buildConfigService(): ConfigService {
   return {
-    get: (key: string) => (key === 'APP_URL' ? 'https://app.korva.test' : undefined),
+    get: (key: string) =>
+      key === 'APP_URL' ? 'https://app.korva.test' : undefined,
   } as unknown as ConfigService;
 }
 
@@ -66,7 +67,10 @@ function buildService(): {
   const send = jest
     .fn<Promise<EmailSendResult>, [SendInput]>()
     .mockResolvedValue({ providerReference: 'x', status: 'sent' });
-  const emailProvider = { name: 'fake', send } as unknown as Deps['emailProvider'];
+  const emailProvider = {
+    name: 'fake',
+    send,
+  } as unknown as Deps['emailProvider'];
 
   const service = new PasswordResetService(
     usersService as unknown as UsersService,
@@ -76,18 +80,27 @@ function buildService(): {
     emailProvider,
   );
 
-  return { service, usersService, sessionsService, passwordResetRepository, emailProvider, send };
+  return {
+    service,
+    usersService,
+    sessionsService,
+    passwordResetRepository,
+    emailProvider,
+    send,
+  };
 }
 
 describe('PasswordResetService.forgotPassword', () => {
   it('returns the generic response and does nothing else when the email has no account', async () => {
-    const { service, usersService, passwordResetRepository, send } = buildService();
+    const { service, usersService, passwordResetRepository, send } =
+      buildService();
     usersService.findByEmail.mockResolvedValue(null);
 
     const result = await service.forgotPassword('nobody@example.com');
 
     expect(result).toEqual({
-      message: 'If an account exists for this email, a reset link has been sent.',
+      message:
+        'If an account exists for this email, a reset link has been sent.',
     });
     expect(passwordResetRepository.issue).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
@@ -95,13 +108,17 @@ describe('PasswordResetService.forgotPassword', () => {
 
   it('issues a hashed token and emails a reset link for an existing account, returning the same generic response', async () => {
     const userId = new Types.ObjectId().toHexString();
-    const { service, usersService, passwordResetRepository, send } = buildService();
-    usersService.findByEmail.mockResolvedValue(fakeUser(userId, 'ada@example.com'));
+    const { service, usersService, passwordResetRepository, send } =
+      buildService();
+    usersService.findByEmail.mockResolvedValue(
+      fakeUser(userId, 'ada@example.com'),
+    );
 
     const result = await service.forgotPassword('ADA@example.com');
 
     expect(result).toEqual({
-      message: 'If an account exists for this email, a reset link has been sent.',
+      message:
+        'If an account exists for this email, a reset link has been sent.',
     });
 
     expect(passwordResetRepository.issue).toHaveBeenCalledTimes(1);
@@ -110,18 +127,23 @@ describe('PasswordResetService.forgotPassword', () => {
     expect(issuedUserId.toString()).toBe(userId);
     expect(issuedTokenHash).toMatch(/^[0-9a-f]{64}$/); // SHA-256 hex digest
     expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
-    expect(expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 30 * 60 * 1000);
+    expect(expiresAt.getTime()).toBeLessThanOrEqual(
+      Date.now() + 30 * 60 * 1000,
+    );
 
     expect(send).toHaveBeenCalledTimes(1);
     const sendArgs = send.mock.calls[0]![0];
     expect(sendArgs.to).toBe('ada@example.com');
     expect(sendArgs.subject).not.toMatch(/[0-9a-f]{40,}/); // token never in subject
-    expect(sendArgs.body).toContain('https://app.korva.test/reset-password?token=');
+    expect(sendArgs.body).toContain(
+      'https://app.korva.test/reset-password?token=',
+    );
   });
 
   it('never stores or emails the raw token — only its SHA-256 hash reaches the repository, and the link carries a different, unhashed value', async () => {
     const userId = new Types.ObjectId().toHexString();
-    const { service, usersService, passwordResetRepository, send } = buildService();
+    const { service, usersService, passwordResetRepository, send } =
+      buildService();
     usersService.findByEmail.mockResolvedValue(fakeUser(userId));
 
     await service.forgotPassword('ada@example.com');
@@ -144,7 +166,8 @@ describe('PasswordResetService.forgotPassword', () => {
     const result = await service.forgotPassword('ada@example.com');
 
     expect(result).toEqual({
-      message: 'If an account exists for this email, a reset link has been sent.',
+      message:
+        'If an account exists for this email, a reset link has been sent.',
     });
   });
 
@@ -154,7 +177,8 @@ describe('PasswordResetService.forgotPassword', () => {
     const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
     const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
 
-    const { service, usersService, send, passwordResetRepository } = buildService();
+    const { service, usersService, send, passwordResetRepository } =
+      buildService();
     usersService.findByEmail.mockResolvedValue(fakeUser(userId));
     send.mockRejectedValue(new Error('provider outage'));
 
@@ -164,7 +188,11 @@ describe('PasswordResetService.forgotPassword', () => {
     const sendBody = send.mock.calls[0]![0].body;
     const linkToken = /token=([0-9a-f]+)/.exec(sendBody)![1]!;
 
-    const allLoggedText = [...logSpy.mock.calls, ...errorSpy.mock.calls, ...warnSpy.mock.calls]
+    const allLoggedText = [
+      ...logSpy.mock.calls,
+      ...errorSpy.mock.calls,
+      ...warnSpy.mock.calls,
+    ]
       .flat()
       .map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg)))
       .join('\n');
@@ -185,10 +213,12 @@ describe('PasswordResetService.resetPassword', () => {
 
     await expect(
       service.resetPassword('bad-token', 'newpassword123'),
-    ).rejects.toMatchObject(new UnauthorizedException({
-      code: 'INVALID_RESET_TOKEN',
-      message: 'This reset link is invalid or has expired',
-    }));
+    ).rejects.toMatchObject(
+      new UnauthorizedException({
+        code: 'INVALID_RESET_TOKEN',
+        message: 'This reset link is invalid or has expired',
+      }),
+    );
 
     expect(usersService.updatePasswordHash).not.toHaveBeenCalled();
     expect(sessionsService.revokeAllForUser).not.toHaveBeenCalled();

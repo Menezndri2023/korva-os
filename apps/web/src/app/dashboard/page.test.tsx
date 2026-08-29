@@ -91,4 +91,24 @@ describe("DashboardPage", () => {
     );
     expect(screen.queryByText("Réessayer")).not.toBeInTheDocument();
   });
+
+  it("treats a MODULE_NOT_ENABLED overview error as a settings prompt, not a retryable failure — an org that disabled Statistiques must still land on a working dashboard", async () => {
+    getMock.mockImplementation(() =>
+      Promise.reject(new ApiError("MODULE_NOT_ENABLED", "module not enabled")),
+    );
+
+    renderWithProviders(<DashboardPage />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Activez le module Statistiques pour voir un résumé de votre activité ici."),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Réessayer")).not.toBeInTheDocument();
+    expect(screen.queryByText("Impossible de charger l'activité de votre organisation.")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ouvrir les paramètres" })).toHaveAttribute(
+      "href",
+      "/dashboard/settings",
+    );
+  });
 });

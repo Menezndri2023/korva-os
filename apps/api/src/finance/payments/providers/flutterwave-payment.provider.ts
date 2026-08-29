@@ -50,6 +50,28 @@ export class FlutterwaveApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly responseBody?: unknown,
+    /**
+     * Stage 2.6 — set (to `true`) ONLY for the network-error/timeout branch of `request()` below,
+     * where no HTTP response was ever received at all: Flutterwave may have genuinely processed
+     * the request despite the caller never finding out. Every other FlutterwaveApiError (non-2xx,
+     * malformed body, missing `status` field, ...) represents a definite response FROM
+     * Flutterwave and is never ambiguous — this stays `undefined` for those. See
+     * payment-provider.interface.ts's isAmbiguousProviderError for how PaymentsService uses this.
+     */
+    public readonly ambiguous?: true,
+    /**
+     * Stage 2.12 — a correlation reference `createPayment()` had ALREADY generated and sent to
+     * Flutterwave (the merchant `tx_ref`) before the request() call that threw this error — set
+     * ONLY by createPayment()'s own catch-and-rethrow around its request() call (see there), so
+     * this is a positive fact about a specific, already-computed local value, never a guess.
+     * PURELY a correlation identifier for future lookup — see
+     * payment-provider.interface.ts's getAmbiguousErrorProviderReference for the full reasoning
+     * on why this is never evidence of provider execution. `undefined` for every other
+     * FlutterwaveApiError (verifyPayment/refundPayment/createPayoutDestination failures, or any
+     * createPayment failure that isn't this specific network-error branch), since only
+     * createPayment() ever has a value here to attach.
+     */
+    public readonly generatedReference?: string,
   ) {
     super(message);
     this.name = 'FlutterwaveApiError';
@@ -141,9 +163,19 @@ export class FlutterwaveProvider implements PaymentProvider {
    * <secretKey>` on every request. Never read from `process.env`/`ConfigService` inside this
    * class — matching `ResendEmailProvider`'s constructor-injection style, the decrypted key is
    * handed in by whoever constructs this adapter (eventually `IntegrationsService`'s decrypt
-   * path, per docs/architecture/integrations-platform.md §3 — that wiring is not this lot's job).
+   * path, per docs/architecture/integrations-platform.md §3, wired in Stage 2.2 —
+   * PaymentProviderRegistry now decrypts and passes a real secret; this constructor still throws
+   * if handed a falsy one anyway, as a second, independent fail-closed guard — this class must
+   * never construct successfully with nothing to authenticate with, regardless of what the
+   * registry does or doesn't check, since a future caller could construct this class directly).
    */
-  constructor(private readonly secretKey: string) {}
+  constructor(private readonly secretKey: string) {
+    if (!secretKey) {
+      throw new FlutterwaveApiError(
+        'FlutterwaveProvider requires a non-empty secret key — refusing to construct an adapter that would send Authorization: Bearer <empty>',
+      );
+    }
+  }
 
   /**
    * Calls Flutterwave's Standard Payment / Checkout endpoint
@@ -203,7 +235,32 @@ export class FlutterwaveProvider implements PaymentProvider {
       ];
     }
 
-    const response = await this.request('/payments', 'POST', body);
+    // Stage 2.12 — `txRef` above was already generated and already sent to Flutterwave in `body`
+    // by the time this call is made. Before this stage, ANY error thrown by request() (including
+    // an ambiguous network timeout — no HTTP response ever received) discarded it entirely: the
+    // caller (PaymentsService.create()) had no way to know what merchant reference was already
+    // in flight. This catch re-throws the exact same error (same message/statusCode/
+    // responseBody/ambiguous — the distinction request-error-handling depends on is completely
+    // unchanged), only ADDING the already-known txRef as `generatedReference` so it is never
+    // silently lost. This is pure evidence attachment: it never changes whether the error is
+    // ambiguous, never changes what request() itself does, and is read only via the
+    // provider-agnostic getAmbiguousErrorProviderReference() accessor — never assumed to mean
+    // the payment was actually created.
+    let response: FlutterwaveEnvelope;
+    try {
+      response = await this.request('/payments', 'POST', body);
+    } catch (error) {
+      if (error instanceof FlutterwaveApiError) {
+        throw new FlutterwaveApiError(
+          error.message,
+          error.statusCode,
+          error.responseBody,
+          error.ambiguous,
+          txRef,
+        );
+      }
+      throw error;
+    }
     const data = isRecord(response.data) ? response.data : undefined;
     const link = data?.link;
     if (response.status !== 'success' || typeof link !== 'string' || !link) {
@@ -249,9 +306,28 @@ export class FlutterwaveProvider implements PaymentProvider {
    * verify-by-reference call `verifyPayment` uses, reading back `data.id`, and only then calling
    * the refund endpoint — a real two-step flow, not a simplification.
    */
+  /**
+   * Stage 2.7A — `localReferenceForReconciliation`, when given, is sent as Flutterwave's own
+   * documented `comments` field on the refund-creation request (a free-text "Custom description
+   * for the refund" — developer.flutterwave.com/v3.0.0/reference/transaction-refund.md, fetched
+   * 2026-08-27). This is a durable breadcrumb only: Flutterwave's "Fetch a refunded transaction"
+   * / "Fetch multiple refunded transactions" endpoints
+   * (developer.flutterwave.com/v3.0.0/reference/get-transaction-refunds.md and
+   * .../get-all-refunds.md, both fetched 2026-08-27) are keyed by the SAME numeric transaction id
+   * this method already resolves via verify_by_reference above, and their documented response
+   * items echo back this same `comment` field — meaning a future reconciliation pass COULD match
+   * a specific KORVA Refund document against Flutterwave's own refund record by this value. That
+   * lookup/match/finalize mechanism is deliberately NOT implemented here (Stage 2.7A's own
+   * mandate: this capability is documented, never verified against a live/sandbox call — the
+   * real response's exact status-string vocabulary, e.g. whether "completed-mpgs"-style
+   * provider-suffixed statuses appear, cannot be safely trusted for an automatic financial
+   * decision without that verification). This method only ever captures the breadcrumb; nothing
+   * reads it back yet.
+   */
   async refundPayment(
     providerReference: string,
     amount: number,
+    localReferenceForReconciliation?: string,
   ): Promise<PaymentProviderResult> {
     const verifyResponse = await this.request(
       `/transactions/verify_by_reference?tx_ref=${encodeURIComponent(providerReference)}`,
@@ -275,7 +351,12 @@ export class FlutterwaveProvider implements PaymentProvider {
     const refundResponse = await this.request(
       `/transactions/${transactionId}/refund`,
       'POST',
-      { amount },
+      {
+        amount,
+        ...(localReferenceForReconciliation
+          ? { comments: localReferenceForReconciliation }
+          : {}),
+      },
     );
     if (refundResponse.status !== 'success') {
       throw new FlutterwaveApiError(
@@ -285,7 +366,33 @@ export class FlutterwaveProvider implements PaymentProvider {
       );
     }
 
-    return { providerReference, status: 'refunded' };
+    // Stage 2.12 — purely defensive, additive extraction. Stage 2.7A/2.7B research confirmed
+    // Flutterwave's LIST-refunds response schema documents `id` (numeric) and `flw_ref` (string)
+    // as two distinct fields on a refund record, but this CREATE-refund response's own schema was
+    // never actually confirmed against official docs — so both reads are type-guarded and each
+    // field is included only when actually present with the expected type. Never throws on
+    // absence, never invents a value, never required for the refund to be considered successful:
+    // the success/failure decision above is completely unchanged and does not depend on these.
+    const refundData = isRecord(refundResponse.data)
+      ? refundResponse.data
+      : undefined;
+    const rawRefundId = refundData?.id;
+    const providerRefundId =
+      typeof rawRefundId === 'string'
+        ? rawRefundId
+        : typeof rawRefundId === 'number'
+          ? String(rawRefundId)
+          : undefined;
+    const rawRefundReference = refundData?.flw_ref;
+    const providerRefundReference =
+      typeof rawRefundReference === 'string' ? rawRefundReference : undefined;
+
+    return {
+      providerReference,
+      status: 'refunded',
+      ...(providerRefundId ? { providerRefundId } : {}),
+      ...(providerRefundReference ? { providerRefundReference } : {}),
+    };
   }
 
   /**
@@ -433,8 +540,15 @@ export class FlutterwaveProvider implements PaymentProvider {
       const message =
         error instanceof Error ? error.message : 'Unknown network error';
       this.logger.error(`Flutterwave request to ${path} failed: ${message}`);
+      // No HTTP response was ever received — Flutterwave may have genuinely processed this
+      // request despite the timeout/network failure on our end. `ambiguous: true` (the 4th
+      // constructor arg) is what distinguishes this from every other FlutterwaveApiError below,
+      // which all represent a definite response Flutterwave actually sent.
       throw new FlutterwaveApiError(
         `Network error calling Flutterwave (${path}): ${message}`,
+        undefined,
+        undefined,
+        true,
       );
     }
 

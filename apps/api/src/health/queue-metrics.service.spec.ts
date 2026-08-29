@@ -108,7 +108,12 @@ describe('QueueMetricsService', () => {
 
     await service.getMetrics();
 
-    const { Queue } = jest.requireMock('bullmq') as { Queue: jest.Mock };
+    const { Queue } = jest.requireMock<{
+      Queue: jest.Mock<
+        { name: string; getJobCounts: jest.Mock; close: jest.Mock },
+        [string]
+      >;
+    }>('bullmq');
     for (const result of Queue.mock.results) {
       const instance = result.value as Record<string, unknown>;
       expect(instance.getFailed).toBeUndefined();

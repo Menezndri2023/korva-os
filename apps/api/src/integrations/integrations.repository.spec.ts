@@ -332,4 +332,42 @@ describe('IntegrationsRepository', () => {
       expect(record).toBeNull();
     });
   });
+
+  describe('findTenantAccountByWabaId (Stage 2.5 — 360dialog webhook tenant attribution)', () => {
+    it('queries by scope/domain/provider/isLive/metadata.wabaId, never by organizationId (the caller does not have one yet)', async () => {
+      const { repository, model } = buildRepository();
+      const orgId = new Types.ObjectId();
+      const doc = makeDoc({
+        scope: 'tenant',
+        organizationId: orgId,
+        domain: 'messaging',
+        provider: '360dialog',
+        metadata: { wabaId: 'waba-A' },
+        secretEncrypted: 'iv:tag:tenant-secret-ciphertext',
+      });
+      model.findOne.mockReturnValue({ exec: jest.fn().mockResolvedValue(doc) });
+
+      const found = await repository.findTenantAccountByWabaId('waba-A');
+
+      expect(model.findOne).toHaveBeenCalledWith({
+        scope: 'tenant',
+        domain: 'messaging',
+        provider: '360dialog',
+        isLive: true,
+        'metadata.wabaId': 'waba-A',
+      });
+      expect(found).toBe(doc);
+    });
+
+    it('returns null when no live tenant account is connected with this WABA id', async () => {
+      const { repository, model } = buildRepository();
+      model.findOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(null),
+      });
+
+      const found = await repository.findTenantAccountByWabaId('waba-unknown');
+
+      expect(found).toBeNull();
+    });
+  });
 });

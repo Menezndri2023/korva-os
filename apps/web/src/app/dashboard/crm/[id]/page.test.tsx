@@ -163,6 +163,7 @@ describe("ContactDetailPage (LOT F7)", () => {
 
     await waitFor(() =>
       expect(patchMock).toHaveBeenCalledWith("/contacts/contact-1", {
+        type: "person",
         firstName: "Augusta",
         lastName: "Lovelace",
         email: "ada@example.com",

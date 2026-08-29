@@ -184,6 +184,23 @@ describe('AI module (e2e)', () => {
     app.setGlobalPrefix('api/v1');
     await app.init();
     server = app.getHttpServer();
+    // LOT P4-CONCURRENCY-2: without this, supertest lazily calls `server.listen(0)` itself on
+    // the very first request (see Test.serverAddress() in supertest/lib/test.js) and never waits
+    // for the 'listening' event before returning — the server object is usable immediately, but
+    // nothing here ever confirms the OS-level bind/listen has actually completed. Under host
+    // contention, a burst of many simultaneous fresh connections (Test 2 below, N up to 20 —
+    // every request uses its own one-off socket, see env.setup.ts) reliably produced a client-side
+    // `ECONNRESET`, with zero trace of any error on the server's own 'connection'/'clientError'/
+    // socket-'error' events (verified with temporary instrumentation: every connection the server
+    // did see closed cleanly) — meaning the reset connection never reached this http.Server's
+    // accept() at all. Explicitly listening here and awaiting 'listening' before any request can
+    // fire eliminates it: 47/47 clean runs post-fix vs 10/10 failures immediately before it,
+    // interleaved on the same host under directly comparable (if anything, worse) load — see
+    // Test 2's N=20 case, which now serves as this fix's own non-regression coverage.
+    const rawServer = server as unknown as import('http').Server;
+    await new Promise<void>((resolve) => {
+      rawServer.listen({ port: 0 }, resolve);
+    });
     connection = app.get(getConnectionToken());
     await connection.dropDatabase();
     await Promise.all(
@@ -742,8 +759,10 @@ describe('AI module (e2e)', () => {
       ).toBe('cancelled');
     });
 
-    // Test 2 — N concurrent confirmations, N = 5 and N = 10.
-    it.each([5, 10])(
+    // Test 2 — N concurrent confirmations, N = 5, 10 and 20. N=20 is also the non-regression
+    // coverage for LOT P4-CONCURRENCY-2's explicit-listen fix in this describe block's beforeAll
+    // above — this level reliably reproduced a transport-level ECONNRESET before that fix.
+    it.each([5, 10, 20])(
       '%d concurrent confirmations on the same action: exactly one wins',
       async (n) => {
         const { bookingId, actionId } = await createPendingCancelAction(
