@@ -11,7 +11,7 @@ import type {
   RescheduleBookingInput,
   UpdateBookingInput,
 } from '@korva/validation';
-import type { Pagination } from '@korva/types';
+import type { BookingPaymentStatus, Pagination } from '@korva/types';
 import { BookingsRepository } from './bookings.repository';
 import { BookingDocument } from './schemas/booking.schema';
 import { AvailabilityService } from '../availability/availability.service';
@@ -171,6 +171,22 @@ export class BookingsService {
     });
 
     return updated;
+  }
+
+  /**
+   * System-driven, not user-driven (no auditService.record, no NotFoundException) — called by
+   * OrdersService.syncBookingPaymentStatusFromInvoice in reaction to `payment.completed`, not by
+   * any controller. A booking that's since been deleted/cancelled is simply a no-op here: there's
+   * no user-facing request to 404 against, and silently dropping a stale sync is correct.
+   */
+  async syncPaymentStatus(
+    organizationId: string,
+    bookingId: string,
+    paymentStatus: BookingPaymentStatus,
+  ): Promise<void> {
+    await this.bookingsRepository.update(organizationId, bookingId, {
+      paymentStatus,
+    });
   }
 
   async reschedule(

@@ -56,6 +56,7 @@ interface ResourcePayload {
 }
 interface BookingPayload {
   id: string;
+  paymentStatus?: string;
 }
 interface FulfillmentPayload {
   status: string;
@@ -66,6 +67,22 @@ function asSuccess<T>(body: unknown): T {
 }
 function asError(body: unknown): ApiError['error'] {
   return (body as ApiError).error;
+}
+
+async function waitFor<T>(
+  check: () => Promise<T | undefined>,
+  timeoutMs = 15000,
+  intervalMs = 300,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await check();
+    if (result !== undefined) return result;
+    if (Date.now() > deadline) {
+      throw new Error('waitFor: timed out waiting for condition');
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 function nextDateFor(dayOfWeek: number): string {
@@ -372,6 +389,159 @@ describe('Commerce module (e2e)', () => {
         .send({ bookingId })
         .expect(400);
       expect(asError(res.body).code).toBe('ORDER_ALREADY_EXISTS');
+    });
+  });
+
+  describe('Booking.paymentStatus synced from the real Payment pipeline (docs/BUSINESS_OS_AUDIT.md §2 — "Réservation → Paiement")', () => {
+    async function setUpBookingOrderInvoice(
+      contactId: string,
+      accessToken: string,
+      organizationId: string,
+    ) {
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'booking',
+          name: 'Spa session',
+          pricing: { amount: 100, currency: 'EUR' },
+        })
+        .expect(201);
+      const offerId = asSuccess<OfferPayload>(offerRes.body).id;
+
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Room A',
+          type: 'room',
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      const bookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          resourceId,
+          offerId,
+          contactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const bookingId = asSuccess<BookingPayload>(bookingRes.body).id;
+      expect(asSuccess<BookingPayload>(bookingRes.body).paymentStatus).toBe(
+        'unpaid',
+      );
+
+      const orderRes = await request(server)
+        .post('/api/v1/orders/from-booking')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ bookingId })
+        .expect(201);
+      const orderId = asSuccess<OrderPayload>(orderRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/orders/${orderId}/confirm`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const invoiceRes = await request(server)
+        .post(`/api/v1/orders/${orderId}/generate-invoice`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
+
+      // A freshly generated invoice starts as 'draft' — POST /payments rejects a draft invoice
+      // with INVOICE_NOT_PAYABLE, so it must be issued first, same as a staff member would do.
+      await request(server)
+        .post(`/api/v1/invoices/${invoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      return { bookingId, invoiceId };
+    }
+
+    async function getBookingPaymentStatus(
+      accessToken: string,
+      organizationId: string,
+      bookingId: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .get(`/api/v1/bookings/${bookingId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      return asSuccess<BookingPayload>(res.body).paymentStatus!;
+    }
+
+    it('moves to "paid" once the booking\'s generated invoice is paid in full', async () => {
+      const ctx = await registerOrgContact(
+        'booking-payment-full@korva.test',
+        'Booking Payment Full Org',
+      );
+      const { bookingId, invoiceId } = await setUpBookingOrderInvoice(
+        ctx.contactId,
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+
+      await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ invoiceId, amount: 100, method: 'cash' })
+        .expect(201);
+
+      const paymentStatus = await waitFor(async () => {
+        const status = await getBookingPaymentStatus(
+          ctx.accessToken,
+          ctx.organizationId,
+          bookingId,
+        );
+        return status === 'paid' ? status : undefined;
+      });
+      expect(paymentStatus).toBe('paid');
+    });
+
+    it('moves to "deposit_paid" (not "paid") once only part of the invoice has been paid', async () => {
+      const ctx = await registerOrgContact(
+        'booking-payment-deposit@korva.test',
+        'Booking Payment Deposit Org',
+      );
+      const { bookingId, invoiceId } = await setUpBookingOrderInvoice(
+        ctx.contactId,
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+
+      await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ invoiceId, amount: 40, method: 'cash' })
+        .expect(201);
+
+      const paymentStatus = await waitFor(async () => {
+        const status = await getBookingPaymentStatus(
+          ctx.accessToken,
+          ctx.organizationId,
+          bookingId,
+        );
+        return status === 'deposit_paid' ? status : undefined;
+      });
+      expect(paymentStatus).toBe('deposit_paid');
     });
   });
 

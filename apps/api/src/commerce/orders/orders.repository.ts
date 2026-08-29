@@ -54,6 +54,20 @@ export class OrdersRepository {
       .exec();
   }
 
+  /** Used by BookingPaymentSyncService to trace a paid Invoice back to the booking it was generated for. */
+  findByInvoiceId(
+    organizationId: string,
+    invoiceId: string,
+  ): Promise<OrderDocument | null> {
+    if (!Types.ObjectId.isValid(invoiceId)) return Promise.resolve(null);
+    return this.orderModel
+      .findOne({
+        organizationId: new Types.ObjectId(organizationId),
+        invoiceId: new Types.ObjectId(invoiceId),
+      })
+      .exec();
+  }
+
   async findAll(
     organizationId: string,
     options: FindOrdersOptions,

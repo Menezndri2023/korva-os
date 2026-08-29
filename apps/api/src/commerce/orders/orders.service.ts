@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
@@ -23,6 +24,8 @@ import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly ordersRepository: OrdersRepository,
     private readonly cartsRepository: CartsRepository,
@@ -532,6 +535,56 @@ export class OrdersService {
       });
     } finally {
       await session.endSession();
+    }
+  }
+
+  /**
+   * Closes the "Réservation → Paiement" loop the Business OS audit flagged as PARTIELLE
+   * (docs/BUSINESS_OS_AUDIT.md §2): `Booking.paymentStatus` was write-once-at-creation
+   * ('unpaid') and never updated again, even once the booking's Order was fully invoiced and
+   * paid through the real Payment pipeline. Called from EventsProcessor on every
+   * `payment.completed` event — not every Invoice traces back to a booking-sourced Order (most
+   * don't), so a miss here (no matching Order, or an Order with no `bookingId`) is the expected,
+   * silent common case, not an error.
+   *
+   * Never throws: this is a best-effort derived-state sync reacting to an event, not a user
+   * request — a transient failure here must never surface as a failed payment or retry-storm the
+   * whole event job (same philosophy as DecisionEngineService.handleEvent, see that class's own
+   * comment). The next `payment.completed` for the same invoice (e.g. a later installment) will
+   * simply re-derive the correct status from the Invoice's current `amountPaid`/`status` anyway.
+   */
+  async syncBookingPaymentStatusFromInvoice(
+    organizationId: string,
+    invoiceId: string,
+  ): Promise<void> {
+    try {
+      const order = await this.ordersRepository.findByInvoiceId(
+        organizationId,
+        invoiceId,
+      );
+      if (!order?.bookingId) return;
+
+      const invoice = await this.invoicesService.getById(
+        organizationId,
+        invoiceId,
+      );
+      const paymentStatus =
+        invoice.status === 'paid'
+          ? 'paid'
+          : invoice.amountPaid > 0
+            ? 'deposit_paid'
+            : 'unpaid';
+
+      await this.bookingsService.syncPaymentStatus(
+        organizationId,
+        order.bookingId.toString(),
+        paymentStatus,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to sync Booking.paymentStatus from Invoice ${invoiceId}`,
+        error,
+      );
     }
   }
 }

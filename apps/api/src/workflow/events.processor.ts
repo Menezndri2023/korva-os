@@ -10,6 +10,7 @@ import IORedis from 'ioredis';
 import { EVENTS_QUEUE_NAME, EventJobData } from '../core/events/event-names';
 import { WorkflowEngineService } from './workflow-engine.service';
 import { DecisionEngineService } from '../decision-engine/decision-engine.service';
+import { OrdersService } from '../commerce/orders/orders.service';
 
 /**
  * Consumes the 'events' queue and hands each event to both the WorkflowEngine (user-configured
@@ -19,6 +20,10 @@ import { DecisionEngineService } from '../decision-engine/decision-engine.servic
  * synchronously with the publishing request) but colocated with the API so
  * action handlers (e.g. create_task) can reuse existing Nest services
  * directly. See docs/architecture-decisions.md for the tradeoff.
+ *
+ * Also reacts to `payment.completed` specifically to sync `Booking.paymentStatus` — see
+ * OrdersService.syncBookingPaymentStatusFromInvoice's own doc for why this lives there rather
+ * than as a fourth standalone engine.
  */
 @Injectable()
 export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
@@ -30,6 +35,7 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     private readonly configService: ConfigService,
     private readonly workflowEngineService: WorkflowEngineService,
     private readonly decisionEngineService: DecisionEngineService,
+    private readonly ordersService: OrdersService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -42,11 +48,12 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<EventJobData>(
       EVENTS_QUEUE_NAME,
       async (job) => {
-        // DecisionEngineService never throws (see its own handleEvent) — it's included in
-        // Promise.all purely so a slow rule evaluation can run concurrently with the Workflow
-        // Engine, not because its failure needs isolating from WorkflowEngineService's own
-        // retryable-error contract (unchanged from before this service existed).
-        await Promise.all([
+        // DecisionEngineService and syncBookingPaymentStatusFromInvoice never throw (see their
+        // own handleEvent/doc) — both are included in Promise.all purely so they can run
+        // concurrently with the Workflow Engine, not because their failure needs isolating from
+        // WorkflowEngineService's own retryable-error contract (unchanged from before either
+        // existed).
+        const tasks: Promise<void>[] = [
           this.workflowEngineService.handleEvent(
             job.data.organizationId,
             job.data.name,
@@ -58,7 +65,19 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
             job.data.name,
             job.data.payload,
           ),
-        ]);
+        ];
+        if (job.data.name === 'payment.completed') {
+          const invoiceId = job.data.payload.invoiceId;
+          if (typeof invoiceId === 'string') {
+            tasks.push(
+              this.ordersService.syncBookingPaymentStatusFromInvoice(
+                job.data.organizationId,
+                invoiceId,
+              ),
+            );
+          }
+        }
+        await Promise.all(tasks);
       },
       { connection: this.connection },
     );
