@@ -1,12 +1,19 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { createOrganizationSchema, type CreateOrganizationInput } from "@korva/validation";
-import { KORVA_MODULES, type KorvaModule, type Organization } from "@korva/types";
-import { Button, Input, Select } from "@korva/ui";
+import {
+  KORVA_MODULES,
+  VERTICAL_TEMPLATES,
+  type KorvaModule,
+  type Organization,
+  type Workflow,
+} from "@korva/types";
+import { Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -44,10 +51,12 @@ const TIMEZONES = Intl.supportedValuesOf("timeZone");
 export default function OnboardingPage() {
   const router = useRouter();
   const setActiveOrganization = useAuthStore((state) => state.setActiveOrganization);
+  const [selectedVertical, setSelectedVertical] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<CreateOrganizationInput>({
     resolver: zodResolver(createOrganizationSchema),
@@ -61,14 +70,37 @@ export default function OnboardingPage() {
 
   const enabledModulesControl = useForm<{ modules: KorvaModule[] }>({ defaultValues: { modules: [] } });
 
+  function applyVerticalTemplate(key: string) {
+    const template = VERTICAL_TEMPLATES.find((t) => t.key === key);
+    if (!template) return;
+    setSelectedVertical(key);
+    setValue("type", template.suggestedType);
+    enabledModulesControl.setValue("modules", template.suggestedModules);
+  }
+
   const mutation = useMutation({
     mutationFn: async (data: CreateOrganizationInput) => {
       const organization = await apiClient.post<Organization>("/organizations", data, { withOrganization: false });
+      setActiveOrganization(organization.id);
+
       const modules = enabledModulesControl.getValues("modules");
       if (modules.length > 0) {
-        setActiveOrganization(organization.id);
         await apiClient.patch<Organization>("/organizations/me", { enabledModules: modules });
       }
+
+      // Starter workflow: only created when the vertical that suggested it is still selected
+      // and its module ended up in the final list — a user can freely edit both after picking
+      // a template, so this must reflect what was actually submitted, not just what the
+      // template originally suggested.
+      const template = VERTICAL_TEMPLATES.find((t) => t.key === selectedVertical);
+      if (template?.starterWorkflow && modules.includes("workflow")) {
+        await apiClient.post<Workflow>("/workflows", {
+          name: template.starterWorkflow.name,
+          trigger: template.starterWorkflow.trigger,
+          actions: [template.starterWorkflow.action],
+        });
+      }
+
       return organization;
     },
     onSuccess: (organization) => {
@@ -92,6 +124,33 @@ export default function OnboardingPage() {
             </label>
             <Input id="name" className="mt-1 w-full" {...register("name")} />
             {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
+          </div>
+
+          <div>
+            <p className="block text-sm font-medium">Quel est votre secteur ?</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Optionnel — préremplit le secteur et les modules suggérés ci-dessous, modifiables
+              librement.
+            </p>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {VERTICAL_TEMPLATES.map((template) => (
+                <button
+                  key={template.key}
+                  type="button"
+                  onClick={() => applyVerticalTemplate(template.key)}
+                  className="text-left"
+                >
+                  <Card
+                    className={`p-3 transition-colors hover:bg-zinc-50 ${
+                      selectedVertical === template.key ? "border-zinc-900" : ""
+                    }`}
+                  >
+                    <p className="text-sm font-medium">{template.label}</p>
+                    <p className="mt-0.5 text-xs text-zinc-500">{template.description}</p>
+                  </Card>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>

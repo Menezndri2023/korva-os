@@ -90,6 +90,95 @@ describe("OnboardingPage — module selection (Bug #4)", () => {
   });
 });
 
+describe("OnboardingPage — vertical templates (docs/BUSINESS_OS_AUDIT.md roadmap item #7)", () => {
+  beforeEach(() => {
+    postMock.mockReset();
+    patchMock.mockReset();
+    postMock.mockResolvedValue({ id: "org-1" });
+    patchMock.mockResolvedValue({ id: "org-1" });
+  });
+
+  it("renders a vertical template card and keeps the free-text secteur input fillable as before", () => {
+    renderWithProviders(<OnboardingPage />);
+    expect(screen.getByText("Salon & bien-être")).toBeInTheDocument();
+    expect(screen.getByLabelText("Secteur d'activité")).toBeInTheDocument();
+  });
+
+  it("selecting a vertical pre-fills the secteur input and pre-checks its suggested modules", () => {
+    renderWithProviders(<OnboardingPage />);
+    fireEvent.click(screen.getByText("Restaurant"));
+
+    expect(screen.getByLabelText("Secteur d'activité")).toHaveValue("restauration");
+    expect(screen.getByRole("checkbox", { name: "Commandes & E-commerce" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Automatisations" })).toBeChecked();
+  });
+
+  it("a pre-filled secteur value from a template can still be edited freely", () => {
+    renderWithProviders(<OnboardingPage />);
+    fireEvent.click(screen.getByText("Restaurant"));
+    fireEvent.input(screen.getByLabelText("Secteur d'activité"), {
+      target: { value: "restauration rapide" },
+    });
+    expect(screen.getByLabelText("Secteur d'activité")).toHaveValue("restauration rapide");
+  });
+
+  it("submitting with a vertical selected creates its starter workflow after the organization and modules are set up", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fireEvent.input(screen.getByLabelText("Nom de l'entreprise"), {
+      target: { value: "Le Bon Repas" },
+    });
+    fireEvent.click(screen.getByText("Restaurant"));
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/workflows",
+        expect.objectContaining({
+          name: "Nouvelle commande",
+          trigger: "order.created",
+          actions: [
+            {
+              type: "internal_notification",
+              config: {
+                title: "Nouvelle commande",
+                body: "Commande {{orderId}} à préparer.",
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    // Order matters: the workflow can only be created once the organization exists.
+    const orgCallIndex = postMock.mock.calls.findIndex((call) => call[0] === "/organizations");
+    const workflowCallIndex = postMock.mock.calls.findIndex((call) => call[0] === "/workflows");
+    expect(orgCallIndex).toBeGreaterThanOrEqual(0);
+    expect(workflowCallIndex).toBeGreaterThan(orgCallIndex);
+  });
+
+  it("does not create any starter workflow when no vertical was selected", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith("/organizations", expect.anything(), expect.anything()));
+    expect(postMock).not.toHaveBeenCalledWith("/workflows", expect.anything());
+  });
+
+  it("does not create the starter workflow if the workflow module is unchecked after selecting a vertical", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fireEvent.input(screen.getByLabelText("Nom de l'entreprise"), {
+      target: { value: "Le Bon Repas" },
+    });
+    fireEvent.click(screen.getByText("Restaurant"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Automatisations" })); // uncheck
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalled());
+    expect(postMock).not.toHaveBeenCalledWith("/workflows", expect.anything());
+  });
+});
+
 describe("OnboardingPage — timezone field (WAVE 2 AGENT E)", () => {
   beforeEach(() => {
     postMock.mockReset();
