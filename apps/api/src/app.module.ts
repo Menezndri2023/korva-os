@@ -31,6 +31,7 @@ import { PublicModule } from './public/public.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { BusinessGraphModule } from './business-graph/business-graph.module';
+import { DecisionEngineModule } from './decision-engine/decision-engine.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { BusinessGraphModule } from './business-graph/business-graph.module';
     PublicModule,
     IntegrationsModule,
     BusinessGraphModule,
+    DecisionEngineModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

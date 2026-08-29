@@ -20,6 +20,7 @@ import { EventsProcessor } from './events.processor';
 
 import { CrmModule } from '../crm/crm.module';
 import { CommunicationModule } from '../communication/communication.module';
+import { DecisionEngineModule } from '../decision-engine/decision-engine.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CommunicationModule } from '../communication/communication.module';
     ]),
     CrmModule,
     CommunicationModule,
+    DecisionEngineModule,
   ],
   controllers: [WorkflowsController],
   providers: [

@@ -9,11 +9,13 @@ import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { EVENTS_QUEUE_NAME, EventJobData } from '../core/events/event-names';
 import { WorkflowEngineService } from './workflow-engine.service';
+import { DecisionEngineService } from '../decision-engine/decision-engine.service';
 
 /**
- * Consumes the 'events' queue and hands each event to the WorkflowEngine.
- * Runs as a BullMQ Worker inside the API process — decoupled from the HTTP
- * request/response cycle (jobs are processed on Redis's own schedule, not
+ * Consumes the 'events' queue and hands each event to both the WorkflowEngine (user-configured
+ * automation) and the Decision Engine (system-authored business-health rules — see
+ * decision-engine.service.ts). Runs as a BullMQ Worker inside the API process — decoupled from
+ * the HTTP request/response cycle (jobs are processed on Redis's own schedule, not
  * synchronously with the publishing request) but colocated with the API so
  * action handlers (e.g. create_task) can reuse existing Nest services
  * directly. See docs/architecture-decisions.md for the tradeoff.
@@ -27,6 +29,7 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly configService: ConfigService,
     private readonly workflowEngineService: WorkflowEngineService,
+    private readonly decisionEngineService: DecisionEngineService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -39,12 +42,23 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<EventJobData>(
       EVENTS_QUEUE_NAME,
       async (job) => {
-        await this.workflowEngineService.handleEvent(
-          job.data.organizationId,
-          job.data.name,
-          job.data.payload,
-          job.data.eventKey,
-        );
+        // DecisionEngineService never throws (see its own handleEvent) — it's included in
+        // Promise.all purely so a slow rule evaluation can run concurrently with the Workflow
+        // Engine, not because its failure needs isolating from WorkflowEngineService's own
+        // retryable-error contract (unchanged from before this service existed).
+        await Promise.all([
+          this.workflowEngineService.handleEvent(
+            job.data.organizationId,
+            job.data.name,
+            job.data.payload,
+            job.data.eventKey,
+          ),
+          this.decisionEngineService.handleEvent(
+            job.data.organizationId,
+            job.data.name,
+            job.data.payload,
+          ),
+        ]);
       },
       { connection: this.connection },
     );

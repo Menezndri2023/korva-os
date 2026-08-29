@@ -59,6 +59,8 @@ export const CORE_PERMISSIONS = [
   "ai.use",
   "ai.execute_sensitive_actions",
   "analytics.read",
+  "recommendations.read",
+  "recommendations.update",
 ] as const satisfies readonly Permission[];
 
 export type CorePermission = (typeof CORE_PERMISSIONS)[number];
@@ -121,6 +123,8 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "notifications.update",
     "ai.use",
     "analytics.read",
+    "recommendations.read",
+    "recommendations.update",
   ],
   SALES: [
     "contacts.read",
@@ -147,6 +151,8 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "notifications.read",
     "notifications.update",
     "ai.use",
+    "recommendations.read",
+    "recommendations.update",
   ],
   FINANCE: [
     "quotes.read",
@@ -161,6 +167,8 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "orders.read",
     "notifications.read",
     "notifications.update",
+    "recommendations.read",
+    "recommendations.update",
   ],
   STAFF: [
     "contacts.read",
@@ -174,5 +182,6 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "message_templates.read",
     "notifications.read",
     "notifications.update",
+    "recommendations.read",
   ],
 };

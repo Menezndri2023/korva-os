@@ -1,6 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
 import { EventsProcessor } from './events.processor';
 import type { WorkflowEngineService } from './workflow-engine.service';
+import type { DecisionEngineService } from '../decision-engine/decision-engine.service';
 
 const workerOnMock = jest.fn();
 const workerCloseMock = jest.fn();
@@ -24,7 +25,12 @@ function buildService(): EventsProcessor {
     getOrThrow: jest.fn().mockReturnValue('redis://localhost:6379'),
   } as unknown as ConfigService;
   const workflowEngineService = {} as unknown as WorkflowEngineService;
-  return new EventsProcessor(configService, workflowEngineService);
+  const decisionEngineService = {} as unknown as DecisionEngineService;
+  return new EventsProcessor(
+    configService,
+    workflowEngineService,
+    decisionEngineService,
+  );
 }
 
 // LOT E2E-INFRA-2: reproduced (see finance/payments/reconciliation-scheduler.service.ts for the
