@@ -19,7 +19,7 @@ export interface Cart {
   updatedAt: string;
 }
 
-export const ORDER_STATUSES = ["pending", "confirmed", "fulfilled", "cancelled"] as const;
+export const ORDER_STATUSES = ["open", "pending", "confirmed", "fulfilled", "cancelled"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export const ORDER_SOURCES = ["cart", "booking", "manual", "storefront"] as const;

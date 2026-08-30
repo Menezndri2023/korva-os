@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -38,13 +38,21 @@ interface CartPayload {
   status: string;
   items: CartItemPayload[];
 }
+interface OrderItemPayload {
+  offerId?: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
 interface OrderPayload {
   id: string;
   status: string;
   source: string;
   total: number;
+  subtotal: number;
   invoiceId?: string;
   bookingId?: string;
+  items: OrderItemPayload[];
 }
 interface InvoicePayload {
   id: string;
@@ -928,6 +936,260 @@ describe('Commerce module (e2e)', () => {
       expect(asSuccess<CartPayload>(cartAfterRetryRes.body).status).toBe(
         'converted',
       );
+    });
+  });
+
+  describe('open order ("tab") — Restaurant vertical flagship feature', () => {
+    let accessToken: string;
+    let organizationId: string;
+    let contactId: string;
+    let starterOfferId: string;
+    let dessertOfferId: string;
+
+    beforeAll(async () => {
+      const ctx = await registerOrgContact(
+        'open-order-owner@korva.test',
+        'Open Order Org',
+      );
+      accessToken = ctx.accessToken;
+      organizationId = ctx.organizationId;
+      contactId = ctx.contactId;
+
+      const starterRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Salade César',
+          pricing: { amount: 12, currency: 'EUR' },
+        })
+        .expect(201);
+      starterOfferId = asSuccess<OfferPayload>(starterRes.body).id;
+
+      const dessertRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Tarte au citron',
+          pricing: { amount: 8, currency: 'EUR' },
+        })
+        .expect(201);
+      dessertOfferId = asSuccess<OfferPayload>(dessertRes.body).id;
+    });
+
+    async function openTab(): Promise<OrderPayload> {
+      const res = await request(server)
+        .post('/api/v1/orders/open')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, currency: 'EUR' })
+        .expect(201);
+      return asSuccess<OrderPayload>(res.body);
+    }
+
+    it('opens an empty tab, accumulates items over time with correctly recomputed totals, then a removal', async () => {
+      const order = await openTab();
+      expect(order.status).toBe('open');
+      expect(order.items).toHaveLength(0);
+      expect(order.total).toBe(0);
+
+      const afterStarterRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId: starterOfferId, quantity: 1 })
+        .expect(201);
+      const afterStarter = asSuccess<OrderPayload>(afterStarterRes.body);
+      expect(afterStarter.items).toHaveLength(1);
+      expect(afterStarter.total).toBe(12);
+
+      // 20 minutes later, dessert is ordered — this is the whole point of the feature: a
+      // second round of items on the SAME order, not a brand new one.
+      const afterDessertRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId: dessertOfferId, quantity: 2 })
+        .expect(201);
+      const afterDessert = asSuccess<OrderPayload>(afterDessertRes.body);
+      expect(afterDessert.items).toHaveLength(2);
+      expect(afterDessert.total).toBe(12 + 8 * 2);
+
+      const afterRemovalRes = await request(server)
+        .delete(`/api/v1/orders/${order.id}/items/0`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const afterRemoval = asSuccess<OrderPayload>(afterRemovalRes.body);
+      expect(afterRemoval.items).toHaveLength(1);
+      expect(afterRemoval.items[0]!.description).toBe('Tarte au citron');
+      expect(afterRemoval.total).toBe(16);
+    });
+
+    it('rejects adding/removing items once the tab is closed, and rejects closing an empty tab', async () => {
+      const emptyOrder = await openTab();
+      const closeEmptyRes = await request(server)
+        .post(`/api/v1/orders/${emptyOrder.id}/close`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(400);
+      expect(asError(closeEmptyRes.body).code).toBe('ORDER_EMPTY');
+
+      const order = await openTab();
+      await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId: starterOfferId, quantity: 1 })
+        .expect(201);
+
+      const closeRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/close`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      expect(asSuccess<OrderPayload>(closeRes.body).status).toBe('pending');
+
+      const addAfterCloseRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId: dessertOfferId, quantity: 1 })
+        .expect(400);
+      expect(asError(addAfterCloseRes.body).code).toBe('ORDER_NOT_OPEN');
+
+      const removeAfterCloseRes = await request(server)
+        .delete(`/api/v1/orders/${order.id}/items/0`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(400);
+      expect(asError(removeAfterCloseRes.body).code).toBe('ORDER_NOT_OPEN');
+    });
+
+    it('a closed tab flows through the existing, unmodified confirm → fulfill → generate-invoice pipeline', async () => {
+      const order = await openTab();
+      await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId: starterOfferId, quantity: 1 })
+        .expect(201);
+      await request(server)
+        .post(`/api/v1/orders/${order.id}/close`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      await request(server)
+        .post(`/api/v1/orders/${order.id}/confirm`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      const fulfillRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/fulfill`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      expect(asSuccess<OrderPayload>(fulfillRes.body).status).toBe('fulfilled');
+
+      const invoiceRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/generate-invoice`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).total).toBe(12);
+    });
+
+    it('rejects opening a second tab for a booking that already has one open', async () => {
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Table 5',
+          type: 'table',
+          capacity: 1,
+          weeklyAvailability: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+            dayOfWeek,
+            startTime: '00:00',
+            endTime: '23:59',
+          })),
+        })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      const bookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          resourceId,
+          offerId: starterOfferId,
+          contactId,
+          startAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          endAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+        })
+        .expect(201);
+      const bookingId = asSuccess<BookingPayload>(bookingRes.body).id;
+
+      await request(server)
+        .post('/api/v1/orders/open')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, currency: 'EUR', bookingId })
+        .expect(201);
+
+      const secondRes = await request(server)
+        .post('/api/v1/orders/open')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, currency: 'EUR', bookingId })
+        .expect(400);
+      expect(asError(secondRes.body).code).toBe('ORDER_ALREADY_EXISTS');
+    });
+
+    it('denies a STAFF member (no orders.update) from adding items or closing a tab, while orders.create still allows opening one', async () => {
+      const staffAuthRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({
+          email: 'open-order-staff@korva.test',
+          password: 'password123',
+        })
+        .expect(201);
+      const staffToken = asSuccess<AuthPayload>(staffAuthRes.body).accessToken;
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(organizationId),
+        systemKey: 'STAFF',
+      });
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          email: 'open-order-staff@korva.test',
+          roleId: String(staffRole?._id),
+        })
+        .expect(201);
+
+      const order = await openTab();
+
+      const addAsStaffRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId: starterOfferId, quantity: 1 })
+        .expect(403);
+      expect(asError(addAsStaffRes.body).code).toBe('PERMISSION_DENIED');
+
+      const closeAsStaffRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/close`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(403);
+      expect(asError(closeAsStaffRes.body).code).toBe('PERMISSION_DENIED');
     });
   });
 

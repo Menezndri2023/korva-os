@@ -1,9 +1,22 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  addOrderItemSchema,
+  createOpenOrderSchema,
   createOrderFromBookingSchema,
   createOrderSchema,
   listOrdersQuerySchema,
+  type AddOrderItemInput,
+  type CreateOpenOrderInput,
   type CreateOrderFromBookingInput,
   type CreateOrderInput,
   type ListOrdersQuery,
@@ -61,6 +74,63 @@ export class OrdersController {
       user.userId,
       body.bookingId,
     );
+  }
+
+  @RequirePermissions('orders.create')
+  @Post('open')
+  createOpen(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createOpenOrderSchema))
+    body: CreateOpenOrderInput,
+  ) {
+    return this.ordersService.createOpen(
+      tenant.organizationId,
+      user.userId,
+      body,
+    );
+  }
+
+  @RequirePermissions('orders.update')
+  @Post(':id/items')
+  addItem(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(addOrderItemSchema)) body: AddOrderItemInput,
+  ) {
+    return this.ordersService.addItem(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body,
+    );
+  }
+
+  @RequirePermissions('orders.update')
+  @Delete(':id/items/:index')
+  removeItem(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Param('index', ParseIntPipe) index: number,
+  ) {
+    return this.ordersService.removeItem(
+      tenant.organizationId,
+      user.userId,
+      id,
+      index,
+    );
+  }
+
+  @RequirePermissions('orders.update')
+  @Post(':id/close')
+  close(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.ordersService.close(tenant.organizationId, user.userId, id);
   }
 
   @RequirePermissions('orders.update')

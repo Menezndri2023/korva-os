@@ -31,6 +31,20 @@ export const createOrderFromBookingSchema = z.object({
 });
 export type CreateOrderFromBookingInput = z.infer<typeof createOrderFromBookingSchema>;
 
+export const createOpenOrderSchema = z.object({
+  contactId: z.string().min(1),
+  currency: z.string().length(3),
+  bookingId: z.string().optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type CreateOpenOrderInput = z.infer<typeof createOpenOrderSchema>;
+
+export const addOrderItemSchema = z.object({
+  offerId: z.string().min(1),
+  quantity: z.number().positive(),
+});
+export type AddOrderItemInput = z.infer<typeof addOrderItemSchema>;
+
 export const listOrdersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

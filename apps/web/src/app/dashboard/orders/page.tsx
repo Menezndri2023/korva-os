@@ -5,13 +5,19 @@ import { useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createOrderSchema, type CreateOrderInput } from "@korva/validation";
+import {
+  createOpenOrderSchema,
+  createOrderSchema,
+  type CreateOpenOrderInput,
+  type CreateOrderInput,
+} from "@korva/validation";
 import type { Contact, Order } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
 const STATUS_LABELS: Record<Order["status"], string> = {
+  open: "Addition ouverte",
   pending: "En attente",
   confirmed: "Confirmée",
   fulfilled: "Livrée",
@@ -20,6 +26,7 @@ const STATUS_LABELS: Record<Order["status"], string> = {
 
 export default function OrdersPage() {
   const [showForm, setShowForm] = useState(false);
+  const [showOpenForm, setShowOpenForm] = useState(false);
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
@@ -45,6 +52,15 @@ export default function OrdersPage() {
   });
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
 
+  const {
+    register: registerOpen,
+    handleSubmit: handleOpenSubmit,
+    reset: resetOpenForm,
+  } = useForm<CreateOpenOrderInput>({
+    resolver: zodResolver(createOpenOrderSchema),
+    defaultValues: { currency: "EUR" },
+  });
+
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["orders"] });
     void queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -56,6 +72,15 @@ export default function OrdersPage() {
       invalidate();
       reset();
       setShowForm(false);
+    },
+  });
+  const createOpenMutation = useMutation({
+    mutationFn: (input: CreateOpenOrderInput) =>
+      apiClient.post<Order>("/orders/open", input),
+    onSuccess: () => {
+      invalidate();
+      resetOpenForm();
+      setShowOpenForm(false);
     },
   });
   const confirmMutation = useMutation({
@@ -88,9 +113,45 @@ export default function OrdersPage() {
         <p className="mt-1 text-sm text-text-muted">Commandes manuelles, issues du panier ou d&apos;une réservation.</p>
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={() => setShowOpenForm((v) => !v)}>
+          {showOpenForm ? "Annuler" : "Ouvrir une addition"}
+        </Button>
         <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouvelle commande"}</Button>
       </div>
+
+      {showOpenForm && (
+        <form
+          onSubmit={handleOpenSubmit((values) => createOpenMutation.mutate(values))}
+          className="flex flex-wrap items-end gap-2 rounded-lg border border-border bg-surface p-4"
+        >
+          <select
+            className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            defaultValue=""
+            {...registerOpen("contactId")}
+          >
+            <option value="" disabled>
+              Choisir un client
+            </option>
+            {contacts?.map((c) => (
+              <option key={c.id} value={c.id}>
+                {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email}
+              </option>
+            ))}
+          </select>
+          <Input placeholder="Devise (EUR)" className="w-28" {...registerOpen("currency")} />
+          {createOpenMutation.isError && (
+            <p className="w-full text-sm text-destructive">
+              {createOpenMutation.error instanceof ApiError
+                ? createOpenMutation.error.message
+                : "Erreur"}
+            </p>
+          )}
+          <Button type="submit" loading={createOpenMutation.isPending}>
+            {createOpenMutation.isPending ? "Ouverture..." : "Ouvrir"}
+          </Button>
+        </form>
+      )}
 
       {showForm && (
         <form

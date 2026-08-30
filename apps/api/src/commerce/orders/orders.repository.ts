@@ -112,6 +112,33 @@ export class OrdersRepository {
   }
 
   /**
+   * Used by OrdersService.addItem/removeItem — guarded by `status: 'open'` in the filter so a
+   * write that arrives after the order was already closed (e.g. a slow request racing a
+   * close()) is a clean no-op (returns null) rather than silently mutating a closed order's
+   * items. A plain read-modify-write, not a transaction: the realistic contention profile here
+   * is one staff device editing one open tab at a time, unlike payments/invoices.
+   */
+  setItemsIfOpen(
+    organizationId: string,
+    id: string,
+    items: Order['items'],
+    totals: { subtotal: number; taxTotal: number; total: number },
+  ): Promise<OrderDocument | null> {
+    if (!Types.ObjectId.isValid(id)) return Promise.resolve(null);
+    return this.orderModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          status: 'open',
+        },
+        { items, ...totals },
+        { new: true },
+      )
+      .exec();
+  }
+
+  /**
    * Atomic guard against concurrent generateInvoice() calls: the accept/reject decision ("is
    * this order still uninvoiced") is made by MongoDB itself, in the SAME findOneAndUpdate as
    * the write, via `invoiceId: { $exists: false }` in the filter — not from the `order`

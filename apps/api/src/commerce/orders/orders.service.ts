@@ -242,6 +242,204 @@ export class OrdersService {
     return order;
   }
 
+  /**
+   * Opens a mutable "tab" — an Order with `status:'open'` and no items yet, to which addItem()
+   * can append line items over time (e.g. a restaurant table ordering across a whole seating)
+   * before close() freezes it and hands off to the existing pending→confirmed→fulfilled flow
+   * unchanged. Generic Order capability, not restaurant-specific — see this feature's own plan
+   * for why (packages/types's Resource.type free-form precedent).
+   */
+  async createOpen(
+    organizationId: string,
+    userId: string,
+    input: {
+      contactId: string;
+      currency: string;
+      bookingId?: string;
+      notes?: string;
+    },
+  ): Promise<OrderDocument> {
+    const contactExists = await this.contactsService.existsById(
+      organizationId,
+      input.contactId,
+    );
+    if (!contactExists) {
+      throw new NotFoundException({
+        code: 'CONTACT_NOT_FOUND',
+        message: 'Contact not found',
+      });
+    }
+    if (input.bookingId) {
+      const existing = await this.ordersRepository.findByBookingId(
+        organizationId,
+        input.bookingId,
+      );
+      if (existing) {
+        throw new BadRequestException({
+          code: 'ORDER_ALREADY_EXISTS',
+          message: 'An order already exists for this booking',
+        });
+      }
+    }
+
+    return this.createOrderRecord(organizationId, userId, {
+      contactId: input.contactId,
+      items: [],
+      currency: input.currency,
+      notes: input.notes,
+      source: 'manual',
+      bookingId: input.bookingId,
+      status: 'open',
+    });
+  }
+
+  /** Appends one offer-driven line item to an open order, resolving the offer the same way
+   *  createFromCart() does (a financial snapshot of its current name/price, not a live
+   *  reference) — Order lines have always stored a snapshot, unlike Cart's live offerId+quantity
+   *  pairs. Rejects ORDER_NOT_OPEN once the tab has been closed. */
+  async addItem(
+    organizationId: string,
+    userId: string,
+    orderId: string,
+    input: { offerId: string; quantity: number },
+  ): Promise<OrderDocument> {
+    const order = await this.getById(organizationId, orderId);
+    if (order.status !== 'open') {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_OPEN',
+        message: 'Items can only be added to an open order',
+      });
+    }
+    const offer = await this.offersService.getById(
+      organizationId,
+      input.offerId,
+    );
+
+    const newItem: LineItemInput = {
+      offerId: offer.id as string,
+      description: offer.name,
+      quantity: input.quantity,
+      unitPrice: offer.pricing.amount,
+      taxRate: offer.pricing.taxRate,
+    };
+    const items: LineItemInput[] = [
+      ...order.items.map((item) => ({
+        offerId: item.offerId?.toString(),
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        taxRate: item.taxRate,
+      })),
+      newItem,
+    ];
+    const totals = computeTotals(items);
+
+    const updated = await this.ordersRepository.setItemsIfOpen(
+      organizationId,
+      orderId,
+      toLineItemDocs(items),
+      totals,
+    );
+    if (!updated) {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_OPEN',
+        message: 'Items can only be added to an open order',
+      });
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'UPDATE',
+      entity: 'order',
+      entityId: orderId,
+      metadata: { itemAdded: offer.id as string },
+    });
+
+    return updated;
+  }
+
+  /** Removes one line item by its position in the array. No update-quantity endpoint in v1 —
+   *  remove and re-add covers the same need with a smaller API surface. */
+  async removeItem(
+    organizationId: string,
+    userId: string,
+    orderId: string,
+    itemIndex: number,
+  ): Promise<OrderDocument> {
+    const order = await this.getById(organizationId, orderId);
+    if (order.status !== 'open') {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_OPEN',
+        message: 'Items can only be removed from an open order',
+      });
+    }
+    if (itemIndex < 0 || itemIndex >= order.items.length) {
+      throw new NotFoundException({
+        code: 'ORDER_ITEM_NOT_FOUND',
+        message: 'No item at this index',
+      });
+    }
+
+    const items: LineItemInput[] = order.items
+      .filter((_item, i) => i !== itemIndex)
+      .map((item) => ({
+        offerId: item.offerId?.toString(),
+        description: item.description,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        taxRate: item.taxRate,
+      }));
+    const totals = computeTotals(items);
+
+    const updated = await this.ordersRepository.setItemsIfOpen(
+      organizationId,
+      orderId,
+      toLineItemDocs(items),
+      totals,
+    );
+    if (!updated) {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_OPEN',
+        message: 'Items can only be removed from an open order',
+      });
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'UPDATE',
+      entity: 'order',
+      entityId: orderId,
+      metadata: { itemRemoved: itemIndex },
+    });
+
+    return updated;
+  }
+
+  /** Freezes an open tab — from here on the order behaves exactly like any other order created
+   *  today (existing confirm/cancel/fulfill/generate-invoice, entirely unmodified). */
+  async close(
+    organizationId: string,
+    userId: string,
+    orderId: string,
+  ): Promise<OrderDocument> {
+    const order = await this.getById(organizationId, orderId);
+    if (order.status === 'open' && order.items.length === 0) {
+      throw new BadRequestException({
+        code: 'ORDER_EMPTY',
+        message: 'Cannot close an order with no items',
+      });
+    }
+    return this.transition(
+      organizationId,
+      userId,
+      orderId,
+      ['open'],
+      'pending',
+    );
+  }
+
   /** Called by the public storefront API only — no authenticated user, so no userId to audit. */
   createFromStorefront(
     organizationId: string,
@@ -271,6 +469,9 @@ export class OrdersService {
       notes?: string;
       source: OrderDocument['source'];
       bookingId?: string;
+      /** Defaults to the schema's own default ('pending') when omitted — only createOpen()
+       *  passes 'open' explicitly. */
+      status?: OrderDocument['status'];
     },
   ): Promise<OrderDocument> {
     const totals = computeTotals(input.items);
@@ -285,6 +486,7 @@ export class OrdersService {
       contactId: new Types.ObjectId(input.contactId),
       number,
       source: input.source,
+      status: input.status,
       bookingId: input.bookingId
         ? new Types.ObjectId(input.bookingId)
         : undefined,

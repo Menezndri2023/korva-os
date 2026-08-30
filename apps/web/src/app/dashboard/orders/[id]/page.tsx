@@ -2,14 +2,18 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Contact, Order } from "@korva/types";
-import { Badge, Button, Card } from "@korva/ui";
+import { addOrderItemSchema, type AddOrderItemInput } from "@korva/validation";
+import type { Contact, Offer, Order } from "@korva/types";
+import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
 
 const STATUS_LABELS: Record<Order["status"], string> = {
+  open: "Addition ouverte",
   pending: "En attente",
   confirmed: "Confirmée",
   fulfilled: "Livrée",
@@ -31,11 +35,42 @@ export default function OrderDetailPage() {
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
     enabled: authReady,
   });
+  const offersQuery = useQuery({
+    queryKey: ["offers", ""],
+    queryFn: () => apiClient.get<Offer[]>("/offers"),
+    enabled: authReady,
+  });
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["orders"] });
     void queryClient.invalidateQueries({ queryKey: ["invoices"] });
   };
+
+  const {
+    register: registerItem,
+    handleSubmit: handleItemSubmit,
+    reset: resetItemForm,
+  } = useForm<AddOrderItemInput>({
+    resolver: zodResolver(addOrderItemSchema),
+    defaultValues: { quantity: 1 },
+  });
+  const addItemMutation = useMutation({
+    mutationFn: (input: AddOrderItemInput) =>
+      apiClient.post<Order>(`/orders/${id}/items`, input),
+    onSuccess: () => {
+      invalidate();
+      resetItemForm({ offerId: "", quantity: 1 });
+    },
+  });
+  const removeItemMutation = useMutation({
+    mutationFn: (index: number) => apiClient.delete<Order>(`/orders/${id}/items/${index}`),
+    onSuccess: invalidate,
+  });
+  const closeMutation = useMutation({
+    mutationFn: () => apiClient.post<Order>(`/orders/${id}/close`),
+    onSuccess: invalidate,
+  });
+
   const confirmMutation = useMutation({
     mutationFn: () => apiClient.post(`/orders/${id}/confirm`),
     onSuccess: invalidate,
@@ -53,7 +88,15 @@ export default function OrderDetailPage() {
     onSuccess: invalidate,
   });
 
-  const actionError = [confirmMutation, cancelMutation, fulfillMutation, invoiceMutation]
+  const actionError = [
+    confirmMutation,
+    cancelMutation,
+    fulfillMutation,
+    invoiceMutation,
+    closeMutation,
+    addItemMutation,
+    removeItemMutation,
+  ]
     .map((mutation) => mutation.error)
     .find((error) => error instanceof ApiError);
 
@@ -109,6 +152,16 @@ export default function OrderDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{STATUS_LABELS[order.status]}</Badge>
+            {order.status === "open" && (
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={closeMutation.isPending}
+                onClick={() => closeMutation.mutate()}
+              >
+                Clôturer l&apos;addition
+              </Button>
+            )}
             {order.status === "pending" && (
               <Button
                 variant="secondary"
@@ -191,9 +244,20 @@ export default function OrderDetailPage() {
                 <th className="px-4 py-2">Prix unitaire</th>
                 <th className="px-4 py-2">TVA</th>
                 <th className="px-4 py-2">Total ligne</th>
+                {order.status === "open" && <th className="px-4 py-2">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
+              {order.items.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={order.status === "open" ? 6 : 5}
+                    className="px-4 py-6 text-center text-text-muted"
+                  >
+                    Aucun article pour le moment.
+                  </td>
+                </tr>
+              )}
               {order.items.map((item, index) => (
                 <tr key={index}>
                   <td className="px-4 py-2 font-medium">{item.description}</td>
@@ -208,6 +272,17 @@ export default function OrderDetailPage() {
                       order.currency,
                     )}
                   </td>
+                  {order.status === "open" && (
+                    <td className="px-4 py-2">
+                      <button
+                        onClick={() => removeItemMutation.mutate(index)}
+                        disabled={removeItemMutation.isPending}
+                        className="text-xs text-destructive hover:underline"
+                      >
+                        Retirer
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -225,6 +300,37 @@ export default function OrderDetailPage() {
             <p className="font-semibold">{formatCurrency(order.total, order.currency)}</p>
           </div>
         </div>
+        {order.status === "open" && (
+          <form
+            onSubmit={handleItemSubmit((values) => addItemMutation.mutate(values))}
+            className="flex flex-wrap items-end gap-2 border-t border-border p-4"
+          >
+            <select
+              className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+              defaultValue=""
+              {...registerItem("offerId")}
+            >
+              <option value="" disabled>
+                Choisir un article
+              </option>
+              {offersQuery.data?.map((offer) => (
+                <option key={offer.id} value={offer.id}>
+                  {offer.name} — {formatCurrency(offer.pricing.amount, offer.pricing.currency)}
+                </option>
+              ))}
+            </select>
+            <Input
+              type="number"
+              step="1"
+              placeholder="Qté"
+              className="w-20"
+              {...registerItem("quantity", { valueAsNumber: true })}
+            />
+            <Button type="submit" size="sm" loading={addItemMutation.isPending}>
+              {addItemMutation.isPending ? "Ajout..." : "Ajouter l'article"}
+            </Button>
+          </form>
+        )}
       </Card>
     </div>
   );
