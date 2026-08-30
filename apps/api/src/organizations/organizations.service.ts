@@ -381,6 +381,41 @@ export class OrganizationsService {
     return updated;
   }
 
+  /** Same shape/guards as updateMemberRate above. */
+  async updateMemberCommissionRate(
+    organizationId: string,
+    actorUserId: string,
+    membershipId: string,
+    commissionRateBasisPoints: number,
+  ) {
+    const membership = await this.membershipsService.findByIdForOrganization(
+      membershipId,
+      organizationId,
+    );
+    if (!membership) {
+      throw new NotFoundException({
+        code: 'MEMBERSHIP_NOT_FOUND',
+        message: 'Membership not found',
+      });
+    }
+
+    const updated = await this.membershipsService.updateCommissionRate(
+      membershipId,
+      commissionRateBasisPoints,
+    );
+
+    await this.auditService.record({
+      organizationId,
+      userId: actorUserId,
+      action: 'UPDATE',
+      entity: 'membership',
+      entityId: membershipId,
+      metadata: { commissionRateBasisPoints },
+    });
+
+    return updated;
+  }
+
   /**
    * Removes a member — a status change to 'suspended', never a delete (same revoke-not-delete
    * convention as invitations/integration accounts). Guards: an actor can never remove someone

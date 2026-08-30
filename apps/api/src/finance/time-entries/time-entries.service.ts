@@ -411,4 +411,85 @@ export class TimeEntriesService {
 
     return invoice;
   }
+
+  /**
+   * Commission a staff member earned on their own billed-and-paid work within a date range —
+   * Membership.commissionRateBasisPoints × the sum of (durationMinutes/60 × hourlyRate) for
+   * every invoiced TimeEntry of theirs whose invoice has since been fully paid. Grouped by
+   * currency rather than assuming one: an org billing in multiple currencies would otherwise
+   * silently sum incompatible amounts together.
+   */
+  async getCommissionReport(
+    organizationId: string,
+    userId: string,
+    from: string,
+    to: string,
+  ): Promise<{
+    userId: string;
+    commissionRateBasisPoints: number;
+    timeEntryCount: number;
+    periods: {
+      currency: string;
+      billableAmount: number;
+      commissionAmount: number;
+    }[];
+  }> {
+    const membership = await this.membershipsService.findByUserAndOrganization(
+      userId,
+      organizationId,
+    );
+    const commissionRateBasisPoints =
+      membership?.commissionRateBasisPoints ?? 0;
+
+    const entries = await this.timeEntriesRepository.findInvoicedByUserInRange(
+      organizationId,
+      userId,
+      new Date(from),
+      new Date(to),
+    );
+
+    const invoiceIds = [
+      ...new Set(
+        entries.filter((e) => e.invoiceId).map((e) => e.invoiceId!.toString()),
+      ),
+    ];
+    const invoicesById = await this.invoicesService.getManyByIds(
+      organizationId,
+      invoiceIds,
+    );
+
+    const paidEntries = entries.filter(
+      (entry) =>
+        entry.invoiceId &&
+        invoicesById.get(entry.invoiceId.toString())?.status === 'paid',
+    );
+
+    const billableByCurrency = new Map<string, number>();
+    for (const entry of paidEntries) {
+      const amount = round2(
+        (entry.durationMinutes / 60) * (entry.hourlyRate ?? 0),
+      );
+      billableByCurrency.set(
+        entry.currency,
+        round2((billableByCurrency.get(entry.currency) ?? 0) + amount),
+      );
+    }
+
+    const periods = [...billableByCurrency.entries()].map(
+      ([currency, billableAmount]) => ({
+        currency,
+        billableAmount,
+        commissionAmount: round2(
+          (billableAmount * commissionRateBasisPoints) / 10000,
+        ),
+      }),
+    );
+
+    return {
+      userId,
+      commissionRateBasisPoints,
+      timeEntryCount: paidEntries.length,
+      periods,
+    };
+  }
 }

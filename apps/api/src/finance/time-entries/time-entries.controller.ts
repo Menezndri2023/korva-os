@@ -10,10 +10,12 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  commissionReportQuerySchema,
   createTimeEntrySchema,
   generateInvoiceFromTimeEntriesSchema,
   listTimeEntriesQuerySchema,
   updateTimeEntrySchema,
+  type CommissionReportQuery,
   type CreateTimeEntryInput,
   type GenerateInvoiceFromTimeEntriesInput,
   type ListTimeEntriesQuery,
@@ -42,6 +44,24 @@ export class TimeEntriesController {
     query: ListTimeEntriesQuery,
   ) {
     return this.timeEntriesService.list(tenant.organizationId, query);
+  }
+
+  // Registered before Get(':id') — a static segment must be matched before the dynamic :id
+  // route below it, or NestJS/Express would treat "commission-report" as an :id value.
+  @RequirePermissions('settings.manage')
+  @Get('commission-report/:userId')
+  getCommissionReport(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('userId') userId: string,
+    @Query(new ZodValidationPipe(commissionReportQuerySchema))
+    query: CommissionReportQuery,
+  ) {
+    return this.timeEntriesService.getCommissionReport(
+      tenant.organizationId,
+      userId,
+      query.from,
+      query.to,
+    );
   }
 
   @RequirePermissions('time_entries.read')

@@ -85,7 +85,7 @@ export interface Refund {
   createdAt: string;
 }
 
-export const EXPENSE_STATUSES = ["recorded", "voided"] as const;
+export const EXPENSE_STATUSES = ["recorded", "invoiced", "voided"] as const;
 export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
 
 export interface Expense {
@@ -99,6 +99,14 @@ export interface Expense {
   currency: string;
   date: string;
   vendor?: string;
+  /** Client this expense can be re-billed to — symmetric extension of the billable pattern
+   *  already shipped on TimeEntry. Absent (undefined) for internal, non-billable expenses. */
+  contactId?: string;
+  /** Defaults to false, unlike TimeEntry.billable (which defaults true) — most expenses
+   *  (office supplies, internal tooling) are never client-billable, so opt-in is the safer
+   *  default here. */
+  billable: boolean;
+  invoiceId?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

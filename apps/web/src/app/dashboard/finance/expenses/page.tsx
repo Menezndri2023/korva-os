@@ -5,20 +5,30 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createExpenseSchema, type CreateExpenseInput } from "@korva/validation";
-import { EXPENSE_STATUSES, type Expense, type ExpenseStatus } from "@korva/types";
+import { EXPENSE_STATUSES, type Contact, type Expense, type ExpenseStatus } from "@korva/types";
 import { Badge, Button, Card, Dialog, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
 const STATUS_LABELS: Record<ExpenseStatus, string> = {
   recorded: "Enregistrée",
+  invoiced: "Facturée",
   voided: "Annulée",
 };
 
-const STATUS_VARIANT: Record<ExpenseStatus, "default" | "success"> = {
+const STATUS_VARIANT: Record<ExpenseStatus, "default" | "success" | "warning"> = {
   recorded: "success",
+  invoiced: "default",
   voided: "default",
 };
+
+function contactLabel(contact: Contact): string {
+  return (
+    [contact.firstName, contact.lastName].filter(Boolean).join(" ") ||
+    contact.company ||
+    "—"
+  );
+}
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
@@ -30,6 +40,7 @@ export default function ExpensesPage() {
   const [page, setPage] = useState(1);
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
@@ -48,24 +59,51 @@ export default function ExpensesPage() {
   });
   const expenses = expensesPage?.data;
 
+  const { data: contacts } = useQuery({
+    queryKey: ["contacts", ""],
+    queryFn: () => apiClient.get<Contact[]>("/contacts"),
+    enabled: authReady,
+  });
+  function contactName(contactId?: string): string {
+    const contact = contacts?.find((c) => c.id === contactId);
+    return contact ? contactLabel(contact) : "—";
+  }
+
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<CreateExpenseInput>({
     resolver: zodResolver(createExpenseSchema),
-    defaultValues: { currency: "EUR" },
+    defaultValues: { currency: "EUR", billable: false },
   });
+  const billable = watch("billable");
 
   const createMutation = useMutation({
     mutationFn: (input: CreateExpenseInput) => apiClient.post<Expense>("/expenses", input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      reset();
+      reset({ currency: "EUR", billable: false });
       setShowForm(false);
     },
   });
+
+  const generateInvoiceMutation = useMutation({
+    mutationFn: (expenseIds: string[]) =>
+      apiClient.post<{ id: string }>("/expenses/generate-invoice", { expenseIds }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      setSelectedIds([]);
+    },
+  });
+
+  function toggleSelected(id: string) {
+    setSelectedIds((ids) =>
+      ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id],
+    );
+  }
 
   const voidMutation = useMutation({
     mutationFn: (id: string) => apiClient.post<Expense>(`/expenses/${id}/void`),
@@ -154,6 +192,30 @@ export default function ExpensesPage() {
           />
           {errors.date && <p className="text-xs text-destructive">{errors.date.message}</p>}
 
+          <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
+            <input type="checkbox" {...register("billable")} />
+            Refacturable au client
+          </label>
+          {billable && (
+            <select
+              className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+              defaultValue=""
+              {...register("contactId")}
+            >
+              <option value="" disabled>
+                Choisir un client
+              </option>
+              {contacts?.map((contact) => (
+                <option key={contact.id} value={contact.id}>
+                  {contactLabel(contact)}
+                </option>
+              ))}
+            </select>
+          )}
+          {errors.contactId && (
+            <p className="col-span-2 text-xs text-destructive">{errors.contactId.message}</p>
+          )}
+
           <textarea
             placeholder="Notes (optionnel)"
             className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
@@ -184,18 +246,40 @@ export default function ExpensesPage() {
         </Card>
       )}
 
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-border bg-surface p-3">
+          <p className="text-sm text-text-muted">
+            {selectedIds.length} dépense(s) sélectionnée(s)
+          </p>
+          <Button
+            size="sm"
+            loading={generateInvoiceMutation.isPending}
+            onClick={() => generateInvoiceMutation.mutate(selectedIds)}
+          >
+            {generateInvoiceMutation.isPending ? "Génération..." : "Générer une facture"}
+          </Button>
+        </div>
+      )}
+      {generateInvoiceMutation.isError && (
+        <p className="text-sm text-destructive">
+          {errorMessage(generateInvoiceMutation.error, "Impossible de générer la facture.")}
+        </p>
+      )}
+
       {!isError && (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
                 <tr>
+                  <th className="px-4 py-2"></th>
                   <th className="px-4 py-2">N°</th>
                   <th className="px-4 py-2">Catégorie</th>
                   <th className="px-4 py-2">Description</th>
                   <th className="px-4 py-2">Montant</th>
                   <th className="px-4 py-2">Date</th>
                   <th className="px-4 py-2">Statut</th>
+                  <th className="px-4 py-2">Client</th>
                   <th className="px-4 py-2">Fournisseur</th>
                   <th className="px-4 py-2">Actions</th>
                 </tr>
@@ -203,14 +287,14 @@ export default function ExpensesPage() {
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-text-muted">
+                    <td colSpan={10} className="px-4 py-6 text-center text-text-muted">
                       Chargement...
                     </td>
                   </tr>
                 )}
                 {!isLoading && expenses?.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-6 text-center text-text-muted">
+                    <td colSpan={10} className="px-4 py-6 text-center text-text-muted">
                       <p>Aucune dépense.</p>
                       <p className="mt-1">
                         Les dépenses sont les frais et achats professionnels réglés par votre
@@ -222,6 +306,16 @@ export default function ExpensesPage() {
                 )}
                 {expenses?.map((expense) => (
                   <tr key={expense.id}>
+                    <td className="px-4 py-2">
+                      {expense.billable && expense.status === "recorded" && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Sélectionner ${expense.number}`}
+                          checked={selectedIds.includes(expense.id)}
+                          onChange={() => toggleSelected(expense.id)}
+                        />
+                      )}
+                    </td>
                     <td className="px-4 py-2 font-medium">{expense.number}</td>
                     <td className="px-4 py-2 text-text-muted">{expense.category}</td>
                     <td className="px-4 py-2 text-text-muted">{expense.description}</td>
@@ -235,6 +329,9 @@ export default function ExpensesPage() {
                       <Badge variant={STATUS_VARIANT[expense.status]}>
                         {STATUS_LABELS[expense.status]}
                       </Badge>
+                    </td>
+                    <td className="px-4 py-2 text-text-muted">
+                      {contactName(expense.contactId)}
                     </td>
                     <td className="px-4 py-2 text-text-muted">{expense.vendor ?? "—"}</td>
                     <td className="px-4 py-2 space-x-2">

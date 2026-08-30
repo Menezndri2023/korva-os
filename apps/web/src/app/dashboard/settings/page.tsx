@@ -43,6 +43,7 @@ interface MemberRow {
   userId: { id: string; email: string; firstName?: string; lastName?: string };
   roleId: { id: string; name: string; systemKey?: string };
   defaultHourlyRate?: number;
+  commissionRateBasisPoints?: number;
 }
 
 interface RoleOption {
@@ -306,6 +307,23 @@ export default function SettingsPage() {
   const updateMemberRateMutation = useMutation({
     mutationFn: ({ id, defaultHourlyRate }: { id: string; defaultHourlyRate: number }) =>
       apiClient.patch<MemberRow>(`/organizations/me/members/${id}/rate`, { defaultHourlyRate }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["organizations", "me", "members"] }),
+  });
+
+  // Share of this member's billed-and-paid work paid out to them as commission — see
+  // TimeEntriesService.getCommissionReport for how it's applied.
+  const updateMemberCommissionRateMutation = useMutation({
+    mutationFn: ({
+      id,
+      commissionRateBasisPoints,
+    }: {
+      id: string;
+      commissionRateBasisPoints: number;
+    }) =>
+      apiClient.patch<MemberRow>(`/organizations/me/members/${id}/commission-rate`, {
+        commissionRateBasisPoints,
+      }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["organizations", "me", "members"] }),
   });
@@ -1070,6 +1088,46 @@ export default function SettingsPage() {
                         <span className="text-destructive">
                           {updateMemberRateMutation.error instanceof ApiError
                             ? updateMemberRateMutation.error.message
+                            : "Erreur"}
+                        </span>
+                      )}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+                    <label htmlFor={`commission-${member.id}`}>Commission (%)</label>
+                    <Input
+                      id={`commission-${member.id}`}
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      max={100}
+                      className="h-7 w-20 py-1 text-xs"
+                      defaultValue={
+                        member.commissionRateBasisPoints !== undefined
+                          ? member.commissionRateBasisPoints / 100
+                          : ""
+                      }
+                      disabled={
+                        updateMemberCommissionRateMutation.isPending &&
+                        updateMemberCommissionRateMutation.variables?.id === member.id
+                      }
+                      onBlur={(e) => {
+                        const percent = e.target.value === "" ? undefined : Number(e.target.value);
+                        if (percent !== undefined && percent >= 0 && percent <= 100) {
+                          const basisPoints = Math.round(percent * 100);
+                          if (basisPoints !== member.commissionRateBasisPoints) {
+                            updateMemberCommissionRateMutation.mutate({
+                              id: member.id,
+                              commissionRateBasisPoints: basisPoints,
+                            });
+                          }
+                        }
+                      }}
+                    />
+                    {updateMemberCommissionRateMutation.isError &&
+                      updateMemberCommissionRateMutation.variables?.id === member.id && (
+                        <span className="text-destructive">
+                          {updateMemberCommissionRateMutation.error instanceof ApiError
+                            ? updateMemberCommissionRateMutation.error.message
                             : "Erreur"}
                         </span>
                       )}

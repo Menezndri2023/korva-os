@@ -330,7 +330,7 @@ describe('Finance module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ code: 'NOCURRENCY', type: 'fixed', value: 5 })
         .expect(400);
-      expect(res.body.success).toBe(false);
+      expect(asError(res.body).code).toBe('VALIDATION_ERROR');
     });
 
     it('applies a percentage discount code to a new quote, pre-tax, and rejects an unknown code', async () => {
@@ -341,12 +341,23 @@ describe('Finance module (e2e)', () => {
         .send({
           contactId,
           currency: 'EUR',
-          items: [{ description: 'Consulting', quantity: 1, unitPrice: 100, taxRate: 20 }],
+          items: [
+            {
+              description: 'Consulting',
+              quantity: 1,
+              unitPrice: 100,
+              taxRate: 20,
+            },
+          ],
           discountCode: 'save10',
         })
         .expect(201);
       const quote = asSuccess<
-        QuotePayload & { discountTotal: number; subtotal: number; taxTotal: number }
+        QuotePayload & {
+          discountTotal: number;
+          subtotal: number;
+          taxTotal: number;
+        }
       >(quoteRes.body);
       expect(quote.subtotal).toBe(100);
       expect(quote.taxTotal).toBe(20);
@@ -372,7 +383,13 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/discount-codes')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ code: 'ONEUSE', type: 'fixed', value: 5, currency: 'EUR', maxRedemptions: 1 })
+        .send({
+          code: 'ONEUSE',
+          type: 'fixed',
+          value: 5,
+          currency: 'EUR',
+          maxRedemptions: 1,
+        })
         .expect(201);
 
       await request(server)
@@ -406,7 +423,13 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/discount-codes')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ code: 'RELEASEME', type: 'fixed', value: 5, currency: 'EUR', maxRedemptions: 1 })
+        .send({
+          code: 'RELEASEME',
+          type: 'fixed',
+          value: 5,
+          currency: 'EUR',
+          maxRedemptions: 1,
+        })
         .expect(201);
 
       const orderRes = await request(server)
@@ -440,7 +463,9 @@ describe('Finance module (e2e)', () => {
           discountCode: 'RELEASEME',
         })
         .expect(201);
-      expect(asSuccess<{ discountTotal: number }>(secondRes.body).discountTotal).toBe(5);
+      expect(
+        asSuccess<{ discountTotal: number }>(secondRes.body).discountTotal,
+      ).toBe(5);
     });
 
     it('rejects a scope:"offers" code when none of the order items are eligible', async () => {
@@ -448,7 +473,11 @@ describe('Finance module (e2e)', () => {
         .post('/api/v1/offers')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ type: 'product', name: 'Eligible Widget', pricing: { amount: 15, currency: 'EUR' } })
+        .send({
+          type: 'product',
+          name: 'Eligible Widget',
+          pricing: { amount: 15, currency: 'EUR' },
+        })
         .expect(201);
       const eligibleOfferId = asSuccess<{ id: string }>(offerRes.body).id;
 
@@ -472,7 +501,9 @@ describe('Finance module (e2e)', () => {
         .send({
           contactId,
           currency: 'EUR',
-          items: [{ description: 'Unrelated item', quantity: 1, unitPrice: 20 }],
+          items: [
+            { description: 'Unrelated item', quantity: 1, unitPrice: 20 },
+          ],
           discountCode: 'SCOPED',
         })
         .expect(400);
@@ -496,7 +527,9 @@ describe('Finance module (e2e)', () => {
           discountCode: 'SCOPED',
         })
         .expect(201);
-      expect(asSuccess<{ discountTotal: number }>(eligibleRes.body).discountTotal).toBe(3);
+      expect(
+        asSuccess<{ discountTotal: number }>(eligibleRes.body).discountTotal,
+      ).toBe(3);
     });
   });
 

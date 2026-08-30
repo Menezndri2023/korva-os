@@ -130,11 +130,12 @@ export class InvoicesService {
   }
 
   /**
-   * Used by TimeEntriesService.generateInvoice when billing a batch of approved time entries.
-   * Same "no audit here, caller records it after the transaction commits" contract as
-   * createFromOrder — see that method's doc comment for the full rationale. No back-reference
-   * field on Invoice itself is needed for this source (unlike quoteId/orderId): the link is
-   * tracked the other direction, via TimeEntry.invoiceId.
+   * Used by TimeEntriesService.generateInvoice (billing a batch of approved time entries) AND
+   * ExpensesService.generateInvoice (billing a batch of billable expenses) — both bill an
+   * existing record batch with no richer Invoice-side back-reference needed (unlike
+   * quoteId/orderId, the link is tracked the other direction, via TimeEntry.invoiceId /
+   * Expense.invoiceId). Same "no audit here, caller records it after the transaction commits"
+   * contract as createFromOrder — see that method's doc comment for the full rationale.
    */
   async createFromTimeEntries(
     organizationId: string,
@@ -202,6 +203,22 @@ export class InvoicesService {
       });
     }
     return invoice;
+  }
+
+  /** Batched equivalent of getById(), one per id — used by
+   *  TimeEntriesService.getCommissionReport to check the paid status of every distinct invoice
+   *  a batch of time entries was billed through. Missing ids are silently absent from the
+   *  returned map rather than throwing — unlike getManyByIds on Offers, a caller here is
+   *  reconciling historical records, not validating a fresh request. */
+  async getManyByIds(
+    organizationId: string,
+    ids: string[],
+  ): Promise<Map<string, InvoiceDocument>> {
+    const invoices = await this.invoicesRepository.findByIds(
+      organizationId,
+      ids,
+    );
+    return new Map(invoices.map((invoice) => [invoice.id as string, invoice]));
   }
 
   async list(

@@ -51,6 +51,26 @@ export class TimeEntriesRepository {
       .exec();
   }
 
+  /** Unpaginated, bounded by organizationId+userId+date range+status — used by
+   *  TimeEntriesService.getCommissionReport, which needs every matching entry to sum, not a
+   *  page of them. A commission reporting period (a month/quarter) is a small enough result set
+   *  that pagination would only add complexity here, same reasoning as findByIds. */
+  findInvoicedByUserInRange(
+    organizationId: string,
+    userId: string,
+    from: Date,
+    to: Date,
+  ): Promise<TimeEntryDocument[]> {
+    return this.timeEntryModel
+      .find({
+        organizationId: new Types.ObjectId(organizationId),
+        userId: new Types.ObjectId(userId),
+        status: 'invoiced',
+        date: { $gte: from, $lte: to },
+      })
+      .exec();
+  }
+
   async findAll(
     organizationId: string,
     options: FindTimeEntriesOptions,

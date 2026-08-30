@@ -72,6 +72,9 @@ export interface Membership {
    *  contact provides an hourlyRate — this staff member's own default billing rate.
    *  Denominated in the organization's currency. */
   defaultHourlyRate?: number;
+  /** Share of this staff member's billed-and-paid work paid out to them as commission, in
+   *  basis points (0-10000, i.e. 500 = 5%). Absent means no commission arrangement. */
+  commissionRateBasisPoints?: number;
 }
 
 export const INVITATION_STATUSES = ["pending", "accepted"] as const;

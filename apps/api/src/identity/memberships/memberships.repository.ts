@@ -103,6 +103,17 @@ export class MembershipsRepository {
       .exec();
   }
 
+  updateCommissionRate(
+    id: string,
+    commissionRateBasisPoints: number,
+  ): Promise<MembershipDocument | null> {
+    return this.membershipModel
+      .findByIdAndUpdate(id, { commissionRateBasisPoints }, { new: true })
+      .populate('userId', 'email firstName lastName')
+      .populate('roleId', 'name systemKey')
+      .exec();
+  }
+
   /** Removal is a status change ('suspended'), never a delete — same revoke-not-delete
    *  convention as invitations/integration accounts elsewhere in this codebase. A suspended
    *  membership is excluded from findAllForUser/findActiveUserIdsForOrganization (both already

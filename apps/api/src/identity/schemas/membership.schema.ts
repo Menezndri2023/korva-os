@@ -28,6 +28,10 @@ export class Membership {
   /** See Membership.defaultHourlyRate in @korva/types for the field-level rationale. */
   @Prop()
   defaultHourlyRate?: number;
+
+  /** See Membership.commissionRateBasisPoints in @korva/types for the field-level rationale. */
+  @Prop()
+  commissionRateBasisPoints?: number;
 }
 
 export const MembershipSchema = SchemaFactory.createForClass(Membership);

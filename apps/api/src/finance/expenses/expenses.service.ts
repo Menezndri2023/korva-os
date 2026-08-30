@@ -3,14 +3,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
-import type { CreateExpenseInput, UpdateExpenseInput } from '@korva/validation';
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection, Types } from 'mongoose';
+import type {
+  CreateExpenseInput,
+  GenerateInvoiceFromExpensesInput,
+  UpdateExpenseInput,
+} from '@korva/validation';
 import type { Pagination } from '@korva/types';
 import { ExpensesRepository, FindExpensesOptions } from './expenses.repository';
 import { ExpenseDocument } from './schemas/expense.schema';
 import { CountersService } from '../../core/counters/counters.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { ContactsService } from '../../crm/contacts/contacts.service';
+import { InvoicesService } from '../invoices/invoices.service';
+import { InvoiceDocument } from '../invoices/schemas/invoice.schema';
 
 @Injectable()
 export class ExpensesService {
@@ -19,6 +27,9 @@ export class ExpensesService {
     private readonly countersService: CountersService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    private readonly contactsService: ContactsService,
+    private readonly invoicesService: InvoicesService,
+    @InjectConnection() private readonly connection: Connection,
   ) {}
 
   async create(
@@ -26,6 +37,10 @@ export class ExpensesService {
     userId: string,
     input: CreateExpenseInput,
   ): Promise<ExpenseDocument> {
+    if (input.billable && input.contactId) {
+      await this.assertContactExists(organizationId, input.contactId);
+    }
+
     const number = await this.countersService.nextFormatted(
       organizationId,
       'expense',
@@ -41,6 +56,10 @@ export class ExpensesService {
       currency: input.currency,
       date: new Date(input.date),
       vendor: input.vendor,
+      contactId: input.contactId
+        ? new Types.ObjectId(input.contactId)
+        : undefined,
+      billable: input.billable,
       notes: input.notes,
     });
 
@@ -102,8 +121,21 @@ export class ExpensesService {
     if (expense.status !== 'recorded') {
       throw new BadRequestException({
         code: 'EXPENSE_NOT_EDITABLE',
-        message: 'Only a recorded (non-voided) expense can be edited',
+        message:
+          'Only a recorded (not yet invoiced or voided) expense can be edited',
       });
+    }
+
+    const billable = input.billable ?? expense.billable;
+    const contactId = input.contactId ?? expense.contactId?.toString();
+    if (billable && !contactId) {
+      throw new BadRequestException({
+        code: 'EXPENSE_BILLABLE_REQUIRES_CONTACT',
+        message: 'A billable expense must have a contactId',
+      });
+    }
+    if (input.contactId) {
+      await this.assertContactExists(organizationId, input.contactId);
     }
 
     const updated = await this.expensesRepository.update(organizationId, id, {
@@ -113,6 +145,10 @@ export class ExpensesService {
       currency: input.currency,
       date: input.date ? new Date(input.date) : undefined,
       vendor: input.vendor,
+      contactId: input.contactId
+        ? new Types.ObjectId(input.contactId)
+        : undefined,
+      billable: input.billable,
       notes: input.notes,
     });
     if (!updated) {
@@ -193,5 +229,135 @@ export class ExpensesService {
       entity: 'expense',
       entityId: id,
     });
+  }
+
+  /**
+   * Symmetric extension of TimeEntriesService.generateInvoice — same validation shape (all
+   * selected records exist, same contact, same currency, eligible status), same atomic
+   * all-or-nothing guard against concurrent invoicing (see ExpensesRepository.markInvoiced), and
+   * the same "insert Invoice + mark the source records invoiced in one transaction" structure.
+   */
+  async generateInvoice(
+    organizationId: string,
+    callerUserId: string,
+    input: GenerateInvoiceFromExpensesInput,
+  ): Promise<InvoiceDocument> {
+    const expenses = await this.expensesRepository.findByIds(
+      organizationId,
+      input.expenseIds,
+    );
+    if (expenses.length !== input.expenseIds.length) {
+      const foundIds = new Set(expenses.map((e) => e.id as string));
+      const missing = input.expenseIds.filter((id) => !foundIds.has(id));
+      throw new NotFoundException({
+        code: 'EXPENSE_NOT_FOUND',
+        message: `Expense not found: ${missing.join(', ')}`,
+      });
+    }
+
+    if (expenses.some((e) => e.status !== 'recorded')) {
+      throw new BadRequestException({
+        code: 'EXPENSE_NOT_EDITABLE',
+        message:
+          'Only recorded (not yet invoiced or voided) expenses can be invoiced',
+      });
+    }
+    if (expenses.some((e) => !e.billable || !e.contactId)) {
+      throw new BadRequestException({
+        code: 'EXPENSE_NOT_BILLABLE',
+        message: 'Non-billable expenses cannot be invoiced',
+      });
+    }
+
+    const contactId = expenses[0]!.contactId!.toString();
+    if (expenses.some((e) => e.contactId!.toString() !== contactId)) {
+      throw new BadRequestException({
+        code: 'EXPENSES_MIXED_CONTACT',
+        message: 'All selected expenses must belong to the same client',
+      });
+    }
+
+    const currency = expenses[0]!.currency;
+    if (expenses.some((e) => e.currency !== currency)) {
+      throw new BadRequestException({
+        code: 'EXPENSES_MIXED_CURRENCY',
+        message: 'All selected expenses must use the same currency',
+      });
+    }
+
+    const items = expenses.map((expense) => {
+      const dateLabel = expense.date.toISOString().slice(0, 10);
+      return {
+        description: `${dateLabel} — ${expense.description}${expense.vendor ? ` (${expense.vendor})` : ''}`,
+        quantity: 1,
+        unitPrice: expense.amount,
+      };
+    });
+
+    const expenseIds = expenses.map((e) => e.id as string);
+    const session = await this.connection.startSession();
+    let invoice: InvoiceDocument;
+    try {
+      invoice = await session.withTransaction(async () => {
+        // No back-reference field on Invoice for this source (same as TimeEntry) — the link is
+        // tracked the other direction, via Expense.invoiceId below.
+        const created = await this.invoicesService.createFromTimeEntries(
+          organizationId,
+          {
+            contactId,
+            items,
+            currency,
+            dueDate: input.dueDate,
+            notes: input.notes,
+          },
+          session,
+        );
+
+        const { matchedCount } = await this.expensesRepository.markInvoiced(
+          organizationId,
+          expenseIds,
+          created.id as string,
+          session,
+        );
+        if (matchedCount !== expenseIds.length) {
+          throw new BadRequestException({
+            code: 'EXPENSES_NOT_INVOICEABLE',
+            message:
+              'One or more expenses were modified concurrently and are no longer invoiceable',
+          });
+        }
+
+        return created;
+      });
+    } finally {
+      await session.endSession();
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId: callerUserId,
+      action: 'CREATE',
+      entity: 'invoice',
+      entityId: invoice.id as string,
+      metadata: { expenseIds },
+    });
+
+    return invoice;
+  }
+
+  private async assertContactExists(
+    organizationId: string,
+    contactId: string,
+  ): Promise<void> {
+    const exists = await this.contactsService.existsById(
+      organizationId,
+      contactId,
+    );
+    if (!exists) {
+      throw new NotFoundException({
+        code: 'CONTACT_NOT_FOUND',
+        message: 'Contact not found',
+      });
+    }
   }
 }

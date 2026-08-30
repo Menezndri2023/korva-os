@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import { Expense, ExpenseDocument } from './schemas/expense.schema';
 import type { Paginated } from '../../crm/contacts/contacts.repository';
 
@@ -30,6 +30,18 @@ export class ExpensesRepository {
     return this.expenseModel
       .findOne({
         _id: new Types.ObjectId(id),
+        organizationId: new Types.ObjectId(organizationId),
+      })
+      .exec();
+  }
+
+  /** Batched `$in` lookup — same pattern as TimeEntriesRepository.findByIds, used by
+   *  ExpensesService.generateInvoice to fetch every selected expense in one round trip. */
+  findByIds(organizationId: string, ids: string[]): Promise<ExpenseDocument[]> {
+    const validIds = ids.filter((id) => Types.ObjectId.isValid(id));
+    return this.expenseModel
+      .find({
+        _id: { $in: validIds.map((id) => new Types.ObjectId(id)) },
         organizationId: new Types.ObjectId(organizationId),
       })
       .exec();
@@ -86,5 +98,30 @@ export class ExpensesRepository {
       })
       .exec();
     return res.deletedCount > 0;
+  }
+
+  /** Atomic all-or-nothing guard against concurrent generateInvoice() calls — same shape as
+   *  TimeEntriesRepository.markInvoiced. A short matchedCount means one or more expenses were
+   *  modified (voided, already invoiced) between the caller's read and this write; the caller
+   *  converts that into EXPENSES_NOT_INVOICEABLE rather than silently creating a partial invoice. */
+  async markInvoiced(
+    organizationId: string,
+    ids: string[],
+    invoiceId: string,
+    session: ClientSession,
+  ): Promise<{ matchedCount: number }> {
+    const res = await this.expenseModel
+      .updateMany(
+        {
+          _id: { $in: ids.map((id) => new Types.ObjectId(id)) },
+          organizationId: new Types.ObjectId(organizationId),
+          status: 'recorded',
+          invoiceId: { $exists: false },
+        },
+        { status: 'invoiced', invoiceId: new Types.ObjectId(invoiceId) },
+        { session },
+      )
+      .exec();
+    return { matchedCount: res.matchedCount };
   }
 }

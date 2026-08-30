@@ -516,6 +516,185 @@ describe('Time Entries module (e2e)', () => {
       });
     });
 
+    describe('staff commission report', () => {
+      async function ownerMembershipAndUserId(): Promise<{
+        membershipId: string;
+        userId: string;
+      }> {
+        const membersRes = await request(server)
+          .get('/api/v1/organizations/me/members')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const members = asSuccess<
+          { id: string; userId: string | { id: string; email: string } }[]
+        >(membersRes.body);
+        const owner = members.find((m) =>
+          typeof m.userId === 'string'
+            ? true
+            : m.userId.email === 'time-entries-owner@korva.test',
+        );
+        if (!owner) throw new Error('Owner membership not found');
+        const userId =
+          typeof owner.userId === 'string' ? owner.userId : owner.userId.id;
+        return { membershipId: owner.id, userId };
+      }
+
+      it('computes commission only on paid, invoiced entries within the date range, grouped by currency', async () => {
+        const { membershipId, userId } = await ownerMembershipAndUserId();
+
+        await request(server)
+          .patch(
+            `/api/v1/organizations/me/members/${membershipId}/commission-rate`,
+          )
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ commissionRateBasisPoints: 1000 }) // 10%
+          .expect(200);
+
+        // Billed and fully paid — should count.
+        const paidEntry = await createApprovedEntry({
+          durationMinutes: 60,
+          hourlyRate: 100,
+          currency: 'EUR',
+        });
+        const invoiceRes = await request(server)
+          .post('/api/v1/time-entries/generate-invoice')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ timeEntryIds: [paidEntry.id] })
+          .expect(201);
+        const invoice = asSuccess<InvoicePayload>(invoiceRes.body);
+        await request(server)
+          .post(`/api/v1/invoices/${invoice.id}/issue`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(201);
+        await request(server)
+          .post('/api/v1/payments')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({
+            invoiceId: invoice.id,
+            amount: invoice.total,
+            method: 'cash',
+          })
+          .expect(201);
+
+        // Billed but never paid — must NOT count.
+        const unpaidEntry = await createApprovedEntry({
+          durationMinutes: 60,
+          hourlyRate: 50,
+          currency: 'EUR',
+        });
+        await request(server)
+          .post('/api/v1/time-entries/generate-invoice')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ timeEntryIds: [unpaidEntry.id] })
+          .expect(201);
+
+        const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const to = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const reportRes = await request(server)
+          .get(
+            `/api/v1/time-entries/commission-report/${userId}?from=${from}&to=${to}`,
+          )
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const report = asSuccess<{
+          commissionRateBasisPoints: number;
+          timeEntryCount: number;
+          periods: {
+            currency: string;
+            billableAmount: number;
+            commissionAmount: number;
+          }[];
+        }>(reportRes.body);
+
+        expect(report.commissionRateBasisPoints).toBe(1000);
+        expect(report.timeEntryCount).toBe(1);
+        expect(report.periods).toEqual([
+          { currency: 'EUR', billableAmount: 100, commissionAmount: 10 },
+        ]);
+      });
+
+      it('defaults to 0 commission when no rate has been set for the member', async () => {
+        const ctx = await registerOrgAndContact(
+          'commission-default-owner@korva.test',
+          'Commission Default Org',
+        );
+        const membersRes = await request(server)
+          .get('/api/v1/organizations/me/members')
+          .set('Authorization', `Bearer ${ctx.accessToken}`)
+          .set('X-Organization-Id', ctx.organizationId)
+          .expect(200);
+        const members = asSuccess<
+          { id: string; userId: string | { id: string } }[]
+        >(membersRes.body);
+        const userId =
+          typeof members[0]!.userId === 'string'
+            ? members[0]!.userId
+            : members[0]!.userId.id;
+
+        const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const to = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const res = await request(server)
+          .get(
+            `/api/v1/time-entries/commission-report/${userId}?from=${from}&to=${to}`,
+          )
+          .set('Authorization', `Bearer ${ctx.accessToken}`)
+          .set('X-Organization-Id', ctx.organizationId)
+          .expect(200);
+        const report = asSuccess<{
+          commissionRateBasisPoints: number;
+          periods: unknown[];
+        }>(res.body);
+        expect(report.commissionRateBasisPoints).toBe(0);
+        expect(report.periods).toEqual([]);
+      });
+
+      it('denies a STAFF member (no settings.manage) from reading the commission report', async () => {
+        const staffAuthRes = await request(server)
+          .post('/api/v1/auth/register')
+          .send({
+            email: 'commission-rbac-staff@korva.test',
+            password: 'password123',
+          })
+          .expect(201);
+        const staffToken = asSuccess<AuthPayload>(
+          staffAuthRes.body,
+        ).accessToken;
+
+        const staffRole = await connection.collection('roles').findOne({
+          organizationId: new Types.ObjectId(organizationId),
+          systemKey: 'STAFF',
+        });
+        await request(server)
+          .post('/api/v1/organizations/me/members')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({
+            email: 'commission-rbac-staff@korva.test',
+            roleId: String(staffRole?._id),
+          })
+          .expect(201);
+
+        const { userId } = await ownerMembershipAndUserId();
+        const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const to = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const res = await request(server)
+          .get(
+            `/api/v1/time-entries/commission-report/${userId}?from=${from}&to=${to}`,
+          )
+          .set('Authorization', `Bearer ${staffToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(403);
+        expect(asError(res.body).code).toBe('PERMISSION_DENIED');
+      });
+    });
+
     it('denies a user from another organization reading time entries via a foreign org id', async () => {
       const a = await registerOrgAndContact(
         'time-entries-iso-a@korva.test',

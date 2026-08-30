@@ -86,6 +86,16 @@ export class MembershipsService {
     );
   }
 
+  updateCommissionRate(
+    id: string,
+    commissionRateBasisPoints: number,
+  ): Promise<MembershipDocument | null> {
+    return this.membershipsRepository.updateCommissionRate(
+      id,
+      commissionRateBasisPoints,
+    );
+  }
+
   updateStatus(
     id: string,
     status: MembershipDocument['status'],

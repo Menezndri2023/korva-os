@@ -80,15 +80,22 @@ export const createRefundSchema = z.object({
 });
 export type CreateRefundInput = z.infer<typeof createRefundSchema>;
 
-export const createExpenseSchema = z.object({
-  category: z.string().min(1).max(100),
-  description: z.string().min(1).max(300),
-  amount: z.number().positive(),
-  currency: z.string().length(3),
-  date: z.string().datetime(),
-  vendor: z.string().max(200).optional(),
-  notes: z.string().max(2000).optional(),
-});
+export const createExpenseSchema = z
+  .object({
+    category: z.string().min(1).max(100),
+    description: z.string().min(1).max(300),
+    amount: z.number().positive(),
+    currency: z.string().length(3),
+    date: z.string().datetime(),
+    vendor: z.string().max(200).optional(),
+    notes: z.string().max(2000).optional(),
+    contactId: z.string().min(1).optional(),
+    billable: z.boolean().default(false),
+  })
+  .refine((e) => !e.billable || !!e.contactId, {
+    message: "contactId is required when billable is true",
+    path: ["contactId"],
+  });
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 
 export const updateExpenseSchema = z.object({
@@ -99,8 +106,19 @@ export const updateExpenseSchema = z.object({
   date: z.string().datetime().optional(),
   vendor: z.string().max(200).optional(),
   notes: z.string().max(2000).optional(),
+  contactId: z.string().min(1).optional(),
+  billable: z.boolean().optional(),
 });
 export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
+
+export const generateInvoiceFromExpensesSchema = z.object({
+  expenseIds: z.array(z.string().min(1)).min(1),
+  dueDate: z.string().datetime().optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type GenerateInvoiceFromExpensesInput = z.infer<
+  typeof generateInvoiceFromExpensesSchema
+>;
 
 export const listExpensesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

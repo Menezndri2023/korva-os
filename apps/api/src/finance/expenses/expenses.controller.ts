@@ -11,9 +11,11 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import {
   createExpenseSchema,
+  generateInvoiceFromExpensesSchema,
   listExpensesQuerySchema,
   updateExpenseSchema,
   type CreateExpenseInput,
+  type GenerateInvoiceFromExpensesInput,
   type ListExpensesQuery,
   type UpdateExpenseInput,
 } from '@korva/validation';
@@ -94,6 +96,21 @@ export class ExpensesController {
     @Param('id') id: string,
   ) {
     return this.expensesService.void(tenant.organizationId, user.userId, id);
+  }
+
+  @RequirePermissions('invoices.create')
+  @Post('generate-invoice')
+  generateInvoice(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(generateInvoiceFromExpensesSchema))
+    body: GenerateInvoiceFromExpensesInput,
+  ) {
+    return this.expensesService.generateInvoice(
+      tenant.organizationId,
+      user.userId,
+      body,
+    );
   }
 
   @RequirePermissions('invoices.update')

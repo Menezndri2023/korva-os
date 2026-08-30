@@ -40,6 +40,16 @@ export class Expense {
   @Prop()
   vendor?: string;
 
+  /** See Expense.contactId/billable/invoiceId in @korva/types for the field-level rationale. */
+  @Prop({ type: Types.ObjectId, ref: 'Contact' })
+  contactId?: Types.ObjectId;
+
+  @Prop({ default: false })
+  billable!: boolean;
+
+  @Prop({ type: Types.ObjectId, ref: 'Invoice' })
+  invoiceId?: Types.ObjectId;
+
   @Prop()
   notes?: string;
 }
@@ -47,3 +57,4 @@ export class Expense {
 export const ExpenseSchema = SchemaFactory.createForClass(Expense);
 ExpenseSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 ExpenseSchema.index({ organizationId: 1, number: 1 }, { unique: true });
+ExpenseSchema.index({ organizationId: 1, contactId: 1, status: 1 });

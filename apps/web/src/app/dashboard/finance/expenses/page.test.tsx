@@ -9,12 +9,19 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
   return {
     ...actual,
-    apiClient: { ...actual.apiClient, getList: vi.fn(), post: vi.fn(), delete: vi.fn() },
+    apiClient: {
+      ...actual.apiClient,
+      get: vi.fn(),
+      getList: vi.fn(),
+      post: vi.fn(),
+      delete: vi.fn(),
+    },
   };
 });
 
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
+const getMock = vi.mocked(apiClient.get);
 const getListMock = vi.mocked(apiClient.getList);
 const postMock = vi.mocked(apiClient.post);
 const deleteMock = vi.mocked(apiClient.delete);
@@ -46,9 +53,14 @@ function mockExpensesPage(
 
 describe("ExpensesPage", () => {
   beforeEach(() => {
+    getMock.mockReset();
     getListMock.mockReset();
     postMock.mockReset();
     deleteMock.mockReset();
+    getMock.mockImplementation((path: string) => {
+      if (path === "/contacts") return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
     mockExpensesPage([]);
   });
 
@@ -148,6 +160,7 @@ describe("ExpensesPage", () => {
           currency: "XOF",
           date: "2026-08-27T00:00:00.000Z",
           notes: "Achat mensuel",
+          billable: false,
         }),
       );
     });
@@ -226,6 +239,59 @@ describe("ExpensesPage", () => {
 
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(deleteMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("billable expenses and invoice generation", () => {
+    it("shows the client select only once billable is checked", async () => {
+      getMock.mockImplementation((path: string) => {
+        if (path === "/contacts") {
+          return Promise.resolve([
+            { id: "contact-1", firstName: "Ada", lastName: "Lovelace", tags: [] },
+          ]);
+        }
+        throw new Error(`unexpected GET ${path}`);
+      });
+      const user = userEvent.setup();
+      renderWithProviders(<ExpensesPage />);
+
+      await user.click(screen.getByRole("button", { name: "Nouvelle dépense" }));
+      expect(screen.queryByText("Choisir un client")).not.toBeInTheDocument();
+
+      await user.click(screen.getByLabelText("Refacturable au client"));
+      expect(screen.getByText("Choisir un client")).toBeInTheDocument();
+      expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+    });
+
+    it("selecting a billable, recorded expense's checkbox reveals a 'Générer une facture' action that calls the endpoint with the selected id", async () => {
+      mockExpensesPage([
+        { ...expense, id: "expense-2", billable: true, status: "recorded" },
+      ]);
+      postMock.mockResolvedValue({ id: "invoice-1" });
+      const user = userEvent.setup();
+      renderWithProviders(<ExpensesPage />);
+      await screen.findByText("EXP-1");
+
+      await user.click(screen.getByRole("checkbox", { name: /Sélectionner/ }));
+      await user.click(screen.getByRole("button", { name: "Générer une facture" }));
+
+      await waitFor(() =>
+        expect(postMock).toHaveBeenCalledWith("/expenses/generate-invoice", {
+          expenseIds: ["expense-2"],
+        }),
+      );
+    });
+
+    it("does not show a selection checkbox for a non-billable or already-invoiced expense", async () => {
+      mockExpensesPage([
+        { ...expense, id: "e-a", number: "EXP-A", billable: false, status: "recorded" },
+        { ...expense, id: "e-b", number: "EXP-B", billable: true, status: "invoiced" },
+      ]);
+      renderWithProviders(<ExpensesPage />);
+      await screen.findByText("EXP-A");
+      await screen.findByText("EXP-B");
+
+      expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     });
   });
 });

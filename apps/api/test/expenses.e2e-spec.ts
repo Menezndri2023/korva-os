@@ -429,4 +429,137 @@ describe('Expenses module (e2e)', () => {
       expect(executions[0]!.payload.expenseId).toBe(newExpenseId);
     }, 20000);
   });
+
+  describe('billable expenses and invoicing', () => {
+    let accessToken: string;
+    let organizationId: string;
+    let contactId: string;
+
+    beforeAll(async () => {
+      ({ accessToken, organizationId, contactId } = await registerOrgAndContact(
+        'billable-expenses-owner@korva.test',
+        'Billable Expenses Org',
+      ));
+    });
+
+    function createExpenseReq(overrides: Record<string, unknown> = {}) {
+      return request(server)
+        .post('/api/v1/expenses')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          category: 'travel',
+          description: 'Client site visit',
+          amount: 50,
+          currency: 'EUR',
+          date: new Date().toISOString(),
+          ...overrides,
+        });
+    }
+
+    it('rejects billable:true with no contactId', async () => {
+      const res = await createExpenseReq({ billable: true }).expect(400);
+      expect(asError(res.body).code).toBe('VALIDATION_ERROR');
+    });
+
+    it('defaults billable to false, and a non-billable expense cannot be invoiced', async () => {
+      const createRes = await createExpenseReq().expect(201);
+      const expense = asSuccess<ExpensePayload & { billable: boolean }>(
+        createRes.body,
+      );
+      expect(expense.billable).toBe(false);
+
+      const res = await request(server)
+        .post('/api/v1/expenses/generate-invoice')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ expenseIds: [expense.id] })
+        .expect(400);
+      expect(asError(res.body).code).toBe('EXPENSE_NOT_BILLABLE');
+    });
+
+    it('creates a billable expense linked to a contact and generates an invoice from it', async () => {
+      const createRes = await createExpenseReq({
+        billable: true,
+        contactId,
+        description: 'Billable travel expense',
+        amount: 75,
+      }).expect(201);
+      const expense = asSuccess<ExpensePayload & { billable: boolean }>(
+        createRes.body,
+      );
+      expect(expense.billable).toBe(true);
+
+      const invoiceRes = await request(server)
+        .post('/api/v1/expenses/generate-invoice')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ expenseIds: [expense.id] })
+        .expect(201);
+      const invoice = asSuccess<{ id: string; total: number }>(invoiceRes.body);
+      expect(invoice.total).toBe(75);
+
+      const expenseAfter = await request(server)
+        .get(`/api/v1/expenses/${expense.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<ExpensePayload & { invoiceId?: string }>(expenseAfter.body)
+          .status,
+      ).toBe('invoiced');
+      expect(
+        asSuccess<ExpensePayload & { invoiceId?: string }>(expenseAfter.body)
+          .invoiceId,
+      ).toBe(invoice.id);
+
+      // An already-invoiced expense cannot be edited, voided, or invoiced again.
+      const reInvoiceRes = await request(server)
+        .post('/api/v1/expenses/generate-invoice')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ expenseIds: [expense.id] })
+        .expect(400);
+      expect(asError(reInvoiceRes.body).code).toBe('EXPENSE_NOT_EDITABLE');
+    });
+
+    it('rejects invoicing expenses that belong to different contacts or use different currencies', async () => {
+      const secondContactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName: 'Second', lastName: 'Client' })
+        .expect(201);
+      const secondContactId = asSuccess<ContactPayload>(
+        secondContactRes.body,
+      ).id;
+
+      const expenseA = asSuccess<ExpensePayload>(
+        (
+          await createExpenseReq({
+            billable: true,
+            contactId,
+            description: 'Expense A',
+          }).expect(201)
+        ).body,
+      );
+      const expenseB = asSuccess<ExpensePayload>(
+        (
+          await createExpenseReq({
+            billable: true,
+            contactId: secondContactId,
+            description: 'Expense B',
+          }).expect(201)
+        ).body,
+      );
+
+      const res = await request(server)
+        .post('/api/v1/expenses/generate-invoice')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ expenseIds: [expenseA.id, expenseB.id] })
+        .expect(400);
+      expect(asError(res.body).code).toBe('EXPENSES_MIXED_CONTACT');
+    });
+  });
 });

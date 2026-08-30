@@ -11,11 +11,13 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   addMemberSchema,
   createOrganizationSchema,
+  updateMemberCommissionRateSchema,
   updateMemberRateSchema,
   updateMemberRoleSchema,
   updateOrganizationSchema,
   type AddMemberInput,
   type CreateOrganizationInput,
+  type UpdateMemberCommissionRateInput,
   type UpdateMemberRateInput,
   type UpdateMemberRoleInput,
   type UpdateOrganizationInput,
@@ -122,6 +124,23 @@ export class OrganizationsController {
       user.userId,
       id,
       body.defaultHourlyRate,
+    );
+  }
+
+  @RequirePermissions('settings.manage')
+  @Patch('me/members/:id/commission-rate')
+  updateMemberCommissionRate(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateMemberCommissionRateSchema))
+    body: UpdateMemberCommissionRateInput,
+  ) {
+    return this.organizationsService.updateMemberCommissionRate(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body.commissionRateBasisPoints,
     );
   }
 

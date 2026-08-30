@@ -48,6 +48,19 @@ export const updateMemberRateSchema = z.object({
 });
 export type UpdateMemberRateInput = z.infer<typeof updateMemberRateSchema>;
 
+export const updateMemberCommissionRateSchema = z.object({
+  commissionRateBasisPoints: z.number().int().min(0).max(10000),
+});
+export type UpdateMemberCommissionRateInput = z.infer<
+  typeof updateMemberCommissionRateSchema
+>;
+
+export const commissionReportQuerySchema = z.object({
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+});
+export type CommissionReportQuery = z.infer<typeof commissionReportQuerySchema>;
+
 /**
  * `password`/`firstName`/`lastName` are only required when the invited email has no existing
  * KORVA account yet — InvitationsService.accept enforces that conditionally, since a static

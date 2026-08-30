@@ -46,6 +46,22 @@ export class InvoicesRepository {
       .exec();
   }
 
+  /** Batched `$in` lookup — used by TimeEntriesService.getCommissionReport to resolve the
+   *  payment status of every invoice a batch of time entries was billed through, in one
+   *  round trip instead of one findById() per distinct invoice. */
+  findByIds(organizationId: string, ids: string[]): Promise<InvoiceDocument[]> {
+    const validIds = ids
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (validIds.length === 0) return Promise.resolve([]);
+    return this.invoiceModel
+      .find({
+        organizationId: new Types.ObjectId(organizationId),
+        _id: { $in: validIds },
+      })
+      .exec();
+  }
+
   async findAll(
     organizationId: string,
     options: FindInvoicesOptions,
