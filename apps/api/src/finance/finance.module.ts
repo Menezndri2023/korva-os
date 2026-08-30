@@ -6,6 +6,10 @@ import { Invoice, InvoiceSchema } from './invoices/schemas/invoice.schema';
 import { Payment, PaymentSchema } from './payments/schemas/payment.schema';
 import { Refund, RefundSchema } from './payments/schemas/refund.schema';
 import { Expense, ExpenseSchema } from './expenses/schemas/expense.schema';
+import {
+  TimeEntry,
+  TimeEntrySchema,
+} from './time-entries/schemas/time-entry.schema';
 
 import { QuotesRepository } from './quotes/quotes.repository';
 import { QuotesService } from './quotes/quotes.service';
@@ -31,6 +35,10 @@ import { ExpensesRepository } from './expenses/expenses.repository';
 import { ExpensesService } from './expenses/expenses.service';
 import { ExpensesController } from './expenses/expenses.controller';
 
+import { TimeEntriesRepository } from './time-entries/time-entries.repository';
+import { TimeEntriesService } from './time-entries/time-entries.service';
+import { TimeEntriesController } from './time-entries/time-entries.controller';
+
 import { CrmModule } from '../crm/crm.module';
 import { CountersModule } from '../core/counters/counters.module';
 import { AuditModule } from '../audit/audit.module';
@@ -44,6 +52,7 @@ import { IntegrationWebhookModule } from '../integrations/webhooks/integration-w
       { name: Payment.name, schema: PaymentSchema },
       { name: Refund.name, schema: RefundSchema },
       { name: Expense.name, schema: ExpenseSchema },
+      { name: TimeEntry.name, schema: TimeEntrySchema },
     ]),
     CrmModule,
     CountersModule,
@@ -55,6 +64,7 @@ import { IntegrationWebhookModule } from '../integrations/webhooks/integration-w
     InvoicesController,
     PaymentsController,
     ExpensesController,
+    TimeEntriesController,
     FlutterwaveWebhookController,
     PaystackWebhookController,
   ],
@@ -81,6 +91,8 @@ import { IntegrationWebhookModule } from '../integrations/webhooks/integration-w
     { provide: PAYMENT_PROVIDER, useClass: ManualPaymentProvider },
     ExpensesRepository,
     ExpensesService,
+    TimeEntriesRepository,
+    TimeEntriesService,
   ],
   exports: [InvoicesService, QuotesService, PaymentReconciliationService],
 })

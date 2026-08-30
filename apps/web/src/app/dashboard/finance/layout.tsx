@@ -7,6 +7,7 @@ const TABS = [
   { href: "/dashboard/finance", label: "Devis" },
   { href: "/dashboard/finance/invoices", label: "Factures" },
   { href: "/dashboard/finance/expenses", label: "Dépenses" },
+  { href: "/dashboard/finance/time-entries", label: "Suivi du temps" },
 ];
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {

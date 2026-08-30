@@ -99,3 +99,24 @@ export interface Expense {
   createdAt: string;
   updatedAt: string;
 }
+
+export const TIME_ENTRY_STATUSES = ["unbilled", "approved", "invoiced", "voided"] as const;
+export type TimeEntryStatus = (typeof TIME_ENTRY_STATUSES)[number];
+
+export interface TimeEntry {
+  id: string;
+  organizationId: string;
+  contactId: string;
+  userId: string;
+  date: string;
+  durationMinutes: number;
+  description: string;
+  billable: boolean;
+  hourlyRate?: number;
+  currency: string;
+  status: TimeEntryStatus;
+  invoiceId?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}

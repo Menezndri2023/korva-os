@@ -109,6 +109,27 @@ export class InvoicesService {
     return this.createInvoiceRecord(organizationId, input, session);
   }
 
+  /**
+   * Used by TimeEntriesService.generateInvoice when billing a batch of approved time entries.
+   * Same "no audit here, caller records it after the transaction commits" contract as
+   * createFromOrder — see that method's doc comment for the full rationale. No back-reference
+   * field on Invoice itself is needed for this source (unlike quoteId/orderId): the link is
+   * tracked the other direction, via TimeEntry.invoiceId.
+   */
+  async createFromTimeEntries(
+    organizationId: string,
+    input: {
+      contactId: string;
+      items: LineItemInput[];
+      currency: string;
+      dueDate?: string;
+      notes?: string;
+    },
+    session?: ClientSession,
+  ): Promise<InvoiceDocument> {
+    return this.createInvoiceRecord(organizationId, input, session);
+  }
+
   private async createInvoiceRecord(
     organizationId: string,
     input: {

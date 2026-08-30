@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { EXPENSE_STATUSES, INVOICE_STATUSES, QUOTE_STATUSES } from "@korva/types";
+import {
+  EXPENSE_STATUSES,
+  INVOICE_STATUSES,
+  QUOTE_STATUSES,
+  TIME_ENTRY_STATUSES,
+} from "@korva/types";
 
 export const lineItemInputSchema = z.object({
   offerId: z.string().optional(),
@@ -102,3 +107,51 @@ export const listExpensesQuerySchema = z.object({
   category: z.string().optional(),
 });
 export type ListExpensesQuery = z.infer<typeof listExpensesQuerySchema>;
+
+export const createTimeEntrySchema = z
+  .object({
+    contactId: z.string().min(1),
+    userId: z.string().min(1).optional(),
+    date: z.string().datetime(),
+    durationMinutes: z.number().int().positive().max(24 * 60),
+    description: z.string().min(1).max(300),
+    billable: z.boolean().default(true),
+    hourlyRate: z.number().positive().optional(),
+    currency: z.string().length(3),
+    notes: z.string().max(2000).optional(),
+  })
+  .refine((v) => v.billable === false || v.hourlyRate !== undefined, {
+    message: "hourlyRate is required for billable time entries",
+    path: ["hourlyRate"],
+  });
+export type CreateTimeEntryInput = z.infer<typeof createTimeEntrySchema>;
+
+export const updateTimeEntrySchema = z.object({
+  date: z.string().datetime().optional(),
+  durationMinutes: z.number().int().positive().max(24 * 60).optional(),
+  description: z.string().min(1).max(300).optional(),
+  billable: z.boolean().optional(),
+  hourlyRate: z.number().positive().optional(),
+  currency: z.string().length(3).optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type UpdateTimeEntryInput = z.infer<typeof updateTimeEntrySchema>;
+
+export const listTimeEntriesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(TIME_ENTRY_STATUSES).optional(),
+  contactId: z.string().optional(),
+  userId: z.string().optional(),
+  billable: z.coerce.boolean().optional(),
+});
+export type ListTimeEntriesQuery = z.infer<typeof listTimeEntriesQuerySchema>;
+
+export const generateInvoiceFromTimeEntriesSchema = z.object({
+  timeEntryIds: z.array(z.string().min(1)).min(1),
+  dueDate: z.string().datetime().optional(),
+  notes: z.string().max(2000).optional(),
+});
+export type GenerateInvoiceFromTimeEntriesInput = z.infer<
+  typeof generateInvoiceFromTimeEntriesSchema
+>;
