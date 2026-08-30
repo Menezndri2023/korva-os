@@ -31,6 +31,7 @@ function mockGetByPath(path: string) {
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
   if (path.startsWith("/offers")) return Promise.resolve([offer]);
   if (path.startsWith("/availability")) return Promise.resolve({ windows: [], bookings: [] });
+  if (path === "/organizations/me/members") return Promise.resolve([]);
   throw new Error(`unexpected GET ${path}`);
 }
 
@@ -137,5 +138,66 @@ describe("BookingsPage (migrated to @korva/ui Button/Input/Card in F2-B.9)", () 
 
     await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/bookings?page=2"));
     expect(await screen.findByText("Page 2 sur 3")).toBeInTheDocument();
+  });
+
+  describe("staff-linked resources", () => {
+    it("shows the assigned staff member next to a resource option, and in the booking row", async () => {
+      getMock.mockImplementation((path: string) => {
+        if (path.startsWith("/resources")) {
+          return Promise.resolve([{ id: "res-1", name: "Salle 1", membershipId: "mem-1" }]);
+        }
+        if (path === "/organizations/me/members") {
+          return Promise.resolve([
+            { id: "mem-1", userId: { firstName: "Sophie", lastName: "Martin", email: "s@x.test" } },
+          ]);
+        }
+        return mockGetByPath(path);
+      });
+      mockBookingsPage([
+        {
+          id: "booking-1",
+          resourceId: "res-1",
+          contactId: "contact-1",
+          offerId: "offer-1",
+          startAt: "2026-01-15T09:00:00.000Z",
+          endAt: "2026-01-15T10:00:00.000Z",
+          status: "confirmed",
+          staffMembershipId: "mem-1",
+        },
+      ]);
+      const user = userEvent.setup();
+      renderWithProviders(<BookingsPage />);
+
+      expect(await screen.findByText("Sophie Martin")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Nouvelle réservation" }));
+      expect(screen.getByText("Salle 1 — Sophie Martin")).toBeInTheDocument();
+    });
+
+    it("filters resources by the selected practitioner", async () => {
+      getMock.mockImplementation((path: string) => {
+        if (path === "/resources?membershipId=mem-1") {
+          return Promise.resolve([{ id: "res-1", name: "Salle 1", membershipId: "mem-1" }]);
+        }
+        if (path.startsWith("/resources")) {
+          return Promise.resolve([{ id: "res-1", name: "Salle 1", membershipId: "mem-1" }]);
+        }
+        if (path === "/organizations/me/members") {
+          return Promise.resolve([
+            { id: "mem-1", userId: { firstName: "Sophie", lastName: "Martin", email: "s@x.test" } },
+          ]);
+        }
+        return mockGetByPath(path);
+      });
+      const user = userEvent.setup();
+      renderWithProviders(<BookingsPage />);
+
+      await user.click(screen.getByRole("button", { name: "Nouvelle réservation" }));
+      await user.selectOptions(screen.getByDisplayValue("Tous les praticiens"), "mem-1");
+
+      await waitFor(() =>
+        expect(getMock).toHaveBeenCalledWith("/resources?membershipId=mem-1"),
+      );
+    });
   });
 });

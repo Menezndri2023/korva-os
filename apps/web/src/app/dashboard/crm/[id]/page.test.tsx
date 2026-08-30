@@ -49,6 +49,8 @@ function mockGetByPath(path: string) {
   if (path.startsWith("/orders")) return Promise.resolve([]);
   if (path.startsWith("/carts")) return Promise.resolve([]);
   if (path.startsWith("/bookings")) return Promise.resolve([]);
+  if (path.startsWith("/credit-balances")) return Promise.resolve([]);
+  if (path.startsWith("/offers")) return Promise.resolve([]);
   if (path.startsWith("/invoices")) return Promise.resolve([]);
   if (path.startsWith("/quotes")) return Promise.resolve([]);
   if (path.startsWith("/conversations")) return Promise.resolve([]);
@@ -140,6 +142,31 @@ describe("ContactDetailPage (LOT F7)", () => {
     renderWithProviders(<ContactDetailPage />);
 
     expect(await screen.findByText("ORD-1")).toBeInTheDocument();
+  });
+
+  it("fetches and displays credit balances (package offer + remaining/total credits)", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/contacts/contact-1") return Promise.resolve(contact);
+      if (path === "/credit-balances?contactId=contact-1") {
+        return Promise.resolve([
+          {
+            id: "cb-1",
+            contactId: "contact-1",
+            offerId: "offer-1",
+            totalCredits: 10,
+            remainingCredits: 7,
+          },
+        ]);
+      }
+      if (path === "/offers?type=package") {
+        return Promise.resolve([{ id: "offer-1", name: "10-session pass" }]);
+      }
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<ContactDetailPage />);
+
+    expect(await screen.findByText("10-session pass")).toBeInTheDocument();
+    expect(screen.getByText("7 / 10 séances")).toBeInTheDocument();
   });
 
   it("shows empty-state text for a relation with no data", async () => {

@@ -43,6 +43,23 @@ interface MemberPayload {
   id: string;
   userId: string | { id: string; email: string };
 }
+interface WaitlistEntryPayload {
+  id: string;
+  status: string;
+  resourceId: string;
+  contactId: string;
+}
+interface ConversationPayload {
+  channel: string;
+  contactId: string;
+}
+interface CreditBalancePayload {
+  id: string;
+  contactId: string;
+  offerId: string;
+  totalCredits: number;
+  remainingCredits: number;
+}
 
 function asSuccess<T>(body: unknown): T {
   return (body as ApiSuccess<T>).data;
@@ -59,6 +76,24 @@ function nextDateFor(dayOfWeek: number): string {
     date.setUTCDate(date.getUTCDate() + 1);
   }
   return date.toISOString().slice(0, 10);
+}
+
+/** Polls `check` until it returns a defined value (not the real Redis-backed BullMQ queue
+ *  processing the event synchronously with the triggering request) or times out. */
+async function waitFor<T>(
+  check: () => Promise<T | undefined>,
+  timeoutMs = 15000,
+  intervalMs = 300,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await check();
+    if (result !== undefined) return result;
+    if (Date.now() > deadline) {
+      throw new Error('waitFor: timed out waiting for condition');
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 describe('Booking module (e2e)', () => {
@@ -943,6 +978,589 @@ describe('Booking module (e2e)', () => {
         .set('X-Organization-Id', a.organizationId)
         .expect(403);
       expect(asError(res.body).code).toBe('ORGANIZATION_ACCESS_DENIED');
+    });
+  });
+
+  describe('waitlist for full slots', () => {
+    async function enableCommunication(
+      accessToken: string,
+      organizationId: string,
+    ) {
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          enabledModules: ['crm', 'catalog', 'booking', 'communication'],
+        })
+        .expect(200);
+    }
+
+    async function createCapacityOneResource(
+      accessToken: string,
+      organizationId: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: `Waitlist room ${Math.random()}`,
+          type: 'room',
+          capacity: 1,
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      return asSuccess<ResourcePayload>(res.body).id;
+    }
+
+    async function createContact(
+      accessToken: string,
+      organizationId: string,
+      firstName: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName })
+        .expect(201);
+      return asSuccess<ContactPayload>(res.body).id;
+    }
+
+    it('rejects a waitlist request for a slot that is actually available', async () => {
+      const ctx = await registerOrgContactOffer(
+        'waitlist-available-owner@korva.test',
+        'Waitlist Available Org',
+      );
+      const resourceId = await createCapacityOneResource(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+
+      const res = await request(server)
+        .post('/api/v1/waitlist')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(400);
+      expect(asError(res.body).code).toBe('WAITLIST_SLOT_AVAILABLE');
+    });
+
+    it('creates a waitlist entry once the slot is genuinely full', async () => {
+      const ctx = await registerOrgContactOffer(
+        'waitlist-full-owner@korva.test',
+        'Waitlist Full Org',
+      );
+      const resourceId = await createCapacityOneResource(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+
+      await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+
+      const waitingContactId = await createContact(
+        ctx.accessToken,
+        ctx.organizationId,
+        'Waiting',
+      );
+
+      const res = await request(server)
+        .post('/api/v1/waitlist')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: waitingContactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const entry = asSuccess<WaitlistEntryPayload>(res.body);
+      expect(entry.status).toBe('waiting');
+      expect(entry.contactId).toBe(waitingContactId);
+    });
+
+    it('notifies the oldest waiting contact with a message once the blocking booking is cancelled', async () => {
+      const ctx = await registerOrgContactOffer(
+        'waitlist-notify-owner@korva.test',
+        'Waitlist Notify Org',
+      );
+      await enableCommunication(ctx.accessToken, ctx.organizationId);
+      const resourceId = await createCapacityOneResource(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+
+      const bookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const booking = asSuccess<BookingPayload>(bookingRes.body);
+
+      const waitingContactId = await createContact(
+        ctx.accessToken,
+        ctx.organizationId,
+        'Waiting',
+      );
+      await request(server)
+        .patch(`/api/v1/contacts/${waitingContactId}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ email: 'waitlist-notify-waiting@korva.test' })
+        .expect(200);
+
+      const waitlistRes = await request(server)
+        .post('/api/v1/waitlist')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: waitingContactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const entry = asSuccess<WaitlistEntryPayload>(waitlistRes.body);
+
+      await request(server)
+        .post(`/api/v1/bookings/${booking.id}/cancel`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(201);
+
+      const notified = await waitFor(async () => {
+        const res = await request(server)
+          .get(`/api/v1/waitlist/${entry.id}`)
+          .set('Authorization', `Bearer ${ctx.accessToken}`)
+          .set('X-Organization-Id', ctx.organizationId)
+          .expect(200);
+        const data = asSuccess<WaitlistEntryPayload>(res.body);
+        return data.status === 'notified' ? data : undefined;
+      });
+      expect(notified.status).toBe('notified');
+
+      // The DB write marking the entry 'notified' commits before the message send
+      // necessarily completes (same async function, but the HTTP poll above can observe
+      // it mid-flight) — poll for the conversation too rather than checking it once.
+      await waitFor(async () => {
+        const res = await request(server)
+          .get('/api/v1/conversations')
+          .set('Authorization', `Bearer ${ctx.accessToken}`)
+          .set('X-Organization-Id', ctx.organizationId)
+          .expect(200);
+        const conversations = asSuccess<ConversationPayload[]>(res.body);
+        const match = conversations.some(
+          (c) => c.channel === 'email' && c.contactId === waitingContactId,
+        );
+        return match ? conversations : undefined;
+      });
+    }, 20000);
+
+    it('withdraws a waitlist entry directly via cancel', async () => {
+      const ctx = await registerOrgContactOffer(
+        'waitlist-withdraw-owner@korva.test',
+        'Waitlist Withdraw Org',
+      );
+      const resourceId = await createCapacityOneResource(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+      await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const waitingContactId = await createContact(
+        ctx.accessToken,
+        ctx.organizationId,
+        'Waiting',
+      );
+      const waitlistRes = await request(server)
+        .post('/api/v1/waitlist')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: waitingContactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const entry = asSuccess<WaitlistEntryPayload>(waitlistRes.body);
+
+      await request(server)
+        .post(`/api/v1/waitlist/${entry.id}/cancel`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(201);
+
+      const res = await request(server)
+        .get(`/api/v1/waitlist/${entry.id}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      expect(asSuccess<WaitlistEntryPayload>(res.body).status).toBe(
+        'cancelled',
+      );
+    });
+
+    it('denies a STAFF member without waitlist.create/waitlist.delete from creating or cancelling entries', async () => {
+      const ctx = await registerOrgContactOffer(
+        'waitlist-rbac-owner@korva.test',
+        'Waitlist RBAC Org',
+      );
+      const resourceId = await createCapacityOneResource(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+      await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const waitingContactId = await createContact(
+        ctx.accessToken,
+        ctx.organizationId,
+        'Waiting',
+      );
+      const waitlistRes = await request(server)
+        .post('/api/v1/waitlist')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: waitingContactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const entry = asSuccess<WaitlistEntryPayload>(waitlistRes.body);
+
+      const staffEmail = 'waitlist-rbac-staff@korva.test';
+      const staffAuthRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: staffEmail, password: 'password123' })
+        .expect(201);
+      const staffToken = asSuccess<AuthPayload>(staffAuthRes.body).accessToken;
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(ctx.organizationId),
+        systemKey: 'STAFF',
+      });
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ email: staffEmail, roleId: String(staffRole?._id) })
+        .expect(201);
+
+      const createRes = await request(server)
+        .post('/api/v1/waitlist')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: waitingContactId,
+          startAt: `${monday}T11:00:00.000Z`,
+          endAt: `${monday}T12:00:00.000Z`,
+        })
+        .expect(403);
+      expect(asError(createRes.body).code).toBe('PERMISSION_DENIED');
+
+      const cancelRes = await request(server)
+        .post(`/api/v1/waitlist/${entry.id}/cancel`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(403);
+      expect(asError(cancelRes.body).code).toBe('PERMISSION_DENIED');
+    });
+  });
+
+  describe('credit balances (prepaid packages)', () => {
+    async function createPackageOffer(
+      accessToken: string,
+      organizationId: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'package',
+          name: '10-session pass',
+          pricing: { amount: 400, currency: 'EUR' },
+        })
+        .expect(201);
+      return asSuccess<OfferPayload>(res.body).id;
+    }
+
+    it('rejects granting credits against a non-package offer', async () => {
+      const ctx = await registerOrgContactOffer(
+        'credits-not-package-owner@korva.test',
+        'Credits Not Package Org',
+      );
+
+      const res = await request(server)
+        .post('/api/v1/credit-balances/top-up')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ contactId: ctx.contactId, offerId: ctx.offerId, credits: 5 })
+        .expect(400);
+      expect(asError(res.body).code).toBe('OFFER_NOT_A_PACKAGE');
+    });
+
+    it('tops up a package offer into a single balance row and lists it', async () => {
+      const ctx = await registerOrgContactOffer(
+        'credits-topup-owner@korva.test',
+        'Credits Topup Org',
+      );
+      const packageOfferId = await createPackageOffer(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+
+      const firstRes = await request(server)
+        .post('/api/v1/credit-balances/top-up')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ contactId: ctx.contactId, offerId: packageOfferId, credits: 5 })
+        .expect(201);
+      const first = asSuccess<CreditBalancePayload>(firstRes.body);
+      expect(first.totalCredits).toBe(5);
+      expect(first.remainingCredits).toBe(5);
+
+      const secondRes = await request(server)
+        .post('/api/v1/credit-balances/top-up')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ contactId: ctx.contactId, offerId: packageOfferId, credits: 3 })
+        .expect(201);
+      const second = asSuccess<CreditBalancePayload>(secondRes.body);
+      expect(second.id).toBe(first.id);
+      expect(second.totalCredits).toBe(8);
+      expect(second.remainingCredits).toBe(8);
+
+      const listRes = await request(server)
+        .get(`/api/v1/credit-balances?contactId=${ctx.contactId}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      const list = asSuccess<CreditBalancePayload[]>(listRes.body);
+      expect(list).toHaveLength(1);
+      expect(list[0]!.remainingCredits).toBe(8);
+    });
+
+    it('decrements the balance when a package booking completes with attended:true, but not with attended:false', async () => {
+      const ctx = await registerOrgContactOffer(
+        'credits-decrement-owner@korva.test',
+        'Credits Decrement Org',
+      );
+      const packageOfferId = await createPackageOffer(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+      const topUpRes = await request(server)
+        .post('/api/v1/credit-balances/top-up')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ contactId: ctx.contactId, offerId: packageOfferId, credits: 2 })
+        .expect(201);
+      const balanceId = asSuccess<CreditBalancePayload>(topUpRes.body).id;
+
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          name: `Package room ${Math.random()}`,
+          type: 'room',
+          capacity: 1,
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      async function bookAndComplete(
+        startHour: string,
+        endHour: string,
+        attended: boolean,
+      ): Promise<void> {
+        const bookingRes = await request(server)
+          .post('/api/v1/bookings')
+          .set('Authorization', `Bearer ${ctx.accessToken}`)
+          .set('X-Organization-Id', ctx.organizationId)
+          .send({
+            resourceId,
+            offerId: packageOfferId,
+            contactId: ctx.contactId,
+            startAt: `${monday}T${startHour}:00.000Z`,
+            endAt: `${monday}T${endHour}:00.000Z`,
+          })
+          .expect(201);
+        const bookingId = asSuccess<BookingPayload>(bookingRes.body).id;
+        await request(server)
+          .post(`/api/v1/bookings/${bookingId}/complete`)
+          .set('Authorization', `Bearer ${ctx.accessToken}`)
+          .set('X-Organization-Id', ctx.organizationId)
+          .send({ attended })
+          .expect(201);
+      }
+
+      await bookAndComplete('09:00', '10:00', false);
+      const afterNoShowRes = await request(server)
+        .get(`/api/v1/credit-balances/${balanceId}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      expect(
+        asSuccess<CreditBalancePayload>(afterNoShowRes.body).remainingCredits,
+      ).toBe(2);
+
+      await bookAndComplete('10:00', '11:00', true);
+      const afterAttendedRes = await request(server)
+        .get(`/api/v1/credit-balances/${balanceId}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      expect(
+        asSuccess<CreditBalancePayload>(afterAttendedRes.body)
+          .remainingCredits,
+      ).toBe(1);
+    });
+
+    it('completes a package booking without error even when no credit balance exists yet', async () => {
+      const ctx = await registerOrgContactOffer(
+        'credits-missing-balance-owner@korva.test',
+        'Credits Missing Balance Org',
+      );
+      const packageOfferId = await createPackageOffer(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          name: `No-balance room ${Math.random()}`,
+          type: 'room',
+          capacity: 1,
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+      const bookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: packageOfferId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T09:00:00.000Z`,
+          endAt: `${monday}T10:00:00.000Z`,
+        })
+        .expect(201);
+      const bookingId = asSuccess<BookingPayload>(bookingRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/bookings/${bookingId}/complete`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: true })
+        .expect(201);
+    });
+
+    it('denies a STAFF member without credit_balances.create from topping up (but allows reading)', async () => {
+      const ctx = await registerOrgContactOffer(
+        'credits-rbac-owner@korva.test',
+        'Credits RBAC Org',
+      );
+      const packageOfferId = await createPackageOffer(
+        ctx.accessToken,
+        ctx.organizationId,
+      );
+
+      const staffEmail = 'credits-rbac-staff@korva.test';
+      const staffAuthRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: staffEmail, password: 'password123' })
+        .expect(201);
+      const staffToken = asSuccess<AuthPayload>(staffAuthRes.body).accessToken;
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(ctx.organizationId),
+        systemKey: 'STAFF',
+      });
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ email: staffEmail, roleId: String(staffRole?._id) })
+        .expect(201);
+
+      const topUpRes = await request(server)
+        .post('/api/v1/credit-balances/top-up')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ contactId: ctx.contactId, offerId: packageOfferId, credits: 5 })
+        .expect(403);
+      expect(asError(topUpRes.body).code).toBe('PERMISSION_DENIED');
+
+      await request(server)
+        .get('/api/v1/credit-balances')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
     });
   });
 });

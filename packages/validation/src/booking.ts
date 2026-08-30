@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BOOKING_STATUSES } from "@korva/types";
+import { BOOKING_STATUSES, WAITLIST_ENTRY_STATUSES } from "@korva/types";
 
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -83,3 +83,39 @@ export const listBookingsQuerySchema = z.object({
   to: z.string().datetime().optional(),
 });
 export type ListBookingsQuery = z.infer<typeof listBookingsQuerySchema>;
+
+export const createWaitlistEntrySchema = z
+  .object({
+    resourceId: z.string().min(1),
+    offerId: z.string().min(1),
+    contactId: z.string().min(1),
+    startAt: z.string().datetime(),
+    endAt: z.string().datetime(),
+    notes: z.string().max(2000).optional(),
+  })
+  .refine((w) => w.startAt < w.endAt, { message: "startAt must be before endAt" });
+export type CreateWaitlistEntryInput = z.infer<typeof createWaitlistEntrySchema>;
+
+export const listWaitlistEntriesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  resourceId: z.string().optional(),
+  contactId: z.string().optional(),
+  status: z.enum(WAITLIST_ENTRY_STATUSES).optional(),
+});
+export type ListWaitlistEntriesQuery = z.infer<typeof listWaitlistEntriesQuerySchema>;
+
+export const topUpCreditBalanceSchema = z.object({
+  contactId: z.string().min(1),
+  offerId: z.string().min(1),
+  credits: z.number().int().min(1),
+});
+export type TopUpCreditBalanceInput = z.infer<typeof topUpCreditBalanceSchema>;
+
+export const listCreditBalancesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  contactId: z.string().optional(),
+  offerId: z.string().optional(),
+});
+export type ListCreditBalancesQuery = z.infer<typeof listCreditBalancesQuerySchema>;

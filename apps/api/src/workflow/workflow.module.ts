@@ -23,6 +23,11 @@ import { CommunicationModule } from '../communication/communication.module';
 import { DecisionEngineModule } from '../decision-engine/decision-engine.module';
 import { CommerceModule } from '../commerce/commerce.module';
 import { WebhookSubscriptionsModule } from '../webhook-subscriptions/webhook-subscriptions.module';
+// For EventsProcessor's WaitlistService.handleBookingCancelled call — safe to import directly:
+// BookingModule has no dependency back on WorkflowModule (verified — CommerceModule already
+// imports BookingModule without circularity, but CommerceModule doesn't re-export
+// WaitlistService, hence importing BookingModule here too rather than relying on that chain).
+import { BookingModule } from '../booking/booking.module';
 
 @Module({
   imports: [
@@ -41,6 +46,7 @@ import { WebhookSubscriptionsModule } from '../webhook-subscriptions/webhook-sub
     // For EventsProcessor's WebhookDispatchService.dispatchEvent call — same no-reverse-edge
     // safety check (WebhookSubscriptionsModule has no dependency back on WorkflowModule).
     WebhookSubscriptionsModule,
+    BookingModule,
   ],
   controllers: [WorkflowsController],
   providers: [

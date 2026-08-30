@@ -25,10 +25,23 @@ interface BookingFormValues {
   endTime: string;
 }
 
+interface MemberOption {
+  id: string;
+  userId: { firstName?: string; lastName?: string; email: string };
+}
+
+function memberName(member: MemberOption): string {
+  return (
+    [member.userId.firstName, member.userId.lastName].filter(Boolean).join(" ") ||
+    member.userId.email
+  );
+}
+
 export default function BookingsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
+  const [staffFilter, setStaffFilter] = useState("");
   const authReady = useAuthReady();
 
   const { data: bookingsPage, isLoading } = useQuery({
@@ -38,10 +51,22 @@ export default function BookingsPage() {
   });
   const bookings = bookingsPage?.data;
   const { data: resources } = useQuery({
-    queryKey: ["resources"],
-    queryFn: () => apiClient.get<Resource[]>("/resources"),
+    queryKey: ["resources", staffFilter],
+    queryFn: () =>
+      apiClient.get<Resource[]>(
+        `/resources${staffFilter ? `?membershipId=${staffFilter}` : ""}`,
+      ),
     enabled: authReady,
   });
+  const { data: members } = useQuery({
+    queryKey: ["organizations", "me", "members"],
+    queryFn: () => apiClient.get<MemberOption[]>("/organizations/me/members"),
+    enabled: authReady,
+  });
+  function staffName(membershipId?: string): string {
+    const member = members?.find((m) => m.id === membershipId);
+    return member ? memberName(member) : "—";
+  }
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
@@ -111,6 +136,19 @@ export default function BookingsPage() {
           // dashboard/crm/page.tsx (F2-B.7) and dashboard/crm/leads/page.tsx (F2-B.8).
           className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4"
         >
+          <select
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+            value={staffFilter}
+            onChange={(e) => setStaffFilter(e.target.value)}
+          >
+            <option value="">Tous les praticiens</option>
+            {members?.map((member) => (
+              <option key={member.id} value={member.id}>
+                {memberName(member)}
+              </option>
+            ))}
+          </select>
+
           <div className="grid grid-cols-3 gap-2">
             <select
               className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
@@ -123,6 +161,7 @@ export default function BookingsPage() {
               {resources?.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
+                  {r.membershipId ? ` — ${staffName(r.membershipId)}` : ""}
                 </option>
               ))}
             </select>
@@ -189,6 +228,7 @@ export default function BookingsPage() {
             <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
               <tr>
                 <th className="px-4 py-2">Ressource</th>
+                <th className="px-4 py-2">Praticien</th>
                 <th className="px-4 py-2">Client</th>
                 <th className="px-4 py-2">Début</th>
                 <th className="px-4 py-2">Fin</th>
@@ -199,14 +239,14 @@ export default function BookingsPage() {
             <tbody className="divide-y divide-zinc-100">
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
                     Chargement...
                   </td>
                 </tr>
               )}
               {!isLoading && bookings?.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
                     Aucune réservation.
                   </td>
                 </tr>
@@ -220,6 +260,9 @@ export default function BookingsPage() {
                     >
                       {resourceName(booking.resourceId)}
                     </Link>
+                  </td>
+                  <td className="px-4 py-2 text-zinc-600">
+                    {staffName(booking.staffMembershipId)}
                   </td>
                   <td className="px-4 py-2 text-zinc-600">{contactName(booking.contactId)}</td>
                   <td className="px-4 py-2 text-zinc-600">{new Date(booking.startAt).toLocaleString()}</td>

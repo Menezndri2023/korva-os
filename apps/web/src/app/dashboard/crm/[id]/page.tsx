@@ -25,9 +25,11 @@ import type {
   Contact,
   Conversation,
   ContactTimeline,
+  CreditBalance,
   Invoice,
   Lead,
   Note,
+  Offer,
   Order,
   Quote,
   Task,
@@ -99,6 +101,19 @@ export default function ContactDetailPage() {
     queryFn: () => apiClient.get<Booking[]>(`/bookings?contactId=${id}`),
     enabled: authReady,
   });
+  const creditBalancesQuery = useQuery({
+    queryKey: ["credit-balances", "contact", id],
+    queryFn: () => apiClient.get<CreditBalance[]>(`/credit-balances?contactId=${id}`),
+    enabled: authReady,
+  });
+  const { data: packageOffers } = useQuery({
+    queryKey: ["offers", "package"],
+    queryFn: () => apiClient.get<Offer[]>("/offers?type=package"),
+    enabled: authReady,
+  });
+  function packageOfferName(offerId: string): string {
+    return packageOffers?.find((o) => o.id === offerId)?.name ?? "—";
+  }
   const invoicesQuery = useQuery({
     queryKey: ["invoices", "contact", id],
     queryFn: () => apiClient.get<Invoice[]>(`/invoices?contactId=${id}`),
@@ -552,6 +567,19 @@ export default function ContactDetailPage() {
             <div className="flex items-center justify-between">
               <span>{new Date(booking.startAt).toLocaleString("fr-FR")}</span>
               <Badge>{booking.status}</Badge>
+            </div>
+          )}
+        />
+        <RelationSection<CreditBalance>
+          title="Forfaits"
+          query={creditBalancesQuery}
+          emptyLabel="Aucun forfait."
+          renderItem={(balance) => (
+            <div className="flex items-center justify-between">
+              <span>{packageOfferName(balance.offerId)}</span>
+              <span>
+                {balance.remainingCredits} / {balance.totalCredits} séances
+              </span>
             </div>
           )}
         />

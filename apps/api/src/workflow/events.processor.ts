@@ -12,6 +12,7 @@ import { WorkflowEngineService } from './workflow-engine.service';
 import { DecisionEngineService } from '../decision-engine/decision-engine.service';
 import { OrdersService } from '../commerce/orders/orders.service';
 import { WebhookDispatchService } from '../webhook-subscriptions/webhook-dispatch.service';
+import { WaitlistService } from '../booking/waitlist/waitlist.service';
 
 /**
  * Consumes the 'events' queue and hands each event to both the WorkflowEngine (user-configured
@@ -24,8 +25,10 @@ import { WebhookDispatchService } from '../webhook-subscriptions/webhook-dispatc
  *
  * Also reacts to `payment.completed` specifically to sync `Booking.paymentStatus` — see
  * OrdersService.syncBookingPaymentStatusFromInvoice's own doc for why this lives there rather
- * than as a fourth standalone engine — and dispatches EVERY event to this organization's
- * external webhook subscriptions (see WebhookDispatchService's own doc).
+ * than as a fourth standalone engine — reacts to `booking.cancelled` to notify the next waiting
+ * contact if a freed slot matches their WaitlistEntry (see WaitlistService.handleBookingCancelled)
+ * — and dispatches EVERY event to this organization's external webhook subscriptions (see
+ * WebhookDispatchService's own doc).
  */
 @Injectable()
 export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
@@ -39,6 +42,7 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     private readonly decisionEngineService: DecisionEngineService,
     private readonly ordersService: OrdersService,
     private readonly webhookDispatchService: WebhookDispatchService,
+    private readonly waitlistService: WaitlistService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -81,6 +85,17 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
               this.ordersService.syncBookingPaymentStatusFromInvoice(
                 job.data.organizationId,
                 invoiceId,
+              ),
+            );
+          }
+        }
+        if (job.data.name === 'booking.cancelled') {
+          const bookingId = job.data.payload.bookingId;
+          if (typeof bookingId === 'string') {
+            tasks.push(
+              this.waitlistService.handleBookingCancelled(
+                job.data.organizationId,
+                bookingId,
               ),
             );
           }

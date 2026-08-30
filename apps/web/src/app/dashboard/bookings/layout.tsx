@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/dashboard/bookings", label: "Réservations" },
   { href: "/dashboard/bookings/resources", label: "Ressources" },
+  { href: "/dashboard/bookings/waitlist", label: "Liste d'attente" },
+  { href: "/dashboard/bookings/packages", label: "Forfaits" },
 ];
 
 export default function BookingsLayout({ children }: { children: React.ReactNode }) {

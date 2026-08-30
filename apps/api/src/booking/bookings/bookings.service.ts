@@ -24,6 +24,7 @@ import { EventBusService } from '../../core/events/event-bus.service';
 import { ConversationsService } from '../../communication/conversations/conversations.service';
 import { sendWithChannelFallback } from '../../communication/notify-contact-with-fallback';
 import { interpolate } from '../../shared/template';
+import { CreditBalancesService } from '../credit-balances/credit-balances.service';
 
 const COMPLETION_MESSAGE =
   'Bonjour {{contact.firstName}}, félicitations pour avoir terminé la formation « {{offer.name}} » ! Merci pour votre participation.';
@@ -40,6 +41,7 @@ export class BookingsService {
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
     private readonly conversationsService: ConversationsService,
+    private readonly creditBalancesService: CreditBalancesService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
@@ -349,6 +351,15 @@ export class BookingsService {
           `Booking completion: failed to send confirmation for booking ${id}`,
           error,
         ),
+      );
+
+      // Best-effort, and only on an actual attendance — a no-show shouldn't consume a prepaid
+      // session credit. No-op when the offer isn't a 'package' (checked inside the service
+      // itself, so every other vertical's completion flow pays no cost for this).
+      await this.creditBalancesService.decrementForBookingCompletion(
+        organizationId,
+        updated.contactId.toString(),
+        updated.offerId.toString(),
       );
     }
 

@@ -82,3 +82,37 @@ export interface DayAvailability {
   bookings: { startAt: string; endAt: string }[];
   capacity: number;
 }
+
+export const WAITLIST_ENTRY_STATUSES = ["waiting", "notified", "cancelled"] as const;
+export type WaitlistEntryStatus = (typeof WAITLIST_ENTRY_STATUSES)[number];
+
+export interface WaitlistEntry {
+  id: string;
+  organizationId: string;
+  resourceId: string;
+  offerId: string;
+  contactId: string;
+  startAt: string;
+  endAt: string;
+  status: WaitlistEntryStatus;
+  notifiedAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Tracks a contact's remaining sessions against a `package`-type Offer (e.g. a 10-session
+ *  massage pass). Topped up when a package is sold, decremented when a Booking for that same
+ *  offer is completed with `attended: true` — see CreditBalancesService. One balance per
+ *  (organizationId, contactId, offerId) triple; buying another pack adds to it rather than
+ *  creating a second row. */
+export interface CreditBalance {
+  id: string;
+  organizationId: string;
+  contactId: string;
+  offerId: string;
+  totalCredits: number;
+  remainingCredits: number;
+  createdAt: string;
+  updatedAt: string;
+}

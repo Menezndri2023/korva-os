@@ -3,6 +3,14 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { Resource, ResourceSchema } from './resources/schemas/resource.schema';
 import { Booking, BookingSchema } from './bookings/schemas/booking.schema';
+import {
+  WaitlistEntry,
+  WaitlistEntrySchema,
+} from './waitlist/schemas/waitlist-entry.schema';
+import {
+  CreditBalance,
+  CreditBalanceSchema,
+} from './credit-balances/schemas/credit-balance.schema';
 
 import { ResourcesRepository } from './resources/resources.repository';
 import { ResourcesService } from './resources/resources.service';
@@ -16,6 +24,14 @@ import { BookingReminderSchedulerService } from './bookings/booking-reminder-sch
 import { AvailabilityService } from './availability/availability.service';
 import { AvailabilityController } from './availability/availability.controller';
 import { CalendarSyncSchedulerService } from './resources/calendar-sync-scheduler.service';
+
+import { WaitlistRepository } from './waitlist/waitlist.repository';
+import { WaitlistService } from './waitlist/waitlist.service';
+import { WaitlistController } from './waitlist/waitlist.controller';
+
+import { CreditBalancesRepository } from './credit-balances/credit-balances.repository';
+import { CreditBalancesService } from './credit-balances/credit-balances.service';
+import { CreditBalancesController } from './credit-balances/credit-balances.controller';
 
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -40,6 +56,8 @@ import { DocumentsModule } from '../documents/documents.module';
     MongooseModule.forFeature([
       { name: Resource.name, schema: ResourceSchema },
       { name: Booking.name, schema: BookingSchema },
+      { name: WaitlistEntry.name, schema: WaitlistEntrySchema },
+      { name: CreditBalance.name, schema: CreditBalanceSchema },
     ]),
     CrmModule,
     CatalogModule,
@@ -53,6 +71,8 @@ import { DocumentsModule } from '../documents/documents.module';
     ResourcesController,
     AvailabilityController,
     BookingsController,
+    WaitlistController,
+    CreditBalancesController,
   ],
   providers: [
     ResourcesRepository,
@@ -62,7 +82,17 @@ import { DocumentsModule } from '../documents/documents.module';
     BookingsService,
     CalendarSyncSchedulerService,
     BookingReminderSchedulerService,
+    WaitlistRepository,
+    WaitlistService,
+    CreditBalancesRepository,
+    CreditBalancesService,
   ],
-  exports: [BookingsService, AvailabilityService, ResourcesService],
+  exports: [
+    BookingsService,
+    AvailabilityService,
+    ResourcesService,
+    WaitlistService,
+    CreditBalancesService,
+  ],
 })
 export class BookingModule {}

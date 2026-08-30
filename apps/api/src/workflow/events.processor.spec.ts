@@ -4,6 +4,7 @@ import type { WorkflowEngineService } from './workflow-engine.service';
 import type { DecisionEngineService } from '../decision-engine/decision-engine.service';
 import type { OrdersService } from '../commerce/orders/orders.service';
 import type { WebhookDispatchService } from '../webhook-subscriptions/webhook-dispatch.service';
+import type { WaitlistService } from '../booking/waitlist/waitlist.service';
 
 const workerOnMock = jest.fn();
 const workerCloseMock = jest.fn();
@@ -30,12 +31,14 @@ function buildService(): EventsProcessor {
   const decisionEngineService = {} as unknown as DecisionEngineService;
   const ordersService = {} as unknown as OrdersService;
   const webhookDispatchService = {} as unknown as WebhookDispatchService;
+  const waitlistService = {} as unknown as WaitlistService;
   return new EventsProcessor(
     configService,
     workflowEngineService,
     decisionEngineService,
     ordersService,
     webhookDispatchService,
+    waitlistService,
   );
 }
 
