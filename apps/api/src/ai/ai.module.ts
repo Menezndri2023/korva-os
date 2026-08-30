@@ -11,11 +11,13 @@ import {
   AiPendingAction,
   AiPendingActionSchema,
 } from './schemas/ai-pending-action.schema';
+import { AiUsageLog, AiUsageLogSchema } from './schemas/ai-usage-log.schema';
 import { Order, OrderSchema } from '../commerce/orders/schemas/order.schema';
 
 import { AiConversationsRepository } from './ai-conversations.repository';
 import { AiMessagesRepository } from './ai-messages.repository';
 import { AiPendingActionsRepository } from './ai-pending-actions.repository';
+import { AiUsageLogRepository } from './ai-usage-log.repository';
 import { AiContextBuilderService } from './ai-context-builder.service';
 import { AiToolsRegistryService } from './ai-tools-registry.service';
 import { AiOrchestratorService } from './ai-orchestrator.service';
@@ -68,6 +70,7 @@ import { DecisionEngineModule } from '../decision-engine/decision-engine.module'
       { name: AiConversation.name, schema: AiConversationSchema },
       { name: AiMessage.name, schema: AiMessageSchema },
       { name: AiPendingAction.name, schema: AiPendingActionSchema },
+      { name: AiUsageLog.name, schema: AiUsageLogSchema },
       { name: Order.name, schema: OrderSchema },
     ]),
     ConfigModule,
@@ -87,6 +90,7 @@ import { DecisionEngineModule } from '../decision-engine/decision-engine.module'
     AiConversationsRepository,
     AiMessagesRepository,
     AiPendingActionsRepository,
+    AiUsageLogRepository,
     AiContextBuilderService,
     AiToolsRegistryService,
     AiOrchestratorService,

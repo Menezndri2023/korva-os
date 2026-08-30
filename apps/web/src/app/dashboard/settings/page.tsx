@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KORVA_MODULES, STOREFRONT_SECTIONS, SYSTEM_EVENTS } from "@korva/types";
 import type {
+  AiUsageSummary,
   ConnectMessagingAccountInput,
   ConnectPaymentPayoutInput,
   IntegrationAccountStatus,
@@ -31,6 +32,7 @@ import {
 import { Badge, Button, Input, Select } from "@korva/ui";
 import type { BadgeVariant } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { formatCurrency } from "@/lib/analytics-format";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthStore } from "@/lib/auth-store";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -189,6 +191,18 @@ export default function SettingsPage() {
     queryFn: () => apiClient.get<Plan[]>("/plans"),
     enabled: authReady,
   });
+  // settings.manage-gated (see ai.controller.ts) — non-admin members get PERMISSION_DENIED,
+  // handled below the same way the Intégrations section handles it.
+  const {
+    data: aiUsage,
+    error: aiUsageError,
+  } = useQuery({
+    queryKey: ["ai", "usage-summary"],
+    queryFn: () => apiClient.get<AiUsageSummary>("/ai/usage-summary"),
+    enabled: authReady,
+  });
+  const aiUsagePermissionDenied =
+    aiUsageError instanceof ApiError && aiUsageError.code === "PERMISSION_DENIED";
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const {
@@ -749,6 +763,21 @@ export default function SettingsPage() {
                   ? changePlanMutation.error.message
                   : "Erreur"}
               </p>
+            )}
+
+            {aiUsage && !aiUsagePermissionDenied && (
+              <div className="border-t border-border pt-4">
+                <div className="mb-1 flex justify-between text-xs text-text-muted">
+                  <span>Coût IA ce mois-ci ({aiUsage.period})</span>
+                  <span>{formatCurrency(aiUsage.costUsd, "USD")}</span>
+                </div>
+                <p className="text-xs text-text-muted">
+                  {(aiUsage.inputTokens + aiUsage.outputTokens).toLocaleString("fr-FR")} tokens
+                  {aiUsage.unpricedCalls > 0 && (
+                    <> · {aiUsage.unpricedCalls} appel{aiUsage.unpricedCalls > 1 ? "s" : ""} non tarifé{aiUsage.unpricedCalls > 1 ? "s" : ""}</>
+                  )}
+                </p>
+              </div>
             )}
 
             <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">

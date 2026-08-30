@@ -1549,6 +1549,169 @@ describe('AI module (e2e)', () => {
   });
 });
 
+/**
+ * Token/cost tracking (docs/BUSINESS_OS_AUDIT.md §7): each real model call the orchestrator
+ * makes should produce one AiUsageLog row, and GET /ai/usage-summary should aggregate them for
+ * the current month. Each sub-describe boots its own app with a provider double fixing a
+ * specific `model` string, since the real AIProvider is a singleton per app and this needs two
+ * different model strings (one priced, one not) to prove both branches of estimateCostUsd.
+ */
+describe('AI usage/cost tracking', () => {
+  class FixedModelAIProvider implements AIProvider {
+    readonly name = 'fixed-model-scripted';
+    constructor(readonly model: string) {}
+    chat(): Promise<AiChatResult> {
+      return Promise.resolve({
+        type: 'text',
+        text: 'Bonjour',
+        usage: { inputTokens: 1000, outputTokens: 2000 },
+      });
+    }
+  }
+
+  async function registerOrgWithAi(
+    server: App,
+    email: string,
+    orgName: string,
+  ) {
+    const authRes = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    const accessToken = asSuccess<AuthPayload>(authRes.body).accessToken;
+    const orgRes = await request(server)
+      .post('/api/v1/organizations')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        name: orgName,
+        type: 'services',
+        country: 'FR',
+        currency: 'EUR',
+        timezone: 'Europe/Paris',
+        language: 'fr',
+      })
+      .expect(201);
+    const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ enabledModules: ['ai'] })
+      .expect(200);
+    return { accessToken, organizationId };
+  }
+
+  describe('with a priced model', () => {
+    let app: INestApplication<App>;
+    let server: App;
+
+    beforeAll(async () => {
+      const moduleFixture: TestingModule = await Test.createTestingModule({
+        imports: [AppModule],
+      })
+        .overrideProvider(AI_PROVIDER)
+        .useValue(new FixedModelAIProvider('claude-sonnet-5'))
+        .compile();
+      app = moduleFixture.createNestApplication();
+      app.setGlobalPrefix('api/v1');
+      await app.init();
+      server = app.getHttpServer();
+    });
+
+    afterAll(async () => {
+      await app.close();
+    });
+
+    it('logs inputTokens/outputTokens/costUsd and surfaces the total via the summary endpoint', async () => {
+      const { accessToken, organizationId } = await registerOrgWithAi(
+        server,
+        'ai-usage-priced@korva.test',
+        'AI Usage Priced Org',
+      );
+
+      await request(server)
+        .post('/api/v1/ai/chat')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ message: 'Bonjour' })
+        .expect(201);
+
+      const summaryRes = await request(server)
+        .get('/api/v1/ai/usage-summary')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const summary = asSuccess<{
+        period: string;
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number;
+        unpricedCalls: number;
+      }>(summaryRes.body);
+
+      expect(summary.period).toBe(new Date().toISOString().slice(0, 7));
+      expect(summary.inputTokens).toBe(1000);
+      expect(summary.outputTokens).toBe(2000);
+      expect(summary.costUsd).toBeCloseTo((1000 * 2 + 2000 * 10) / 1_000_000);
+      expect(summary.unpricedCalls).toBe(0);
+    });
+  });
+
+  describe('with an unrecognized model string', () => {
+    let app: INestApplication<App>;
+    let server: App;
+
+    beforeAll(async () => {
+      const moduleFixture: TestingModule = await Test.createTestingModule({
+        imports: [AppModule],
+      })
+        .overrideProvider(AI_PROVIDER)
+        .useValue(new FixedModelAIProvider('some-future-unreleased-model'))
+        .compile();
+      app = moduleFixture.createNestApplication();
+      app.setGlobalPrefix('api/v1');
+      await app.init();
+      server = app.getHttpServer();
+    });
+
+    afterAll(async () => {
+      await app.close();
+    });
+
+    it('logs tokens with a null cost rather than a guessed figure, and counts it as unpriced', async () => {
+      const { accessToken, organizationId } = await registerOrgWithAi(
+        server,
+        'ai-usage-unpriced@korva.test',
+        'AI Usage Unpriced Org',
+      );
+
+      await request(server)
+        .post('/api/v1/ai/chat')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ message: 'Bonjour' })
+        .expect(201);
+
+      const summaryRes = await request(server)
+        .get('/api/v1/ai/usage-summary')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const summary = asSuccess<{
+        inputTokens: number;
+        outputTokens: number;
+        costUsd: number;
+        unpricedCalls: number;
+      }>(summaryRes.body);
+
+      expect(summary.inputTokens).toBe(1000);
+      expect(summary.outputTokens).toBe(2000);
+      expect(summary.costUsd).toBe(0);
+      expect(summary.unpricedCalls).toBe(1);
+    });
+  });
+});
+
 describe('AI module (e2e) — default NullAIProvider (no AI_API_KEY)', () => {
   let app: INestApplication<App>;
   let server: App;

@@ -93,4 +93,13 @@ export class AiController {
     await this.aiOrchestratorService.rejectAction(tenant.organizationId, id);
     return { rejected: true };
   }
+
+  /** Token/cost totals are financial information, not a day-to-day chat capability — gated like
+   *  every other settings/billing-adjacent read in this codebase (see organizations.controller.ts,
+   *  webhook-subscriptions.controller.ts). */
+  @RequirePermissions('settings.manage')
+  @Get('usage-summary')
+  getUsageSummary(@CurrentTenant() tenant: TenantContext) {
+    return this.aiOrchestratorService.getUsageSummary(tenant.organizationId);
+  }
 }

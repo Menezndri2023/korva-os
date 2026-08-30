@@ -3,6 +3,7 @@ import type {
   AIProvider,
   AiChatMessage,
   AiChatResult,
+  AiChatUsage,
   AiToolDefinition,
 } from './ai-provider.interface';
 
@@ -13,9 +14,15 @@ interface AnthropicContentBlock {
   name?: string;
   input?: Record<string, unknown>;
 }
+/** `usage` is always present on a real Messages API response — see
+ *  platform.claude.com/docs/en/about-claude/pricing for the documented shape (this codebase
+ *  doesn't use prompt caching or server-side tools, so only input_tokens/output_tokens are read;
+ *  cache_read_input_tokens/cache_creation_input_tokens/server_tool_use are real fields on the
+ *  response too but would only matter if those features were ever adopted here). */
 interface AnthropicResponse {
   content: AnthropicContentBlock[];
   stop_reason: string;
+  usage?: { input_tokens: number; output_tokens: number };
 }
 
 function toAnthropicMessages(messages: AiChatMessage[]): unknown[] {
@@ -57,7 +64,7 @@ export class AnthropicAIProvider implements AIProvider {
 
   constructor(
     private readonly apiKey: string,
-    private readonly model: string,
+    readonly model: string,
   ) {}
 
   async chat(input: {
@@ -97,6 +104,12 @@ export class AnthropicAIProvider implements AIProvider {
     }
 
     const data = (await response.json()) as AnthropicResponse;
+    const usage: AiChatUsage | undefined = data.usage
+      ? {
+          inputTokens: data.usage.input_tokens,
+          outputTokens: data.usage.output_tokens,
+        }
+      : undefined;
 
     if (data.stop_reason === 'tool_use') {
       const toolCalls = data.content
@@ -106,13 +119,13 @@ export class AnthropicAIProvider implements AIProvider {
           name: block.name!,
           input: block.input ?? {},
         }));
-      return { type: 'tool_calls', toolCalls };
+      return { type: 'tool_calls', toolCalls, usage };
     }
 
     const text = data.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n');
-    return { type: 'text', text };
+    return { type: 'text', text, usage };
   }
 }

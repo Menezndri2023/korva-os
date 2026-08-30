@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
@@ -9,6 +10,7 @@ import type { AiAgent } from '@korva/types';
 import { AiConversationsRepository } from './ai-conversations.repository';
 import { AiMessagesRepository } from './ai-messages.repository';
 import { AiPendingActionsRepository } from './ai-pending-actions.repository';
+import { AiUsageLogRepository } from './ai-usage-log.repository';
 import { AiConversationDocument } from './schemas/ai-conversation.schema';
 import { AiMessageDocument } from './schemas/ai-message.schema';
 import { AiPendingActionDocument } from './schemas/ai-pending-action.schema';
@@ -19,10 +21,12 @@ import {
   type AIProvider,
   type AiChatMessage,
   type AiChatToolCall,
+  type AiChatUsage,
 } from './providers/ai-provider.interface';
 import type { AiTool } from './tools/tool.interface';
 import { AuditService } from '../audit/audit.service';
 import { EntitlementsService } from '../subscriptions/entitlements.service';
+import { estimateCostUsd } from './ai-pricing.util';
 
 const MAX_TOOL_ITERATIONS = 5;
 
@@ -57,16 +61,60 @@ function toChatMessage(message: AiMessageDocument): AiChatMessage {
 
 @Injectable()
 export class AiOrchestratorService {
+  private readonly logger = new Logger(AiOrchestratorService.name);
+
   constructor(
     private readonly conversationsRepository: AiConversationsRepository,
     private readonly messagesRepository: AiMessagesRepository,
     private readonly pendingActionsRepository: AiPendingActionsRepository,
+    private readonly usageLogRepository: AiUsageLogRepository,
     private readonly contextBuilder: AiContextBuilderService,
     private readonly toolsRegistry: AiToolsRegistryService,
     private readonly auditService: AuditService,
     private readonly entitlementsService: EntitlementsService,
     @Inject(AI_PROVIDER) private readonly aiProvider: AIProvider,
   ) {}
+
+  /**
+   * Best-effort: a model call already happened and billed real money whether or not this write
+   * succeeds, so a logging failure must never surface as a chat-turn error (same "never throw"
+   * rule WebhookDispatchService.dispatchEvent follows for its own side-channel writes). `usage` is
+   * absent for providers that never call a real paid API (NullAIProvider, test doubles) — those
+   * calls are skipped entirely rather than logged as zero-cost rows.
+   */
+  private async recordUsage(
+    organizationId: string,
+    conversation: AiConversationDocument,
+    usage: AiChatUsage | undefined,
+  ): Promise<void> {
+    if (!usage) {
+      return;
+    }
+    const model = this.aiProvider.model;
+    if (!model) {
+      return;
+    }
+    try {
+      const costUsd = estimateCostUsd(
+        model,
+        usage.inputTokens,
+        usage.outputTokens,
+      );
+      await this.usageLogRepository.record({
+        organizationId,
+        conversationId: conversation.id as string,
+        agent: conversation.agent,
+        model,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        costUsd,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Erreur inconnue';
+      this.logger.error(`Failed to record AI usage log: ${message}`);
+    }
+  }
 
   private async getOrCreateConversation(
     organizationId: string,
@@ -140,6 +188,7 @@ export class AiOrchestratorService {
         messages: chatMessages,
         tools: availableTools.map((tool) => tool.definition),
       });
+      await this.recordUsage(organizationId, conversation, result.usage);
 
       if (result.type === 'text') {
         await this.messagesRepository.create({
@@ -266,6 +315,12 @@ export class AiOrchestratorService {
     userId: string,
   ): Promise<AiConversationDocument[]> {
     return this.conversationsRepository.findAllForUser(organizationId, userId);
+  }
+
+  /** Current calendar-month totals — same "YYYY-MM" period convention as EntitlementsService. */
+  getUsageSummary(organizationId: string) {
+    const period = new Date().toISOString().slice(0, 7);
+    return this.usageLogRepository.getMonthlySummary(organizationId, period);
   }
 
   async listMessages(

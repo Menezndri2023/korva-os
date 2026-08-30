@@ -81,6 +81,15 @@ describe("SettingsPage — Modules section (LOT F1)", () => {
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -223,6 +232,15 @@ describe("SettingsPage — Organization profile edit", () => {
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -366,6 +384,15 @@ describe("SettingsPage — storefront section visibility", () => {
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -415,6 +442,15 @@ describe("SettingsPage — storefront section visibility", () => {
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -457,6 +493,15 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve(roles);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -621,6 +666,15 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
       if (path === "/organizations/me/roles")
         return Promise.reject(new ApiError("NETWORK_ERROR", "Unable to reach the server"));
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -655,6 +709,15 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
         ]);
       if (path === "/organizations/me/roles") return Promise.resolve(roles);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -715,6 +778,15 @@ describe("SettingsPage — member role change and removal", () => {
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve(roles);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -839,6 +911,15 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve(integrationsResult());
       throw new Error(`unexpected GET ${path}`);
@@ -1131,6 +1212,15 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return new Promise(() => {});
       throw new Error(`unexpected GET ${path}`);
@@ -1149,6 +1239,15 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") {
         callCount += 1;
@@ -1173,6 +1272,15 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations")
         return Promise.reject(
@@ -1206,6 +1314,15 @@ describe("SettingsPage — embeddable widget snippet (docs/BUSINESS_OS_AUDIT.md 
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       throw new Error(`unexpected GET ${path}`);
@@ -1270,6 +1387,15 @@ describe("SettingsPage — outbound webhook subscriptions (docs/BUSINESS_OS_AUDI
       if (path === "/organizations/me/invitations") return Promise.resolve([]);
       if (path === "/organizations/me/roles") return Promise.resolve([]);
       if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
       if (path === "/plans") return Promise.resolve([]);
       if (path === "/organizations/me/integrations") return Promise.resolve([]);
       if (path === "/webhook-subscriptions") return Promise.resolve(subscriptionsList);
