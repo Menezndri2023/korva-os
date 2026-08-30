@@ -66,6 +66,11 @@ export default function BookingDetailPage() {
     mutationFn: () => apiClient.post(`/bookings/${id}/cancel`),
     onSuccess: invalidate,
   });
+  const completeMutation = useMutation({
+    mutationFn: (attended: boolean) =>
+      apiClient.post<Booking>(`/bookings/${id}/complete`, { attended }),
+    onSuccess: invalidate,
+  });
 
   const { register, handleSubmit, reset } = useForm<RescheduleFormValues>();
   const rescheduleMutation = useMutation({
@@ -91,7 +96,12 @@ export default function BookingDetailPage() {
     onSuccess: (order) => router.push(`/dashboard/orders/${order.id}`),
   });
 
-  const actionError = [cancelMutation, rescheduleMutation, createOrderMutation]
+  const actionError = [
+    cancelMutation,
+    rescheduleMutation,
+    createOrderMutation,
+    completeMutation,
+  ]
     .map((mutation) => mutation.error)
     .find((error) => error instanceof ApiError);
   const orderAlreadyExists =
@@ -179,6 +189,24 @@ export default function BookingDetailPage() {
                   {isRescheduling ? "Annuler la modification" : "Déplacer"}
                 </Button>
                 <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isRescheduling}
+                  loading={completeMutation.isPending && completeMutation.variables === true}
+                  onClick={() => completeMutation.mutate(true)}
+                >
+                  Marquer présent(e)
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={isRescheduling}
+                  loading={completeMutation.isPending && completeMutation.variables === false}
+                  onClick={() => completeMutation.mutate(false)}
+                >
+                  Marquer absent(e)
+                </Button>
+                <Button
                   variant="ghost"
                   size="sm"
                   disabled={isRescheduling}
@@ -228,6 +256,16 @@ export default function BookingDetailPage() {
                 {booking.reminderSentAt
                   ? `Envoyé le ${new Date(booking.reminderSentAt).toLocaleString("fr-FR")}`
                   : "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Présence</dt>
+              <dd className="mt-0.5">
+                {booking.attended === undefined
+                  ? "—"
+                  : booking.attended
+                    ? "Présent(e)"
+                    : "Absent(e)"}
               </dd>
             </div>
           </dl>

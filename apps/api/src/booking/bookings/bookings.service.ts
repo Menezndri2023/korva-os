@@ -1,11 +1,13 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
 import type {
+  CompleteBookingInput,
   CreateBookingInput,
   ListBookingsQuery,
   RescheduleBookingInput,
@@ -19,9 +21,17 @@ import { ContactsService } from '../../crm/contacts/contacts.service';
 import { OffersService } from '../../catalog/offers/offers.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { ConversationsService } from '../../communication/conversations/conversations.service';
+import { sendWithChannelFallback } from '../../communication/notify-contact-with-fallback';
+import { interpolate } from '../../shared/template';
+
+const COMPLETION_MESSAGE =
+  'Bonjour {{contact.firstName}}, félicitations pour avoir terminé la formation « {{offer.name}} » ! Merci pour votre participation.';
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
+
   constructor(
     private readonly bookingsRepository: BookingsRepository,
     private readonly availabilityService: AvailabilityService,
@@ -29,6 +39,7 @@ export class BookingsService {
     private readonly offersService: OffersService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    private readonly conversationsService: ConversationsService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
@@ -286,5 +297,84 @@ export class BookingsService {
     });
 
     return updated;
+  }
+
+  async complete(
+    organizationId: string,
+    userId: string,
+    id: string,
+    input: CompleteBookingInput,
+  ): Promise<BookingDocument> {
+    const booking = await this.getById(organizationId, id);
+    if (booking.status === 'cancelled' || booking.status === 'completed') {
+      throw new BadRequestException({
+        code: 'BOOKING_NOT_COMPLETABLE',
+        message: `Cannot complete a booking with status "${booking.status}"`,
+      });
+    }
+
+    const updated = await this.bookingsRepository.update(organizationId, id, {
+      status: 'completed',
+      attended: input.attended,
+    });
+    if (!updated) {
+      throw new NotFoundException({
+        code: 'BOOKING_NOT_FOUND',
+        message: 'Booking not found',
+      });
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'UPDATE',
+      entity: 'booking',
+      entityId: id,
+      metadata: { status: 'completed', attended: input.attended },
+    });
+
+    await this.eventBus.publish(organizationId, 'booking.completed', {
+      bookingId: id,
+      contactId: updated.contactId.toString(),
+      attended: input.attended,
+    });
+
+    if (input.attended) {
+      // Best-effort — a failed confirmation send must never fail the completion that already
+      // succeeded. Awaited (not fire-and-forget) so callers observe a consistent end state.
+      await this.sendCompletionMessage(organizationId, updated).catch((error) =>
+        this.logger.error(
+          `Booking completion: failed to send confirmation for booking ${id}`,
+          error,
+        ),
+      );
+    }
+
+    return updated;
+  }
+
+  private async sendCompletionMessage(
+    organizationId: string,
+    booking: BookingDocument,
+  ): Promise<void> {
+    const [offer, contact] = await Promise.all([
+      this.offersService.getById(organizationId, booking.offerId.toString()),
+      this.contactsService.getById(
+        organizationId,
+        booking.contactId.toString(),
+      ),
+    ]);
+    const body = interpolate(COMPLETION_MESSAGE, {
+      contact: { firstName: contact.firstName ?? '' },
+      offer: { name: offer.name },
+    });
+    await sendWithChannelFallback(
+      this.conversationsService,
+      this.logger,
+      organizationId,
+      booking.contactId.toString(),
+      body,
+      'Booking completion',
+    );
   }
 }

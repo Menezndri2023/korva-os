@@ -14,6 +14,7 @@ import { ConversationsService } from '../../communication/conversations/conversa
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
 import { interpolate } from '../../shared/template';
+import { sendWithChannelFallback } from '../../communication/notify-contact-with-fallback';
 
 export const BOOKING_REMINDER_QUEUE_NAME = 'booking-reminder';
 export const BOOKING_REMINDER_JOB_NAME = 'sweep';
@@ -29,16 +30,6 @@ const JOB_OPTIONS = {
   removeOnComplete: { age: 24 * 3600, count: 1000 },
   removeOnFail: false,
 } as const;
-
-/** Extracts the `code` from a NestJS HttpException thrown as `new XException({ code, message })`
- *  — the shape every business error in this codebase uses (see ContactsService/ConversationsService
- *  etc.). Nest stores the constructor's body as `.response` on the thrown instance. */
-function errorCode(error: unknown): string | undefined {
-  const response = (error as { response?: unknown } | undefined)?.response;
-  return response && typeof response === 'object' && 'code' in response
-    ? String(response.code)
-    : undefined;
-}
 
 const DEFAULT_MESSAGE =
   'Bonjour {{contact.firstName}}, un rappel pour votre rendez-vous « {{offer.name}} » le {{booking.date}} à {{booking.heure}}. À bientôt !';
@@ -164,10 +155,13 @@ export class BookingReminderSchedulerService
         };
         const body = interpolate(DEFAULT_MESSAGE, payload);
 
-        const channel = await this.sendReminder(
+        const channel = await sendWithChannelFallback(
+          this.conversationsService,
+          this.logger,
           organizationId,
           candidate.contactId.toString(),
           body,
+          'Booking reminder',
         );
         if (!channel) {
           skipped += 1;
@@ -205,44 +199,6 @@ export class BookingReminderSchedulerService
     this.logger.log(
       `Booking reminder sweep finished: candidates=${candidates.length} sent=${sent} skipped=${skipped}`,
     );
-  }
-
-  /** Tries WhatsApp first, falls back to email on a missing-consent rejection, and gives up
-   *  (returning undefined) if neither channel can reach this contact — never throws, so one
-   *  contact's channel gap never aborts the sweep. Returns the channel actually used. */
-  private async sendReminder(
-    organizationId: string,
-    contactId: string,
-    body: string,
-  ): Promise<'whatsapp' | 'email' | undefined> {
-    for (const channel of ['whatsapp', 'email'] as const) {
-      try {
-        const conversation =
-          await this.conversationsService.findOrCreateForContactAndChannel(
-            organizationId,
-            contactId,
-            channel,
-          );
-        await this.conversationsService.sendMessage(
-          organizationId,
-          undefined,
-          conversation.id as string,
-          { body },
-        );
-        return channel;
-      } catch (error) {
-        // WHATSAPP_CONSENT_MISSING / CONTACT_HAS_NO_PHONE / CONTACT_HAS_NO_EMAIL /
-        // WHATSAPP_NOT_CONNECTED are all expected "this channel doesn't work right now" outcomes
-        // — fall through to the next channel (or give up after email) rather than treating them
-        // as sweep failures. Any other, genuinely unexpected error also falls through, which is
-        // the intended best-effort behavior — one contact's channel gap must never abort the
-        // sweep for every other candidate.
-        this.logger.warn(
-          `Booking reminder: ${channel} send failed for contact ${contactId} (${errorCode(error) ?? 'unknown error'}), trying next channel`,
-        );
-      }
-    }
-    return undefined;
   }
 
   private isEnabled(): boolean {

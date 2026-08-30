@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -35,6 +35,7 @@ interface BookingPayload {
   status: string;
   startAt: string;
   endAt: string;
+  attended?: boolean;
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -482,6 +483,252 @@ describe('Booking module (e2e)', () => {
       expect(forSlot[0]!.id).toBe(
         asSuccess<BookingPayload>(succeeded[0]!.body).id,
       );
+    });
+  });
+
+  describe('completing bookings (attendance)', () => {
+    async function registerOrgContactOfferWithCommunication(
+      email: string,
+      orgName: string,
+    ) {
+      const ctx = await registerOrgContactOffer(email, orgName);
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          enabledModules: ['crm', 'catalog', 'booking', 'communication'],
+        })
+        .expect(200);
+
+      await request(server)
+        .patch(`/api/v1/contacts/${ctx.contactId}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ email: 'completion-contact@korva.test' })
+        .expect(200);
+
+      return ctx;
+    }
+
+    async function createConfirmedBooking(
+      accessToken: string,
+      organizationId: string,
+      contactId: string,
+      offerId: string,
+    ): Promise<BookingPayload> {
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: `Room ${Math.random()}`,
+          type: 'room',
+          capacity: 1,
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      const bookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          resourceId,
+          offerId,
+          contactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      return asSuccess<BookingPayload>(bookingRes.body);
+    }
+
+    it('completing with attended:true transitions to completed, sets attended, and sends a confirmation message', async () => {
+      const ctx = await registerOrgContactOfferWithCommunication(
+        'complete-attended-owner@korva.test',
+        'Complete Attended Org',
+      );
+      const booking = await createConfirmedBooking(
+        ctx.accessToken,
+        ctx.organizationId,
+        ctx.contactId,
+        ctx.offerId,
+      );
+
+      const res = await request(server)
+        .post(`/api/v1/bookings/${booking.id}/complete`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: true })
+        .expect(201);
+      const completed = asSuccess<BookingPayload>(res.body);
+      expect(completed.status).toBe('completed');
+      expect(completed.attended).toBe(true);
+
+      const conversationsRes = await request(server)
+        .get('/api/v1/conversations')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      const conversations = asSuccess<{ channel: string; contactId: string }[]>(
+        conversationsRes.body,
+      );
+      expect(
+        conversations.some(
+          (c) => c.channel === 'email' && c.contactId === ctx.contactId,
+        ),
+      ).toBe(true);
+    });
+
+    it('completing with attended:false transitions to completed, sets attended false, and sends no message', async () => {
+      const ctx = await registerOrgContactOfferWithCommunication(
+        'complete-absent-owner@korva.test',
+        'Complete Absent Org',
+      );
+      const booking = await createConfirmedBooking(
+        ctx.accessToken,
+        ctx.organizationId,
+        ctx.contactId,
+        ctx.offerId,
+      );
+
+      const res = await request(server)
+        .post(`/api/v1/bookings/${booking.id}/complete`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: false })
+        .expect(201);
+      const completed = asSuccess<BookingPayload>(res.body);
+      expect(completed.status).toBe('completed');
+      expect(completed.attended).toBe(false);
+
+      const conversationsRes = await request(server)
+        .get('/api/v1/conversations')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      const conversations = asSuccess<{ channel: string; contactId: string }[]>(
+        conversationsRes.body,
+      );
+      expect(conversations.some((c) => c.contactId === ctx.contactId)).toBe(
+        false,
+      );
+    });
+
+    it('rejects completing an already-completed or cancelled booking, and rejects cancelling/rescheduling a completed one', async () => {
+      const ctx = await registerOrgContactOfferWithCommunication(
+        'complete-guard-owner@korva.test',
+        'Complete Guard Org',
+      );
+      const booking = await createConfirmedBooking(
+        ctx.accessToken,
+        ctx.organizationId,
+        ctx.contactId,
+        ctx.offerId,
+      );
+
+      await request(server)
+        .post(`/api/v1/bookings/${booking.id}/complete`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: true })
+        .expect(201);
+
+      const alreadyCompletedRes = await request(server)
+        .post(`/api/v1/bookings/${booking.id}/complete`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: true })
+        .expect(400);
+      expect(asError(alreadyCompletedRes.body).code).toBe(
+        'BOOKING_NOT_COMPLETABLE',
+      );
+
+      // Non-regression: existing guards on a now-completed booking still hold.
+      const cancelRes = await request(server)
+        .post(`/api/v1/bookings/${booking.id}/cancel`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(400);
+      expect(asError(cancelRes.body).code).toBe('BOOKING_NOT_CANCELLABLE');
+
+      const rescheduleRes = await request(server)
+        .post(`/api/v1/bookings/${booking.id}/reschedule`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          startAt: `${monday}T14:00:00.000Z`,
+          endAt: `${monday}T15:00:00.000Z`,
+        })
+        .expect(400);
+      expect(asError(rescheduleRes.body).code).toBe(
+        'BOOKING_NOT_RESCHEDULABLE',
+      );
+
+      const cancelledBooking = await createConfirmedBooking(
+        ctx.accessToken,
+        ctx.organizationId,
+        ctx.contactId,
+        ctx.offerId,
+      );
+      await request(server)
+        .post(`/api/v1/bookings/${cancelledBooking.id}/cancel`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(201);
+      const completeCancelledRes = await request(server)
+        .post(`/api/v1/bookings/${cancelledBooking.id}/complete`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: true })
+        .expect(400);
+      expect(asError(completeCancelledRes.body).code).toBe(
+        'BOOKING_NOT_COMPLETABLE',
+      );
+    });
+
+    it('denies a STAFF member without bookings.update from completing a booking', async () => {
+      const ctx = await registerOrgContactOfferWithCommunication(
+        'complete-rbac-owner@korva.test',
+        'Complete RBAC Org',
+      );
+      const booking = await createConfirmedBooking(
+        ctx.accessToken,
+        ctx.organizationId,
+        ctx.contactId,
+        ctx.offerId,
+      );
+
+      const staffEmail = 'complete-rbac-staff@korva.test';
+      const staffAuthRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: staffEmail, password: 'password123' })
+        .expect(201);
+      const staffToken = asSuccess<AuthPayload>(staffAuthRes.body).accessToken;
+
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(ctx.organizationId),
+        systemKey: 'STAFF',
+      });
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ email: staffEmail, roleId: String(staffRole?._id) })
+        .expect(201);
+
+      const res = await request(server)
+        .post(`/api/v1/bookings/${booking.id}/complete`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: true })
+        .expect(403);
+      expect(asError(res.body).code).toBe('PERMISSION_DENIED');
     });
   });
 

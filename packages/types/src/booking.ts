@@ -60,6 +60,11 @@ export interface Booking {
   /** Set once BookingReminderSchedulerService has sent a reminder for this appointment — absent
    *  otherwise. Cleared on reschedule (the old reminder no longer applies to the new time). */
   reminderSentAt?: string;
+  /** Set when this booking is completed (status becomes 'completed') — whether this specific
+   *  contact actually showed up. Orthogonal to `status`: a group session has many Bookings
+   *  sharing one resource+time, and some attendees may be absent while the session still
+   *  happened. Absent (undefined) until completed. */
+  attended?: boolean;
   createdAt: string;
   updatedAt: string;
 }

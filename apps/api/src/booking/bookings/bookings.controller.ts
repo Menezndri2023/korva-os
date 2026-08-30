@@ -9,10 +9,12 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  completeBookingSchema,
   createBookingSchema,
   listBookingsQuerySchema,
   rescheduleBookingSchema,
   updateBookingSchema,
+  type CompleteBookingInput,
   type CreateBookingInput,
   type ListBookingsQuery,
   type RescheduleBookingInput,
@@ -104,5 +106,22 @@ export class BookingsController {
     @Param('id') id: string,
   ) {
     return this.bookingsService.cancel(tenant.organizationId, user.userId, id);
+  }
+
+  @RequirePermissions('bookings.update')
+  @Post(':id/complete')
+  complete(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(completeBookingSchema))
+    body: CompleteBookingInput,
+  ) {
+    return this.bookingsService.complete(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body,
+    );
   }
 }

@@ -57,6 +57,10 @@ export class Booking {
   /** See Booking.reminderSentAt in @korva/types for the field-level rationale. */
   @Prop({ type: Date })
   reminderSentAt?: Date;
+
+  /** See Booking.attended in @korva/types for the field-level rationale. */
+  @Prop({ type: Boolean })
+  attended?: boolean;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);

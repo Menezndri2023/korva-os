@@ -67,6 +67,11 @@ export const updateBookingSchema = z.object({
 });
 export type UpdateBookingInput = z.infer<typeof updateBookingSchema>;
 
+export const completeBookingSchema = z.object({
+  attended: z.boolean().default(true),
+});
+export type CompleteBookingInput = z.infer<typeof completeBookingSchema>;
+
 export const listBookingsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

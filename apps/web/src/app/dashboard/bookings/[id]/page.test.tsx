@@ -192,6 +192,65 @@ describe("BookingDetailPage", () => {
     expect(screen.queryByText("An order already exists for this booking")).not.toBeInTheDocument();
   });
 
+  it("marking a confirmed booking present calls POST /bookings/:id/complete with attended:true", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/bookings/booking-1") {
+        return Promise.resolve({ ...booking, status: "confirmed" as const });
+      }
+      return mockGetByPath(path);
+    });
+    postMock.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithProviders(<BookingDetailPage />);
+    await screen.findByRole("heading", { name: "Salle 1" });
+
+    await user.click(screen.getByRole("button", { name: "Marquer présent(e)" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/bookings/booking-1/complete", {
+        attended: true,
+      }),
+    );
+  });
+
+  it("marking a confirmed booking absent calls POST /bookings/:id/complete with attended:false", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/bookings/booking-1") {
+        return Promise.resolve({ ...booking, status: "confirmed" as const });
+      }
+      return mockGetByPath(path);
+    });
+    postMock.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithProviders(<BookingDetailPage />);
+    await screen.findByRole("heading", { name: "Salle 1" });
+
+    await user.click(screen.getByRole("button", { name: "Marquer absent(e)" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/bookings/booking-1/complete", {
+        attended: false,
+      }),
+    );
+  });
+
+  it("shows the Présence value once the booking has attended set", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/bookings/booking-1") {
+        return Promise.resolve({
+          ...booking,
+          status: "completed" as const,
+          attended: true,
+        });
+      }
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<BookingDetailPage />);
+    await screen.findByRole("heading", { name: "Salle 1" });
+
+    expect(screen.getByText("Présent(e)")).toBeInTheDocument();
+  });
+
   it("also shows 'Créer une commande' for a completed booking", async () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/bookings/booking-1") {
