@@ -24,6 +24,10 @@ export class Membership {
 
   @Prop({ type: String, enum: MEMBERSHIP_STATUSES, default: 'active' })
   status!: MembershipStatus;
+
+  /** See Membership.defaultHourlyRate in @korva/types for the field-level rationale. */
+  @Prop()
+  defaultHourlyRate?: number;
 }
 
 export const MembershipSchema = SchemaFactory.createForClass(Membership);

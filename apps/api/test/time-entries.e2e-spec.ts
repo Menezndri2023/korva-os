@@ -172,9 +172,9 @@ describe('Time Entries module (e2e)', () => {
       expect(asError(negRes.body).code).toBe('VALIDATION_ERROR');
     });
 
-    it('rejects a billable entry with no hourlyRate', async () => {
+    it('rejects a billable entry with no hourlyRate and no resolvable default (TIME_ENTRY_RATE_REQUIRED)', async () => {
       const res = await createEntryReq({ hourlyRate: undefined }).expect(400);
-      expect(asError(res.body).code).toBe('VALIDATION_ERROR');
+      expect(asError(res.body).code).toBe('TIME_ENTRY_RATE_REQUIRED');
     });
 
     it('allows a non-billable entry with no hourlyRate', async () => {
@@ -183,6 +183,59 @@ describe('Time Entries module (e2e)', () => {
         hourlyRate: undefined,
       }).expect(201);
       expect(asSuccess<TimeEntryPayload>(res.body).status).toBe('unbilled');
+    });
+
+    describe('default hourly rate resolution', () => {
+      it("uses the client's defaultHourlyRate when none is provided", async () => {
+        const rateContactRes = await request(server)
+          .post('/api/v1/contacts')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({
+            firstName: 'Rated',
+            lastName: 'Client',
+            defaultHourlyRate: 95,
+          })
+          .expect(201);
+        const ratedContactId = asSuccess<ContactPayload>(
+          rateContactRes.body,
+        ).id;
+
+        const res = await createEntryReq({
+          contactId: ratedContactId,
+          hourlyRate: undefined,
+        }).expect(201);
+        expect(asSuccess<TimeEntryPayload>(res.body).hourlyRate).toBe(95);
+      });
+
+      it("falls back to the caller's own default rate when the client has none", async () => {
+        // Member updates are id-addressed (no 'me' shortcut route), so the caller's own
+        // membership id has to be resolved via the members list first.
+        const membersRes = await request(server)
+          .get('/api/v1/organizations/me/members')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const members = asSuccess<
+          { id: string; userId: string | { id: string; email: string } }[]
+        >(membersRes.body);
+        const ownerMembership = members.find((m) =>
+          typeof m.userId === 'string'
+            ? true
+            : m.userId.email === 'time-entries-owner@korva.test',
+        );
+        if (!ownerMembership) throw new Error('Owner membership not found');
+
+        await request(server)
+          .patch(`/api/v1/organizations/me/members/${ownerMembership.id}/rate`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ defaultHourlyRate: 60 })
+          .expect(200);
+
+        const res = await createEntryReq({ hourlyRate: undefined }).expect(201);
+        expect(asSuccess<TimeEntryPayload>(res.body).hourlyRate).toBe(60);
+      });
     });
 
     it('lists and reads back the created entry', async () => {

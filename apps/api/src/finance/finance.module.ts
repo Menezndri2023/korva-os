@@ -43,6 +43,11 @@ import { CrmModule } from '../crm/crm.module';
 import { CountersModule } from '../core/counters/counters.module';
 import { AuditModule } from '../audit/audit.module';
 import { IntegrationWebhookModule } from '../integrations/webhooks/integration-webhook.module';
+// For MembershipsService (TimeEntriesService's staff-default-rate lookup). Safe: IdentityModule
+// imports neither FinanceModule nor anything that transitively does (verified by grepping every
+// `import { IdentityModule }` site — only Organizations/Subscriptions/Communication/AppModule —
+// before adding this edge, per this codebase's own "check the reverse edge first" convention).
+import { IdentityModule } from '../identity/identity.module';
 
 @Module({
   imports: [
@@ -58,6 +63,7 @@ import { IntegrationWebhookModule } from '../integrations/webhooks/integration-w
     CountersModule,
     AuditModule,
     IntegrationWebhookModule,
+    IdentityModule,
   ],
   controllers: [
     QuotesController,

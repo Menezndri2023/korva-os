@@ -342,6 +342,46 @@ export class OrganizationsService {
   }
 
   /**
+   * Sets a member's default hourly rate — pre-fills TimeEntry.hourlyRate for that staff member
+   * when a time entry omits one (see TimeEntriesService.create). Unlike updateMemberRole, this
+   * carries no privilege-hierarchy concern (a rate is a billing detail, not an access level), so
+   * the only guard needed is that the membership actually belongs to this organization.
+   */
+  async updateMemberRate(
+    organizationId: string,
+    actorUserId: string,
+    membershipId: string,
+    defaultHourlyRate: number,
+  ) {
+    const membership = await this.membershipsService.findByIdForOrganization(
+      membershipId,
+      organizationId,
+    );
+    if (!membership) {
+      throw new NotFoundException({
+        code: 'MEMBERSHIP_NOT_FOUND',
+        message: 'Membership not found',
+      });
+    }
+
+    const updated = await this.membershipsService.updateDefaultHourlyRate(
+      membershipId,
+      defaultHourlyRate,
+    );
+
+    await this.auditService.record({
+      organizationId,
+      userId: actorUserId,
+      action: 'UPDATE',
+      entity: 'membership',
+      entityId: membershipId,
+      metadata: { defaultHourlyRate },
+    });
+
+    return updated;
+  }
+
+  /**
    * Removes a member — a status change to 'suspended', never a delete (same revoke-not-delete
    * convention as invitations/integration accounts). Guards: an actor can never remove someone
    * who outranks them, can never remove themselves via this route (self-removal from the org

@@ -108,22 +108,21 @@ export const listExpensesQuerySchema = z.object({
 });
 export type ListExpensesQuery = z.infer<typeof listExpensesQuerySchema>;
 
-export const createTimeEntrySchema = z
-  .object({
-    contactId: z.string().min(1),
-    userId: z.string().min(1).optional(),
-    date: z.string().datetime(),
-    durationMinutes: z.number().int().positive().max(24 * 60),
-    description: z.string().min(1).max(300),
-    billable: z.boolean().default(true),
-    hourlyRate: z.number().positive().optional(),
-    currency: z.string().length(3),
-    notes: z.string().max(2000).optional(),
-  })
-  .refine((v) => v.billable === false || v.hourlyRate !== undefined, {
-    message: "hourlyRate is required for billable time entries",
-    path: ["hourlyRate"],
-  });
+// `hourlyRate` is optional even for a billable entry: when omitted, TimeEntriesService.create
+// resolves it server-side (the billed contact's defaultHourlyRate, then the staff member's own
+// default) and only rejects the request — TIME_ENTRY_RATE_REQUIRED — if neither exists. That
+// resolution needs a database read, so it can't live in this static Zod shape.
+export const createTimeEntrySchema = z.object({
+  contactId: z.string().min(1),
+  userId: z.string().min(1).optional(),
+  date: z.string().datetime(),
+  durationMinutes: z.number().int().positive().max(24 * 60),
+  description: z.string().min(1).max(300),
+  billable: z.boolean().default(true),
+  hourlyRate: z.number().positive().optional(),
+  currency: z.string().length(3),
+  notes: z.string().max(2000).optional(),
+});
 export type CreateTimeEntryInput = z.infer<typeof createTimeEntrySchema>;
 
 export const updateTimeEntrySchema = z.object({

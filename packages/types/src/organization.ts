@@ -68,6 +68,10 @@ export interface Membership {
   organizationId: string;
   roleId: string;
   status: MembershipStatus;
+  /** Fallback used by TimeEntriesService.create when neither the caller nor the billed
+   *  contact provides an hourlyRate — this staff member's own default billing rate.
+   *  Denominated in the organization's currency. */
+  defaultHourlyRate?: number;
 }
 
 export const INVITATION_STATUSES = ["pending", "accepted"] as const;

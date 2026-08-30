@@ -225,6 +225,7 @@ export default function ContactDetailPage() {
       company: contact.company,
       email: contact.email,
       phone: contact.phone,
+      defaultHourlyRate: contact.defaultHourlyRate,
     });
   }
   function cancelEdit() {
@@ -360,6 +361,12 @@ export default function ContactDetailPage() {
                   : contact.tags.map((tag) => <Badge key={tag}>{tag}</Badge>)}
               </dd>
             </div>
+            <div>
+              <dt className="text-text-muted">Taux horaire par défaut</dt>
+              <dd className="mt-0.5">
+                {contact.defaultHourlyRate != null ? `${contact.defaultHourlyRate}/h` : "—"}
+              </dd>
+            </div>
           </dl>
         ) : (
           <form
@@ -444,6 +451,23 @@ export default function ContactDetailPage() {
                 <Input id="company" className="w-full" {...registerEdit("company")} />
               </div>
             )}
+            <div>
+              <label
+                className="mb-1 block text-xs font-medium text-zinc-700"
+                htmlFor="defaultHourlyRate"
+              >
+                Taux horaire par défaut
+              </label>
+              <Input
+                id="defaultHourlyRate"
+                type="number"
+                step="0.01"
+                placeholder="Ex. 120"
+                {...registerEdit("defaultHourlyRate", {
+                  setValueAs: (value: string) => (value === "" ? undefined : Number(value)),
+                })}
+              />
+            </div>
             <div className="col-span-2">
               <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="tags">
                 Tags (séparés par des virgules)

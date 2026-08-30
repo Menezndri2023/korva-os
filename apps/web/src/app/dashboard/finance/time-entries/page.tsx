@@ -261,8 +261,10 @@ export default function TimeEntriesPage() {
           <Input
             type="number"
             step="0.01"
-            placeholder="Taux horaire"
-            {...register("hourlyRate", { valueAsNumber: true })}
+            placeholder="Taux horaire (auto si vide)"
+            {...register("hourlyRate", {
+              setValueAs: (value: string) => (value === "" ? undefined : Number(value)),
+            })}
           />
           <Input placeholder="Devise (EUR)" {...register("currency")} />
           {errors.hourlyRate && (

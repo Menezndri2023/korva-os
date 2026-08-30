@@ -254,6 +254,7 @@ interface MembershipPayload {
   userId: string | { id: string; email: string };
   roleId: string | { id: string; systemKey?: string };
   status: string;
+  defaultHourlyRate?: number;
 }
 
 /** Same email-capturing technique as password-reset.e2e-spec.ts — recovers the raw invitation
@@ -971,5 +972,92 @@ describe('Organizations — member role change and removal (e2e)', () => {
       .set('X-Organization-Id', orgB.id)
       .expect(404);
     expect(asError(res.body).code).toBe('MEMBERSHIP_NOT_FOUND');
+  });
+
+  /**
+   * PATCH /organizations/me/members/:id/rate — pre-fills TimeEntry.hourlyRate for a staff
+   * member (see time-entries.e2e-spec.ts's rate-resolution coverage). Unlike role changes, this
+   * carries no privilege-hierarchy invariant: any settings.manage holder can set any member's
+   * rate, including their own or an OWNER's.
+   */
+  it("an OWNER can set a member's default hourly rate", async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'member-rate-owner@korva.test',
+      'Member Rate Org',
+    );
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+    const { membershipId } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      staffRoleId,
+      'member-rate-staff@korva.test',
+    );
+
+    const res = await request(server)
+      .patch(`/api/v1/organizations/me/members/${membershipId}/rate`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ defaultHourlyRate: 85 })
+      .expect(200);
+    expect(asSuccess<MembershipPayload>(res.body).defaultHourlyRate).toBe(85);
+  });
+
+  it('rejects a non-positive default hourly rate', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'member-rate-invalid-owner@korva.test',
+      'Member Rate Invalid Org',
+    );
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+    const { membershipId } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      staffRoleId,
+      'member-rate-invalid-staff@korva.test',
+    );
+
+    const res = await request(server)
+      .patch(`/api/v1/organizations/me/members/${membershipId}/rate`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ defaultHourlyRate: 0 })
+      .expect(400);
+    expect(asError(res.body).code).toBe('VALIDATION_ERROR');
+  });
+
+  it('404s setting a rate on an unknown membership id', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'member-rate-missing-owner@korva.test',
+      'Member Rate Missing Org',
+    );
+
+    const res = await request(server)
+      .patch('/api/v1/organizations/me/members/000000000000000000000000/rate')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ defaultHourlyRate: 50 })
+      .expect(404);
+    expect(asError(res.body).code).toBe('MEMBERSHIP_NOT_FOUND');
+  });
+
+  it('denies a STAFF member (no settings.manage) from setting a rate', async () => {
+    const { accessToken, organization } = await registerOrgAndToken(
+      'member-rate-rbac-owner@korva.test',
+      'Member Rate RBAC Org',
+    );
+    const staffRoleId = await roleId(accessToken, organization.id, 'STAFF');
+    const { membershipId, memberToken: staffToken } = await addMemberWithRole(
+      accessToken,
+      organization.id,
+      staffRoleId,
+      'member-rate-rbac-staff@korva.test',
+    );
+
+    const res = await request(server)
+      .patch(`/api/v1/organizations/me/members/${membershipId}/rate`)
+      .set('Authorization', `Bearer ${staffToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ defaultHourlyRate: 50 })
+      .expect(403);
+    expect(asError(res.body).code).toBe('PERMISSION_DENIED');
   });
 });

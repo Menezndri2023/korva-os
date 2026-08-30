@@ -48,6 +48,7 @@ export class ContactsService {
       phone: input.phone,
       tags: input.tags,
       customFields,
+      defaultHourlyRate: input.defaultHourlyRate,
     });
 
     await this.auditService.record({

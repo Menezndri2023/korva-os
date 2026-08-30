@@ -11,10 +11,12 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   addMemberSchema,
   createOrganizationSchema,
+  updateMemberRateSchema,
   updateMemberRoleSchema,
   updateOrganizationSchema,
   type AddMemberInput,
   type CreateOrganizationInput,
+  type UpdateMemberRateInput,
   type UpdateMemberRoleInput,
   type UpdateOrganizationInput,
 } from '@korva/validation';
@@ -103,6 +105,23 @@ export class OrganizationsController {
       tenant.roleId,
       id,
       body.roleId,
+    );
+  }
+
+  @RequirePermissions('settings.manage')
+  @Patch('me/members/:id/rate')
+  updateMemberRate(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(updateMemberRateSchema))
+    body: UpdateMemberRateInput,
+  ) {
+    return this.organizationsService.updateMemberRate(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body.defaultHourlyRate,
     );
   }
 

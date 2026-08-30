@@ -20,6 +20,7 @@ import { ContactsService } from '../../crm/contacts/contacts.service';
 import { AuditService } from '../../audit/audit.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { InvoiceDocument } from '../invoices/schemas/invoice.schema';
+import { MembershipsService } from '../../identity/memberships/memberships.service';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -32,34 +33,67 @@ export class TimeEntriesService {
     private readonly contactsService: ContactsService,
     private readonly auditService: AuditService,
     private readonly invoicesService: InvoicesService,
+    private readonly membershipsService: MembershipsService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
+
+  /**
+   * Resolves the rate to bill when the caller didn't supply one explicitly: the client's own
+   * negotiated rate takes priority (Contact.defaultHourlyRate — more specific to this billing
+   * relationship than who happened to do the work), falling back to the staff member's own
+   * default (Membership.defaultHourlyRate for the resolved userId). A non-billable entry never
+   * needs a rate at all. Returns undefined when nothing resolves — the caller decides whether
+   * that's an error (it is, for a billable entry with no input.hourlyRate).
+   */
+  private async resolveHourlyRate(
+    organizationId: string,
+    userId: string,
+    contactDefaultRate: number | undefined,
+    inputRate: number | undefined,
+  ): Promise<number | undefined> {
+    if (inputRate !== undefined) return inputRate;
+    if (contactDefaultRate !== undefined) return contactDefaultRate;
+    const membership = await this.membershipsService.findByUserAndOrganization(
+      userId,
+      organizationId,
+    );
+    return membership?.defaultHourlyRate;
+  }
 
   async create(
     organizationId: string,
     callerUserId: string,
     input: CreateTimeEntryInput,
   ): Promise<TimeEntryDocument> {
-    const contactExists = await this.contactsService.existsById(
+    const contact = await this.contactsService.getById(
       organizationId,
       input.contactId,
     );
-    if (!contactExists) {
-      throw new NotFoundException({
-        code: 'CONTACT_NOT_FOUND',
-        message: 'Contact not found',
+
+    const userId = input.userId ?? callerUserId;
+    const hourlyRate = await this.resolveHourlyRate(
+      organizationId,
+      userId,
+      contact.defaultHourlyRate,
+      input.hourlyRate,
+    );
+    if (input.billable && hourlyRate === undefined) {
+      throw new BadRequestException({
+        code: 'TIME_ENTRY_RATE_REQUIRED',
+        message:
+          'No hourlyRate was provided and none could be resolved from the client or staff member defaults',
       });
     }
 
     const entry = await this.timeEntriesRepository.create({
       organizationId: new Types.ObjectId(organizationId),
       contactId: new Types.ObjectId(input.contactId),
-      userId: new Types.ObjectId(input.userId ?? callerUserId),
+      userId: new Types.ObjectId(userId),
       date: new Date(input.date),
       durationMinutes: input.durationMinutes,
       description: input.description,
       billable: input.billable,
-      hourlyRate: input.hourlyRate,
+      hourlyRate,
       currency: input.currency,
       notes: input.notes,
     });

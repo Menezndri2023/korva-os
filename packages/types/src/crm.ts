@@ -30,6 +30,10 @@ export interface Contact {
   tags: string[];
   customFields: CustomFieldValues;
   consents: ContactConsent[];
+  /** Pre-fills TimeEntry.hourlyRate when a time entry is logged for this client without an
+   *  explicit rate — see TimeEntriesService.create's resolution order (this contact's rate takes
+   *  priority over the staff member's own default). Denominated in the organization's currency. */
+  defaultHourlyRate?: number;
   createdAt: string;
   updatedAt: string;
 }

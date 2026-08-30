@@ -42,6 +42,7 @@ interface MemberRow {
   status: string;
   userId: { id: string; email: string; firstName?: string; lastName?: string };
   roleId: { id: string; name: string; systemKey?: string };
+  defaultHourlyRate?: number;
 }
 
 interface RoleOption {
@@ -296,6 +297,15 @@ export default function SettingsPage() {
   const updateMemberRoleMutation = useMutation({
     mutationFn: ({ id, roleId }: { id: string; roleId: string }) =>
       apiClient.patch<MemberRow>(`/organizations/me/members/${id}`, { roleId }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["organizations", "me", "members"] }),
+  });
+
+  // Pre-fills TimeEntry.hourlyRate for this member when a time entry omits one (see
+  // time-entries/page.tsx and TimeEntriesService.create's resolution order).
+  const updateMemberRateMutation = useMutation({
+    mutationFn: ({ id, defaultHourlyRate }: { id: string; defaultHourlyRate: number }) =>
+      apiClient.patch<MemberRow>(`/organizations/me/members/${id}/rate`, { defaultHourlyRate }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["organizations", "me", "members"] }),
   });
@@ -1035,6 +1045,34 @@ export default function SettingsPage() {
                         )}
                       </div>
                     )}
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+                    <label htmlFor={`rate-${member.id}`}>Taux horaire par défaut</label>
+                    <Input
+                      id={`rate-${member.id}`}
+                      type="number"
+                      step="0.01"
+                      className="h-7 w-24 py-1 text-xs"
+                      defaultValue={member.defaultHourlyRate ?? ""}
+                      disabled={
+                        updateMemberRateMutation.isPending &&
+                        updateMemberRateMutation.variables?.id === member.id
+                      }
+                      onBlur={(e) => {
+                        const value = e.target.value === "" ? undefined : Number(e.target.value);
+                        if (value !== undefined && value > 0 && value !== member.defaultHourlyRate) {
+                          updateMemberRateMutation.mutate({ id: member.id, defaultHourlyRate: value });
+                        }
+                      }}
+                    />
+                    {updateMemberRateMutation.isError &&
+                      updateMemberRateMutation.variables?.id === member.id && (
+                        <span className="text-destructive">
+                          {updateMemberRateMutation.error instanceof ApiError
+                            ? updateMemberRateMutation.error.message
+                            : "Erreur"}
+                        </span>
+                      )}
                   </div>
                   {roleChangeError && (
                     <p className="mt-1 text-xs text-destructive">

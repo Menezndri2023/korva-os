@@ -76,6 +76,16 @@ export class MembershipsService {
     return this.membershipsRepository.updateRole(id, roleId);
   }
 
+  updateDefaultHourlyRate(
+    id: string,
+    defaultHourlyRate: number,
+  ): Promise<MembershipDocument | null> {
+    return this.membershipsRepository.updateDefaultHourlyRate(
+      id,
+      defaultHourlyRate,
+    );
+  }
+
   updateStatus(
     id: string,
     status: MembershipDocument['status'],

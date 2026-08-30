@@ -6,16 +6,21 @@ import type { TimeEntryDocument } from './schemas/time-entry.schema';
 import type { ContactsService } from '../../crm/contacts/contacts.service';
 import type { AuditService } from '../../audit/audit.service';
 import type { InvoicesService } from '../invoices/invoices.service';
+import type { MembershipsService } from '../../identity/memberships/memberships.service';
 
 type TimeEntriesRepositoryMock = jest.Mocked<
-  Pick<TimeEntriesRepository, 'findByIds' | 'markInvoiced'>
+  Pick<TimeEntriesRepository, 'create' | 'findByIds' | 'markInvoiced'>
 >;
 type InvoicesServiceMock = jest.Mocked<
   Pick<InvoicesService, 'createFromTimeEntries'>
 >;
 
 function buildTimeEntriesRepositoryMock(): TimeEntriesRepositoryMock {
-  return { findByIds: jest.fn(), markInvoiced: jest.fn() };
+  return {
+    create: jest.fn().mockResolvedValue({ id: 'entry-1' }),
+    findByIds: jest.fn(),
+    markInvoiced: jest.fn(),
+  };
 }
 function buildInvoicesServiceMock(): InvoicesServiceMock {
   return { createFromTimeEntries: jest.fn() };
@@ -71,28 +76,44 @@ function makeEntry(
   } as unknown as TimeEntryDocument;
 }
 
+function buildService(overrides?: {
+  timeEntries?: TimeEntriesRepositoryMock;
+  invoices?: InvoicesServiceMock;
+  contacts?: { existsById: jest.Mock; getById: jest.Mock };
+  memberships?: { findByUserAndOrganization: jest.Mock };
+}) {
+  const timeEntriesRepository =
+    overrides?.timeEntries ?? buildTimeEntriesRepositoryMock();
+  const invoicesService = overrides?.invoices ?? buildInvoicesServiceMock();
+  const auditService = { record: jest.fn().mockResolvedValue(undefined) };
+  const contactsService = overrides?.contacts ?? {
+    existsById: jest.fn(),
+    getById: jest.fn(),
+  };
+  const membershipsService = overrides?.memberships ?? {
+    findByUserAndOrganization: jest.fn(),
+  };
+  const connection = buildConnectionMock();
+
+  const service = new TimeEntriesService(
+    asRepository(timeEntriesRepository),
+    contactsService as unknown as ContactsService,
+    auditService as unknown as AuditService,
+    asInvoicesService(invoicesService),
+    membershipsService as unknown as MembershipsService,
+    connection,
+  );
+  return {
+    service,
+    timeEntriesRepository,
+    invoicesService,
+    auditService,
+    contactsService,
+    membershipsService,
+  };
+}
+
 describe('TimeEntriesService.generateInvoice', () => {
-  function buildService(overrides?: {
-    timeEntries?: TimeEntriesRepositoryMock;
-    invoices?: InvoicesServiceMock;
-  }) {
-    const timeEntriesRepository =
-      overrides?.timeEntries ?? buildTimeEntriesRepositoryMock();
-    const invoicesService = overrides?.invoices ?? buildInvoicesServiceMock();
-    const auditService = { record: jest.fn().mockResolvedValue(undefined) };
-    const contactsService = { existsById: jest.fn() };
-    const connection = buildConnectionMock();
-
-    const service = new TimeEntriesService(
-      asRepository(timeEntriesRepository),
-      contactsService as unknown as ContactsService,
-      auditService as unknown as AuditService,
-      asInvoicesService(invoicesService),
-      connection,
-    );
-    return { service, timeEntriesRepository, invoicesService, auditService };
-  }
-
   it('throws NotFoundException naming missing ids when some requested entries do not exist', async () => {
     const { service, timeEntriesRepository } = buildService();
     const entryA = makeEntry();
@@ -212,5 +233,128 @@ describe('TimeEntriesService.generateInvoice', () => {
     ).rejects.toMatchObject({
       response: { code: 'TIME_ENTRIES_NOT_INVOICEABLE' },
     });
+  });
+});
+
+describe('TimeEntriesService.create — default hourly rate resolution', () => {
+  const ORG_ID = '507f1f77bcf86cd799439011';
+  const USER_ID = '507f1f77bcf86cd799439012';
+  const baseInput = {
+    contactId: '507f1f77bcf86cd799439013',
+    date: '2026-08-01T00:00:00.000Z',
+    durationMinutes: 60,
+    description: 'Work',
+    billable: true,
+    currency: 'EUR',
+  };
+
+  it('uses the explicitly-provided hourlyRate over any default', async () => {
+    const contactsService = {
+      existsById: jest.fn(),
+      getById: jest.fn().mockResolvedValue({ defaultHourlyRate: 50 }),
+    };
+    const membershipsService = {
+      findByUserAndOrganization: jest
+        .fn()
+        .mockResolvedValue({ defaultHourlyRate: 75 }),
+    };
+    const { service, timeEntriesRepository } = buildService({
+      contacts: contactsService,
+      memberships: membershipsService,
+    });
+
+    await service.create(ORG_ID, USER_ID, { ...baseInput, hourlyRate: 120 });
+
+    expect(timeEntriesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ hourlyRate: 120 }),
+    );
+    expect(membershipsService.findByUserAndOrganization).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the client's default rate when none is provided", async () => {
+    const contactsService = {
+      existsById: jest.fn(),
+      getById: jest.fn().mockResolvedValue({ defaultHourlyRate: 90 }),
+    };
+    const membershipsService = {
+      findByUserAndOrganization: jest
+        .fn()
+        .mockResolvedValue({ defaultHourlyRate: 75 }),
+    };
+    const { service, timeEntriesRepository } = buildService({
+      contacts: contactsService,
+      memberships: membershipsService,
+    });
+
+    await service.create(ORG_ID, USER_ID, { ...baseInput });
+
+    expect(timeEntriesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ hourlyRate: 90 }),
+    );
+  });
+
+  it("falls back to the staff member's default rate when the client has none", async () => {
+    const contactsService = {
+      existsById: jest.fn(),
+      getById: jest.fn().mockResolvedValue({ defaultHourlyRate: undefined }),
+    };
+    const membershipsService = {
+      findByUserAndOrganization: jest
+        .fn()
+        .mockResolvedValue({ defaultHourlyRate: 65 }),
+    };
+    const { service, timeEntriesRepository } = buildService({
+      contacts: contactsService,
+      memberships: membershipsService,
+    });
+
+    await service.create(ORG_ID, USER_ID, { ...baseInput });
+
+    expect(timeEntriesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ hourlyRate: 65 }),
+    );
+  });
+
+  it('rejects a billable entry when no rate can be resolved from any source', async () => {
+    const contactsService = {
+      existsById: jest.fn(),
+      getById: jest.fn().mockResolvedValue({ defaultHourlyRate: undefined }),
+    };
+    const membershipsService = {
+      findByUserAndOrganization: jest.fn().mockResolvedValue(null),
+    };
+    const { service } = buildService({
+      contacts: contactsService,
+      memberships: membershipsService,
+    });
+
+    await expect(
+      service.create(ORG_ID, USER_ID, { ...baseInput }),
+    ).rejects.toMatchObject({
+      response: { code: 'TIME_ENTRY_RATE_REQUIRED' },
+    });
+  });
+
+  it('allows a non-billable entry with no resolvable rate at all', async () => {
+    const contactsService = {
+      existsById: jest.fn(),
+      getById: jest.fn().mockResolvedValue({ defaultHourlyRate: undefined }),
+    };
+    const membershipsService = {
+      findByUserAndOrganization: jest.fn().mockResolvedValue(null),
+    };
+    const { service, timeEntriesRepository } = buildService({
+      contacts: contactsService,
+      memberships: membershipsService,
+    });
+
+    await service.create(ORG_ID, USER_ID, {
+      ...baseInput,
+      billable: false,
+    });
+
+    expect(timeEntriesRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ hourlyRate: undefined }),
+    );
   });
 });

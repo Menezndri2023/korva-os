@@ -80,6 +80,10 @@ export class Contact {
    */
   @Prop({ type: Date })
   inactiveNotifiedAt?: Date;
+
+  /** See Contact.defaultHourlyRate in @korva/types for the field-level rationale. */
+  @Prop()
+  defaultHourlyRate?: number;
 }
 
 export const ContactSchema = SchemaFactory.createForClass(Contact);

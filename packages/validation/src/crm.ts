@@ -12,6 +12,7 @@ export const createContactSchema = z.object({
   phone: z.string().min(1).max(40).optional(),
   tags: z.array(z.string().min(1).max(60)).default([]),
   customFields: customFieldsSchema,
+  defaultHourlyRate: z.number().positive().optional(),
 });
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 
