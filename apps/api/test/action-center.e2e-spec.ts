@@ -161,6 +161,22 @@ describe('Action Center (e2e)', () => {
         createdAt: new Date(),
       },
     ]);
+
+    // One failed WebhookDelivery, seeded directly — same rationale as the pending action/
+    // workflow execution rows above: this file only exercises ActionCenterService's read
+    // aggregation, not WebhookDeliveryWorkerService's own retry/failure logic (covered by
+    // webhook-subscriptions.e2e-spec.ts).
+    await connection.collection('webhook_deliveries').insertOne({
+      organizationId: new Types.ObjectId(organizationId),
+      subscriptionId: new Types.ObjectId(),
+      eventName: 'order.created',
+      payload: {},
+      status: 'failed',
+      attempts: 5,
+      error: 'HTTP 500',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   });
 
   afterAll(async () => {
@@ -195,13 +211,14 @@ describe('Action Center (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .expect(200);
       const data = asSuccess<ActionCenterItemPayload[]>(res.body);
-      return data.length === 3 ? data : undefined;
+      return data.length === 4 ? data : undefined;
     });
 
     const types = items.map((item) => item.type).sort();
     expect(types).toEqual([
       'pending_approval',
       'recommendation',
+      'webhook_delivery_failure',
       'workflow_failure',
     ]);
 
@@ -214,6 +231,14 @@ describe('Action Center (e2e)', () => {
     expect(failure?.title).toBe(
       'Échec d\'automatisation pour l\'événement "lead.created"',
     );
+
+    const webhookFailure = items.find(
+      (item) => item.type === 'webhook_delivery_failure',
+    );
+    expect(webhookFailure?.title).toBe(
+      'Échec de livraison webhook pour l\'événement "order.created"',
+    );
+    expect(webhookFailure?.entityType).toBe('webhook_subscription');
 
     const recommendation = items.find((item) => item.type === 'recommendation');
     expect(recommendation?.entityType).toBe('invoice');

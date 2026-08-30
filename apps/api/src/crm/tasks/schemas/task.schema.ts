@@ -41,3 +41,6 @@ export class Task {
 export const TaskSchema = SchemaFactory.createForClass(Task);
 TaskSchema.index({ organizationId: 1, status: 1, dueAt: 1 });
 TaskSchema.index({ organizationId: 1, assigneeId: 1, status: 1 });
+// Supports TasksRepository.findAll's `?entity=&entityId=` filter — hit on every CRM contact AND
+// lead detail page load (GET /tasks?entity=contact&entityId=X), previously unindexed.
+TaskSchema.index({ organizationId: 1, entity: 1, entityId: 1 });

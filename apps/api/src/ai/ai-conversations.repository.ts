@@ -32,16 +32,28 @@ export class AiConversationsRepository {
       .exec();
   }
 
+  /**
+   * `limit` defaults to a sane cap (see AiOrchestratorService.listConversations) rather than
+   * returning every conversation a user has ever had — this was previously fully unbounded, a
+   * latent risk as AI usage grows. `page`/`limit` are accepted for forward compatibility, but the
+   * response stays a plain array (not the {data, pagination} envelope other list endpoints use)
+   * so the existing `GET /ai/conversations` contract — and the frontend page consuming it —
+   * doesn't change for the default, no-query-params call.
+   */
   findAllForUser(
     organizationId: string,
     userId: string,
+    options: { page: number; limit: number },
   ): Promise<AiConversationDocument[]> {
+    const skip = (options.page - 1) * options.limit;
     return this.aiConversationModel
       .find({
         organizationId: new Types.ObjectId(organizationId),
         userId: new Types.ObjectId(userId),
       })
       .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(options.limit)
       .exec();
   }
 

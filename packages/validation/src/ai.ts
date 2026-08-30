@@ -7,3 +7,11 @@ export const aiChatSchema = z.object({
   message: z.string().min(1).max(4000),
 });
 export type AiChatInput = z.infer<typeof aiChatSchema>;
+
+export const listAiConversationsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type ListAiConversationsQuery = z.infer<
+  typeof listAiConversationsQuerySchema
+>;

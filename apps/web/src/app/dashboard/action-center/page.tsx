@@ -11,12 +11,14 @@ const ITEM_TYPE_LABELS: Record<ActionCenterItem["type"], string> = {
   recommendation: "Recommandation",
   pending_approval: "Approbation requise",
   workflow_failure: "Échec d'automatisation",
+  webhook_delivery_failure: "Échec de livraison webhook",
 };
 
 const ITEM_TYPE_LINKS: Record<ActionCenterItem["type"], string> = {
   recommendation: "/dashboard/recommendations",
   pending_approval: "/dashboard/ai",
   workflow_failure: "/dashboard/workflows",
+  webhook_delivery_failure: "/dashboard/settings",
 };
 
 export default function ActionCenterPage() {

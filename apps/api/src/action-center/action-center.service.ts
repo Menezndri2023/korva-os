@@ -14,6 +14,10 @@ import {
   WorkflowExecution,
   WorkflowExecutionDocument,
 } from '../workflow/schemas/workflow-execution.schema';
+import {
+  WebhookDelivery,
+  WebhookDeliveryDocument,
+} from '../webhook-subscriptions/schemas/webhook-delivery.schema';
 
 const FEED_LIMIT_PER_CATEGORY = 20;
 const PENDING_APPROVAL_STATUSES = ['pending', 'confirming'];
@@ -36,6 +40,8 @@ export class ActionCenterService {
     private readonly recommendationModel: Model<RecommendationDocument>,
     @InjectModel(WorkflowExecution.name)
     private readonly workflowExecutionModel: Model<WorkflowExecutionDocument>,
+    @InjectModel(WebhookDelivery.name)
+    private readonly webhookDeliveryModel: Model<WebhookDeliveryDocument>,
   ) {}
 
   async getSummary(organizationId: string): Promise<ActionCenterSummary> {
@@ -71,30 +77,40 @@ export class ActionCenterService {
     const organizationObjectId = new Types.ObjectId(organizationId);
     const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
 
-    const [pendingActions, recommendations, failures] = await Promise.all([
-      this.aiPendingActionModel
-        .find({
-          organizationId: organizationObjectId,
-          status: { $in: PENDING_APPROVAL_STATUSES },
-        })
-        .sort({ createdAt: -1 })
-        .limit(FEED_LIMIT_PER_CATEGORY)
-        .exec(),
-      this.recommendationModel
-        .find({ organizationId: organizationObjectId, status: 'open' })
-        .sort({ createdAt: -1 })
-        .limit(FEED_LIMIT_PER_CATEGORY)
-        .exec(),
-      this.workflowExecutionModel
-        .find({
-          organizationId: organizationObjectId,
-          status: 'failed',
-          createdAt: { $gte: sevenDaysAgo },
-        })
-        .sort({ createdAt: -1 })
-        .limit(FEED_LIMIT_PER_CATEGORY)
-        .exec(),
-    ]);
+    const [pendingActions, recommendations, failures, webhookFailures] =
+      await Promise.all([
+        this.aiPendingActionModel
+          .find({
+            organizationId: organizationObjectId,
+            status: { $in: PENDING_APPROVAL_STATUSES },
+          })
+          .sort({ createdAt: -1 })
+          .limit(FEED_LIMIT_PER_CATEGORY)
+          .exec(),
+        this.recommendationModel
+          .find({ organizationId: organizationObjectId, status: 'open' })
+          .sort({ createdAt: -1 })
+          .limit(FEED_LIMIT_PER_CATEGORY)
+          .exec(),
+        this.workflowExecutionModel
+          .find({
+            organizationId: organizationObjectId,
+            status: 'failed',
+            createdAt: { $gte: sevenDaysAgo },
+          })
+          .sort({ createdAt: -1 })
+          .limit(FEED_LIMIT_PER_CATEGORY)
+          .exec(),
+        this.webhookDeliveryModel
+          .find({
+            organizationId: organizationObjectId,
+            status: 'failed',
+            createdAt: { $gte: sevenDaysAgo },
+          })
+          .sort({ createdAt: -1 })
+          .limit(FEED_LIMIT_PER_CATEGORY)
+          .exec(),
+      ]);
 
     const items: ActionCenterItem[] = [
       ...pendingActions.map((action) => ({
@@ -128,6 +144,17 @@ export class ActionCenterService {
         ).createdAt.toISOString(),
         entityType: 'workflow',
         entityId: execution.workflowId.toString(),
+      })),
+      ...webhookFailures.map((delivery) => ({
+        type: 'webhook_delivery_failure' as const,
+        id: delivery.id as string,
+        title: `Échec de livraison webhook pour l'événement "${delivery.eventName}"`,
+        description: delivery.error,
+        occurredAt: (
+          delivery as unknown as { createdAt: Date }
+        ).createdAt.toISOString(),
+        entityType: 'webhook_subscription',
+        entityId: delivery.subscriptionId.toString(),
       })),
     ];
 

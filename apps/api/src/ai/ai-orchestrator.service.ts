@@ -313,8 +313,13 @@ export class AiOrchestratorService {
   listConversations(
     organizationId: string,
     userId: string,
+    options: { page: number; limit: number },
   ): Promise<AiConversationDocument[]> {
-    return this.conversationsRepository.findAllForUser(organizationId, userId);
+    return this.conversationsRepository.findAllForUser(
+      organizationId,
+      userId,
+      options,
+    );
   }
 
   /** Current calendar-month totals — same "YYYY-MM" period convention as EntitlementsService. */

@@ -51,3 +51,8 @@ export class Quote {
 export const QuoteSchema = SchemaFactory.createForClass(Quote);
 QuoteSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 QuoteSchema.index({ organizationId: 1, number: 1 }, { unique: true });
+// Supports QuotesRepository.findExpirable's global (org-agnostic) sweep query
+// ({status: {$in:[...]}, validUntil: {$lt: now}}) — same pattern already indexed on
+// Payment/Refund (see payment.schema.ts) for the identical class of scheduler query, never
+// mirrored here until now.
+QuoteSchema.index({ status: 1, validUntil: 1 });

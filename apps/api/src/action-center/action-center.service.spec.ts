@@ -27,17 +27,20 @@ describe('ActionCenterService', () => {
       aiPendingActionModel?: ReturnType<typeof makeModel>;
       recommendationModel?: ReturnType<typeof makeModel>;
       workflowExecutionModel?: ReturnType<typeof makeModel>;
+      webhookDeliveryModel?: ReturnType<typeof makeModel>;
     } = {},
   ) {
     const aiPendingActionModel = overrides.aiPendingActionModel ?? makeModel();
     const recommendationModel = overrides.recommendationModel ?? makeModel();
     const workflowExecutionModel =
       overrides.workflowExecutionModel ?? makeModel();
+    const webhookDeliveryModel = overrides.webhookDeliveryModel ?? makeModel();
 
     const service = new ActionCenterService(
       aiPendingActionModel as never,
       recommendationModel as never,
       workflowExecutionModel as never,
+      webhookDeliveryModel as never,
     );
 
     return {
@@ -45,6 +48,7 @@ describe('ActionCenterService', () => {
       aiPendingActionModel,
       recommendationModel,
       workflowExecutionModel,
+      webhookDeliveryModel,
     };
   }
 
@@ -131,7 +135,7 @@ describe('ActionCenterService', () => {
   });
 
   describe('getFeed', () => {
-    it('merges items from all three sources and sorts them most-recent-first', async () => {
+    it('merges items from all four sources and sorts them most-recent-first', async () => {
       const { service } = buildService({
         aiPendingActionModel: makeModel({
           findResults: [
@@ -151,7 +155,7 @@ describe('ActionCenterService', () => {
               description: 'desc',
               entityType: 'contact',
               entityId: new Types.ObjectId(),
-              createdAt: new Date('2026-03-01T00:00:00Z'),
+              createdAt: new Date('2026-04-01T00:00:00Z'),
             },
           ],
         }),
@@ -166,20 +170,35 @@ describe('ActionCenterService', () => {
             },
           ],
         }),
+        webhookDeliveryModel: makeModel({
+          findResults: [
+            {
+              id: 'wd-1',
+              eventName: 'order.created',
+              error: 'HTTP 500',
+              subscriptionId: new Types.ObjectId(),
+              createdAt: new Date('2026-03-01T00:00:00Z'),
+            },
+          ],
+        }),
       });
 
       const feed = await service.getFeed(ORG_ID);
 
       expect(feed.map((item) => item.type)).toEqual([
         'recommendation',
+        'webhook_delivery_failure',
         'workflow_failure',
         'pending_approval',
       ]);
       expect(feed[0]?.title).toBe('Client inactif à relancer');
       expect(feed[1]?.title).toBe(
+        'Échec de livraison webhook pour l\'événement "order.created"',
+      );
+      expect(feed[2]?.title).toBe(
         'Échec d\'automatisation pour l\'événement "invoice.overdue"',
       );
-      expect(feed[2]?.title).toBe('Confirmation requise : send_email');
+      expect(feed[3]?.title).toBe('Confirmation requise : send_email');
     });
   });
 });

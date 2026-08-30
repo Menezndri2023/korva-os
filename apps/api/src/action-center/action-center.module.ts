@@ -12,6 +12,10 @@ import {
   WorkflowExecution,
   WorkflowExecutionSchema,
 } from '../workflow/schemas/workflow-execution.schema';
+import {
+  WebhookDelivery,
+  WebhookDeliverySchema,
+} from '../webhook-subscriptions/schemas/webhook-delivery.schema';
 import { ActionCenterService } from './action-center.service';
 import { ActionCenterController } from './action-center.controller';
 
@@ -21,6 +25,7 @@ import { ActionCenterController } from './action-center.controller';
       { name: AiPendingAction.name, schema: AiPendingActionSchema },
       { name: Recommendation.name, schema: RecommendationSchema },
       { name: WorkflowExecution.name, schema: WorkflowExecutionSchema },
+      { name: WebhookDelivery.name, schema: WebhookDeliverySchema },
     ]),
   ],
   controllers: [ActionCenterController],

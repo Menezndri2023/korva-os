@@ -1,6 +1,23 @@
 import type { ConfigService } from '@nestjs/config';
 import { EVENTS_QUEUE_NAME } from '../core/events/event-names';
 import { RECONCILIATION_QUEUE_NAME } from '../finance/payments/reconciliation-scheduler.service';
+import { QUOTE_EXPIRY_QUEUE_NAME } from '../finance/quotes/quote-expiry-scheduler.service';
+import { INVOICE_OVERDUE_QUEUE_NAME } from '../finance/invoices/invoice-overdue-scheduler.service';
+import { CALENDAR_SYNC_QUEUE_NAME } from '../booking/resources/calendar-sync-scheduler.service';
+import { CUSTOMER_INACTIVITY_QUEUE_NAME } from '../crm/contacts/customer-inactivity-scheduler.service';
+import { WEBHOOK_DELIVERY_QUEUE_NAME } from '../webhook-subscriptions/webhook-delivery.queue';
+import { SUBSCRIPTION_PERIOD_QUEUE_NAME } from '../subscriptions/subscription-period-scheduler.service';
+
+const ALL_QUEUE_NAMES = [
+  EVENTS_QUEUE_NAME,
+  RECONCILIATION_QUEUE_NAME,
+  QUOTE_EXPIRY_QUEUE_NAME,
+  INVOICE_OVERDUE_QUEUE_NAME,
+  CALENDAR_SYNC_QUEUE_NAME,
+  CUSTOMER_INACTIVITY_QUEUE_NAME,
+  WEBHOOK_DELIVERY_QUEUE_NAME,
+  SUBSCRIPTION_PERIOD_QUEUE_NAME,
+];
 
 interface MockQueueEventsInstance {
   name: string;
@@ -79,15 +96,15 @@ describe('QueueAlertingService', () => {
     loggerErrorSpy.mockRestore();
   });
 
-  it('creates exactly two QueueEvents, one per known queue name, without a connection created before onModuleInit', () => {
+  it('creates exactly eight QueueEvents, one per known queue name, without a connection created before onModuleInit', () => {
     const service = buildService();
     expect(instances).toHaveLength(0);
 
     service.onModuleInit();
 
-    expect(instances).toHaveLength(2);
+    expect(instances).toHaveLength(8);
     expect(instances.map((i) => i.name).sort()).toEqual(
-      [EVENTS_QUEUE_NAME, RECONCILIATION_QUEUE_NAME].sort(),
+      [...ALL_QUEUE_NAMES].sort(),
     );
   });
 
@@ -215,7 +232,7 @@ describe('QueueAlertingService', () => {
     expect(error).toBeInstanceOf(Error);
   });
 
-  it('a construction failure on one queue does not prevent the other from starting', () => {
+  it('a construction failure on one queue does not prevent the others from starting', () => {
     const { QueueEvents } = jest.requireMock<{ QueueEvents: jest.Mock }>(
       'bullmq',
     );
@@ -225,7 +242,7 @@ describe('QueueAlertingService', () => {
     const service = buildService();
 
     expect(() => service.onModuleInit()).not.toThrow();
-    expect(instances).toHaveLength(1);
+    expect(instances).toHaveLength(ALL_QUEUE_NAMES.length - 1);
     expect(loggerErrorSpy).toHaveBeenCalled();
   });
 
@@ -235,7 +252,7 @@ describe('QueueAlertingService', () => {
 
     await service.onModuleDestroy();
 
-    expect(instances).toHaveLength(2);
+    expect(instances).toHaveLength(8);
     for (const instance of instances) {
       expect(instance.close).toHaveBeenCalledTimes(1);
     }
@@ -254,7 +271,7 @@ describe('QueueAlertingService', () => {
     expect(loggerErrorSpy).toHaveBeenCalled();
   });
 
-  it('destroy after a partial initialization failure only closes the listener that actually started', async () => {
+  it('destroy after a partial initialization failure only closes the listeners that actually started', async () => {
     const { QueueEvents } = jest.requireMock<{ QueueEvents: jest.Mock }>(
       'bullmq',
     );
@@ -266,8 +283,10 @@ describe('QueueAlertingService', () => {
 
     await service.onModuleDestroy();
 
-    expect(instances).toHaveLength(1);
-    expect(instances[0]!.close).toHaveBeenCalledTimes(1);
+    expect(instances).toHaveLength(ALL_QUEUE_NAMES.length - 1);
+    for (const instance of instances) {
+      expect(instance.close).toHaveBeenCalledTimes(1);
+    }
   });
 
   it('destroy is safe to call twice', async () => {

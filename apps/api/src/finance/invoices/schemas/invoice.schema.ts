@@ -75,3 +75,7 @@ InvoiceSchema.index(
   { orderId: 1 },
   { unique: true, partialFilterExpression: { orderId: { $exists: true } } },
 );
+// Supports InvoicesRepository.findOverdueCandidates's global (org-agnostic) sweep query
+// ({status: {$in:[...]}, dueDate: {$lt: now}}) — same pattern already indexed on Payment/Refund
+// for the identical class of scheduler query, never mirrored here until now.
+InvoiceSchema.index({ status: 1, dueDate: 1 });

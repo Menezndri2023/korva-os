@@ -1,6 +1,11 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { aiChatSchema, type AiChatInput } from '@korva/validation';
+import {
+  aiChatSchema,
+  listAiConversationsQuerySchema,
+  type AiChatInput,
+  type ListAiConversationsQuery,
+} from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import type { AuthenticatedUser } from '../core/tenant/request-context.types';
 import { AiOrchestratorService } from './ai-orchestrator.service';
@@ -35,10 +40,13 @@ export class AiController {
   listConversations(
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: AuthenticatedUser,
+    @Query(new ZodValidationPipe(listAiConversationsQuerySchema))
+    query: ListAiConversationsQuery,
   ) {
     return this.aiOrchestratorService.listConversations(
       tenant.organizationId,
       user.userId,
+      query,
     );
   }
 

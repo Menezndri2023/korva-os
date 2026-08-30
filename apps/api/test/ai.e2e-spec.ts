@@ -345,6 +345,45 @@ describe('AI module (e2e)', () => {
     });
   });
 
+  describe('GET /ai/conversations pagination (docs/BUSINESS_OS_AUDIT.md performance findings — previously fully unbounded)', () => {
+    it('defaults to a capped page and honors an explicit page/limit', async () => {
+      const { accessToken, organizationId } = await registerFullOrg(
+        'ai-pagination@korva.test',
+        'AI Pagination Org',
+      );
+
+      for (let i = 0; i < 3; i++) {
+        await request(server)
+          .post('/api/v1/ai/chat')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ message: `Bonjour ${i}` })
+          .expect(201);
+      }
+
+      const defaultRes = await request(server)
+        .get('/api/v1/ai/conversations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<{ id: string }[]>(defaultRes.body)).toHaveLength(3);
+
+      const limitedRes = await request(server)
+        .get('/api/v1/ai/conversations?page=1&limit=2')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<{ id: string }[]>(limitedRes.body)).toHaveLength(2);
+
+      const secondPageRes = await request(server)
+        .get('/api/v1/ai/conversations?page=2&limit=2')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<{ id: string }[]>(secondPageRes.body)).toHaveLength(1);
+    });
+  });
+
   describe('chat that calls a real tool', () => {
     it('executes search_leads for real and feeds the result back to the model', async () => {
       const { accessToken, organizationId } = await registerFullOrg(

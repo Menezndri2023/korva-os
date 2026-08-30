@@ -2,6 +2,7 @@ export const ACTION_CENTER_ITEM_TYPES = [
   "recommendation",
   "pending_approval",
   "workflow_failure",
+  "webhook_delivery_failure",
 ] as const;
 export type ActionCenterItemType = (typeof ACTION_CENTER_ITEM_TYPES)[number];
 

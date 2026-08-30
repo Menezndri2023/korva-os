@@ -8,8 +8,27 @@ import { ConfigService } from '@nestjs/config';
 import { QueueEvents } from 'bullmq';
 import { EVENTS_QUEUE_NAME } from '../core/events/event-names';
 import { RECONCILIATION_QUEUE_NAME } from '../finance/payments/reconciliation-scheduler.service';
+import { QUOTE_EXPIRY_QUEUE_NAME } from '../finance/quotes/quote-expiry-scheduler.service';
+import { INVOICE_OVERDUE_QUEUE_NAME } from '../finance/invoices/invoice-overdue-scheduler.service';
+import { CALENDAR_SYNC_QUEUE_NAME } from '../booking/resources/calendar-sync-scheduler.service';
+import { CUSTOMER_INACTIVITY_QUEUE_NAME } from '../crm/contacts/customer-inactivity-scheduler.service';
+import { WEBHOOK_DELIVERY_QUEUE_NAME } from '../webhook-subscriptions/webhook-delivery.queue';
+import { SUBSCRIPTION_PERIOD_QUEUE_NAME } from '../subscriptions/subscription-period-scheduler.service';
 
-const QUEUE_NAMES = [EVENTS_QUEUE_NAME, RECONCILIATION_QUEUE_NAME];
+// Previously only 'events'/'reconciliation' — the other 6 queues had zero failure visibility at
+// all (see docs/BUSINESS_OS_AUDIT.md's performance/reliability findings): a permanently-failed
+// job on any of them produced no log line, no alert, nothing. All 8 registered queues now share
+// this same minimal "someone should look at this" signal.
+const QUEUE_NAMES = [
+  EVENTS_QUEUE_NAME,
+  RECONCILIATION_QUEUE_NAME,
+  QUOTE_EXPIRY_QUEUE_NAME,
+  INVOICE_OVERDUE_QUEUE_NAME,
+  CALENDAR_SYNC_QUEUE_NAME,
+  CUSTOMER_INACTIVITY_QUEUE_NAME,
+  WEBHOOK_DELIVERY_QUEUE_NAME,
+  SUBSCRIPTION_PERIOD_QUEUE_NAME,
+];
 
 /**
  * Per-queue, per-process cooldown before the same alert can log again. This is a local

@@ -48,3 +48,8 @@ export const LeadSchema = SchemaFactory.createForClass(Lead);
 LeadSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 LeadSchema.index({ organizationId: 1, pipelineId: 1, stageId: 1 });
 LeadSchema.index({ organizationId: 1, ownerId: 1 });
+// Supports LeadsRepository.findAll's `?contactId=` filter — hit on every CRM contact detail
+// page load (GET /leads?contactId=X) with no matching index until now (organizationId and
+// contactId each had their own single-field index, but Mongo doesn't efficiently intersect two
+// single-field indexes for a compound filter the way one compound index does).
+LeadSchema.index({ organizationId: 1, contactId: 1, createdAt: -1 });

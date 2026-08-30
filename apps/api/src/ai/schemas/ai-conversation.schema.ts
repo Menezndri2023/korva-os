@@ -27,4 +27,7 @@ export class AiConversation {
 
 export const AiConversationSchema =
   SchemaFactory.createForClass(AiConversation);
-AiConversationSchema.index({ organizationId: 1, userId: 1, createdAt: -1 });
+// Matches AiConversationsRepository.findAllForUser's actual sort (`updatedAt`, so the most
+// recently active conversation surfaces first — touch() bumps updatedAt on every new message) —
+// previously indexed on createdAt instead, a mismatch that forced an in-memory sort.
+AiConversationSchema.index({ organizationId: 1, userId: 1, updatedAt: -1 });
