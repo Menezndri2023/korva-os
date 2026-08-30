@@ -4,6 +4,7 @@ import { Offer, OfferSchema } from './offers/schemas/offer.schema';
 import { OffersRepository } from './offers/offers.repository';
 import { OffersService } from './offers/offers.service';
 import { OffersController } from './offers/offers.controller';
+import { InventoryService } from './offers/inventory.service';
 import { OfferReferencesRepository } from './offers/offer-references.repository';
 import { Category, CategorySchema } from './categories/schemas/category.schema';
 import { CategoriesRepository } from './categories/categories.repository';
@@ -51,11 +52,12 @@ import { StorageModule } from '../shared/storage/storage.module';
   providers: [
     OffersRepository,
     OffersService,
+    InventoryService,
     OfferReferencesRepository,
     CategoriesRepository,
     CategoriesService,
     CategoryReferencesRepository,
   ],
-  exports: [OffersService, CategoriesService],
+  exports: [OffersService, InventoryService, CategoriesService],
 })
 export class CatalogModule {}

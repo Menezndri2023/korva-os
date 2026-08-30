@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import { Offer, OfferDocument } from './schemas/offer.schema';
 import type { Paginated } from '../../crm/contacts/contacts.repository';
 
@@ -40,7 +40,11 @@ export class OffersRepository {
    * "not a valid ObjectId means not found" behavior; the caller (OffersService.getManyByIds)
    * is responsible for turning a missing id into OFFER_NOT_FOUND.
    */
-  findByIds(organizationId: string, ids: string[]): Promise<OfferDocument[]> {
+  findByIds(
+    organizationId: string,
+    ids: string[],
+    session?: ClientSession,
+  ): Promise<OfferDocument[]> {
     const validIds = ids
       .filter((id) => Types.ObjectId.isValid(id))
       .map((id) => new Types.ObjectId(id));
@@ -51,6 +55,59 @@ export class OffersRepository {
         organizationId: new Types.ObjectId(organizationId),
         _id: { $in: validIds },
       })
+      .session(session ?? null)
+      .exec();
+  }
+
+  /**
+   * Atomic reserve — single-document `findOneAndUpdate` with a `$gte` guard, so this is already
+   * race-safe on its own without needing the booking module's resource-lock-version trick (that
+   * exists because booking's check and insert are two separate documents; here the check and
+   * write are the same document). Returns null if trackStock is false, the offer doesn't exist,
+   * or there isn't enough stock — the caller can't tell those apart from this alone, which is
+   * fine: InventoryService.reserveStock skips non-tracked offers before ever calling this, so a
+   * null here always means "insufficient stock" in practice.
+   */
+  decrementStockIfAvailable(
+    organizationId: string,
+    offerId: string,
+    quantity: number,
+    session?: ClientSession,
+  ): Promise<OfferDocument | null> {
+    if (!Types.ObjectId.isValid(offerId)) return Promise.resolve(null);
+    return this.offerModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(offerId),
+          organizationId: new Types.ObjectId(organizationId),
+          trackStock: true,
+          stockOnHand: { $gte: quantity },
+        },
+        { $inc: { stockOnHand: -quantity } },
+        { new: true, session },
+      )
+      .exec();
+  }
+
+  /** Restock path (order cancelled/item removed) — only meaningful for tracked offers; a no-op
+   *  (matches nothing) for an untracked offer, same as decrementStockIfAvailable. */
+  incrementStock(
+    organizationId: string,
+    offerId: string,
+    quantity: number,
+    session?: ClientSession,
+  ): Promise<OfferDocument | null> {
+    if (!Types.ObjectId.isValid(offerId)) return Promise.resolve(null);
+    return this.offerModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(offerId),
+          organizationId: new Types.ObjectId(organizationId),
+          trackStock: true,
+        },
+        { $inc: { stockOnHand: quantity } },
+        { new: true, session },
+      )
       .exec();
   }
 

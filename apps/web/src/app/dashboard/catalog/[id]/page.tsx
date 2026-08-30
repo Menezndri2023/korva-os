@@ -55,8 +55,10 @@ export default function OfferDetailPage() {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<UpdateOfferInput>({ resolver: zodResolver(updateOfferSchema) });
+  const trackStock = watch("trackStock");
 
   function startEdit(offer: Offer) {
     setIsEditing(true);
@@ -67,6 +69,8 @@ export default function OfferDetailPage() {
       description: offer.description,
       pricing: offer.pricing,
       status: offer.status,
+      trackStock: offer.trackStock,
+      stockOnHand: offer.stockOnHand,
     });
   }
   function cancelEdit() {
@@ -79,6 +83,16 @@ export default function OfferDetailPage() {
     onSuccess: () => {
       setIsEditing(false);
       return queryClient.invalidateQueries({ queryKey: ["offers"] });
+    },
+  });
+
+  const [stockInput, setStockInput] = useState("");
+  const adjustStockMutation = useMutation({
+    mutationFn: (stockOnHand: number) =>
+      apiClient.post<Offer>(`/offers/${id}/stock/adjust`, { stockOnHand }),
+    onSuccess: () => {
+      setStockInput("");
+      return queryClient.invalidateQueries({ queryKey: ["offers", id] });
     },
   });
 
@@ -201,7 +215,37 @@ export default function OfferDetailPage() {
                   <dd className="mt-0.5">{offer.pricing.taxRate}%</dd>
                 </div>
               )}
+              <div>
+                <dt className="text-text-muted">Stock</dt>
+                <dd className="mt-0.5">
+                  {offer.trackStock ? offer.stockOnHand ?? 0 : "Non suivi"}
+                </dd>
+              </div>
             </dl>
+
+            {offer.trackStock && (
+              <div className="mt-4 flex items-end gap-2">
+                <Input
+                  type="number"
+                  step="1"
+                  placeholder="Nouveau stock"
+                  value={stockInput}
+                  onChange={(e) => setStockInput(e.target.value)}
+                  className="w-40"
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={adjustStockMutation.isPending}
+                  disabled={stockInput === ""}
+                  onClick={() =>
+                    adjustStockMutation.mutate(Number(stockInput))
+                  }
+                >
+                  Ajuster le stock
+                </Button>
+              </div>
+            )}
 
             {offer.description && (
               <div className="mt-4">
@@ -262,6 +306,19 @@ export default function OfferDetailPage() {
               <p className="col-span-2 text-xs text-destructive">
                 {errors.pricing.currency.message}
               </p>
+            )}
+            <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
+              <input type="checkbox" {...register("trackStock")} />
+              Suivre le stock pour cette offre
+            </label>
+            {trackStock && (
+              <Input
+                type="number"
+                step="1"
+                placeholder="Stock"
+                className="col-span-2"
+                {...register("stockOnHand", { valueAsNumber: true })}
+              />
             )}
 
             {updateMutation.isError && (

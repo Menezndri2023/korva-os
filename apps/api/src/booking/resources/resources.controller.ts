@@ -35,8 +35,13 @@ export class ResourcesController {
   list(
     @CurrentTenant() tenant: TenantContext,
     @Query('active') active?: string,
+    @Query('membershipId') membershipId?: string,
   ) {
-    return this.resourcesService.list(tenant.organizationId, active === 'true');
+    return this.resourcesService.list(
+      tenant.organizationId,
+      active === 'true',
+      membershipId,
+    );
   }
 
   @RequirePermissions('bookings.read')

@@ -29,11 +29,25 @@ export const LineItemSchema = SchemaFactory.createForClass(LineItem);
 export interface LineItemTotals {
   subtotal: number;
   taxTotal: number;
+  discountTotal: number;
   total: number;
 }
 
-/** Never trust totals from the client — always recompute server-side from the line items. */
-export function computeTotals(items: LineItemInput[]): LineItemTotals {
+export interface ResolvedDiscount {
+  type: 'percentage' | 'fixed';
+  value: number;
+}
+
+/**
+ * Never trust totals from the client — always recompute server-side from the line items.
+ * `discount`, when given, is applied against the pre-tax subtotal (tax is charged on the
+ * undiscounted amount — a deliberate v1 simplification, not a compliance claim for every
+ * jurisdiction; revisit if a tax-sensitive market needs discount-before-tax instead).
+ */
+export function computeTotals(
+  items: LineItemInput[],
+  discount?: ResolvedDiscount,
+): LineItemTotals {
   let subtotal = 0;
   let taxTotal = 0;
 
@@ -46,7 +60,23 @@ export function computeTotals(items: LineItemInput[]): LineItemTotals {
   const round = (n: number) => Math.round(n * 100) / 100;
   subtotal = round(subtotal);
   taxTotal = round(taxTotal);
-  return { subtotal, taxTotal, total: round(subtotal + taxTotal) };
+
+  let discountTotal = 0;
+  if (discount) {
+    const rawDiscount =
+      discount.type === 'percentage'
+        ? subtotal * (discount.value / 100)
+        : discount.value;
+    // Clamped so a fixed-amount discount larger than the order can never push total negative.
+    discountTotal = round(Math.min(rawDiscount, subtotal + taxTotal));
+  }
+
+  return {
+    subtotal,
+    taxTotal,
+    discountTotal,
+    total: round(subtotal + taxTotal - discountTotal),
+  };
 }
 
 export function toLineItemDocs(items: LineItemInput[]): LineItem[] {

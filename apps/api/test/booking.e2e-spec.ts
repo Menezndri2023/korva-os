@@ -29,6 +29,7 @@ interface OfferPayload {
 }
 interface ResourcePayload {
   id: string;
+  membershipId?: string;
 }
 interface BookingPayload {
   id: string;
@@ -36,6 +37,11 @@ interface BookingPayload {
   startAt: string;
   endAt: string;
   attended?: boolean;
+  staffMembershipId?: string;
+}
+interface MemberPayload {
+  id: string;
+  userId: string | { id: string; email: string };
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -585,6 +591,42 @@ describe('Booking module (e2e)', () => {
       ).toBe(true);
     });
 
+    it('a completed booking yields a downloadable certificate PDF; a non-completed one 400s', async () => {
+      const ctx = await registerOrgContactOfferWithCommunication(
+        'certificate-owner@korva.test',
+        'Certificate Org',
+      );
+      const booking = await createConfirmedBooking(
+        ctx.accessToken,
+        ctx.organizationId,
+        ctx.contactId,
+        ctx.offerId,
+      );
+
+      const beforeRes = await request(server)
+        .get(`/api/v1/bookings/${booking.id}/certificate`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(400);
+      expect(asError(beforeRes.body).code).toBe('CERTIFICATE_NOT_AVAILABLE');
+
+      await request(server)
+        .post(`/api/v1/bookings/${booking.id}/complete`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: true })
+        .expect(201);
+
+      const res = await request(server)
+        .get(`/api/v1/bookings/${booking.id}/certificate`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      expect(res.headers['content-type']).toContain('application/pdf');
+      expect(Buffer.isBuffer(res.body)).toBe(true);
+      expect((res.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    });
+
     it('completing with attended:false transitions to completed, sets attended false, and sends no message', async () => {
       const ctx = await registerOrgContactOfferWithCommunication(
         'complete-absent-owner@korva.test',
@@ -729,6 +771,151 @@ describe('Booking module (e2e)', () => {
         .send({ attended: true })
         .expect(403);
       expect(asError(res.body).code).toBe('PERMISSION_DENIED');
+    });
+  });
+
+  describe('staff-linked resources', () => {
+    async function ownerMembershipId(
+      accessToken: string,
+      organizationId: string,
+      email: string,
+    ): Promise<string> {
+      const res = await request(server)
+        .get('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const members = asSuccess<MemberPayload[]>(res.body);
+      const owner = members.find((m) =>
+        typeof m.userId === 'string' ? true : m.userId.email === email,
+      );
+      if (!owner) throw new Error('Owner membership not found');
+      return owner.id;
+    }
+
+    it('rejects creating a resource with a membershipId that does not exist', async () => {
+      const ctx = await registerOrgContactOffer(
+        'staff-link-invalid-owner@korva.test',
+        'Staff Link Invalid Org',
+      );
+
+      const res = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          name: 'Ghost staff room',
+          type: 'person',
+          membershipId: '000000000000000000000000',
+        })
+        .expect(404);
+      expect(asError(res.body).code).toBe('MEMBERSHIP_NOT_FOUND');
+    });
+
+    it('links a resource to a real membership, filters by it, and snapshots staffMembershipId onto new bookings — a later reassignment never rewrites the old booking', async () => {
+      const email = 'staff-link-owner@korva.test';
+      const ctx = await registerOrgContactOffer(email, 'Staff Link Org');
+      const membershipId = await ownerMembershipId(
+        ctx.accessToken,
+        ctx.organizationId,
+        email,
+      );
+
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          name: 'Sophie',
+          type: 'person',
+          capacity: 1,
+          membershipId,
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      const resource = asSuccess<ResourcePayload>(resourceRes.body);
+      expect(resource.membershipId).toBe(membershipId);
+
+      const filteredRes = await request(server)
+        .get(`/api/v1/resources?membershipId=${membershipId}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      const filtered = asSuccess<ResourcePayload[]>(filteredRes.body);
+      expect(filtered.map((r) => r.id)).toContain(resource.id);
+
+      const bookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId: resource.id,
+          offerId: ctx.offerId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
+        })
+        .expect(201);
+      const booking = asSuccess<BookingPayload>(bookingRes.body);
+      expect(booking.staffMembershipId).toBe(membershipId);
+
+      // Invite a second staff member and reassign the resource to them.
+      const staffRole = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(ctx.organizationId),
+        systemKey: 'STAFF',
+      });
+      const secondEmail = 'staff-link-second@korva.test';
+      await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: secondEmail, password: 'password123' })
+        .expect(201);
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ email: secondEmail, roleId: String(staffRole?._id) })
+        .expect(201);
+      const secondMembershipId = await ownerMembershipId(
+        ctx.accessToken,
+        ctx.organizationId,
+        secondEmail,
+      );
+
+      await request(server)
+        .patch(`/api/v1/resources/${resource.id}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ membershipId: secondMembershipId })
+        .expect(200);
+
+      // The original booking's snapshot must be untouched by the reassignment.
+      const unchangedRes = await request(server)
+        .get(`/api/v1/bookings/${booking.id}`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      expect(
+        asSuccess<BookingPayload>(unchangedRes.body).staffMembershipId,
+      ).toBe(membershipId);
+
+      // A new booking on the same (now-reassigned) resource picks up the new snapshot.
+      const secondBookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId: resource.id,
+          offerId: ctx.offerId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T14:00:00.000Z`,
+          endAt: `${monday}T15:00:00.000Z`,
+        })
+        .expect(201);
+      expect(
+        asSuccess<BookingPayload>(secondBookingRes.body).staffMembershipId,
+      ).toBe(secondMembershipId);
     });
   });
 

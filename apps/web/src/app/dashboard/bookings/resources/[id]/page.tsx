@@ -19,6 +19,18 @@ import { useAuthReady } from "@/lib/use-auth-ready";
 
 const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
+interface MemberOption {
+  id: string;
+  userId: { firstName?: string; lastName?: string; email: string };
+}
+
+function memberName(member: MemberOption): string {
+  return (
+    [member.userId.firstName, member.userId.lastName].filter(Boolean).join(" ") ||
+    member.userId.email
+  );
+}
+
 interface BlockedSlotFormValues {
   date: string;
   startTime: string;
@@ -35,6 +47,11 @@ export default function ResourceDetailPage() {
   const resourceQuery = useQuery({
     queryKey: ["resources", id],
     queryFn: () => apiClient.get<Resource>(`/resources/${id}`),
+    enabled: authReady,
+  });
+  const { data: members } = useQuery({
+    queryKey: ["organizations", "me", "members"],
+    queryFn: () => apiClient.get<MemberOption[]>("/organizations/me/members"),
     enabled: authReady,
   });
 
@@ -56,6 +73,7 @@ export default function ResourceDetailPage() {
       active: resource.active,
       weeklyAvailability: resource.weeklyAvailability,
       externalCalendarUrl: resource.externalCalendarUrl,
+      membershipId: resource.membershipId,
     });
   }
   function cancelEdit() {
@@ -156,6 +174,15 @@ export default function ResourceDetailPage() {
 
         {!isEditing ? (
           <>
+            <div className="mt-4">
+              <dt className="text-sm text-text-muted">Membre assigné</dt>
+              <dd className="mt-0.5 text-sm text-text">
+                {(() => {
+                  const member = members?.find((m) => m.id === resource.membershipId);
+                  return member ? memberName(member) : "—";
+                })()}
+              </dd>
+            </div>
             {resource.description && (
               <div className="mt-4">
                 <dt className="text-sm text-text-muted">Description</dt>
@@ -205,6 +232,20 @@ export default function ResourceDetailPage() {
             {errors.externalCalendarUrl && (
               <p className="text-xs text-destructive">{errors.externalCalendarUrl.message}</p>
             )}
+            <select
+              className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+              defaultValue=""
+              {...register("membershipId", {
+                setValueAs: (v: string) => (v === "" ? undefined : v),
+              })}
+            >
+              <option value="">Aucun membre assigné (ressource générique)</option>
+              {members?.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {memberName(member)}
+                </option>
+              ))}
+            </select>
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-text">Horaires hebdomadaires</p>

@@ -34,11 +34,15 @@ export class ResourcesRepository {
   findAll(
     organizationId: string,
     activeOnly: boolean,
+    membershipId?: string,
   ): Promise<ResourceDocument[]> {
     const filter: Record<string, unknown> = {
       organizationId: new Types.ObjectId(organizationId),
     };
     if (activeOnly) filter.active = true;
+    if (membershipId && Types.ObjectId.isValid(membershipId)) {
+      filter.membershipId = new Types.ObjectId(membershipId);
+    }
     return this.resourceModel.find(filter).sort({ name: 1 }).exec();
   }
 

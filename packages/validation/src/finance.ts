@@ -21,6 +21,7 @@ export const createQuoteSchema = z.object({
   currency: z.string().length(3),
   validUntil: z.string().datetime().optional(),
   notes: z.string().max(2000).optional(),
+  discountCode: z.string().max(40).optional(),
 });
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;
 
@@ -46,6 +47,7 @@ export const createInvoiceSchema = z.object({
   currency: z.string().length(3),
   dueDate: z.string().datetime().optional(),
   notes: z.string().max(2000).optional(),
+  discountCode: z.string().max(40).optional(),
 });
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 

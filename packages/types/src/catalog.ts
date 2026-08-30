@@ -48,6 +48,12 @@ export interface Offer {
   variants: OfferVariant[];
   status: OfferStatus;
   customFields: CustomFieldValues;
+  /** Opt-in stock tracking — false (default) means this offer is never checked/decremented by
+   *  order creation, matching every existing offer's behavior today. */
+  trackStock: boolean;
+  /** Only meaningful when trackStock is true. Reserved (decremented) at order-creation time,
+   *  not at fulfillment — see InventoryService for the concurrency reasoning. */
+  stockOnHand?: number;
   createdAt: string;
   updatedAt: string;
 }

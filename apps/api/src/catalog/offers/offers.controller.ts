@@ -10,9 +10,11 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  adjustStockSchema,
   createOfferSchema,
   listOffersQuerySchema,
   updateOfferSchema,
+  type AdjustStockInput,
   type CreateOfferInput,
   type ListOffersQuery,
   type UpdateOfferInput,
@@ -66,6 +68,22 @@ export class OffersController {
     @Body(new ZodValidationPipe(updateOfferSchema)) body: UpdateOfferInput,
   ) {
     return this.offersService.update(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body,
+    );
+  }
+
+  @RequirePermissions('offers.update')
+  @Post(':id/stock/adjust')
+  adjustStock(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(adjustStockSchema)) body: AdjustStockInput,
+  ) {
+    return this.offersService.adjustStock(
       tenant.organizationId,
       user.userId,
       id,

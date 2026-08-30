@@ -107,6 +107,15 @@ export class Resource {
   externalCalendarUrl?: string;
 
   /**
+   * Optional link to a real staff Membership — turns "book with Sophie" from a name string into
+   * a queryable relationship, and lets commission/tip-attribution features later trace a
+   * booking/order back to the staff member who performed it. Never required: every Resource
+   * that isn't a person (a room, a vehicle, equipment) simply has none.
+   */
+  @Prop({ type: Types.ObjectId, ref: 'Membership' })
+  membershipId?: Types.ObjectId;
+
+  /**
    * Internal write-conflict trigger only — never read, no business meaning, kept out of API
    * responses via `select: false`. Every booking-creation transaction increments it (see
    * AvailabilityService.assertSlotAvailable) as part of the same MongoDB transaction that reads

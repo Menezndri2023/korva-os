@@ -30,6 +30,9 @@ export interface Resource {
   weeklyAvailability: WeeklyAvailabilityWindow[];
   blockedSlots: BlockedSlot[];
   externalCalendarUrl?: string;
+  /** Optional link to a staff Membership — see Booking.staffMembershipId for the snapshot
+   *  rationale on the booking side. */
+  membershipId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +68,9 @@ export interface Booking {
    *  sharing one resource+time, and some attendees may be absent while the session still
    *  happened. Absent (undefined) until completed. */
   attended?: boolean;
+  /** Snapshot of the resource's assigned staff member at booking-creation time — see the schema
+   *  field's own doc comment for why this is a snapshot, not a live join. */
+  staffMembershipId?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -26,6 +26,14 @@ import { AuditModule } from '../audit/audit.module';
 // `import { BookingModule }` site first, per this codebase's own "check the reverse edge first"
 // convention.
 import { CommunicationModule } from '../communication/communication.module';
+// For MembershipsService (staff↔Resource link validation, staffMembershipId snapshot on
+// Booking.create). Safe: IdentityModule only imports EmailModule/AuditModule, neither of which
+// imports BookingModule — verified per this codebase's "check the reverse edge first" convention.
+import { IdentityModule } from '../identity/identity.module';
+// For OrganizationsService (booking certificate PDF header) — same reverse-edge check already
+// documented above for IdentityModule; OrganizationsModule has no path back to BookingModule.
+import { OrganizationsModule } from '../organizations/organizations.module';
+import { DocumentsModule } from '../documents/documents.module';
 
 @Module({
   imports: [
@@ -37,6 +45,9 @@ import { CommunicationModule } from '../communication/communication.module';
     CatalogModule,
     AuditModule,
     CommunicationModule,
+    IdentityModule,
+    OrganizationsModule,
+    DocumentsModule,
   ],
   controllers: [
     ResourcesController,

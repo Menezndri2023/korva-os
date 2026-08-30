@@ -15,3 +15,4 @@ export * from "./analytics.ts";
 export * from "./integrations.ts";
 export * from "./decision-engine.ts";
 export * from "./webhook-subscriptions.ts";
+export * from "./discount-codes.ts";

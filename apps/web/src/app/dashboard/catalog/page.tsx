@@ -47,6 +47,7 @@ export default function CatalogPage() {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<CreateOfferInput>({
     resolver: zodResolver(createOfferSchema),
@@ -57,8 +58,10 @@ export default function CatalogPage() {
       variants: [],
       status: "draft",
       pricing: { amount: 0, currency: "EUR" },
+      trackStock: false,
     },
   });
+  const trackStock = watch("trackStock");
 
   const createMutation = useMutation({
     mutationFn: (input: CreateOfferInput) => apiClient.post<Offer>("/offers", input),
@@ -130,6 +133,19 @@ export default function CatalogPage() {
           <Input placeholder="Devise (EUR)" {...register("pricing.currency")} />
           {errors.pricing?.currency && (
             <p className="col-span-2 text-xs text-destructive">{errors.pricing.currency.message}</p>
+          )}
+          <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
+            <input type="checkbox" {...register("trackStock")} />
+            Suivre le stock pour cette offre
+          </label>
+          {trackStock && (
+            <Input
+              type="number"
+              step="1"
+              placeholder="Stock initial"
+              className="col-span-2"
+              {...register("stockOnHand", { valueAsNumber: true })}
+            />
           )}
 
           {createMutation.isError && (

@@ -13,6 +13,7 @@ import { OrderDocument } from './schemas/order.schema';
 import { CartsRepository } from '../carts/carts.repository';
 import { ContactsService } from '../../crm/contacts/contacts.service';
 import { OffersService } from '../../catalog/offers/offers.service';
+import { InventoryService } from '../../catalog/offers/inventory.service';
 import { BookingsService } from '../../booking/bookings/bookings.service';
 import { InvoicesService } from '../../finance/invoices/invoices.service';
 import { InvoiceDocument } from '../../finance/invoices/schemas/invoice.schema';
@@ -21,6 +22,7 @@ import { CountersService } from '../../core/counters/counters.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
 import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
+import { DiscountCodesService } from '../../finance/discount-codes/discount-codes.service';
 
 @Injectable()
 export class OrdersService {
@@ -31,12 +33,14 @@ export class OrdersService {
     private readonly cartsRepository: CartsRepository,
     private readonly contactsService: ContactsService,
     private readonly offersService: OffersService,
+    private readonly inventoryService: InventoryService,
     private readonly bookingsService: BookingsService,
     private readonly invoicesService: InvoicesService,
     private readonly fulfillmentsService: FulfillmentsService,
     private readonly countersService: CountersService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    private readonly discountCodesService: DiscountCodesService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
@@ -62,6 +66,7 @@ export class OrdersService {
       currency: input.currency,
       notes: input.notes,
       source: 'manual',
+      discountCode: input.discountCode,
     });
   }
 
@@ -174,6 +179,12 @@ export class OrdersService {
             message: 'This cart is not open',
           });
         }
+
+        await this.inventoryService.reserveStock(
+          organizationId,
+          input.items,
+          session,
+        );
 
         const number = await this.countersService.nextFormatted(
           organizationId,
@@ -334,17 +345,37 @@ export class OrdersService {
     ];
     const totals = computeTotals(items);
 
-    const updated = await this.ordersRepository.setItemsIfOpen(
-      organizationId,
-      orderId,
-      toLineItemDocs(items),
-      totals,
-    );
-    if (!updated) {
-      throw new BadRequestException({
-        code: 'ORDER_NOT_OPEN',
-        message: 'Items can only be added to an open order',
+    // Only the newly-added quantity needs reserving — existing items on the tab were already
+    // reserved when they were added. Reservation and the item-list write share one transaction,
+    // and setItemsIfOpen's null result is checked and thrown INSIDE the transaction (not after
+    // it commits) so a concurrently-closed order rolls the stock reservation back too, rather
+    // than leaving a phantom reservation with no matching order item.
+    const session = await this.connection.startSession();
+    let updated: OrderDocument;
+    try {
+      updated = await session.withTransaction(async () => {
+        await this.inventoryService.reserveStock(
+          organizationId,
+          [{ offerId: newItem.offerId, quantity: newItem.quantity }],
+          session,
+        );
+        const result = await this.ordersRepository.setItemsIfOpen(
+          organizationId,
+          orderId,
+          toLineItemDocs(items),
+          totals,
+          session,
+        );
+        if (!result) {
+          throw new BadRequestException({
+            code: 'ORDER_NOT_OPEN',
+            message: 'Items can only be added to an open order',
+          });
+        }
+        return result;
       });
+    } finally {
+      await session.endSession();
     }
 
     await this.auditService.record({
@@ -381,6 +412,7 @@ export class OrdersService {
       });
     }
 
+    const removedItem = order.items[itemIndex]!;
     const items: LineItemInput[] = order.items
       .filter((_item, i) => i !== itemIndex)
       .map((item) => ({
@@ -392,17 +424,39 @@ export class OrdersService {
       }));
     const totals = computeTotals(items);
 
-    const updated = await this.ordersRepository.setItemsIfOpen(
-      organizationId,
-      orderId,
-      toLineItemDocs(items),
-      totals,
-    );
-    if (!updated) {
-      throw new BadRequestException({
-        code: 'ORDER_NOT_OPEN',
-        message: 'Items can only be removed from an open order',
+    // Same "check inside the transaction, not after" reasoning as addItem — the restock and the
+    // item-list write must commit or roll back together.
+    const session = await this.connection.startSession();
+    let updated: OrderDocument;
+    try {
+      updated = await session.withTransaction(async () => {
+        const result = await this.ordersRepository.setItemsIfOpen(
+          organizationId,
+          orderId,
+          toLineItemDocs(items),
+          totals,
+          session,
+        );
+        if (!result) {
+          throw new BadRequestException({
+            code: 'ORDER_NOT_OPEN',
+            message: 'Items can only be removed from an open order',
+          });
+        }
+        await this.inventoryService.restockItems(
+          organizationId,
+          [
+            {
+              offerId: removedItem.offerId?.toString(),
+              quantity: removedItem.quantity,
+            },
+          ],
+          session,
+        );
+        return result;
       });
+    } finally {
+      await session.endSession();
     }
 
     await this.auditService.record({
@@ -459,6 +513,14 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Wraps the counter allocation, stock reservation, and Order insert in one transaction — stock
+   * reservation must roll back together with the rest if anything downstream fails, same
+   * reasoning as generateInvoiceAtomically. Was a plain non-transactional insert before stock
+   * tracking existed; every existing caller (create/createFromBooking/createOpen/
+   * createFromStorefront) is unaffected since reserveStock() is a no-op for offers that don't
+   * opt into trackStock (which is every offer today except newly-tracked ones).
+   */
   private async createOrderRecord(
     organizationId: string,
     userId: string | undefined,
@@ -472,29 +534,65 @@ export class OrdersService {
       /** Defaults to the schema's own default ('pending') when omitted — only createOpen()
        *  passes 'open' explicitly. */
       status?: OrderDocument['status'];
+      discountCode?: string;
     },
   ): Promise<OrderDocument> {
-    const totals = computeTotals(input.items);
-    const number = await this.countersService.nextFormatted(
-      organizationId,
-      'order',
-      'CMD',
-    );
+    const session = await this.connection.startSession();
+    let order: OrderDocument;
+    try {
+      order = await session.withTransaction(async () => {
+        await this.inventoryService.reserveStock(
+          organizationId,
+          input.items,
+          session,
+        );
 
-    const order = await this.ordersRepository.create({
-      organizationId: new Types.ObjectId(organizationId),
-      contactId: new Types.ObjectId(input.contactId),
-      number,
-      source: input.source,
-      status: input.status,
-      bookingId: input.bookingId
-        ? new Types.ObjectId(input.bookingId)
-        : undefined,
-      items: toLineItemDocs(input.items),
-      currency: input.currency,
-      ...totals,
-      notes: input.notes,
-    });
+        // Resolved inside the same transaction as the stock reservation: a stock failure below
+        // this point would otherwise leave a phantom redemption with no matching order.
+        const reservation = input.discountCode
+          ? await this.discountCodesService.validateAndReserve(
+              organizationId,
+              input.discountCode,
+              {
+                offerIds: input.items
+                  .map((item) => item.offerId)
+                  .filter((id): id is string => !!id),
+              },
+              session,
+            )
+          : undefined;
+        const totals = computeTotals(input.items, reservation?.resolved);
+
+        const number = await this.countersService.nextFormatted(
+          organizationId,
+          'order',
+          'CMD',
+        );
+
+        return this.ordersRepository.create(
+          {
+            organizationId: new Types.ObjectId(organizationId),
+            contactId: new Types.ObjectId(input.contactId),
+            number,
+            source: input.source,
+            status: input.status,
+            bookingId: input.bookingId
+              ? new Types.ObjectId(input.bookingId)
+              : undefined,
+            items: toLineItemDocs(input.items),
+            currency: input.currency,
+            ...totals,
+            discountCodeId: reservation
+              ? new Types.ObjectId(reservation.discountCodeId)
+              : undefined,
+            notes: input.notes,
+          },
+          session,
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
 
     await this.auditService.record({
       organizationId,
@@ -559,18 +657,71 @@ export class OrdersService {
     );
   }
 
+  /**
+   * Cancel is the one status transition that must restock every reserved item, so unlike
+   * confirm/fulfill it doesn't go through the plain transition() helper — the status write and
+   * the restock share one transaction (order.items is read from the already-fetched `order`
+   * before the transaction starts, which is safe here: items on a non-open order are immutable,
+   * unlike the open-tab case addItem/removeItem guard against).
+   */
   async cancel(
     organizationId: string,
     userId: string,
     id: string,
   ): Promise<OrderDocument> {
-    return this.transition(
+    const order = await this.getById(organizationId, id);
+    if (!['pending', 'confirmed'].includes(order.status)) {
+      throw new BadRequestException({
+        code: 'ORDER_INVALID_TRANSITION',
+        message: `Cannot move order from "${order.status}" to "cancelled"`,
+      });
+    }
+
+    const session = await this.connection.startSession();
+    let updated: OrderDocument;
+    try {
+      updated = await session.withTransaction(async () => {
+        const result = await this.ordersRepository.update(
+          organizationId,
+          id,
+          { status: 'cancelled' },
+          session,
+        );
+        if (!result) {
+          throw new NotFoundException({
+            code: 'ORDER_NOT_FOUND',
+            message: 'Order not found',
+          });
+        }
+        await this.inventoryService.restockItems(
+          organizationId,
+          result.items.map((item) => ({
+            offerId: item.offerId?.toString(),
+            quantity: item.quantity,
+          })),
+          session,
+        );
+        await this.discountCodesService.releaseIfApplied(
+          organizationId,
+          result.discountCodeId?.toString(),
+          session,
+        );
+        return result;
+      });
+    } finally {
+      await session.endSession();
+    }
+
+    await this.auditService.record({
       organizationId,
       userId,
-      id,
-      ['pending', 'confirmed'],
-      'cancelled',
-    );
+      action: 'UPDATE',
+      entity: 'order',
+      entityId: id,
+      metadata: { status: 'cancelled' },
+    });
+
+    return updated;
   }
 
   async fulfill(

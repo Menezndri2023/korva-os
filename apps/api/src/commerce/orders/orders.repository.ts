@@ -97,6 +97,7 @@ export class OrdersRepository {
     organizationId: string,
     id: string,
     data: Partial<Order>,
+    session?: ClientSession,
   ): Promise<OrderDocument | null> {
     if (!Types.ObjectId.isValid(id)) return null;
     return this.orderModel
@@ -106,7 +107,7 @@ export class OrdersRepository {
           organizationId: new Types.ObjectId(organizationId),
         },
         data,
-        { new: true },
+        { new: true, session },
       )
       .exec();
   }
@@ -123,6 +124,7 @@ export class OrdersRepository {
     id: string,
     items: Order['items'],
     totals: { subtotal: number; taxTotal: number; total: number },
+    session?: ClientSession,
   ): Promise<OrderDocument | null> {
     if (!Types.ObjectId.isValid(id)) return Promise.resolve(null);
     return this.orderModel
@@ -133,7 +135,7 @@ export class OrdersRepository {
           status: 'open',
         },
         { items, ...totals },
-        { new: true },
+        { new: true, session },
       )
       .exec();
   }

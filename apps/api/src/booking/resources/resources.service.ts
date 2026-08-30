@@ -15,6 +15,7 @@ import {
   UnsafeWebhookUrlError,
   assertSafeWebhookUrl,
 } from '../../shared/safe-fetch';
+import { MembershipsService } from '../../identity/memberships/memberships.service';
 
 /** Same check already applied to outgoing workflow webhook URLs — an ICS feed URL is just as
  *  capable of being pointed at an internal service or cloud metadata endpoint. */
@@ -34,7 +35,10 @@ async function assertSafeCalendarUrl(url: string): Promise<void> {
 
 @Injectable()
 export class ResourcesService {
-  constructor(private readonly resourcesRepository: ResourcesRepository) {}
+  constructor(
+    private readonly resourcesRepository: ResourcesRepository,
+    private readonly membershipsService: MembershipsService,
+  ) {}
 
   async create(
     organizationId: string,
@@ -42,6 +46,9 @@ export class ResourcesService {
   ): Promise<ResourceDocument> {
     if (input.externalCalendarUrl) {
       await assertSafeCalendarUrl(input.externalCalendarUrl);
+    }
+    if (input.membershipId) {
+      await this.assertMembershipExists(organizationId, input.membershipId);
     }
     return this.resourcesRepository.create({
       organizationId: new Types.ObjectId(organizationId),
@@ -52,14 +59,38 @@ export class ResourcesService {
       active: input.active,
       weeklyAvailability: input.weeklyAvailability,
       externalCalendarUrl: input.externalCalendarUrl,
+      membershipId: input.membershipId
+        ? new Types.ObjectId(input.membershipId)
+        : undefined,
     });
   }
 
   list(
     organizationId: string,
     activeOnly: boolean,
+    membershipId?: string,
   ): Promise<ResourceDocument[]> {
-    return this.resourcesRepository.findAll(organizationId, activeOnly);
+    return this.resourcesRepository.findAll(
+      organizationId,
+      activeOnly,
+      membershipId,
+    );
+  }
+
+  private async assertMembershipExists(
+    organizationId: string,
+    membershipId: string,
+  ): Promise<void> {
+    const membership = await this.membershipsService.findByIdForOrganization(
+      membershipId,
+      organizationId,
+    );
+    if (!membership) {
+      throw new NotFoundException({
+        code: 'MEMBERSHIP_NOT_FOUND',
+        message: 'Membership not found',
+      });
+    }
   }
 
   async getById(organizationId: string, id: string): Promise<ResourceDocument> {
@@ -84,11 +115,15 @@ export class ResourcesService {
     if (input.externalCalendarUrl) {
       await assertSafeCalendarUrl(input.externalCalendarUrl);
     }
-    const updated = await this.resourcesRepository.update(
-      organizationId,
-      id,
-      input,
-    );
+    if (input.membershipId) {
+      await this.assertMembershipExists(organizationId, input.membershipId);
+    }
+    const updated = await this.resourcesRepository.update(organizationId, id, {
+      ...input,
+      membershipId: input.membershipId
+        ? new Types.ObjectId(input.membershipId)
+        : undefined,
+    });
     if (!updated) {
       throw new NotFoundException({
         code: 'RESOURCE_NOT_FOUND',

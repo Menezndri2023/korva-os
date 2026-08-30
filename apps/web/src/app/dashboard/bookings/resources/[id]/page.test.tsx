@@ -44,6 +44,7 @@ const resource = {
 
 function mockGetByPath(path: string) {
   if (path === "/resources/res-1") return Promise.resolve(resource);
+  if (path === "/organizations/me/members") return Promise.resolve([]);
   throw new Error(`unexpected GET ${path}`);
 }
 

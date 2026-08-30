@@ -38,6 +38,12 @@ export class Quote {
   @Prop({ required: true })
   taxTotal!: number;
 
+  @Prop({ type: Types.ObjectId, ref: 'DiscountCode' })
+  discountCodeId?: Types.ObjectId;
+
+  @Prop({ default: 0 })
+  discountTotal!: number;
+
   @Prop({ required: true })
   total!: number;
 

@@ -61,6 +61,14 @@ export class Booking {
   /** See Booking.attended in @korva/types for the field-level rationale. */
   @Prop({ type: Boolean })
   attended?: boolean;
+
+  /**
+   * Snapshot of resource.membershipId at booking-creation time — NOT a live join. A later staff
+   * reassignment on the Resource must never rewrite historical commission/attribution data, so
+   * this is copied once and never re-derived. Absent when the resource had no staff link.
+   */
+  @Prop({ type: Types.ObjectId, ref: 'Membership' })
+  staffMembershipId?: Types.ObjectId;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);

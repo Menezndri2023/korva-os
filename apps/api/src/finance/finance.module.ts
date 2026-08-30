@@ -10,6 +10,10 @@ import {
   TimeEntry,
   TimeEntrySchema,
 } from './time-entries/schemas/time-entry.schema';
+import {
+  DiscountCode,
+  DiscountCodeSchema,
+} from './discount-codes/schemas/discount-code.schema';
 
 import { QuotesRepository } from './quotes/quotes.repository';
 import { QuotesService } from './quotes/quotes.service';
@@ -39,6 +43,10 @@ import { TimeEntriesRepository } from './time-entries/time-entries.repository';
 import { TimeEntriesService } from './time-entries/time-entries.service';
 import { TimeEntriesController } from './time-entries/time-entries.controller';
 
+import { DiscountCodesRepository } from './discount-codes/discount-codes.repository';
+import { DiscountCodesService } from './discount-codes/discount-codes.service';
+import { DiscountCodesController } from './discount-codes/discount-codes.controller';
+
 import { CrmModule } from '../crm/crm.module';
 import { CountersModule } from '../core/counters/counters.module';
 import { AuditModule } from '../audit/audit.module';
@@ -48,6 +56,11 @@ import { IntegrationWebhookModule } from '../integrations/webhooks/integration-w
 // `import { IdentityModule }` site — only Organizations/Subscriptions/Communication/AppModule —
 // before adding this edge, per this codebase's own "check the reverse edge first" convention).
 import { IdentityModule } from '../identity/identity.module';
+// For OrganizationsService (invoice/quote PDF header). Safe: OrganizationsModule imports
+// IdentityModule/AuditModule/SubscriptionsModule, none of which imports FinanceModule or
+// anything that transitively does (verified by grepping every `import { FinanceModule }` site).
+import { OrganizationsModule } from '../organizations/organizations.module';
+import { DocumentsModule } from '../documents/documents.module';
 
 @Module({
   imports: [
@@ -58,12 +71,15 @@ import { IdentityModule } from '../identity/identity.module';
       { name: Refund.name, schema: RefundSchema },
       { name: Expense.name, schema: ExpenseSchema },
       { name: TimeEntry.name, schema: TimeEntrySchema },
+      { name: DiscountCode.name, schema: DiscountCodeSchema },
     ]),
     CrmModule,
     CountersModule,
     AuditModule,
     IntegrationWebhookModule,
     IdentityModule,
+    OrganizationsModule,
+    DocumentsModule,
   ],
   controllers: [
     QuotesController,
@@ -71,6 +87,7 @@ import { IdentityModule } from '../identity/identity.module';
     PaymentsController,
     ExpensesController,
     TimeEntriesController,
+    DiscountCodesController,
     FlutterwaveWebhookController,
     PaystackWebhookController,
   ],
@@ -99,7 +116,14 @@ import { IdentityModule } from '../identity/identity.module';
     ExpensesService,
     TimeEntriesRepository,
     TimeEntriesService,
+    DiscountCodesRepository,
+    DiscountCodesService,
   ],
-  exports: [InvoicesService, QuotesService, PaymentReconciliationService],
+  exports: [
+    InvoicesService,
+    QuotesService,
+    PaymentReconciliationService,
+    DiscountCodesService,
+  ],
 })
 export class FinanceModule {}

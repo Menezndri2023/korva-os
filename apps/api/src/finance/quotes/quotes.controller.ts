@@ -6,7 +6,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import {
   createQuoteSchema,
@@ -24,12 +26,21 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
+import { ContactsService } from '../../crm/contacts/contacts.service';
+import { OrganizationsService } from '../../organizations/organizations.service';
+import { DocumentRenderingService } from '../../documents/rendering/document-rendering.service';
+import { buildQuoteDocumentManifest } from '../../documents/templates/quote-document.template';
 
 @ApiTags('quotes')
 @RequireModule('finance')
 @Controller('quotes')
 export class QuotesController {
-  constructor(private readonly quotesService: QuotesService) {}
+  constructor(
+    private readonly quotesService: QuotesService,
+    private readonly contactsService: ContactsService,
+    private readonly organizationsService: OrganizationsService,
+    private readonly documentRenderingService: DocumentRenderingService,
+  ) {}
 
   @RequirePermissions('quotes.read')
   @Get()
@@ -44,6 +55,33 @@ export class QuotesController {
   @Get(':id')
   getById(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.quotesService.getById(tenant.organizationId, id);
+  }
+
+  @RequirePermissions('quotes.read')
+  @Get(':id/pdf')
+  async getPdf(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const quote = await this.quotesService.getById(tenant.organizationId, id);
+    const [organization, contact] = await Promise.all([
+      this.organizationsService.getById(tenant.organizationId),
+      this.contactsService.getById(
+        tenant.organizationId,
+        quote.contactId.toString(),
+      ),
+    ]);
+    const manifest = buildQuoteDocumentManifest(quote, organization, contact);
+    const buffer = await this.documentRenderingService.renderPdf(manifest);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${quote.number}.pdf"`,
+    );
+    res.send(buffer);
   }
 
   @RequirePermissions('quotes.create')

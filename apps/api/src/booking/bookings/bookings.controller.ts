@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -6,7 +7,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import {
   completeBookingSchema,
@@ -28,12 +31,23 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
+import { ContactsService } from '../../crm/contacts/contacts.service';
+import { OffersService } from '../../catalog/offers/offers.service';
+import { OrganizationsService } from '../../organizations/organizations.service';
+import { DocumentRenderingService } from '../../documents/rendering/document-rendering.service';
+import { buildCertificateDocumentManifest } from '../../documents/templates/certificate-document.template';
 
 @ApiTags('bookings')
 @RequireModule('booking')
 @Controller('bookings')
 export class BookingsController {
-  constructor(private readonly bookingsService: BookingsService) {}
+  constructor(
+    private readonly bookingsService: BookingsService,
+    private readonly contactsService: ContactsService,
+    private readonly offersService: OffersService,
+    private readonly organizationsService: OrganizationsService,
+    private readonly documentRenderingService: DocumentRenderingService,
+  ) {}
 
   @RequirePermissions('bookings.read')
   @Get()
@@ -123,5 +137,47 @@ export class BookingsController {
       id,
       body,
     );
+  }
+
+  @RequirePermissions('bookings.read')
+  @Get(':id/certificate')
+  async getCertificate(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const booking = await this.bookingsService.getById(
+      tenant.organizationId,
+      id,
+    );
+    if (booking.status !== 'completed') {
+      throw new BadRequestException({
+        code: 'CERTIFICATE_NOT_AVAILABLE',
+        message: 'A certificate is only available for a completed booking',
+      });
+    }
+    const [offer, organization, contact] = await Promise.all([
+      this.offersService.getById(
+        tenant.organizationId,
+        booking.offerId.toString(),
+      ),
+      this.organizationsService.getById(tenant.organizationId),
+      this.contactsService.getById(
+        tenant.organizationId,
+        booking.contactId.toString(),
+      ),
+    ]);
+    const manifest = buildCertificateDocumentManifest(
+      booking,
+      offer,
+      organization,
+      contact,
+    );
+    const buffer = await this.documentRenderingService.renderPdf(manifest);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader('Content-Disposition', `inline; filename="certificate.pdf"`);
+    res.send(buffer);
   }
 }

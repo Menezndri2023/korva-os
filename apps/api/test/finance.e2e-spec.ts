@@ -215,6 +215,291 @@ describe('Finance module (e2e)', () => {
     });
   });
 
+  describe('quote and invoice PDF export', () => {
+    let accessToken: string;
+    let organizationId: string;
+    let contactId: string;
+
+    beforeAll(async () => {
+      ({ accessToken, organizationId, contactId } = await registerOrgAndContact(
+        'pdf-owner@korva.test',
+        'PDF Org',
+      ));
+    });
+
+    it('downloads a valid PDF for a quote', async () => {
+      const quoteRes = await request(server)
+        .post('/api/v1/quotes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Consulting', quantity: 1, unitPrice: 100 }],
+        })
+        .expect(201);
+      const quoteId = asSuccess<QuotePayload>(quoteRes.body).id;
+
+      const res = await request(server)
+        .get(`/api/v1/quotes/${quoteId}/pdf`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(res.headers['content-type']).toContain('application/pdf');
+      expect(Buffer.isBuffer(res.body)).toBe(true);
+      expect((res.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    });
+
+    it('downloads a valid PDF for an invoice', async () => {
+      const invoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Consulting', quantity: 1, unitPrice: 100 }],
+        })
+        .expect(201);
+      const invoiceId = asSuccess<InvoicePayload>(invoiceRes.body).id;
+
+      const res = await request(server)
+        .get(`/api/v1/invoices/${invoiceId}/pdf`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(res.headers['content-type']).toContain('application/pdf');
+      expect(Buffer.isBuffer(res.body)).toBe(true);
+      expect((res.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    });
+
+    it('404s for a quote pdf that does not exist', async () => {
+      const res = await request(server)
+        .get('/api/v1/quotes/000000000000000000000000/pdf')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(404);
+      expect(asError(res.body).code).toBe('QUOTE_NOT_FOUND');
+    });
+  });
+
+  describe('discount codes', () => {
+    let accessToken: string;
+    let organizationId: string;
+    let contactId: string;
+
+    beforeAll(async () => {
+      ({ accessToken, organizationId, contactId } = await registerOrgAndContact(
+        'discount-owner@korva.test',
+        'Discount Org',
+      ));
+      // registerOrgAndContact only enables crm/finance — orders (commerce) are also exercised
+      // by the discount-code tests below, so enable that module too for this describe block.
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['crm', 'finance', 'catalog', 'commerce'] })
+        .expect(200);
+    });
+
+    it('creates a discount code, normalizing the code to uppercase', async () => {
+      const res = await request(server)
+        .post('/api/v1/discount-codes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ code: 'save10', type: 'percentage', value: 10 })
+        .expect(201);
+      expect(asSuccess<{ code: string }>(res.body).code).toBe('SAVE10');
+    });
+
+    it('rejects creating a duplicate code (case-insensitively)', async () => {
+      const res = await request(server)
+        .post('/api/v1/discount-codes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ code: 'Save10', type: 'fixed', value: 5, currency: 'EUR' })
+        .expect(400);
+      expect(asError(res.body).code).toBe('DISCOUNT_CODE_ALREADY_EXISTS');
+    });
+
+    it('rejects a fixed-type code with no currency', async () => {
+      const res = await request(server)
+        .post('/api/v1/discount-codes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ code: 'NOCURRENCY', type: 'fixed', value: 5 })
+        .expect(400);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('applies a percentage discount code to a new quote, pre-tax, and rejects an unknown code', async () => {
+      const quoteRes = await request(server)
+        .post('/api/v1/quotes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Consulting', quantity: 1, unitPrice: 100, taxRate: 20 }],
+          discountCode: 'save10',
+        })
+        .expect(201);
+      const quote = asSuccess<
+        QuotePayload & { discountTotal: number; subtotal: number; taxTotal: number }
+      >(quoteRes.body);
+      expect(quote.subtotal).toBe(100);
+      expect(quote.taxTotal).toBe(20);
+      expect(quote.discountTotal).toBe(10);
+      expect(quote.total).toBe(110);
+
+      const badRes = await request(server)
+        .post('/api/v1/quotes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Other', quantity: 1, unitPrice: 10 }],
+          discountCode: 'DOES-NOT-EXIST',
+        })
+        .expect(404);
+      expect(asError(badRes.body).code).toBe('DISCOUNT_CODE_NOT_FOUND');
+    });
+
+    it('enforces maxRedemptions atomically: the second order with the same single-use code is rejected, and stock/order state is unaffected', async () => {
+      await request(server)
+        .post('/api/v1/discount-codes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ code: 'ONEUSE', type: 'fixed', value: 5, currency: 'EUR', maxRedemptions: 1 })
+        .expect(201);
+
+      await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Widget', quantity: 1, unitPrice: 20 }],
+          discountCode: 'ONEUSE',
+        })
+        .expect(201);
+
+      const secondRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Widget', quantity: 1, unitPrice: 20 }],
+          discountCode: 'ONEUSE',
+        })
+        .expect(400);
+      expect(asError(secondRes.body).code).toBe('DISCOUNT_CODE_EXHAUSTED');
+    });
+
+    it('releases the redemption when the order using it is cancelled', async () => {
+      await request(server)
+        .post('/api/v1/discount-codes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ code: 'RELEASEME', type: 'fixed', value: 5, currency: 'EUR', maxRedemptions: 1 })
+        .expect(201);
+
+      const orderRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Widget', quantity: 1, unitPrice: 20 }],
+          discountCode: 'RELEASEME',
+        })
+        .expect(201);
+      const orderId = asSuccess<{ id: string }>(orderRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/orders/${orderId}/cancel`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      // Released — a second order can now use the same single-use code.
+      const secondRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Widget', quantity: 1, unitPrice: 20 }],
+          discountCode: 'RELEASEME',
+        })
+        .expect(201);
+      expect(asSuccess<{ discountTotal: number }>(secondRes.body).discountTotal).toBe(5);
+    });
+
+    it('rejects a scope:"offers" code when none of the order items are eligible', async () => {
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ type: 'product', name: 'Eligible Widget', pricing: { amount: 15, currency: 'EUR' } })
+        .expect(201);
+      const eligibleOfferId = asSuccess<{ id: string }>(offerRes.body).id;
+
+      await request(server)
+        .post('/api/v1/discount-codes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          code: 'SCOPED',
+          type: 'percentage',
+          value: 20,
+          scope: 'offers',
+          offerIds: [eligibleOfferId],
+        })
+        .expect(201);
+
+      const ineligibleRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Unrelated item', quantity: 1, unitPrice: 20 }],
+          discountCode: 'SCOPED',
+        })
+        .expect(400);
+      expect(asError(ineligibleRes.body).code).toBe('DISCOUNT_CODE_INELIGIBLE');
+
+      const eligibleRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [
+            {
+              offerId: eligibleOfferId,
+              description: 'Eligible Widget',
+              quantity: 1,
+              unitPrice: 15,
+            },
+          ],
+          discountCode: 'SCOPED',
+        })
+        .expect(201);
+      expect(asSuccess<{ discountTotal: number }>(eligibleRes.body).discountTotal).toBe(3);
+    });
+  });
+
   describe('invoice payments and refunds', () => {
     let accessToken: string;
     let organizationId: string;

@@ -90,6 +90,13 @@ export class Offer {
 
   @Prop({ type: Object, default: {} })
   customFields!: CustomFieldValues;
+
+  /** See Offer.trackStock/stockOnHand in @korva/types for the field-level rationale. */
+  @Prop({ default: false })
+  trackStock!: boolean;
+
+  @Prop({ min: 0 })
+  stockOnHand?: number;
 }
 
 export const OfferSchema = SchemaFactory.createForClass(Offer);

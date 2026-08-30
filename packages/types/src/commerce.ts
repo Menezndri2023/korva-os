@@ -38,6 +38,8 @@ export interface Order {
   currency: string;
   subtotal: number;
   taxTotal: number;
+  discountCodeId?: string;
+  discountTotal: number;
   total: number;
   notes?: string;
   createdAt: string;

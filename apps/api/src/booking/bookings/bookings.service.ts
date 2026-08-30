@@ -79,7 +79,7 @@ export class BookingsService {
     let booking: BookingDocument;
     try {
       booking = await session.withTransaction(async () => {
-        await this.availabilityService.assertSlotAvailable(
+        const resource = await this.availabilityService.assertSlotAvailable(
           organizationId,
           input.resourceId,
           startAt,
@@ -101,6 +101,8 @@ export class BookingsService {
               currency: offer.pricing.currency,
             },
             notes: input.notes,
+            // Snapshot, not a live join — see Booking.staffMembershipId's own doc comment.
+            staffMembershipId: resource.membershipId,
           },
           session,
         );

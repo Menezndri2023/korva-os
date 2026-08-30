@@ -13,6 +13,18 @@ import { useAuthReady } from "@/lib/use-auth-ready";
 
 const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
+interface MemberOption {
+  id: string;
+  userId: { firstName?: string; lastName?: string; email: string };
+}
+
+function memberName(member: MemberOption): string {
+  return (
+    [member.userId.firstName, member.userId.lastName].filter(Boolean).join(" ") ||
+    member.userId.email
+  );
+}
+
 export default function ResourcesPage() {
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
@@ -23,6 +35,15 @@ export default function ResourcesPage() {
     queryFn: () => apiClient.get<Resource[]>("/resources"),
     enabled: authReady,
   });
+  const { data: members } = useQuery({
+    queryKey: ["organizations", "me", "members"],
+    queryFn: () => apiClient.get<MemberOption[]>("/organizations/me/members"),
+    enabled: authReady,
+  });
+  function assignedStaffName(membershipId?: string): string {
+    const member = members?.find((m) => m.id === membershipId);
+    return member ? memberName(member) : "—";
+  }
 
   const { register, control, handleSubmit, reset } = useForm<CreateResourceInput>({
     resolver: zodResolver(createResourceSchema),
@@ -67,6 +88,20 @@ export default function ResourcesPage() {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           />
+          <select
+            className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            defaultValue=""
+            {...register("membershipId", {
+              setValueAs: (v: string) => (v === "" ? undefined : v),
+            })}
+          >
+            <option value="">Aucun membre assigné (ressource générique)</option>
+            {members?.map((member) => (
+              <option key={member.id} value={member.id}>
+                {memberName(member)}
+              </option>
+            ))}
+          </select>
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-text">Horaires hebdomadaires</p>
@@ -122,19 +157,20 @@ export default function ResourcesPage() {
                 <th className="px-4 py-2">Type</th>
                 <th className="px-4 py-2">Capacité</th>
                 <th className="px-4 py-2">Horaires</th>
+                <th className="px-4 py-2">Membre assigné</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
                     Chargement...
                   </td>
                 </tr>
               )}
               {!isLoading && resources?.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
                     Aucune ressource.
                   </td>
                 </tr>
@@ -155,6 +191,9 @@ export default function ResourcesPage() {
                     {resource.weeklyAvailability
                       .map((w) => `${DAY_LABELS[w.dayOfWeek]} ${w.startTime}-${w.endTime}`)
                       .join(", ") || "—"}
+                  </td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {assignedStaffName(resource.membershipId)}
                   </td>
                 </tr>
               ))}

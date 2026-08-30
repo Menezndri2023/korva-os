@@ -15,6 +15,7 @@ import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
 import { InvoicesService } from '../invoices/invoices.service';
 import { InvoiceDocument } from '../invoices/schemas/invoice.schema';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { DiscountCodesService } from '../discount-codes/discount-codes.service';
 
 @Injectable()
 export class QuotesService {
@@ -25,6 +26,7 @@ export class QuotesService {
     private readonly auditService: AuditService,
     private readonly invoicesService: InvoicesService,
     private readonly eventBus: EventBusService,
+    private readonly discountCodesService: DiscountCodesService,
   ) {}
 
   async create(
@@ -43,7 +45,21 @@ export class QuotesService {
       });
     }
 
-    const totals = computeTotals(input.items);
+    // Not transactional — a quote is a draft, not yet a real commitment (same reasoning as
+    // Order's distinction between draft-stage and commitment-stage writes). Goes through the
+    // identical validateAndReserve() used by Order/Invoice, never a forked copy of the logic.
+    const reservation = input.discountCode
+      ? await this.discountCodesService.validateAndReserve(
+          organizationId,
+          input.discountCode,
+          {
+            offerIds: input.items
+              .map((item) => item.offerId)
+              .filter((id): id is string => !!id),
+          },
+        )
+      : undefined;
+    const totals = computeTotals(input.items, reservation?.resolved);
     const number = await this.countersService.nextFormatted(
       organizationId,
       'quote',
@@ -57,6 +73,9 @@ export class QuotesService {
       items: toLineItemDocs(input.items),
       currency: input.currency,
       ...totals,
+      discountCodeId: reservation
+        ? new Types.ObjectId(reservation.discountCodeId)
+        : undefined,
       validUntil: input.validUntil ? new Date(input.validUntil) : undefined,
       notes: input.notes,
     });

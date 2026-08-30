@@ -173,15 +173,21 @@ describe('Wave 4 Stage 2.6 — payment lifecycle hardening (real Mongo, fixture 
           useValue: { record: jest.fn().mockResolvedValue(undefined) },
         },
         // Real InvoicesService, constructed directly rather than via Nest's class-provider
-        // resolution — its `contactsService`/`countersService` constructor params are never
-        // touched by applyPaymentDelta/applyPaymentIfWithinBalance, the only two methods
-        // PaymentsService actually calls, so passing inert stand-ins for them is safe and avoids
-        // pulling in CrmModule/CountersModule's own dependency graphs for this narrowly-scoped
-        // lifecycle test.
+        // resolution — its `contactsService`/`countersService`/`discountCodesService`
+        // constructor params are never touched by applyPaymentDelta/applyPaymentIfWithinBalance,
+        // the only two methods PaymentsService actually calls, so passing inert stand-ins for
+        // them is safe and avoids pulling in CrmModule/CountersModule/DiscountCodesService's own
+        // dependency graphs for this narrowly-scoped lifecycle test.
         {
           provide: InvoicesService,
           useFactory: (repo: InvoicesRepository, audit: AuditService) =>
-            new InvoicesService(repo, {} as never, {} as never, audit),
+            new InvoicesService(
+              repo,
+              {} as never,
+              {} as never,
+              audit,
+              {} as never,
+            ),
           inject: [InvoicesRepository, AuditService],
         },
         { provide: PAYMENT_PROVIDER, useValue: provider },

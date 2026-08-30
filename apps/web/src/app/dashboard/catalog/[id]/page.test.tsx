@@ -108,6 +108,7 @@ describe("OfferDetailPage", () => {
         description: "Une belle chaise",
         pricing: { amount: 50, currency: "EUR" },
         status: "active",
+        trackStock: false,
       }),
     );
   });

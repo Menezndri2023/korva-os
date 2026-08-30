@@ -35,11 +35,18 @@ export const createOfferSchema = z.object({
   variants: z.array(offerVariantInputSchema).default([]),
   status: z.enum(OFFER_STATUSES).default("draft"),
   customFields: customFieldsSchema,
+  trackStock: z.boolean().default(false),
+  stockOnHand: z.number().int().min(0).optional(),
 });
 export type CreateOfferInput = z.infer<typeof createOfferSchema>;
 
 export const updateOfferSchema = createOfferSchema.partial();
 export type UpdateOfferInput = z.infer<typeof updateOfferSchema>;
+
+export const adjustStockSchema = z.object({
+  stockOnHand: z.number().int().min(0),
+});
+export type AdjustStockInput = z.infer<typeof adjustStockSchema>;
 
 export const listOffersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

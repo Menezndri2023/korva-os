@@ -23,6 +23,7 @@ export const createOrderSchema = z.object({
   items: z.array(lineItemInputSchema).min(1),
   currency: z.string().length(3),
   notes: z.string().max(2000).optional(),
+  discountCode: z.string().max(40).optional(),
 });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 

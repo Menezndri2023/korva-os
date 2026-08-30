@@ -42,6 +42,7 @@ const resourceTwo = {
 function mockResources(resources: unknown[]) {
   getMock.mockImplementation((path: string) => {
     if (path === "/resources") return Promise.resolve(resources);
+    if (path === "/organizations/me/members") return Promise.resolve([]);
     throw new Error(`unexpected GET ${path}`);
   });
 }
@@ -74,7 +75,7 @@ describe("ResourcesPage", () => {
 
     await screen.findByRole("link", { name: "Salle 1" });
     expect(screen.getByText("Lun 09:00-18:00")).toBeInTheDocument();
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("toggles the create form open and closed via the same button", async () => {

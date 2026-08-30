@@ -32,6 +32,8 @@ export interface Quote {
   currency: string;
   subtotal: number;
   taxTotal: number;
+  discountCodeId?: string;
+  discountTotal: number;
   total: number;
   validUntil?: string;
   notes?: string;
@@ -50,6 +52,8 @@ export interface Invoice {
   currency: string;
   subtotal: number;
   taxTotal: number;
+  discountCodeId?: string;
+  discountTotal: number;
   total: number;
   amountPaid: number;
   dueDate?: string;
@@ -117,6 +121,32 @@ export interface TimeEntry {
   status: TimeEntryStatus;
   invoiceId?: string;
   notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const DISCOUNT_CODE_TYPES = ["percentage", "fixed"] as const;
+export type DiscountCodeType = (typeof DISCOUNT_CODE_TYPES)[number];
+
+export const DISCOUNT_CODE_SCOPES = ["all", "offers"] as const;
+export type DiscountCodeScope = (typeof DISCOUNT_CODE_SCOPES)[number];
+
+export interface DiscountCode {
+  id: string;
+  organizationId: string;
+  code: string;
+  type: DiscountCodeType;
+  /** 0-100 for "percentage"; a currency amount for "fixed". */
+  value: number;
+  currency?: string;
+  startsAt?: string;
+  expiresAt?: string;
+  maxRedemptions?: number;
+  redemptionsCount: number;
+  scope: DiscountCodeScope;
+  /** Only meaningful when scope is "offers". */
+  offerIds: string[];
+  active: boolean;
   createdAt: string;
   updatedAt: string;
 }

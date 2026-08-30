@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { ClientSession, Types } from 'mongoose';
 import type {
+  AdjustStockInput,
   CreateOfferInput,
   ListOffersQuery,
   UpdateOfferInput,
@@ -50,6 +52,8 @@ export class OffersService {
       variants: input.variants,
       status: input.status,
       customFields,
+      trackStock: input.trackStock,
+      stockOnHand: input.stockOnHand,
     });
 
     await this.auditService.record({
@@ -91,8 +95,13 @@ export class OffersService {
   async getManyByIds(
     organizationId: string,
     ids: string[],
+    session?: ClientSession,
   ): Promise<Map<string, OfferDocument>> {
-    const offers = await this.offersRepository.findByIds(organizationId, ids);
+    const offers = await this.offersRepository.findByIds(
+      organizationId,
+      ids,
+      session,
+    );
     const byId = new Map(offers.map((offer) => [offer.id as string, offer]));
 
     const missing = ids.some((id) => !byId.has(id));
@@ -157,6 +166,45 @@ export class OffersService {
       action: 'UPDATE',
       entity: 'offer',
       entityId: id,
+    });
+
+    return updated;
+  }
+
+  /** Manual stock correction (stocktake, restock delivery) — sets stockOnHand to an absolute
+   *  value rather than a delta, since that's what a physical count actually produces. Requires
+   *  the offer to already have trackStock enabled (turn tracking on via update() first). */
+  async adjustStock(
+    organizationId: string,
+    userId: string,
+    id: string,
+    input: AdjustStockInput,
+  ): Promise<OfferDocument> {
+    const offer = await this.getById(organizationId, id);
+    if (!offer.trackStock) {
+      throw new BadRequestException({
+        code: 'STOCK_TRACKING_NOT_ENABLED',
+        message: 'Enable trackStock on this offer before adjusting stock',
+      });
+    }
+
+    const updated = await this.offersRepository.update(organizationId, id, {
+      stockOnHand: input.stockOnHand,
+    });
+    if (!updated) {
+      throw new NotFoundException({
+        code: 'OFFER_NOT_FOUND',
+        message: 'Offer not found',
+      });
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'UPDATE',
+      entity: 'offer',
+      entityId: id,
+      metadata: { stockAdjustedTo: input.stockOnHand },
     });
 
     return updated;

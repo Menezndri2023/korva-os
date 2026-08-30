@@ -16,6 +16,8 @@ import { ContactsService } from '../../crm/contacts/contacts.service';
 import { CountersService } from '../../core/counters/counters.service';
 import { AuditService } from '../../audit/audit.service';
 import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
+import type { ResolvedDiscount } from '../../shared/line-item.schema';
+import { DiscountCodesService } from '../discount-codes/discount-codes.service';
 
 @Injectable()
 export class InvoicesService {
@@ -24,6 +26,7 @@ export class InvoicesService {
     private readonly contactsService: ContactsService,
     private readonly countersService: CountersService,
     private readonly auditService: AuditService,
+    private readonly discountCodesService: DiscountCodesService,
   ) {}
 
   async create(
@@ -42,6 +45,21 @@ export class InvoicesService {
       });
     }
 
+    // Not transactional — same "draft/standalone creation, not a derived/system flow" reasoning
+    // as QuotesService.create(). createFromQuote/createFromOrder/createFromTimeEntries (system
+    // flows deriving from an already-resolved source) deliberately do NOT accept a discount code.
+    const reservation = input.discountCode
+      ? await this.discountCodesService.validateAndReserve(
+          organizationId,
+          input.discountCode,
+          {
+            offerIds: input.items
+              .map((item) => item.offerId)
+              .filter((id): id is string => !!id),
+          },
+        )
+      : undefined;
+
     const invoice = await this.createInvoiceRecord(organizationId, {
       contactId: input.contactId,
       quoteId: input.quoteId,
@@ -49,6 +67,8 @@ export class InvoicesService {
       currency: input.currency,
       dueDate: input.dueDate,
       notes: input.notes,
+      discount: reservation?.resolved,
+      discountCodeId: reservation?.discountCodeId,
     });
 
     await this.auditService.record({
@@ -140,10 +160,12 @@ export class InvoicesService {
       currency: string;
       dueDate?: string;
       notes?: string;
+      discount?: ResolvedDiscount;
+      discountCodeId?: string;
     },
     session?: ClientSession,
   ): Promise<InvoiceDocument> {
-    const totals = computeTotals(input.items);
+    const totals = computeTotals(input.items, input.discount);
     const number = await this.countersService.nextFormatted(
       organizationId,
       'invoice',
@@ -160,6 +182,9 @@ export class InvoicesService {
         items: toLineItemDocs(input.items),
         currency: input.currency,
         ...totals,
+        discountCodeId: input.discountCodeId
+          ? new Types.ObjectId(input.discountCodeId)
+          : undefined,
         amountPaid: 0,
         dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
         notes: input.notes,
