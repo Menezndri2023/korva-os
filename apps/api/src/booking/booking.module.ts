@@ -11,6 +11,7 @@ import { ResourcesController } from './resources/resources.controller';
 import { BookingsRepository } from './bookings/bookings.repository';
 import { BookingsService } from './bookings/bookings.service';
 import { BookingsController } from './bookings/bookings.controller';
+import { BookingReminderSchedulerService } from './bookings/booking-reminder-scheduler.service';
 
 import { AvailabilityService } from './availability/availability.service';
 import { AvailabilityController } from './availability/availability.controller';
@@ -19,6 +20,12 @@ import { CalendarSyncSchedulerService } from './resources/calendar-sync-schedule
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { AuditModule } from '../audit/audit.module';
+// For ConversationsService (BookingReminderSchedulerService's outbound send). Safe: neither
+// CommunicationModule nor anything it imports (CrmModule, IdentityModule, AuditModule,
+// EmailModule, MessagingProviderModule) imports BookingModule — verified by grepping every
+// `import { BookingModule }` site first, per this codebase's own "check the reverse edge first"
+// convention.
+import { CommunicationModule } from '../communication/communication.module';
 
 @Module({
   imports: [
@@ -29,6 +36,7 @@ import { AuditModule } from '../audit/audit.module';
     CrmModule,
     CatalogModule,
     AuditModule,
+    CommunicationModule,
   ],
   controllers: [
     ResourcesController,
@@ -42,6 +50,7 @@ import { AuditModule } from '../audit/audit.module';
     ResourcesService,
     BookingsService,
     CalendarSyncSchedulerService,
+    BookingReminderSchedulerService,
   ],
   exports: [BookingsService, AvailabilityService, ResourcesService],
 })

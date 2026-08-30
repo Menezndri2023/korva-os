@@ -53,9 +53,16 @@ export class Booking {
 
   @Prop()
   notes?: string;
+
+  /** See Booking.reminderSentAt in @korva/types for the field-level rationale. */
+  @Prop({ type: Date })
+  reminderSentAt?: Date;
 }
 
 export const BookingSchema = SchemaFactory.createForClass(Booking);
 BookingSchema.index({ organizationId: 1, resourceId: 1, startAt: 1 });
 BookingSchema.index({ organizationId: 1, status: 1, startAt: -1 });
 BookingSchema.index({ organizationId: 1, contactId: 1 });
+// Supports BookingsRepository.findUpcomingUnreminded's global (org-agnostic) sweep query —
+// same cross-tenant-scheduler shape as Quote/Invoice's own status+date indexes.
+BookingSchema.index({ status: 1, startAt: 1, reminderSentAt: 1 });

@@ -49,7 +49,7 @@ export class ConversationsService {
 
   async create(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     input: CreateConversationInput,
   ): Promise<ConversationDocument> {
     const contact = await this.contactsService.getById(
@@ -91,6 +91,28 @@ export class ConversationsService {
     });
 
     return conversation;
+  }
+
+  /**
+   * Reuses an already-open conversation with this contact on this channel, or opens a new one —
+   * for a system-initiated send (e.g. a booking reminder) that has no real acting user and no
+   * conversationId to hand yet. Callers should catch WHATSAPP_CONSENT_MISSING (thrown by
+   * create() when channel is 'whatsapp' and the contact never consented) to fall back to another
+   * channel rather than treating it as fatal.
+   */
+  async findOrCreateForContactAndChannel(
+    organizationId: string,
+    contactId: string,
+    channel: CreateConversationInput['channel'],
+  ): Promise<ConversationDocument> {
+    const existing =
+      await this.conversationsRepository.findOpenForContactAndChannel(
+        organizationId,
+        contactId,
+        channel,
+      );
+    if (existing) return existing;
+    return this.create(organizationId, undefined, { contactId, channel });
   }
 
   async getById(
@@ -171,7 +193,7 @@ export class ConversationsService {
 
   async sendMessage(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     conversationId: string,
     input: CreateMessageInput,
   ): Promise<MessageDocument> {

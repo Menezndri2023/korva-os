@@ -141,4 +141,65 @@ export class BookingsRepository {
       )
       .exec();
   }
+
+  /** Global (org-agnostic) sweep candidate list for BookingReminderSchedulerService — same
+   *  cross-tenant shape as InvoicesRepository.findOverdueCandidates, but looking forward
+   *  (`startAt` upcoming) instead of backward (`dueDate` passed). */
+  findUpcomingUnreminded(
+    windowMs: number,
+    limit = 100,
+  ): Promise<BookingDocument[]> {
+    const now = new Date();
+    return this.bookingModel
+      .find({
+        status: { $in: ACTIVE_STATUSES },
+        startAt: { $gte: now, $lt: new Date(now.getTime() + windowMs) },
+        reminderSentAt: { $exists: false },
+      })
+      .limit(limit)
+      .exec();
+  }
+
+  /**
+   * Atomically marks a single booking as reminded, guarded by the SAME eligibility filter used
+   * by findUpcomingUnreminded — so a booking cancelled/rescheduled concurrently between the
+   * sweep's read and this write is left untouched (returns null), and re-running this on an
+   * already-reminded booking is a no-op.
+   */
+  markReminderSentIfEligible(
+    organizationId: string,
+    id: string,
+  ): Promise<BookingDocument | null> {
+    return this.bookingModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          status: { $in: ACTIVE_STATUSES },
+          reminderSentAt: { $exists: false },
+        },
+        { reminderSentAt: new Date() },
+        { new: true },
+      )
+      .exec();
+  }
+
+  /** Called on reschedule — a reminder already sent for the old time no longer applies to the
+   *  new one. $unset (not the generic `update()`, which auto-$sets and would silently drop an
+   *  `undefined` value rather than actually clearing the field). */
+  clearReminderFlag(
+    organizationId: string,
+    id: string,
+  ): Promise<BookingDocument | null> {
+    return this.bookingModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+        },
+        { $unset: { reminderSentAt: 1 } },
+        { new: true },
+      )
+      .exec();
+  }
 }

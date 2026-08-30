@@ -32,10 +32,12 @@ function buildService(channel: 'email' | 'whatsapp') {
   };
 
   const createConversation = jest.fn().mockResolvedValue(conversation);
+  const findOpenForContactAndChannel = jest.fn().mockResolvedValue(null);
   const conversationsRepository = {
     findById: jest.fn().mockResolvedValue(conversation),
     update: jest.fn().mockResolvedValue(conversation),
     create: createConversation,
+    findOpenForContactAndChannel,
   } as unknown as ConversationsRepository;
 
   const messagesRepository = {
@@ -95,8 +97,10 @@ function buildService(channel: 'email' | 'whatsapp') {
     contactsService,
     conversationsRepository,
     createConversation,
+    findOpenForContactAndChannel,
     auditService,
     eventBus,
+    conversation,
   };
 }
 
@@ -234,5 +238,52 @@ describe('ConversationsService.create — WhatsApp consent gate (Wave 4 Stage 2)
     });
 
     expect(createConversation).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ConversationsService.findOrCreateForContactAndChannel (booking-reminder scheduler support)', () => {
+  it('reuses an already-open conversation instead of creating a new one', async () => {
+    const {
+      service,
+      conversationsRepository,
+      createConversation,
+      conversation,
+    } = buildService('email');
+    (
+      conversationsRepository.findOpenForContactAndChannel as jest.Mock
+    ).mockResolvedValue(conversation);
+
+    const result = await service.findOrCreateForContactAndChannel(
+      ORG_ID,
+      CONTACT.id,
+      'email',
+    );
+
+    expect(result).toBe(conversation);
+    expect(createConversation).not.toHaveBeenCalled();
+  });
+
+  it('creates a new conversation with no acting user when none is open', async () => {
+    const { service, createConversation, contactsService } =
+      buildService('email');
+    (contactsService.getById as jest.Mock).mockResolvedValue(CONTACT);
+
+    await service.findOrCreateForContactAndChannel(ORG_ID, CONTACT.id, 'email');
+
+    expect(createConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates WHATSAPP_CONSENT_MISSING when creating a whatsapp conversation for a non-consenting contact', async () => {
+    const { service, contactsService } = buildService('whatsapp');
+    (contactsService.getById as jest.Mock).mockResolvedValue({
+      ...CONTACT,
+      consents: [],
+    });
+
+    await expect(
+      service.findOrCreateForContactAndChannel(ORG_ID, CONTACT.id, 'whatsapp'),
+    ).rejects.toMatchObject({
+      response: { code: 'WHATSAPP_CONSENT_MISSING' },
+    });
   });
 });

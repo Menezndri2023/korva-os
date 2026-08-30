@@ -223,6 +223,11 @@ export class BookingsService {
         message: 'Booking not found',
       });
     }
+    // A reminder already sent for the old time no longer applies to the new one.
+    const cleared = await this.bookingsRepository.clearReminderFlag(
+      organizationId,
+      id,
+    );
 
     await this.auditService.record({
       organizationId,
@@ -233,7 +238,7 @@ export class BookingsService {
       metadata: { rescheduled: true },
     });
 
-    return updated;
+    return cleared ?? updated;
   }
 
   async cancel(

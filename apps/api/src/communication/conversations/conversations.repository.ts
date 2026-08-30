@@ -69,6 +69,24 @@ export class ConversationsRepository {
     return { data, total };
   }
 
+  /** Used by ConversationsService.findOrCreateForContactAndChannel — a system-initiated send
+   *  (e.g. an appointment reminder) reuses an already-open conversation with this contact on
+   *  this channel instead of always opening a new one. */
+  findOpenForContactAndChannel(
+    organizationId: string,
+    contactId: string,
+    channel: string,
+  ): Promise<ConversationDocument | null> {
+    return this.conversationModel
+      .findOne({
+        organizationId: new Types.ObjectId(organizationId),
+        contactId: new Types.ObjectId(contactId),
+        channel,
+        status: 'open',
+      })
+      .exec();
+  }
+
   update(
     organizationId: string,
     id: string,

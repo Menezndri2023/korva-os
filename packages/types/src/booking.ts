@@ -57,6 +57,9 @@ export interface Booking {
   pricing: BookingPricing;
   paymentStatus: BookingPaymentStatus;
   notes?: string;
+  /** Set once BookingReminderSchedulerService has sent a reminder for this appointment — absent
+   *  otherwise. Cleared on reschedule (the old reminder no longer applies to the new time). */
+  reminderSentAt?: string;
   createdAt: string;
   updatedAt: string;
 }

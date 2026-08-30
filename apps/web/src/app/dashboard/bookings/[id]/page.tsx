@@ -222,6 +222,14 @@ export default function BookingDetailPage() {
                 {formatCurrency(booking.pricing.amount, booking.pricing.currency)}
               </dd>
             </div>
+            <div>
+              <dt className="text-text-muted">Rappel</dt>
+              <dd className="mt-0.5">
+                {booking.reminderSentAt
+                  ? `Envoyé le ${new Date(booking.reminderSentAt).toLocaleString("fr-FR")}`
+                  : "—"}
+              </dd>
+            </div>
           </dl>
         ) : (
           <form

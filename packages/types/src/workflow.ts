@@ -14,6 +14,7 @@ export const SYSTEM_EVENTS = [
   "payment.completed",
   "booking.created",
   "booking.cancelled",
+  "booking.reminder_sent",
   "customer.created",
   "invoice.overdue",
   "customer.inactive",
