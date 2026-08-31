@@ -3,6 +3,7 @@ import {
   EXPENSE_STATUSES,
   INVOICE_STATUSES,
   QUOTE_STATUSES,
+  RECURRING_BILLING_INTERVALS,
   TIME_ENTRY_STATUSES,
 } from "@korva/types";
 
@@ -183,4 +184,23 @@ export const generateInvoiceFromTimeEntriesSchema = z.object({
 });
 export type GenerateInvoiceFromTimeEntriesInput = z.infer<
   typeof generateInvoiceFromTimeEntriesSchema
+>;
+
+export const createRecurringBillingSchema = z.object({
+  contactId: z.string().min(1),
+  offerId: z.string().min(1),
+  interval: z.enum(RECURRING_BILLING_INTERVALS),
+});
+export type CreateRecurringBillingInput = z.infer<
+  typeof createRecurringBillingSchema
+>;
+
+export const listRecurringBillingsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(["active", "cancelled"]).optional(),
+  contactId: z.string().optional(),
+});
+export type ListRecurringBillingsQuery = z.infer<
+  typeof listRecurringBillingsQuerySchema
 >;

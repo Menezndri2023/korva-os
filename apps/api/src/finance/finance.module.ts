@@ -14,6 +14,16 @@ import {
   DiscountCode,
   DiscountCodeSchema,
 } from './discount-codes/schemas/discount-code.schema';
+import {
+  RecurringBilling,
+  RecurringBillingSchema,
+} from './recurring-billing/schemas/recurring-billing.schema';
+// Direct model injection (not `import { CatalogModule }`) — CatalogModule already imports
+// FinanceModule (for OfferReferencesRepository), so importing it back here would be a circular
+// module dependency. Same established workaround as CrmModule/PublicModule's own direct
+// Order/Booking/Contact registrations for the identical class of problem — see recurring-
+// billing.service.ts/recurring-billing-scheduler.service.ts for the two read-only consumers.
+import { Offer, OfferSchema } from '../catalog/offers/schemas/offer.schema';
 
 import { QuotesRepository } from './quotes/quotes.repository';
 import { QuotesService } from './quotes/quotes.service';
@@ -47,6 +57,11 @@ import { DiscountCodesRepository } from './discount-codes/discount-codes.reposit
 import { DiscountCodesService } from './discount-codes/discount-codes.service';
 import { DiscountCodesController } from './discount-codes/discount-codes.controller';
 
+import { RecurringBillingRepository } from './recurring-billing/recurring-billing.repository';
+import { RecurringBillingService } from './recurring-billing/recurring-billing.service';
+import { RecurringBillingController } from './recurring-billing/recurring-billing.controller';
+import { RecurringBillingSchedulerService } from './recurring-billing/recurring-billing-scheduler.service';
+
 import { CrmModule } from '../crm/crm.module';
 import { CountersModule } from '../core/counters/counters.module';
 import { AuditModule } from '../audit/audit.module';
@@ -72,6 +87,8 @@ import { DocumentsModule } from '../documents/documents.module';
       { name: Expense.name, schema: ExpenseSchema },
       { name: TimeEntry.name, schema: TimeEntrySchema },
       { name: DiscountCode.name, schema: DiscountCodeSchema },
+      { name: RecurringBilling.name, schema: RecurringBillingSchema },
+      { name: Offer.name, schema: OfferSchema },
     ]),
     CrmModule,
     CountersModule,
@@ -88,6 +105,7 @@ import { DocumentsModule } from '../documents/documents.module';
     ExpensesController,
     TimeEntriesController,
     DiscountCodesController,
+    RecurringBillingController,
     FlutterwaveWebhookController,
     PaystackWebhookController,
   ],
@@ -118,12 +136,16 @@ import { DocumentsModule } from '../documents/documents.module';
     TimeEntriesService,
     DiscountCodesRepository,
     DiscountCodesService,
+    RecurringBillingRepository,
+    RecurringBillingService,
+    RecurringBillingSchedulerService,
   ],
   exports: [
     InvoicesService,
     QuotesService,
     PaymentReconciliationService,
     DiscountCodesService,
+    RecurringBillingService,
   ],
 })
 export class FinanceModule {}

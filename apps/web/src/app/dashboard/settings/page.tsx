@@ -1882,6 +1882,9 @@ const WEBHOOK_EVENT_LABELS: Record<string, string> = {
   "message.sent": "Message envoyé",
   "subscription.plan_changed": "Plan d'abonnement changé",
   "expense.created": "Dépense créée",
+  "recurring_billing.created": "Abonnement client créé",
+  "recurring_billing.charged": "Abonnement client facturé",
+  "recurring_billing.cancelled": "Abonnement client résilié",
 };
 
 /**

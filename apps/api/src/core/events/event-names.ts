@@ -60,4 +60,7 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'message.sent': 'messageId',
   'subscription.plan_changed': 'subscriptionId',
   'expense.created': 'expenseId',
+  'recurring_billing.created': 'recurringBillingId',
+  'recurring_billing.charged': 'recurringBillingId',
+  'recurring_billing.cancelled': 'recurringBillingId',
 };

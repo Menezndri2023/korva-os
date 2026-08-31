@@ -31,7 +31,11 @@ export class InvoicesService {
 
   async create(
     organizationId: string,
-    userId: string,
+    // Optional so a system/scheduler-triggered invoice (no staff actor — see
+    // RecurringBillingSchedulerService) can call this too, same precedent as
+    // ContactsService.update's own `userId: string | undefined` widening; AuditService.record
+    // already tolerates undefined.
+    userId: string | undefined,
     input: CreateInvoiceInput,
   ): Promise<InvoiceDocument> {
     const contactExists = await this.contactsService.existsById(

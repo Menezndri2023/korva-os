@@ -28,6 +28,9 @@ export const SYSTEM_EVENTS = [
   "message.sent",
   "subscription.plan_changed",
   "expense.created",
+  "recurring_billing.created",
+  "recurring_billing.charged",
+  "recurring_billing.cancelled",
 ] as const;
 export type SystemEvent = (typeof SYSTEM_EVENTS)[number];
 

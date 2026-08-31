@@ -174,3 +174,36 @@ export interface DiscountCode {
   createdAt: string;
   updatedAt: string;
 }
+
+export const RECURRING_BILLING_INTERVALS = ["monthly", "yearly"] as const;
+export type RecurringBillingInterval = (typeof RECURRING_BILLING_INTERVALS)[number];
+
+export const RECURRING_BILLING_STATUSES = ["active", "cancelled"] as const;
+export type RecurringBillingStatus = (typeof RECURRING_BILLING_STATUSES)[number];
+
+/**
+ * A business's own recurring billing plan for one of ITS customers (e.g. a monthly retainer,
+ * a yearly membership) — deliberately named differently from `Subscription` elsewhere in
+ * @korva/types, which is KORVA's own platform/SaaS billing for the organization itself. Two
+ * unrelated concepts that happen to both be "recurring billing," kept unambiguous by name (see
+ * apps/api/src/finance/payments/providers/payment-provider-resolver.service.ts's own
+ * PaymentResolutionFlow 'subscription' vs 'commerce' split for the same distinction elsewhere
+ * in this codebase).
+ */
+export interface RecurringBilling {
+  id: string;
+  organizationId: string;
+  contactId: string;
+  offerId: string;
+  interval: RecurringBillingInterval;
+  status: RecurringBillingStatus;
+  /** Snapshotted from the offer's price at creation time — a later price change on the offer
+   *  never silently changes what an existing plan bills. */
+  amount: number;
+  currency: string;
+  nextBillingDate: string;
+  lastInvoiceId?: string;
+  cancelledAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
