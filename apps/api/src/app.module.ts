@@ -29,6 +29,7 @@ import { AiModule } from './ai/ai.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { PublicModule } from './public/public.module';
 import { CustomerAuthModule } from './customer-auth/customer-auth.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { BusinessGraphModule } from './business-graph/business-graph.module';
@@ -65,6 +66,7 @@ import { WebhookSubscriptionsModule } from './webhook-subscriptions/webhook-subs
     AnalyticsModule,
     PublicModule,
     CustomerAuthModule,
+    ReviewsModule,
     IntegrationsModule,
     BusinessGraphModule,
     DecisionEngineModule,

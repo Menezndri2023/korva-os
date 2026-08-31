@@ -1,5 +1,6 @@
 import type {
   BookingStatus,
+  LineItem,
   OfferPricing,
   OfferType,
   OfferVariant,
@@ -123,4 +124,33 @@ export interface CustomerBookingSummary {
   startAt: string;
   endAt: string;
   pricing: { amount: number; currency: string };
+}
+
+/** Mirrors CustomerAuthService#getOrderDetail's shape exactly. */
+export interface CustomerOrderDetail {
+  id: string;
+  number: string;
+  status: OrderStatus;
+  items: LineItem[];
+  subtotal: number;
+  taxTotal: number;
+  discountTotal: number;
+  shippingCost: number;
+  shippingAddress?: { line1: string; line2?: string; city: string; postalCode: string; country: string };
+  total: number;
+  currency: string;
+  hasInvoice: boolean;
+  createdAt: string;
+}
+
+/** Mirrors CustomerAuthService#getBookingDetail's shape exactly. */
+export interface CustomerBookingDetail {
+  id: string;
+  status: BookingStatus;
+  startAt: string;
+  endAt: string;
+  pricing: { amount: number; currency: string };
+  attended?: boolean;
+  notes?: string;
+  offerName: string;
 }

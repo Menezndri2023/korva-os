@@ -7,11 +7,12 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import {
   customerRegisterSchema,
   customerLoginSchema,
@@ -20,6 +21,7 @@ import {
   customerForgotPasswordSchema,
   customerResetPasswordSchema,
   listCustomerHistoryQuerySchema,
+  createReviewSchema,
   type CustomerRegisterInput,
   type CustomerLoginInput,
   type CustomerRefreshInput,
@@ -27,12 +29,16 @@ import {
   type CustomerForgotPasswordInput,
   type CustomerResetPasswordInput,
   type ListCustomerHistoryQuery,
+  type CreateReviewInput,
 } from '@korva/validation';
 import { CustomerAuthService } from './customer-auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { Public } from '../common/decorators/public.decorator';
 import { CustomerAuthGuard } from './guards/customer-auth.guard';
 import type { AuthenticatedCustomer } from './strategies/customer-jwt.strategy';
+import { DocumentRenderingService } from '../documents/rendering/document-rendering.service';
+import { buildInvoiceDocumentManifest } from '../documents/templates/invoice-document.template';
+import { buildCertificateDocumentManifest } from '../documents/templates/certificate-document.template';
 
 /** Same brute-force-surface reasoning as AuthController's AUTH_THROTTLE, tightened slightly
  *  since this endpoint set has no HttpOnly-cookie layer of its own to lean on. */
@@ -59,7 +65,10 @@ interface RequestWithCustomer extends Request {
 @Public()
 @Controller('public/:organizationSlug/account')
 export class CustomerAuthController {
-  constructor(private readonly customerAuthService: CustomerAuthService) {}
+  constructor(
+    private readonly customerAuthService: CustomerAuthService,
+    private readonly documentRenderingService: DocumentRenderingService,
+  ) {}
 
   @Throttle(CUSTOMER_AUTH_THROTTLE)
   @Post('register')
@@ -155,5 +164,92 @@ export class CustomerAuthController {
     query: ListCustomerHistoryQuery,
   ) {
     return this.customerAuthService.listBookings(slug, req.user!, query);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('orders/:id')
+  getOrder(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getOrderDetail(slug, req.user!, id);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('orders/:id/invoice-pdf')
+  async getOrderInvoicePdf(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { invoice, organization, contact } =
+      await this.customerAuthService.getOrderInvoiceForPdf(slug, req.user!, id);
+    const manifest = buildInvoiceDocumentManifest(
+      invoice,
+      organization,
+      contact,
+    );
+    const buffer = await this.documentRenderingService.renderPdf(manifest);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${invoice.number}.pdf"`,
+    );
+    res.send(buffer);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('bookings/:id')
+  getBooking(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getBookingDetail(slug, req.user!, id);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('bookings/:id/certificate')
+  async getBookingCertificate(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { booking, organization, contact, offer } =
+      await this.customerAuthService.getBookingForCertificate(
+        slug,
+        req.user!,
+        id,
+      );
+    const manifest = buildCertificateDocumentManifest(
+      booking,
+      offer,
+      organization,
+      contact,
+    );
+    const buffer = await this.documentRenderingService.renderPdf(manifest);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="certificat-${booking.id}.pdf"`,
+    );
+    res.send(buffer);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Post('reviews')
+  createReview(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+    @Body(new ZodValidationPipe(createReviewSchema)) body: CreateReviewInput,
+  ) {
+    return this.customerAuthService.createReview(slug, req.user!, body);
   }
 }

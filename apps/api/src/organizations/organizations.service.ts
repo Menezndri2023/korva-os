@@ -516,10 +516,14 @@ export class OrganizationsService {
       // verbatim, but still narrow enough to guide the user (https-only vs. genuinely
       // unreachable), not the fully generic message every OTHER failure mode below gets.
       const message =
-        error instanceof UnsafeWebhookUrlError && error.message.includes('https')
+        error instanceof UnsafeWebhookUrlError &&
+        error.message.includes('https')
           ? 'This URL must use https'
           : 'Unable to reach this URL';
-      throw new BadRequestException({ code: 'IMPORT_URL_UNREACHABLE', message });
+      throw new BadRequestException({
+        code: 'IMPORT_URL_UNREACHABLE',
+        message,
+      });
     }
     if (!response.ok) {
       throw new BadRequestException({

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -15,6 +16,7 @@ import type {
   CustomerLoginInput,
   CustomerUpdateProfileInput,
   ListCustomerHistoryQuery,
+  CreateReviewInput,
 } from '@korva/validation';
 import {
   EMAIL_PROVIDER,
@@ -25,8 +27,13 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { OrganizationDocument } from '../organizations/schemas/organization.schema';
 import { ContactsService } from '../crm/contacts/contacts.service';
 import { OrdersService } from '../commerce/orders/orders.service';
+import { OrderDocument } from '../commerce/orders/schemas/order.schema';
 import { BookingsService } from '../booking/bookings/bookings.service';
+import { BookingDocument } from '../booking/bookings/schemas/booking.schema';
 import { UsersService } from '../identity/users/users.service';
+import { InvoicesService } from '../finance/invoices/invoices.service';
+import { OffersService } from '../catalog/offers/offers.service';
+import { ReviewsService } from '../reviews/reviews.service';
 import { CustomerAccountRepository } from './customer-account.repository';
 import { CustomerSessionRepository } from './customer-session.repository';
 import { CustomerPasswordResetRepository } from './customer-password-reset.repository';
@@ -87,6 +94,9 @@ export class CustomerAuthService {
     private readonly ordersService: OrdersService,
     private readonly bookingsService: BookingsService,
     private readonly usersService: UsersService,
+    private readonly invoicesService: InvoicesService,
+    private readonly offersService: OffersService,
+    private readonly reviewsService: ReviewsService,
     private readonly customerAccountRepository: CustomerAccountRepository,
     private readonly customerSessionRepository: CustomerSessionRepository,
     private readonly customerPasswordResetRepository: CustomerPasswordResetRepository,
@@ -154,6 +164,25 @@ export class CustomerAuthService {
       email: input.email,
       passwordHash,
     });
+
+    // Best-effort, never allowed to affect the outcome — same posture as AuthService.register's
+    // own email-verification send (a delivery failure must never turn a successful account
+    // creation into a failed request).
+    try {
+      await this.emailProvider.send({
+        to: account.email,
+        subject: `Bienvenue chez ${organization.name}`,
+        body: interpolate(
+          '<p>Bonjour {{firstName}},</p>' +
+            '<p>Votre compte client chez {{orgName}} a bien été créé. Vous pouvez suivre vos commandes ' +
+            'et réservations à tout moment depuis votre espace client.</p>',
+          { firstName: contact.firstName ?? '', orgName: organization.name },
+          { escapeHtml: true },
+        ),
+      });
+    } catch (error) {
+      this.logger.error('Failed to send customer welcome email', error);
+    }
 
     const tokens = await this.issueTokens(account, organizationId);
     return {
@@ -361,6 +390,229 @@ export class CustomerAuthService {
       })),
       pagination,
     };
+  }
+
+  /** Ownership check shared by every "one of my own orders" method below — a valid customer
+   *  session for the right org is not by itself proof the order belongs to THIS customer, so
+   *  every one of these re-checks contactId even though organizationId was already verified. */
+  private assertOwnsOrder(
+    order: OrderDocument,
+    customer: AuthenticatedCustomer,
+  ): void {
+    if (order.contactId.toString() !== customer.contactId) {
+      throw new NotFoundException({
+        code: 'ORDER_NOT_FOUND',
+        message: 'Order not found',
+      });
+    }
+  }
+
+  private assertOwnsBooking(
+    booking: BookingDocument,
+    customer: AuthenticatedCustomer,
+  ): void {
+    if (booking.contactId.toString() !== customer.contactId) {
+      throw new NotFoundException({
+        code: 'BOOKING_NOT_FOUND',
+        message: 'Booking not found',
+      });
+    }
+  }
+
+  async getOrderDetail(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    orderId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const order = await this.ordersService.getById(
+      organization.id as string,
+      orderId,
+    );
+    this.assertOwnsOrder(order, customer);
+
+    return {
+      id: order.id as string,
+      number: order.number,
+      status: order.status,
+      items: order.items,
+      subtotal: order.subtotal,
+      taxTotal: order.taxTotal,
+      discountTotal: order.discountTotal,
+      shippingCost: order.shippingCost,
+      shippingAddress: order.shippingAddress,
+      total: order.total,
+      currency: order.currency,
+      hasInvoice: !!order.invoiceId,
+      createdAt: (order as unknown as { createdAt: Date }).createdAt,
+    };
+  }
+
+  /**
+   * Resolves everything a PDF needs (order, its invoice, organization, contact) and verifies
+   * ownership at every step — never just the order. Building the actual PDF buffer stays in the
+   * controller (@Res() streaming), mirroring InvoicesController#getPdf's own split between
+   * "resolve + authorize" (service-ish) and "render + stream" (controller) responsibilities.
+   */
+  async getOrderInvoiceForPdf(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    orderId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const order = await this.ordersService.getById(
+      organization.id as string,
+      orderId,
+    );
+    this.assertOwnsOrder(order, customer);
+    if (!order.invoiceId) {
+      throw new NotFoundException({
+        code: 'INVOICE_NOT_FOUND',
+        message: 'No invoice is available for this order',
+      });
+    }
+
+    const invoice = await this.invoicesService.getById(
+      organization.id as string,
+      order.invoiceId.toString(),
+    );
+    // Belt-and-suspenders: the invoice was reached via THIS order's own invoiceId (never a
+    // caller-supplied invoice id), so its contactId should always already match — re-checking
+    // costs nothing and removes any doubt.
+    if (invoice.contactId.toString() !== customer.contactId) {
+      throw new NotFoundException({
+        code: 'INVOICE_NOT_FOUND',
+        message: 'No invoice is available for this order',
+      });
+    }
+
+    const contact = await this.contactsService.getById(
+      organization.id as string,
+      customer.contactId,
+    );
+    return { invoice, organization, contact };
+  }
+
+  async getBookingDetail(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    bookingId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const booking = await this.bookingsService.getById(
+      organization.id as string,
+      bookingId,
+    );
+    this.assertOwnsBooking(booking, customer);
+
+    const offer = await this.offersService.getById(
+      organization.id as string,
+      booking.offerId.toString(),
+    );
+
+    return {
+      id: booking.id as string,
+      status: booking.status,
+      startAt: booking.startAt,
+      endAt: booking.endAt,
+      pricing: booking.pricing,
+      attended: booking.attended,
+      notes: booking.notes,
+      offerName: offer.name,
+    };
+  }
+
+  async getBookingForCertificate(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    bookingId: string,
+  ): Promise<{
+    booking: BookingDocument;
+    organization: OrganizationDocument;
+    contact: Awaited<ReturnType<ContactsService['getById']>>;
+    offer: Awaited<ReturnType<OffersService['getById']>>;
+  }> {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const booking = await this.bookingsService.getById(
+      organization.id as string,
+      bookingId,
+    );
+    this.assertOwnsBooking(booking, customer);
+    if (booking.status !== 'completed') {
+      throw new BadRequestException({
+        code: 'CERTIFICATE_NOT_AVAILABLE',
+        message: 'A certificate is only available for a completed booking',
+      });
+    }
+
+    const [offer, contact] = await Promise.all([
+      this.offersService.getById(
+        organization.id as string,
+        booking.offerId.toString(),
+      ),
+      this.contactsService.getById(
+        organization.id as string,
+        customer.contactId,
+      ),
+    ]);
+
+    return { booking, organization, contact, offer };
+  }
+
+  /**
+   * Eligibility is enforced here, not just left to the client: a review can only be left for an
+   * order the customer owns AND that is genuinely fulfilled (or a booking they own AND that is
+   * completed) — never a still-open/pending/cancelled one. ReviewsService.create handles the
+   * one-review-per-entity race via its own unique index.
+   */
+  async createReview(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    input: CreateReviewInput,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+    const organizationId = organization.id as string;
+
+    if (input.entity === 'order') {
+      const order = await this.ordersService.getById(
+        organizationId,
+        input.entityId,
+      );
+      this.assertOwnsOrder(order, customer);
+      if (order.status !== 'fulfilled') {
+        throw new BadRequestException({
+          code: 'ORDER_NOT_REVIEWABLE',
+          message: 'Only a fulfilled order can be reviewed',
+        });
+      }
+    } else {
+      const booking = await this.bookingsService.getById(
+        organizationId,
+        input.entityId,
+      );
+      this.assertOwnsBooking(booking, customer);
+      if (booking.status !== 'completed') {
+        throw new BadRequestException({
+          code: 'BOOKING_NOT_REVIEWABLE',
+          message: 'Only a completed booking can be reviewed',
+        });
+      }
+    }
+
+    return this.reviewsService.create(
+      organizationId,
+      customer.contactId,
+      input,
+    );
   }
 
   /** Same never-reveal-existence posture as PasswordResetService.forgotPassword. */

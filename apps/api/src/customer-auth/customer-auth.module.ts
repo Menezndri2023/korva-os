@@ -33,14 +33,19 @@ import { CommerceModule } from '../commerce/commerce.module';
 import { BookingModule } from '../booking/booking.module';
 import { IdentityModule } from '../identity/identity.module';
 import { EmailModule } from '../shared/email/email.module';
+import { FinanceModule } from '../finance/finance.module';
+import { CatalogModule } from '../catalog/catalog.module';
+import { DocumentsModule } from '../documents/documents.module';
+import { ReviewsModule } from '../reviews/reviews.module';
 
 /**
  * Top-level module (not nested under PublicModule) so it's independently testable/importable —
  * see customer-auth.controller.ts's class doc for how it relates to (and stays independent of)
  * PublicController's existing guest-checkout/tracking endpoints. Registered a *second*,
  * separately-configured JwtModule instance here (own secret, own default expiresIn) — verified
- * no reverse edge exists before importing CrmModule/CommerceModule/BookingModule/IdentityModule
- * (this module is brand new, so nothing could import it back).
+ * no reverse edge exists before importing CrmModule/CommerceModule/BookingModule/IdentityModule/
+ * FinanceModule/CatalogModule/DocumentsModule/ReviewsModule (this module is brand new, so
+ * nothing could import it back — re-verified via grep before each addition).
  */
 @Module({
   imports: [
@@ -59,6 +64,10 @@ import { EmailModule } from '../shared/email/email.module';
     CommerceModule,
     BookingModule,
     IdentityModule,
+    FinanceModule,
+    CatalogModule,
+    DocumentsModule,
+    ReviewsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

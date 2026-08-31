@@ -58,7 +58,8 @@ export default function OrdersHistoryClient({ slug }: { slug: string }) {
       {ordersQuery.isSuccess && ordersQuery.data.length > 0 && (
         <div className="space-y-3">
           {ordersQuery.data.map((order) => (
-            <Card key={order.id} className="flex items-center justify-between p-4 text-sm">
+            <Link key={order.id} href={`/${slug}/account/orders/${order.id}`}>
+            <Card className="flex items-center justify-between p-4 text-sm hover:bg-surface-muted">
               <div>
                 <p className="font-medium text-text">Commande {order.number}</p>
                 <p className="text-text-muted">
@@ -76,6 +77,7 @@ export default function OrdersHistoryClient({ slug }: { slug: string }) {
                 </p>
               </div>
             </Card>
+            </Link>
           ))}
         </div>
       )}

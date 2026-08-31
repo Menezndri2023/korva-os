@@ -59,7 +59,8 @@ export default function BookingsHistoryClient({ slug }: { slug: string }) {
       {bookingsQuery.isSuccess && bookingsQuery.data.length > 0 && (
         <div className="space-y-3">
           {bookingsQuery.data.map((booking) => (
-            <Card key={booking.id} className="flex items-center justify-between p-4 text-sm">
+            <Link key={booking.id} href={`/${slug}/account/bookings/${booking.id}`}>
+            <Card className="flex items-center justify-between p-4 text-sm hover:bg-surface-muted">
               <div>
                 <p className="font-medium text-text">{formatter.format(new Date(booking.startAt))}</p>
                 <p className="text-text-muted">
@@ -83,6 +84,7 @@ export default function BookingsHistoryClient({ slug }: { slug: string }) {
                 </p>
               </div>
             </Card>
+            </Link>
           ))}
         </div>
       )}
