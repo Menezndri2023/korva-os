@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { createOrganizationSchema, type CreateOrganizationInput } from "@korva/validation";
+import {
+  createOrganizationSchema,
+  type CreateOrganizationInput,
+  type ImportOrganizationPreviewInput,
+} from "@korva/validation";
 import {
   KORVA_MODULES,
   VERTICAL_TEMPLATES,
@@ -48,10 +52,18 @@ const CURRENCIES = ["EUR", "XOF", "MAD", "USD", "CAD"];
 // per the repo's engines field, and all evergreen browsers).
 const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
+interface ImportPreview {
+  name?: string;
+  tagline?: string;
+  logo?: string;
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const setActiveOrganization = useAuthStore((state) => state.setActiveOrganization);
   const [selectedVertical, setSelectedVertical] = useState<string | null>(null);
+  const [importUrl, setImportUrl] = useState("");
+  const [imported, setImported] = useState<ImportPreview | null>(null);
 
   const {
     register,
@@ -70,6 +82,17 @@ export default function OnboardingPage() {
 
   const enabledModulesControl = useForm<{ modules: KorvaModule[] }>({ defaultValues: { modules: [] } });
 
+  const importMutation = useMutation({
+    mutationFn: (input: ImportOrganizationPreviewInput) =>
+      apiClient.post<ImportPreview>("/organizations/import-preview", input, {
+        withOrganization: false,
+      }),
+    onSuccess: (preview) => {
+      setImported(preview);
+      if (preview.name) setValue("name", preview.name);
+    },
+  });
+
   function applyVerticalTemplate(key: string) {
     const template = VERTICAL_TEMPLATES.find((t) => t.key === key);
     if (!template) return;
@@ -84,8 +107,18 @@ export default function OnboardingPage() {
       setActiveOrganization(organization.id);
 
       const modules = enabledModulesControl.getValues("modules");
-      if (modules.length > 0) {
-        await apiClient.patch<Organization>("/organizations/me", { enabledModules: modules });
+      // Branding imported from an existing site (tagline/logo) is applied here, right after
+      // creation — createOrganizationSchema itself has no room for these fields (they're
+      // storefront presentation, not the base org record), so this piggybacks on the same
+      // PATCH /organizations/me call the module-selection step already makes.
+      const brandingUpdate: { tagline?: string; logo?: string } = {};
+      if (imported?.tagline) brandingUpdate.tagline = imported.tagline;
+      if (imported?.logo) brandingUpdate.logo = imported.logo;
+      if (modules.length > 0 || Object.keys(brandingUpdate).length > 0) {
+        await apiClient.patch<Organization>("/organizations/me", {
+          ...(modules.length > 0 ? { enabledModules: modules } : {}),
+          ...brandingUpdate,
+        });
       }
 
       // Starter workflow: only created when the vertical that suggested it is still selected
@@ -116,6 +149,44 @@ export default function OnboardingPage() {
           <h1 className="text-2xl font-semibold">Configurez votre entreprise</h1>
           <p className="mt-1 text-sm text-zinc-500">Quelques informations pour démarrer sur KORVA OS.</p>
         </div>
+
+        <Card className="space-y-2 p-4">
+          <p className="text-sm font-medium">Importer mon entreprise (optionnel)</p>
+          <p className="text-xs text-zinc-500">
+            Vous avez déjà un site web ? Collez son adresse pour préremplir le nom, le slogan et
+            le logo ci-dessous — tout reste modifiable avant de valider.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              type="url"
+              placeholder="https://mon-entreprise.com"
+              value={importUrl}
+              onChange={(event) => setImportUrl(event.target.value)}
+              className="flex-1"
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              loading={importMutation.isPending}
+              disabled={!importUrl.trim()}
+              onClick={() => importMutation.mutate({ url: importUrl.trim() })}
+            >
+              {importMutation.isPending ? "Analyse..." : "Analyser"}
+            </Button>
+          </div>
+          {importMutation.isError && (
+            <p className="text-xs text-red-600">
+              {importMutation.error instanceof ApiError
+                ? importMutation.error.message
+                : "Impossible d'analyser ce site."}
+            </p>
+          )}
+          {imported && (
+            <p className="text-xs text-green-700">
+              Informations importées — vérifiez-les ci-dessous avant de continuer.
+            </p>
+          )}
+        </Card>
 
         <form className="space-y-4" onSubmit={handleSubmit((data) => mutation.mutate(data))}>
           <div>

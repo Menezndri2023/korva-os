@@ -11,6 +11,16 @@ export const createOrganizationSchema = z.object({
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 
+/** Onboarding's "importer mon entreprise" step — fetches this URL server-side and extracts
+ *  best-effort branding suggestions (name/tagline/logo) the user reviews before creating the
+ *  organization. https-only, same posture as webhook URLs (see assertSafeWebhookUrl). */
+export const importOrganizationPreviewSchema = z.object({
+  url: z.string().url(),
+});
+export type ImportOrganizationPreviewInput = z.infer<
+  typeof importOrganizationPreviewSchema
+>;
+
 /** e.g. "#1a73e8" or "#fff" — a single storefront accent color, deliberately not a full theme. */
 const hexColorSchema = z
   .string()

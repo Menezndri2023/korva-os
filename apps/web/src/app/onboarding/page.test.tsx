@@ -179,6 +179,80 @@ describe("OnboardingPage — vertical templates (docs/BUSINESS_OS_AUDIT.md roadm
   });
 });
 
+describe("OnboardingPage — importer mon entreprise", () => {
+  beforeEach(() => {
+    postMock.mockReset();
+    patchMock.mockReset();
+    patchMock.mockResolvedValue({ id: "org-1" });
+  });
+
+  it("pre-fills the name field and shows a confirmation once import-preview resolves", async () => {
+    postMock.mockImplementation((path) =>
+      path === "/organizations/import-preview"
+        ? Promise.resolve({ name: "Acme Corp", tagline: "We sell widgets", logo: "https://acme.example.com/logo.png" })
+        : Promise.resolve({ id: "org-1" }),
+    );
+    renderWithProviders(<OnboardingPage />);
+
+    fireEvent.input(screen.getByPlaceholderText("https://mon-entreprise.com"), {
+      target: { value: "https://acme.example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Analyser" }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Nom de l'entreprise")).toHaveValue("Acme Corp"),
+    );
+    expect(
+      screen.getByText("Informations importées — vérifiez-les ci-dessous avant de continuer."),
+    ).toBeInTheDocument();
+  });
+
+  it("submitting after a successful import also patches the imported tagline/logo", async () => {
+    postMock.mockImplementation((path) =>
+      path === "/organizations/import-preview"
+        ? Promise.resolve({ name: "Acme Corp", tagline: "We sell widgets", logo: "https://acme.example.com/logo.png" })
+        : Promise.resolve({ id: "org-1" }),
+    );
+    renderWithProviders(<OnboardingPage />);
+
+    fireEvent.input(screen.getByPlaceholderText("https://mon-entreprise.com"), {
+      target: { value: "https://acme.example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Analyser" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Nom de l'entreprise")).toHaveValue("Acme Corp"),
+    );
+
+    fireEvent.input(screen.getByLabelText("Secteur d'activité"), { target: { value: "commerce" } });
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalled());
+    const [, body] = patchMock.mock.calls[0]!;
+    expect(body).toMatchObject({
+      tagline: "We sell widgets",
+      logo: "https://acme.example.com/logo.png",
+    });
+  });
+
+  it("shows an error and never touches the form when import-preview fails", async () => {
+    const { ApiError } = await import("@/lib/api-client");
+    postMock.mockImplementation((path) =>
+      path === "/organizations/import-preview"
+        ? Promise.reject(new ApiError("IMPORT_URL_UNREACHABLE", "Unable to reach this URL"))
+        : Promise.resolve({ id: "org-1" }),
+    );
+    renderWithProviders(<OnboardingPage />);
+
+    fireEvent.input(screen.getByPlaceholderText("https://mon-entreprise.com"), {
+      target: { value: "https://unreachable.example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Analyser" }));
+
+    await waitFor(() => expect(screen.getByText("Unable to reach this URL")).toBeInTheDocument());
+    expect(screen.getByLabelText("Nom de l'entreprise")).toHaveValue("");
+  });
+});
+
 describe("OnboardingPage — timezone field (WAVE 2 AGENT E)", () => {
   beforeEach(() => {
     postMock.mockReset();

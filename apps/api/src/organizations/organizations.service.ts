@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -12,6 +13,11 @@ import type {
 import { SYSTEM_ROLE_RANK } from '@korva/types';
 import { OrganizationsRepository } from './organizations.repository';
 import { OrganizationDocument } from './schemas/organization.schema';
+import {
+  extractBusinessInfoFromHtml,
+  type ExtractedBusinessInfo,
+} from './business-import.util';
+import { safeFetch, UnsafeWebhookUrlError } from '../shared/safe-fetch';
 import { RolesService } from '../identity/roles/roles.service';
 import { RoleDocument } from '../identity/schemas/role.schema';
 import { MembershipsService } from '../identity/memberships/memberships.service';
@@ -489,5 +495,40 @@ export class OrganizationsService {
     });
 
     return updated;
+  }
+
+  /**
+   * Onboarding's "importer mon entreprise" step — fetches the given URL server-side (SSRF-safe,
+   * https-only, same `safeFetch`/`assertSafeWebhookUrl` posture as webhook/calendar URLs
+   * elsewhere in this codebase) and extracts best-effort branding suggestions. Never throws for
+   * "nothing extractable" — an empty result just means the caller's form stays blank, exactly
+   * like a user who chose the manual "créer" path instead. Only a genuinely unreachable/unsafe
+   * URL is a hard error, since that's the one case the caller can't silently fall back from
+   * (they typed a URL and it didn't work — worth telling them, not worth guessing).
+   */
+  async importPreviewFromUrl(url: string): Promise<ExtractedBusinessInfo> {
+    let response: Response;
+    try {
+      response = await safeFetch(url);
+    } catch (error) {
+      // safeFetch's own UnsafeWebhookUrlError messages are worded for its original webhook
+      // caller ("Webhook URL must use https", ...) — rephrased here rather than passed through
+      // verbatim, but still narrow enough to guide the user (https-only vs. genuinely
+      // unreachable), not the fully generic message every OTHER failure mode below gets.
+      const message =
+        error instanceof UnsafeWebhookUrlError && error.message.includes('https')
+          ? 'This URL must use https'
+          : 'Unable to reach this URL';
+      throw new BadRequestException({ code: 'IMPORT_URL_UNREACHABLE', message });
+    }
+    if (!response.ok) {
+      throw new BadRequestException({
+        code: 'IMPORT_URL_UNREACHABLE',
+        message: `The site responded with status ${response.status}`,
+      });
+    }
+
+    const html = await response.text();
+    return extractBusinessInfoFromHtml(html, url);
   }
 }

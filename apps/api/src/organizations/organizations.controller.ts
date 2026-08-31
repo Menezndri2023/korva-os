@@ -8,15 +8,18 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import {
   addMemberSchema,
   createOrganizationSchema,
+  importOrganizationPreviewSchema,
   updateMemberCommissionRateSchema,
   updateMemberRateSchema,
   updateMemberRoleSchema,
   updateOrganizationSchema,
   type AddMemberInput,
   type CreateOrganizationInput,
+  type ImportOrganizationPreviewInput,
   type UpdateMemberCommissionRateInput,
   type UpdateMemberRateInput,
   type UpdateMemberRoleInput,
@@ -55,6 +58,19 @@ export class OrganizationsController {
   @Get('me')
   getActive(@CurrentTenant() tenant: TenantContext) {
     return this.organizationsService.getById(tenant.organizationId);
+  }
+
+  /** Onboarding's "importer mon entreprise" step — triggers a server-side outbound fetch, so
+   *  it's throttled the same way PUBLIC_BOOKING_THROTTLE gates other server-triggered-fetch
+   *  endpoints in this codebase, to stop it being usable as a free URL-probing proxy. */
+  @SkipTenant()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('import-preview')
+  importPreview(
+    @Body(new ZodValidationPipe(importOrganizationPreviewSchema))
+    body: ImportOrganizationPreviewInput,
+  ) {
+    return this.organizationsService.importPreviewFromUrl(body.url);
   }
 
   @RequirePermissions('settings.manage')

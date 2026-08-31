@@ -1061,3 +1061,92 @@ describe('Organizations — member role change and removal (e2e)', () => {
     expect(asError(res.body).code).toBe('PERMISSION_DENIED');
   });
 });
+
+/**
+ * Onboarding's "importer mon entreprise" step. Deliberately does not test a real successful
+ * import against a live external site (that would make this suite depend on real internet
+ * access and an always-up third party — verified manually instead, see project memory) — only
+ * the deterministic SSRF-rejection/validation paths, same scope as the existing webhook-
+ * subscriptions e2e coverage for the identical assertSafeWebhookUrl mechanism.
+ */
+describe('Organizations — import-preview (e2e)', () => {
+  let app: INestApplication<App>;
+  let server: App;
+  let connection: Connection;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+    server = app.getHttpServer();
+    connection = app.get(getConnectionToken());
+    await connection.dropDatabase();
+  });
+
+  afterAll(async () => {
+    await connection.dropDatabase();
+    await app.close();
+  });
+
+  async function registerToken(email: string): Promise<string> {
+    const res = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    return asSuccess<AuthPayload>(res.body).accessToken;
+  }
+
+  it('requires authentication', async () => {
+    await request(server)
+      .post('/api/v1/organizations/import-preview')
+      .send({ url: 'https://example.com' })
+      .expect(401);
+  });
+
+  it('rejects a non-https URL', async () => {
+    const accessToken = await registerToken('import-preview-1@korva.test');
+    const res = await request(server)
+      .post('/api/v1/organizations/import-preview')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ url: 'http://example.com' })
+      .expect(400);
+    expect(asError(res.body).code).toBe('IMPORT_URL_UNREACHABLE');
+  });
+
+  it('rejects a URL that resolves to a private/reserved address', async () => {
+    const accessToken = await registerToken('import-preview-2@korva.test');
+    const res = await request(server)
+      .post('/api/v1/organizations/import-preview')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ url: 'https://127.0.0.1/' })
+      .expect(400);
+    expect(asError(res.body).code).toBe('IMPORT_URL_UNREACHABLE');
+  });
+
+  it('rejects a malformed URL at the validation layer', async () => {
+    const accessToken = await registerToken('import-preview-3@korva.test');
+    const res = await request(server)
+      .post('/api/v1/organizations/import-preview')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ url: 'not-a-url' })
+      .expect(400);
+    expect(asError(res.body).code).toBe('VALIDATION_ERROR');
+  });
+
+  it('does not require an active organization (SkipTenant)', async () => {
+    const accessToken = await registerToken('import-preview-4@korva.test');
+    // No X-Organization-Id header at all — a brand new user genuinely has no organization yet
+    // at this point in onboarding; a TENANT/ORGANIZATION_CONTEXT_REQUIRED rejection here would
+    // be the real regression this test guards against, not the https/SSRF checks above.
+    const res = await request(server)
+      .post('/api/v1/organizations/import-preview')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ url: 'https://127.0.0.1/' })
+      .expect(400);
+    expect(asError(res.body).code).toBe('IMPORT_URL_UNREACHABLE');
+  });
+});
