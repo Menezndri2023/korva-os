@@ -193,7 +193,7 @@ export function BookingPanel({
         <Input
           placeholder="Prénom"
           aria-label="Prénom"
-          {...register("contact.firstName")}
+          {...register("contact.firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
           error={!!errors.contact?.firstName}
         />
         <div>
@@ -211,7 +211,7 @@ export function BookingPanel({
         <Input
           placeholder="Téléphone (optionnel)"
           aria-label="Téléphone"
-          {...register("contact.phone")}
+          {...register("contact.phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
           error={!!errors.contact?.phone}
         />
 
@@ -317,7 +317,7 @@ export function CheckoutPanel({
         <Input
           placeholder="Prénom"
           aria-label="Prénom"
-          {...register("contact.firstName")}
+          {...register("contact.firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
           error={!!errors.contact?.firstName}
         />
         <div>
@@ -335,7 +335,7 @@ export function CheckoutPanel({
         <Input
           placeholder="Téléphone (optionnel)"
           aria-label="Téléphone"
-          {...register("contact.phone")}
+          {...register("contact.phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
           error={!!errors.contact?.phone}
         />
 

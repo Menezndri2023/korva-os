@@ -144,7 +144,9 @@ export default function CatalogPage() {
               step="1"
               placeholder="Stock initial"
               className="col-span-2"
-              {...register("stockOnHand", { valueAsNumber: true })}
+              {...register("stockOnHand", {
+                setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+              })}
             />
           )}
 

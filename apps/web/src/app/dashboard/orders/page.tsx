@@ -224,7 +224,9 @@ export default function OrdersPage() {
                   type="number"
                   placeholder="TVA %"
                   className="col-span-2"
-                  {...register(`items.${index}.taxRate`, { valueAsNumber: true })}
+                  {...register(`items.${index}.taxRate`, {
+                    setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+                  })}
                 />
                 <button
                   type="button"

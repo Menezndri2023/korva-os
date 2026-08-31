@@ -178,7 +178,9 @@ export default function LeadsPage() {
           <Input
             type="number"
             placeholder="Valeur estimée"
-            {...register("estimatedValue", { valueAsNumber: true })}
+            {...register("estimatedValue", {
+              setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+            })}
           />
 
           {createLeadMutation.isError && (

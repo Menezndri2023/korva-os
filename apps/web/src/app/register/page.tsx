@@ -48,13 +48,29 @@ export default function RegisterPage() {
               <label className="block text-sm font-medium" htmlFor="firstName">
                 Prénom
               </label>
-              <Input id="firstName" className="mt-1 w-full" {...register("firstName")} />
+              <Input
+                id="firstName"
+                className="mt-1 w-full"
+                error={!!errors.firstName}
+                {...register("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+              />
+              {errors.firstName && (
+                <p className="mt-1 text-xs text-red-600">{errors.firstName.message}</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium" htmlFor="lastName">
                 Nom
               </label>
-              <Input id="lastName" className="mt-1 w-full" {...register("lastName")} />
+              <Input
+                id="lastName"
+                className="mt-1 w-full"
+                error={!!errors.lastName}
+                {...register("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+              />
+              {errors.lastName && (
+                <p className="mt-1 text-xs text-red-600">{errors.lastName.message}</p>
+              )}
             </div>
           </div>
 

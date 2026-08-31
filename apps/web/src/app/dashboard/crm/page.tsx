@@ -190,19 +190,19 @@ export default function ContactsPage() {
             <Input
               placeholder="Nom de l'entreprise"
               className="col-span-2"
-              {...register("company")}
+              {...register("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
             />
           ) : (
             <>
-              <Input placeholder="Prénom" {...register("firstName")} />
-              <Input placeholder="Nom" {...register("lastName")} />
+              <Input placeholder="Prénom" {...register("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
+              <Input placeholder="Nom" {...register("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
             </>
           )}
           <Input placeholder="Email" type="email" error={!!errors.email} {...register("email")} />
           {errors.email && <p className="col-span-2 text-xs text-red-600">{errors.email.message}</p>}
-          <Input placeholder="Téléphone" {...register("phone")} />
+          <Input placeholder="Téléphone" {...register("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
           {createType !== "company" && (
-            <Input placeholder="Entreprise" className="col-span-2" {...register("company")} />
+            <Input placeholder="Entreprise" className="col-span-2" {...register("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
           )}
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-red-600">
@@ -388,7 +388,7 @@ export default function ContactsPage() {
                                 <Input
                                   id={`edit-company-name-${contact.id}`}
                                   className="w-full"
-                                  {...registerEdit("company")}
+                                  {...registerEdit("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
                                 />
                               </div>
                             ) : (
@@ -400,7 +400,7 @@ export default function ContactsPage() {
                                   >
                                     Prénom
                                   </label>
-                                  <Input id={`edit-firstName-${contact.id}`} {...registerEdit("firstName")} />
+                                  <Input id={`edit-firstName-${contact.id}`} {...registerEdit("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                                 </div>
                                 <div>
                                   <label
@@ -409,7 +409,7 @@ export default function ContactsPage() {
                                   >
                                     Nom
                                   </label>
-                                  <Input id={`edit-lastName-${contact.id}`} {...registerEdit("lastName")} />
+                                  <Input id={`edit-lastName-${contact.id}`} {...registerEdit("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                                 </div>
                               </>
                             )}
@@ -437,7 +437,7 @@ export default function ContactsPage() {
                               >
                                 Téléphone
                               </label>
-                              <Input id={`edit-phone-${contact.id}`} {...registerEdit("phone")} />
+                              <Input id={`edit-phone-${contact.id}`} {...registerEdit("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                             </div>
                             {editType !== "company" && (
                               <div className="col-span-2">
@@ -450,7 +450,7 @@ export default function ContactsPage() {
                                 <Input
                                   id={`edit-company-${contact.id}`}
                                   className="w-full"
-                                  {...registerEdit("company")}
+                                  {...registerEdit("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
                                 />
                               </div>
                             )}

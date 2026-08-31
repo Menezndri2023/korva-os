@@ -327,7 +327,9 @@ export default function OfferDetailPage() {
                 step="1"
                 placeholder="Stock"
                 className="col-span-2"
-                {...register("stockOnHand", { valueAsNumber: true })}
+                {...register("stockOnHand", {
+                  setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+                })}
               />
             )}
 

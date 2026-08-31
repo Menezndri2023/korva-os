@@ -420,7 +420,7 @@ export default function ContactDetailPage() {
                 >
                   Nom de l&apos;entreprise
                 </label>
-                <Input id="company-name" className="w-full" {...registerEdit("company")} />
+                <Input id="company-name" className="w-full" {...registerEdit("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
               </div>
             ) : (
               <>
@@ -428,13 +428,13 @@ export default function ContactDetailPage() {
                   <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="firstName">
                     Prénom
                   </label>
-                  <Input id="firstName" {...registerEdit("firstName")} />
+                  <Input id="firstName" {...registerEdit("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="lastName">
                     Nom
                   </label>
-                  <Input id="lastName" {...registerEdit("lastName")} />
+                  <Input id="lastName" {...registerEdit("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                 </div>
               </>
             )}
@@ -456,14 +456,14 @@ export default function ContactDetailPage() {
               <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="phone">
                 Téléphone
               </label>
-              <Input id="phone" {...registerEdit("phone")} />
+              <Input id="phone" {...registerEdit("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
             </div>
             {editType !== "company" && (
               <div className="col-span-2">
                 <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="company">
                   Entreprise
                 </label>
-                <Input id="company" className="w-full" {...registerEdit("company")} />
+                <Input id="company" className="w-full" {...registerEdit("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
               </div>
             )}
             <div>

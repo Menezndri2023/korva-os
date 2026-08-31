@@ -267,14 +267,29 @@ describe("ContactsPage — edit contact (LOT F4)", () => {
     expect(screen.getByLabelText("Tags (séparés par des virgules)")).toHaveValue("vip");
   });
 
-  it("blocks submission when a required field is cleared (updateContactSchema)", async () => {
+  // Regression test for a real bug: firstName is genuinely optional on updateContactSchema
+  // (createContactSchema.partial()), but clearing an uncontrolled RHF text input submits ""
+  // rather than undefined — Zod's .optional() only skips validation for undefined, so "" was
+  // still run through .min(1) and silently rejected, blocking the whole submission with zero
+  // visible error (no error UI exists for this field). Found via a real-browser check on the
+  // register page (the same bug, same root cause) and fixed with setValueAs everywhere it
+  // occurred. This test used to assert the opposite (that clearing blocks submission) — that
+  // was documenting the bug as if it were intended behavior, not a real requirement; there is
+  // no field on this schema that updateContactSchema actually requires.
+  it("allows clearing an optional field (firstName) without blocking submission", async () => {
     const user = userEvent.setup();
+    patchMock.mockResolvedValue(contactOne);
     await openEditForm(user, "Ada Lovelace");
 
     await user.clear(screen.getByLabelText("Prénom"));
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
-    await waitFor(() => expect(patchMock).not.toHaveBeenCalled());
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith(
+        "/contacts/contact-1",
+        expect.objectContaining({ firstName: undefined }),
+      ),
+    );
   });
 
   it("submits PATCH /contacts/:id with exactly the form fields, id in the URL", async () => {
