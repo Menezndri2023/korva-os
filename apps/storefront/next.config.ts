@@ -27,6 +27,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Hides the on-screen dev-mode route indicator badge — compile/runtime errors still surface
+  // normally, this only removes the corner badge itself.
+  devIndicators: false,
   async headers() {
     return [
       {

@@ -9,7 +9,9 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import {
   createActivitySchema,
+  listRecentActivitiesQuerySchema,
   type CreateActivityInput,
+  type ListRecentActivitiesQuery,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import type { AuthenticatedUser } from '../../core/tenant/request-context.types';
@@ -25,6 +27,23 @@ import { RequireModule } from '../../common/decorators/require-module.decorator'
 @Controller('activities')
 export class ActivitiesController {
   constructor(private readonly activitiesService: ActivitiesService) {}
+
+  /** Most recent activity across every contact/lead in the org — backs the CRM "Activités" feed.
+   *  A distinct path (not a query-param variant of the entity-filtered GET below), so there's no
+   *  routing ambiguity between the two. */
+  @RequirePermissions('contacts.read')
+  @Get('recent')
+  listRecent(
+    @CurrentTenant() tenant: TenantContext,
+    @Query(new ZodValidationPipe(listRecentActivitiesQuerySchema))
+    query: ListRecentActivitiesQuery,
+  ) {
+    return this.activitiesService.listRecent(
+      tenant.organizationId,
+      query.page,
+      query.limit,
+    );
+  }
 
   @RequirePermissions('contacts.read')
   @Get()

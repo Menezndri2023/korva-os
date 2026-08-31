@@ -28,4 +28,25 @@ export class ActivitiesRepository {
       .sort({ createdAt: -1 })
       .exec();
   }
+
+  /** Most recent activity across every contact/lead in the organization — unlike
+   *  findForEntity, not scoped to one entity. Backs the CRM "Activités" feed. */
+  async findRecentForOrganization(
+    organizationId: string,
+    page: number,
+    limit: number,
+  ): Promise<{ data: ActivityDocument[]; total: number }> {
+    const filter = { organizationId: new Types.ObjectId(organizationId) };
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.activityModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.activityModel.countDocuments(filter).exec(),
+    ]);
+    return { data, total };
+  }
 }

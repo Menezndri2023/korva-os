@@ -115,6 +115,14 @@ export const createActivitySchema = z.object({
 });
 export type CreateActivityInput = z.infer<typeof createActivitySchema>;
 
+export const listRecentActivitiesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+export type ListRecentActivitiesQuery = z.infer<
+  typeof listRecentActivitiesQuerySchema
+>;
+
 export const createTagSchema = z.object({
   name: z.string().min(1).max(60),
   color: z.string().max(20).optional(),

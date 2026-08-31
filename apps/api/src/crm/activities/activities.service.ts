@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
 import type { CreateActivityInput } from '@korva/validation';
+import type { Pagination } from '@korva/types';
 import { ActivitiesRepository } from './activities.repository';
 import { ActivityDocument } from './schemas/activity.schema';
 
@@ -33,5 +34,27 @@ export class ActivitiesService {
       entity,
       entityId,
     );
+  }
+
+  async listRecent(
+    organizationId: string,
+    page: number,
+    limit: number,
+  ): Promise<{ data: ActivityDocument[]; pagination: Pagination }> {
+    const { data, total } =
+      await this.activitiesRepository.findRecentForOrganization(
+        organizationId,
+        page,
+        limit,
+      );
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
   }
 }
