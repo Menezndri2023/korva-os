@@ -1320,6 +1320,186 @@ describe('Booking module (e2e)', () => {
         .expect(403);
       expect(asError(cancelRes.body).code).toBe('PERMISSION_DENIED');
     });
+
+    it('reuses the same generic capacity check for a multi-seat resource (e.g. a Formation group session) — genuinely full only once every seat is taken', async () => {
+      const ctx = await registerOrgContactOffer(
+        'waitlist-multiseat-owner@korva.test',
+        'Waitlist Multiseat Org',
+      );
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          name: `Training room ${Math.random()}`,
+          type: 'room',
+          capacity: 3,
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      // Two of three seats taken — still genuinely available, waitlisting must be rejected.
+      const firstAttendeeId = await createContact(
+        ctx.accessToken,
+        ctx.organizationId,
+        'Attendee1',
+      );
+      const secondAttendeeId = await createContact(
+        ctx.accessToken,
+        ctx.organizationId,
+        'Attendee2',
+      );
+      for (const contactId of [firstAttendeeId, secondAttendeeId]) {
+        await request(server)
+          .post('/api/v1/bookings')
+          .set('Authorization', `Bearer ${ctx.accessToken}`)
+          .set('X-Organization-Id', ctx.organizationId)
+          .send({
+            resourceId,
+            offerId: ctx.offerId,
+            contactId,
+            startAt: `${monday}T09:00:00.000Z`,
+            endAt: `${monday}T10:00:00.000Z`,
+          })
+          .expect(201);
+      }
+
+      const waitingContactId = await createContact(
+        ctx.accessToken,
+        ctx.organizationId,
+        'Waiting',
+      );
+      const stillAvailableRes = await request(server)
+        .post('/api/v1/waitlist')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: waitingContactId,
+          startAt: `${monday}T09:00:00.000Z`,
+          endAt: `${monday}T10:00:00.000Z`,
+        })
+        .expect(400);
+      expect(asError(stillAvailableRes.body).code).toBe(
+        'WAITLIST_SLOT_AVAILABLE',
+      );
+
+      // The third and final seat is taken — the session is now genuinely full.
+      const thirdAttendeeId = await createContact(
+        ctx.accessToken,
+        ctx.organizationId,
+        'Attendee3',
+      );
+      await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: thirdAttendeeId,
+          startAt: `${monday}T09:00:00.000Z`,
+          endAt: `${monday}T10:00:00.000Z`,
+        })
+        .expect(201);
+
+      const nowFullRes = await request(server)
+        .post('/api/v1/waitlist')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: waitingContactId,
+          startAt: `${monday}T09:00:00.000Z`,
+          endAt: `${monday}T10:00:00.000Z`,
+        })
+        .expect(201);
+      expect(asSuccess<WaitlistEntryPayload>(nowFullRes.body).status).toBe(
+        'waiting',
+      );
+    });
+  });
+
+  describe('formation certificate — generic vertical-agnostic verification', () => {
+    it('issues the same generic certificate for a group training session (multiple attendees, one shared resource+slot)', async () => {
+      const ctx = await registerOrgContactOffer(
+        'formation-certificate-owner@korva.test',
+        'Formation Certificate Org',
+      );
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          name: `Training room ${Math.random()}`,
+          type: 'room',
+          capacity: 2,
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      const secondAttendeeRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ firstName: 'SecondAttendee' })
+        .expect(201);
+      const secondAttendeeId = asSuccess<ContactPayload>(
+        secondAttendeeRes.body,
+      ).id;
+
+      // Same resource, same slot, two different contacts — a genuine group session.
+      const firstBookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: ctx.contactId,
+          startAt: `${monday}T09:00:00.000Z`,
+          endAt: `${monday}T10:00:00.000Z`,
+        })
+        .expect(201);
+      const firstBookingId = asSuccess<BookingPayload>(firstBookingRes.body).id;
+      await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          resourceId,
+          offerId: ctx.offerId,
+          contactId: secondAttendeeId,
+          startAt: `${monday}T09:00:00.000Z`,
+          endAt: `${monday}T10:00:00.000Z`,
+        })
+        .expect(201);
+
+      // One attendee's own Booking completes independently of the other's — attendance is
+      // per-contact, not per-session.
+      await request(server)
+        .post(`/api/v1/bookings/${firstBookingId}/complete`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ attended: true })
+        .expect(201);
+
+      const certRes = await request(server)
+        .get(`/api/v1/bookings/${firstBookingId}/certificate`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      expect(certRes.headers['content-type']).toContain('application/pdf');
+      expect((certRes.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    });
   });
 
   describe('credit balances (prepaid packages)', () => {
