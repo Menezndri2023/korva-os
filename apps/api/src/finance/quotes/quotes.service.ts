@@ -188,6 +188,49 @@ export class QuotesService {
     );
   }
 
+  /**
+   * The customer-portal counterpart to `accept()` above — same allowed-from/to transition, but
+   * additionally records a lightweight signature (typed name + timestamp + caller's IP, never a
+   * cryptographic signature — see Quote.signedByName's doc comment) in the same write. Kept as
+   * its own method rather than threading optional signature params through the shared private
+   * `transition()` helper: `reject()`/`send()` have no use for them, and this is the only
+   * customer-initiated transition on this entity.
+   */
+  async signByCustomer(
+    organizationId: string,
+    id: string,
+    input: { signedByName: string; signedIp?: string },
+  ): Promise<QuoteDocument> {
+    const quote = await this.getById(organizationId, id);
+    if (!['sent', 'viewed'].includes(quote.status)) {
+      throw new BadRequestException({
+        code: 'QUOTE_INVALID_TRANSITION',
+        message: `Cannot sign a quote with status "${quote.status}"`,
+      });
+    }
+
+    const updated = await this.quotesRepository.update(organizationId, id, {
+      status: 'accepted',
+      signedByName: input.signedByName,
+      signedAt: new Date(),
+      signedIp: input.signedIp,
+    });
+    if (!updated) {
+      throw new NotFoundException({
+        code: 'QUOTE_NOT_FOUND',
+        message: 'Quote not found',
+      });
+    }
+
+    await this.eventBus.publish(organizationId, 'quote.accepted', {
+      quoteId: id,
+      contactId: updated.contactId.toString(),
+      total: updated.total,
+    });
+
+    return updated;
+  }
+
   async reject(
     organizationId: string,
     userId: string,

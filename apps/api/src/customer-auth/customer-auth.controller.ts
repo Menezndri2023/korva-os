@@ -22,6 +22,7 @@ import {
   customerResetPasswordSchema,
   listCustomerHistoryQuerySchema,
   createReviewSchema,
+  signQuoteSchema,
   type CustomerRegisterInput,
   type CustomerLoginInput,
   type CustomerRefreshInput,
@@ -30,6 +31,7 @@ import {
   type CustomerResetPasswordInput,
   type ListCustomerHistoryQuery,
   type CreateReviewInput,
+  type SignQuoteInput,
 } from '@korva/validation';
 import { CustomerAuthService } from './customer-auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -241,6 +243,44 @@ export class CustomerAuthController {
       `inline; filename="certificat-${booking.id}.pdf"`,
     );
     res.send(buffer);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('quotes')
+  listQuotes(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+    @Query(new ZodValidationPipe(listCustomerHistoryQuerySchema))
+    query: ListCustomerHistoryQuery,
+  ) {
+    return this.customerAuthService.listQuotes(slug, req.user!, query);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('quotes/:id')
+  getQuote(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getQuoteDetail(slug, req.user!, id);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Post('quotes/:id/sign')
+  signQuote(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+    @Body(new ZodValidationPipe(signQuoteSchema)) body: SignQuoteInput,
+  ) {
+    return this.customerAuthService.signQuote(
+      slug,
+      req.user!,
+      id,
+      body,
+      req.ip,
+    );
   }
 
   @UseGuards(CustomerAuthGuard)

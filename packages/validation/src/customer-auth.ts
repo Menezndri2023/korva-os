@@ -52,3 +52,10 @@ export const listCustomerHistoryQuerySchema = z.object({
 export type ListCustomerHistoryQuery = z.infer<
   typeof listCustomerHistoryQuerySchema
 >;
+
+/** "Signing" a quote in the customer portal — a typed full legal name, not a drawn/cryptographic
+ *  signature (see the matching doc comment on Quote.signedByName in @korva/types). */
+export const signQuoteSchema = z.object({
+  signerName: z.string().min(1).max(200),
+});
+export type SignQuoteInput = z.infer<typeof signQuoteSchema>;

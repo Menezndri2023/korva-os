@@ -52,6 +52,17 @@ export class Quote {
 
   @Prop()
   notes?: string;
+
+  /** See the matching doc comment on the Quote type in @korva/types — only ever set by the
+   *  customer-portal "sign" flow. */
+  @Prop()
+  signedByName?: string;
+
+  @Prop()
+  signedAt?: Date;
+
+  @Prop()
+  signedIp?: string;
 }
 
 export const QuoteSchema = SchemaFactory.createForClass(Quote);

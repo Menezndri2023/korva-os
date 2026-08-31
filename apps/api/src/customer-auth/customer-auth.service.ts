@@ -17,6 +17,7 @@ import type {
   CustomerUpdateProfileInput,
   ListCustomerHistoryQuery,
   CreateReviewInput,
+  SignQuoteInput,
 } from '@korva/validation';
 import {
   EMAIL_PROVIDER,
@@ -32,6 +33,8 @@ import { BookingsService } from '../booking/bookings/bookings.service';
 import { BookingDocument } from '../booking/bookings/schemas/booking.schema';
 import { UsersService } from '../identity/users/users.service';
 import { InvoicesService } from '../finance/invoices/invoices.service';
+import { QuotesService } from '../finance/quotes/quotes.service';
+import { QuoteDocument } from '../finance/quotes/schemas/quote.schema';
 import { OffersService } from '../catalog/offers/offers.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { CustomerAccountRepository } from './customer-account.repository';
@@ -95,6 +98,7 @@ export class CustomerAuthService {
     private readonly bookingsService: BookingsService,
     private readonly usersService: UsersService,
     private readonly invoicesService: InvoicesService,
+    private readonly quotesService: QuotesService,
     private readonly offersService: OffersService,
     private readonly reviewsService: ReviewsService,
     private readonly customerAccountRepository: CustomerAccountRepository,
@@ -565,6 +569,112 @@ export class CustomerAuthService {
     ]);
 
     return { booking, organization, contact, offer };
+  }
+
+  private assertOwnsQuote(
+    quote: QuoteDocument,
+    customer: AuthenticatedCustomer,
+  ): void {
+    if (quote.contactId.toString() !== customer.contactId) {
+      throw new NotFoundException({
+        code: 'QUOTE_NOT_FOUND',
+        message: 'Quote not found',
+      });
+    }
+  }
+
+  async listQuotes(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    query: ListCustomerHistoryQuery,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const { data, pagination } = await this.quotesService.list(
+      organization.id as string,
+      {
+        page: query.page,
+        limit: query.limit,
+        contactId: customer.contactId,
+      },
+    );
+    return {
+      data: data.map((quote) => ({
+        id: quote.id as string,
+        number: quote.number,
+        status: quote.status,
+        total: quote.total,
+        currency: quote.currency,
+        validUntil: quote.validUntil,
+        createdAt: (quote as unknown as { createdAt: Date }).createdAt,
+      })),
+      pagination,
+    };
+  }
+
+  async getQuoteDetail(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    quoteId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const quote = await this.quotesService.getById(
+      organization.id as string,
+      quoteId,
+    );
+    this.assertOwnsQuote(quote, customer);
+
+    return {
+      id: quote.id as string,
+      number: quote.number,
+      status: quote.status,
+      items: quote.items,
+      subtotal: quote.subtotal,
+      taxTotal: quote.taxTotal,
+      discountTotal: quote.discountTotal,
+      total: quote.total,
+      currency: quote.currency,
+      validUntil: quote.validUntil,
+      notes: quote.notes,
+      signedByName: quote.signedByName,
+      signedAt: quote.signedAt,
+    };
+  }
+
+  /**
+   * "Signing" is a typed full name, not a drawn/cryptographic signature — see Quote.signedByName's
+   * doc comment in @korva/types for why this is the honest, smallest-real-version choice, same
+   * philosophy as this project's one-way ICS calendar import instead of full OAuth. Eligibility
+   * (ownership + a genuinely still-open quote) is enforced by QuotesService.signByCustomer itself,
+   * not just checked here.
+   */
+  async signQuote(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    quoteId: string,
+    input: SignQuoteInput,
+    signerIp: string | undefined,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const quote = await this.quotesService.getById(
+      organization.id as string,
+      quoteId,
+    );
+    this.assertOwnsQuote(quote, customer);
+
+    return this.quotesService.signByCustomer(
+      organization.id as string,
+      quoteId,
+      {
+        signedByName: input.signerName,
+        signedIp: signerIp,
+      },
+    );
   }
 
   /**

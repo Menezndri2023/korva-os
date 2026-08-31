@@ -5,6 +5,7 @@ import type {
   OfferType,
   OfferVariant,
   OrderStatus,
+  QuoteStatus,
 } from "@korva/types";
 
 /** Mirrors PublicService#getOrganization (apps/api/src/public/public.service.ts) exactly. */
@@ -153,4 +154,32 @@ export interface CustomerBookingDetail {
   attended?: boolean;
   notes?: string;
   offerName: string;
+}
+
+/** Mirrors CustomerAuthService#listQuotes' mapped item shape. */
+export interface CustomerQuoteSummary {
+  id: string;
+  number: string;
+  status: QuoteStatus;
+  total: number;
+  currency: string;
+  validUntil?: string;
+  createdAt: string;
+}
+
+/** Mirrors CustomerAuthService#getQuoteDetail's shape exactly. */
+export interface CustomerQuoteDetail {
+  id: string;
+  number: string;
+  status: QuoteStatus;
+  items: LineItem[];
+  subtotal: number;
+  taxTotal: number;
+  discountTotal: number;
+  total: number;
+  currency: string;
+  validUntil?: string;
+  notes?: string;
+  signedByName?: string;
+  signedAt?: string;
 }

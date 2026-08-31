@@ -70,6 +70,9 @@ export default function ProfileClient({ slug }: { slug: string }) {
         <Link href={`/${slug}/account/bookings`} className="font-medium text-text hover:underline">
           Mes réservations
         </Link>
+        <Link href={`/${slug}/account/quotes`} className="font-medium text-text hover:underline">
+          Mes devis
+        </Link>
       </div>
 
       <Card className="p-4">

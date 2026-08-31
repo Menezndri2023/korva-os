@@ -44,6 +44,13 @@ export interface Quote {
   total: number;
   validUntil?: string;
   notes?: string;
+  /** Set only when accepted through the customer portal's "sign" flow (not a cryptographic
+   *  signature — a typed full name + timestamp + IP, the honest lightweight version — see
+   *  CustomerAuthService#signQuote). A quote accepted by staff on the customer's behalf never
+   *  has these set. */
+  signedByName?: string;
+  signedAt?: string;
+  signedIp?: string;
   createdAt: string;
   updatedAt: string;
 }
