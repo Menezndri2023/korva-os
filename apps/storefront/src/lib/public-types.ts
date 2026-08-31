@@ -156,6 +156,16 @@ export interface CustomerReturnRequestSummary {
   createdAt: string;
 }
 
+/** Mirrors WishlistService#list's mapped item shape. */
+export interface CustomerWishlistEntry {
+  id: string;
+  offerId: string;
+  offerName: string;
+  offerImage?: string;
+  pricing: { amount: number; currency: string };
+  createdAt: string;
+}
+
 /** Mirrors CustomerAuthService#getBookingDetail's shape exactly. */
 export interface CustomerBookingDetail {
   id: string;

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -24,6 +25,7 @@ import {
   createReviewSchema,
   signQuoteSchema,
   createReturnRequestSchema,
+  addWishlistItemSchema,
   type CustomerRegisterInput,
   type CustomerLoginInput,
   type CustomerRefreshInput,
@@ -34,6 +36,7 @@ import {
   type CreateReviewInput,
   type SignQuoteInput,
   type CreateReturnRequestInput,
+  type AddWishlistItemInput,
 } from '@korva/validation';
 import { CustomerAuthService } from './customer-auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -325,5 +328,37 @@ export class CustomerAuthController {
     body: CreateReturnRequestInput,
   ) {
     return this.customerAuthService.createReturnRequest(slug, req.user!, body);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('wishlist')
+  listWishlist(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.listWishlist(slug, req.user!);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Post('wishlist')
+  async addToWishlist(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+    @Body(new ZodValidationPipe(addWishlistItemSchema))
+    body: AddWishlistItemInput,
+  ) {
+    await this.customerAuthService.addToWishlist(slug, req.user!, body);
+    return { saved: true };
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Delete('wishlist/:offerId')
+  async removeFromWishlist(
+    @Param('organizationSlug') slug: string,
+    @Param('offerId') offerId: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    await this.customerAuthService.removeFromWishlist(slug, req.user!, offerId);
+    return { removed: true };
   }
 }

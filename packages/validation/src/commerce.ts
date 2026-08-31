@@ -81,6 +81,11 @@ export const rejectReturnRequestSchema = z.object({
 });
 export type RejectReturnRequestInput = z.infer<typeof rejectReturnRequestSchema>;
 
+export const addWishlistItemSchema = z.object({
+  offerId: z.string().min(1),
+});
+export type AddWishlistItemInput = z.infer<typeof addWishlistItemSchema>;
+
 export const listReturnRequestsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

@@ -10,6 +10,7 @@ import { useCustomerAuth } from "@/lib/use-customer-auth";
 import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "./commerce-panels";
+import { WishlistButton } from "./wishlist-button";
 
 export default function StorefrontClient({ slug }: { slug: string }) {
   const queryClient = useQueryClient();
@@ -207,9 +208,12 @@ function OfferCard({
           className="mb-3 h-32 w-full rounded-md object-cover"
         />
       )}
-      <Link href={`/${slug}/offers/${offer.id}`} className="font-medium text-text hover:underline">
-        {offer.name}
-      </Link>
+      <div className="flex items-start justify-between gap-2">
+        <Link href={`/${slug}/offers/${offer.id}`} className="font-medium text-text hover:underline">
+          {offer.name}
+        </Link>
+        <WishlistButton slug={slug} offerId={offer.id} />
+      </div>
       <div className="mt-1 flex items-center gap-2">
         <Badge>{OFFER_TYPE_LABELS[offer.type]}</Badge>
       </div>

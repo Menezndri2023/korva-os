@@ -115,6 +115,20 @@ export class OffersService {
     return byId;
   }
 
+  /**
+   * Same batched `$in` query as getManyByIds, but tolerant of a missing id instead of throwing —
+   * for a display-only listing (e.g. a wishlist) where an offer referenced by an older row may
+   * have since been deleted, and the right behavior is to simply omit it, not fail the whole
+   * request. Never use this where price/availability integrity matters (order/cart pricing) —
+   * getManyByIds's strictness exists specifically for that case.
+   */
+  async findManyByIds(
+    organizationId: string,
+    ids: string[],
+  ): Promise<OfferDocument[]> {
+    return this.offersRepository.findByIds(organizationId, ids);
+  }
+
   async list(
     organizationId: string,
     query: ListOffersQuery,

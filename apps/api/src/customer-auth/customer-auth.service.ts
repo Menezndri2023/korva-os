@@ -19,6 +19,7 @@ import type {
   CreateReviewInput,
   SignQuoteInput,
   CreateReturnRequestInput,
+  AddWishlistItemInput,
 } from '@korva/validation';
 import {
   EMAIL_PROVIDER,
@@ -40,6 +41,7 @@ import { OffersService } from '../catalog/offers/offers.service';
 import { ReviewsService } from '../reviews/reviews.service';
 import { ReturnRequestsService } from '../commerce/returns/return-requests.service';
 import { ReturnRequestDocument } from '../commerce/returns/schemas/return-request.schema';
+import { WishlistService } from '../commerce/wishlist/wishlist.service';
 import { CustomerAccountRepository } from './customer-account.repository';
 import { CustomerSessionRepository } from './customer-session.repository';
 import { CustomerPasswordResetRepository } from './customer-password-reset.repository';
@@ -105,6 +107,7 @@ export class CustomerAuthService {
     private readonly offersService: OffersService,
     private readonly reviewsService: ReviewsService,
     private readonly returnRequestsService: ReturnRequestsService,
+    private readonly wishlistService: WishlistService,
     private readonly customerAccountRepository: CustomerAccountRepository,
     private readonly customerSessionRepository: CustomerSessionRepository,
     private readonly customerPasswordResetRepository: CustomerPasswordResetRepository,
@@ -803,6 +806,46 @@ export class CustomerAuthService {
     );
     this.assertOwnsReturnRequest(returnRequest, customer);
     return returnRequest;
+  }
+
+  async listWishlist(slug: string, customer: AuthenticatedCustomer) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    return this.wishlistService.list(
+      organization.id as string,
+      customer.contactId,
+    );
+  }
+
+  async addToWishlist(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    input: AddWishlistItemInput,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    await this.wishlistService.add(
+      organization.id as string,
+      customer.contactId,
+      input.offerId,
+    );
+  }
+
+  async removeFromWishlist(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    offerId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    await this.wishlistService.remove(
+      organization.id as string,
+      customer.contactId,
+      offerId,
+    );
   }
 
   /** Same never-reveal-existence posture as PasswordResetService.forgotPassword. */

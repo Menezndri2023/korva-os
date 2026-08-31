@@ -28,6 +28,13 @@ import { ReturnRequestsRepository } from './returns/return-requests.repository';
 import { ReturnRequestsService } from './returns/return-requests.service';
 import { ReturnRequestsController } from './returns/return-requests.controller';
 
+import {
+  WishlistItem,
+  WishlistItemSchema,
+} from './wishlist/schemas/wishlist-item.schema';
+import { WishlistRepository } from './wishlist/wishlist.repository';
+import { WishlistService } from './wishlist/wishlist.service';
+
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { BookingModule } from '../booking/booking.module';
@@ -42,6 +49,7 @@ import { AuditModule } from '../audit/audit.module';
       { name: Order.name, schema: OrderSchema },
       { name: Fulfillment.name, schema: FulfillmentSchema },
       { name: ReturnRequest.name, schema: ReturnRequestSchema },
+      { name: WishlistItem.name, schema: WishlistItemSchema },
     ]),
     CrmModule,
     CatalogModule,
@@ -65,7 +73,9 @@ import { AuditModule } from '../audit/audit.module';
     FulfillmentsService,
     ReturnRequestsRepository,
     ReturnRequestsService,
+    WishlistRepository,
+    WishlistService,
   ],
-  exports: [OrdersService, ReturnRequestsService],
+  exports: [OrdersService, ReturnRequestsService, WishlistService],
 })
 export class CommerceModule {}

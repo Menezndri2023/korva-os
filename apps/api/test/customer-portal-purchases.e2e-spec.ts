@@ -703,4 +703,130 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
       expect(asError(res.body).code).toBe('ORDER_NOT_FOUND');
     });
   });
+
+  describe('wishlist', () => {
+    let slug: string;
+    let customerToken: string;
+    let otherCustomerToken: string;
+    let offerId: string;
+
+    beforeAll(async () => {
+      const authRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: 'owner-cust-10@example.com', password: 'password123' })
+        .expect(201);
+      const staffToken = asSuccess<AuthPayload>(authRes.body).accessToken;
+
+      const orgRes = await request(server)
+        .post('/api/v1/organizations')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({
+          name: 'Cust Auth Org 10',
+          type: 'commerce',
+          country: 'FR',
+          currency: 'EUR',
+          timezone: 'Europe/Paris',
+          language: 'fr',
+        })
+        .expect(201);
+      const organization = asSuccess<OrganizationPayload>(orgRes.body);
+      slug = organization.slug;
+      const organizationId = organization.id;
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['crm', 'catalog', 'commerce'] })
+        .expect(200);
+
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Wishlist Widget',
+          status: 'active',
+          pricing: { amount: 40, currency: 'EUR' },
+        })
+        .expect(201);
+      offerId = asSuccess<{ id: string }>(offerRes.body).id;
+
+      const custRes = await request(server)
+        .post(`/api/v1/public/${slug}/account/register`)
+        .send({
+          email: 'wishlist-customer@example.com',
+          password: 'clientpass123',
+        })
+        .expect(201);
+      customerToken = asSuccess<CustomerAuthPayload>(custRes.body).accessToken;
+
+      const otherRes = await request(server)
+        .post(`/api/v1/public/${slug}/account/register`)
+        .send({
+          email: 'other-wishlist-customer@example.com',
+          password: 'clientpass123',
+        })
+        .expect(201);
+      otherCustomerToken = asSuccess<CustomerAuthPayload>(
+        otherRes.body,
+      ).accessToken;
+    });
+
+    it('adds an offer to the wishlist and lists it with its name and price', async () => {
+      await request(server)
+        .post(`/api/v1/public/${slug}/account/wishlist`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({ offerId })
+        .expect(201);
+
+      const listRes = await request(server)
+        .get(`/api/v1/public/${slug}/account/wishlist`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(200);
+      const entries = asSuccess<
+        { offerId: string; offerName: string; pricing: { amount: number } }[]
+      >(listRes.body);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.offerId).toBe(offerId);
+      expect(entries[0]?.offerName).toBe('Wishlist Widget');
+      expect(entries[0]?.pricing.amount).toBe(40);
+    });
+
+    it('adding the same offer twice is a no-op, not a duplicate entry', async () => {
+      await request(server)
+        .post(`/api/v1/public/${slug}/account/wishlist`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({ offerId })
+        .expect(201);
+
+      const listRes = await request(server)
+        .get(`/api/v1/public/${slug}/account/wishlist`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(200);
+      expect(asSuccess<unknown[]>(listRes.body)).toHaveLength(1);
+    });
+
+    it("does not leak into another customer's wishlist", async () => {
+      const listRes = await request(server)
+        .get(`/api/v1/public/${slug}/account/wishlist`)
+        .set('Authorization', `Bearer ${otherCustomerToken}`)
+        .expect(200);
+      expect(asSuccess<unknown[]>(listRes.body)).toHaveLength(0);
+    });
+
+    it('removes an offer from the wishlist', async () => {
+      await request(server)
+        .delete(`/api/v1/public/${slug}/account/wishlist/${offerId}`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(200);
+
+      const listRes = await request(server)
+        .get(`/api/v1/public/${slug}/account/wishlist`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(200);
+      expect(asSuccess<unknown[]>(listRes.body)).toHaveLength(0);
+    });
+  });
 });

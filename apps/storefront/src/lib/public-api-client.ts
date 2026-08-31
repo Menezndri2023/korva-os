@@ -13,7 +13,7 @@ export class PublicApiError extends Error {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   /** Bearer token for the storefront's authenticated customer-portal endpoints
    *  (/public/:slug/account/...) — never sent on any other request. */
@@ -48,6 +48,8 @@ export const publicApiClient = {
     request<T>(path, { method: "POST", body, accessToken }),
   patch: <T>(path: string, body?: unknown, accessToken?: string) =>
     request<T>(path, { method: "PATCH", body, accessToken }),
+  delete: <T>(path: string, accessToken?: string) =>
+    request<T>(path, { method: "DELETE", accessToken }),
 };
 
 /**
