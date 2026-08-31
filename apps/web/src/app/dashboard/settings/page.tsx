@@ -1630,17 +1630,45 @@ export default function SettingsPage() {
  * being fully functional. `NEXT_PUBLIC_STOREFRONT_URL` makes the storefront domain real (unlike
  * the prior placeholder "VOTRE-DOMAINE-STOREFRONT"), same pattern as NEXT_PUBLIC_API_URL.
  */
+const WIDGET_MODE_OPTIONS: { value: string; label: string; description: string }[] = [
+  {
+    value: "leads",
+    label: "Capture de contacts",
+    description: "Un formulaire simple pour recevoir des demandes de contact.",
+  },
+  {
+    value: "catalog",
+    label: "Boutique",
+    description: "Vos visiteurs parcourent votre catalogue et commandent directement.",
+  },
+  {
+    value: "booking",
+    label: "Réservation",
+    description: "Vos visiteurs réservent un créneau directement.",
+  },
+  {
+    value: "full",
+    label: "Boutique + réservation",
+    description: "Les deux, avec des onglets dans le widget.",
+  },
+];
+
 function ExternalWebsiteSection({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState("leads");
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
   const storefrontUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
   const storefrontPageUrl = `${storefrontUrl}/${slug}`;
+  // The default "leads" snippet is byte-identical to the one this section rendered before the
+  // mode picker existed (no data-mode attribute at all) — an existing embed on a business's own
+  // site keeps working unchanged, and re-copying the same default snippet is a no-op for them.
   const snippet = `<script
   src="${storefrontUrl}/korva-widget.js"
   data-org="${slug}"
-  data-api-url="${apiUrl}"
+  data-api-url="${apiUrl}"${mode !== "leads" ? `\n  data-mode="${mode}"` : ""}
   async
 ></script>`;
+  const selectedOption = WIDGET_MODE_OPTIONS.find((option) => option.value === mode);
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
@@ -1656,9 +1684,24 @@ function ExternalWebsiteSection({ slug }: { slug: string }) {
         </a>
       </div>
       <p className="mt-1 text-sm text-text-muted">
-        Ajoutez ce widget sur votre site web actuel pour recevoir directement dans KORVA les
-        demandes de contact de vos visiteurs.
+        Ajoutez ce widget sur votre site web actuel pour interagir avec vos visiteurs directement
+        depuis KORVA.
       </p>
+
+      <label className="mt-4 block text-sm">
+        <span className="mb-1 block text-text-muted">Ce que le widget doit faire</span>
+        <Select value={mode} onChange={(event) => setMode(event.target.value)} className="w-full sm:w-72">
+          {WIDGET_MODE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+        {selectedOption && (
+          <span className="mt-1 block text-xs text-text-muted">{selectedOption.description}</span>
+        )}
+      </label>
+
       <pre className="mt-4 overflow-x-auto rounded-md bg-surface-muted p-3 text-xs">
         <code>{snippet}</code>
       </pre>
