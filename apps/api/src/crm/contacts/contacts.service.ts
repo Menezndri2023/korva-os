@@ -128,7 +128,10 @@ export class ContactsService {
 
   async update(
     organizationId: string,
-    userId: string,
+    // Optional so a customer-initiated self-service profile edit (no staff actor — see
+    // CustomerAuthService.updateProfile) can call this too, same precedent as create()'s own
+    // `userId: string | undefined` above; AuditService.record already tolerates undefined.
+    userId: string | undefined,
     id: string,
     input: UpdateContactInput,
   ): Promise<ContactDocument> {

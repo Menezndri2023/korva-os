@@ -127,6 +127,7 @@ process.env.REDIS_URL ??= `redis://localhost:6380/${TEST_RUN_REDIS_DB}`;
 process.env.TEST_RUN_BULLMQ_PREFIX ??= TEST_RUN_BULLMQ_PREFIX;
 process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.JWT_REFRESH_SECRET ??= 'test-jwt-refresh-secret';
+process.env.CUSTOMER_JWT_SECRET ??= 'test-customer-jwt-secret';
 process.env.INTEGRATION_CREDENTIALS_KEY ??= 'test-integration-credentials-key';
 
 // Each e2e spec file boots its own NestApplication (its own ephemeral
