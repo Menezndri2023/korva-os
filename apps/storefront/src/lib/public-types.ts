@@ -90,3 +90,37 @@ export interface TrackedBooking {
   endAt: string;
   pricing: { amount: number; currency: string };
 }
+
+/** Mirrors CustomerAuthService's toPublicCustomer shape exactly. */
+export interface CustomerProfile {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+}
+
+export interface CustomerAuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  customer: CustomerProfile;
+}
+
+/** Mirrors CustomerAuthService#listOrders' mapped item shape. */
+export interface CustomerOrderSummary {
+  id: string;
+  number: string;
+  status: OrderStatus;
+  total: number;
+  currency: string;
+  createdAt: string;
+}
+
+/** Mirrors CustomerAuthService#listBookings' mapped item shape. */
+export interface CustomerBookingSummary {
+  id: string;
+  status: BookingStatus;
+  startAt: string;
+  endAt: string;
+  pricing: { amount: number; currency: string };
+}

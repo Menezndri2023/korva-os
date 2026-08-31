@@ -233,6 +233,7 @@ export function CheckoutPanel({
   cart,
   currency,
   shippingFlatRate,
+  customer,
   onClose,
   onSuccess,
 }: {
@@ -240,6 +241,9 @@ export function CheckoutPanel({
   cart: CartLine[];
   currency: string;
   shippingFlatRate?: number;
+  /** When the visitor is logged into the customer portal, pre-fills (but never locks) the
+   *  contact fields below — guest checkout stays fully unchanged when this is undefined. */
+  customer?: { email: string; firstName?: string; phone?: string };
   onClose: () => void;
   onSuccess: (orderNumber: string) => void;
 }) {
@@ -260,7 +264,11 @@ export function CheckoutPanel({
         quantity: line.quantity,
       })),
       currency,
-      contact: { email: "", firstName: "", phone: "" },
+      contact: {
+        email: customer?.email ?? "",
+        firstName: customer?.firstName ?? "",
+        phone: customer?.phone ?? "",
+      },
       discountCode: "",
       shippingAddress: { line1: "", line2: "", city: "", postalCode: "", country: "" },
     },

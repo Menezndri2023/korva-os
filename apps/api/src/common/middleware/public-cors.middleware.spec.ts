@@ -53,6 +53,22 @@ describe('publicCorsMiddleware', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it('allows PATCH and an Authorization header, for the customer-portal endpoints', () => {
+    const req = {
+      path: '/api/v1/public/my-org/account/me',
+      method: 'PATCH',
+    } as Request;
+    const res = makeResponse();
+    const next = jest.fn();
+
+    publicCorsMiddleware(req, res as unknown as Response, next);
+
+    expect(res.headers['Access-Control-Allow-Methods']).toContain('PATCH');
+    expect(res.headers['Access-Control-Allow-Headers']).toContain(
+      'Authorization',
+    );
+  });
+
   it('never applies to a path that merely contains "public" outside the dedicated prefix', () => {
     const req = { path: '/api/v1/not-public/leads', method: 'POST' } as Request;
     const res = makeResponse();

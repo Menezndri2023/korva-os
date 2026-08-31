@@ -185,16 +185,23 @@ describe('Customer portal auth (e2e)', () => {
 
       const authRes = await request(server)
         .post('/api/v1/auth/register')
-        .send({ email: 'staff-cust-boundary@example.com', password: 'password123' })
+        .send({
+          email: 'staff-cust-boundary@example.com',
+          password: 'password123',
+        })
         .expect(201);
       staffTokenOrgA = asSuccess<AuthPayload>(authRes.body).accessToken;
 
       const registerRes = await request(server)
         .post(`/api/v1/public/${slugA}/account/register`)
-        .send({ email: 'boundary-client@example.com', password: 'clientpass123' })
+        .send({
+          email: 'boundary-client@example.com',
+          password: 'clientpass123',
+        })
         .expect(201);
-      customerTokenOrgA = asSuccess<CustomerAuthPayload>(registerRes.body)
-        .accessToken;
+      customerTokenOrgA = asSuccess<CustomerAuthPayload>(
+        registerRes.body,
+      ).accessToken;
     });
 
     it('rejects a customer access token used against a staff-only endpoint', async () => {
@@ -212,7 +219,7 @@ describe('Customer portal auth (e2e)', () => {
         .expect(401);
     });
 
-    it('rejects a customer token for org A when presented against org B\'s slug', async () => {
+    it("rejects a customer token for org A when presented against org B's slug", async () => {
       await request(server)
         .get(`/api/v1/public/${slugB}/account/me`)
         .set('Authorization', `Bearer ${customerTokenOrgA}`)
@@ -304,7 +311,7 @@ describe('Customer portal auth (e2e)', () => {
         .expect(201);
     });
 
-    it('only returns the authenticated customer\'s own orders', async () => {
+    it("only returns the authenticated customer's own orders", async () => {
       const resA = await request(server)
         .get(`/api/v1/public/${slug}/account/orders`)
         .set('Authorization', `Bearer ${customerAToken}`)

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Badge, Button, Card } from "@korva/ui";
 import { publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
+import { useCustomerAuth } from "@/lib/use-customer-auth";
 import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "./commerce-panels";
@@ -25,6 +26,7 @@ export default function StorefrontClient({ slug }: { slug: string }) {
   });
 
   const { cart, addToCart, clearCart } = useCart(slug);
+  const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
   const [bookingOffer, setBookingOffer] = useState<PublicOffer | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
@@ -70,6 +72,14 @@ export default function StorefrontClient({ slug }: { slug: string }) {
             >
               Suivre ma commande
             </Link>
+            {authHydrated && (
+              <Link
+                href={`/${slug}/account${isAuthenticated ? "" : "/login"}`}
+                className="text-sm text-text-muted hover:underline"
+              >
+                {isAuthenticated ? (customer?.firstName ?? "Mon compte") : "Se connecter"}
+              </Link>
+            )}
             {commerceEnabled && cartCount > 0 && (
               <Button
                 size="sm"
@@ -150,6 +160,7 @@ export default function StorefrontClient({ slug }: { slug: string }) {
           cart={cart}
           currency={organization.currency}
           shippingFlatRate={organization.shippingFlatRate}
+          customer={isAuthenticated && customer ? customer : undefined}
           onClose={() => setShowCheckout(false)}
           onSuccess={(orderNumber) => {
             clearCart();

@@ -20,6 +20,13 @@ const PUBLIC_API_PREFIX = '/api/v1/public/';
  * res.setHeader for Access-Control-Allow-Origin when the origin actually matches its own
  * allowlist (confirmed against the installed cors@2.8.6 source — it simply skips setting the
  * header otherwise), so it can never downgrade or remove what this middleware already set.
+ *
+ * PATCH and the Authorization header are both needed for the customer-portal endpoints under
+ * /public/:slug/account/* (PATCH .../me, and every guarded GET/PATCH sends a bearer token) —
+ * still safe under this middleware's own reasoning above: a customer-portal bearer token is a
+ * plain header value the caller supplies deliberately, never an ambient browser credential like
+ * a cookie, so allowing it here doesn't reintroduce the cross-origin credential leak this
+ * middleware exists to avoid.
  */
 export function publicCorsMiddleware(
   req: Request,
@@ -32,8 +39,8 @@ export function publicCorsMiddleware(
   }
 
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
