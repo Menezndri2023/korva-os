@@ -42,6 +42,7 @@ function mockGetByPath(path: string) {
   if (path === "/invoices/invoice-1") return Promise.resolve(invoice);
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
   if (path.startsWith("/payments")) return Promise.resolve([]);
+  if (path === "/organizations/me/members") return Promise.resolve([]);
   throw new Error(`unexpected GET ${path}`);
 }
 
@@ -134,6 +135,65 @@ describe("InvoiceDetailPage", () => {
         method: "",
       }),
     );
+  });
+
+  it("records a payment with a tip attributed to a staff member", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me/members") {
+        return Promise.resolve([
+          { id: "mem-1", userId: { firstName: "Sophie", lastName: "Martin", email: "s@x.test" } },
+        ]);
+      }
+      return mockGetByPath(path);
+    });
+    postMock.mockResolvedValue({ id: "payment-1" });
+    const user = userEvent.setup();
+    renderWithProviders(<InvoiceDetailPage />);
+    await screen.findByRole("heading", { name: "INV-1" });
+
+    await user.type(screen.getByPlaceholderText("Montant"), "50");
+    await user.type(screen.getByPlaceholderText("Pourboire (optionnel)"), "5");
+    await user.selectOptions(screen.getByDisplayValue("Pourboire pour (optionnel)"), "mem-1");
+    await user.click(screen.getByRole("button", { name: "Enregistrer le paiement" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/payments", {
+        invoiceId: "invoice-1",
+        amount: 50,
+        method: "",
+        tipAmount: 5,
+        tipStaffMembershipId: "mem-1",
+      }),
+    );
+  });
+
+  it("shows a payment's tip amount and attributed staff member", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me/members") {
+        return Promise.resolve([
+          { id: "mem-1", userId: { firstName: "Sophie", lastName: "Martin", email: "s@x.test" } },
+        ]);
+      }
+      if (path.startsWith("/payments")) {
+        return Promise.resolve([
+          {
+            id: "payment-1",
+            invoiceId: "invoice-1",
+            amount: 20,
+            currency: "EUR",
+            status: "completed",
+            provider: "manual",
+            tipAmount: 3,
+            tipStaffMembershipId: "mem-1",
+            createdAt: "2026-01-02T00:00:00.000Z",
+          },
+        ]);
+      }
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<InvoiceDetailPage />);
+
+    expect(await screen.findByText(/pourboire pour Sophie Martin/)).toBeInTheDocument();
   });
 
   it("does not show the payment form for a draft invoice", async () => {

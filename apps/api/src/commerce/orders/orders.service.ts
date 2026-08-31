@@ -15,6 +15,7 @@ import { ContactsService } from '../../crm/contacts/contacts.service';
 import { OffersService } from '../../catalog/offers/offers.service';
 import { InventoryService } from '../../catalog/offers/inventory.service';
 import { BookingsService } from '../../booking/bookings/bookings.service';
+import { ResourcesService } from '../../booking/resources/resources.service';
 import { InvoicesService } from '../../finance/invoices/invoices.service';
 import { InvoiceDocument } from '../../finance/invoices/schemas/invoice.schema';
 import { FulfillmentsService } from '../fulfillments/fulfillments.service';
@@ -35,6 +36,7 @@ export class OrdersService {
     private readonly offersService: OffersService,
     private readonly inventoryService: InventoryService,
     private readonly bookingsService: BookingsService,
+    private readonly resourcesService: ResourcesService,
     private readonly invoicesService: InvoicesService,
     private readonly fulfillmentsService: FulfillmentsService,
     private readonly countersService: CountersService,
@@ -267,6 +269,7 @@ export class OrdersService {
       contactId: string;
       currency: string;
       bookingId?: string;
+      resourceId?: string;
       notes?: string;
     },
   ): Promise<OrderDocument> {
@@ -292,6 +295,11 @@ export class OrdersService {
         });
       }
     }
+    if (input.resourceId) {
+      // Confirms the resource exists and belongs to this organization — reuses Resource as a
+      // physical table, no new Table entity (see this class's own doc above).
+      await this.resourcesService.getById(organizationId, input.resourceId);
+    }
 
     return this.createOrderRecord(organizationId, userId, {
       contactId: input.contactId,
@@ -300,6 +308,7 @@ export class OrdersService {
       notes: input.notes,
       source: 'manual',
       bookingId: input.bookingId,
+      resourceId: input.resourceId,
       status: 'open',
     });
   }
@@ -312,7 +321,11 @@ export class OrdersService {
     organizationId: string,
     userId: string,
     orderId: string,
-    input: { offerId: string; quantity: number },
+    input: {
+      offerId: string;
+      quantity: number;
+      modifiers?: { name: string; priceDelta: number }[];
+    },
   ): Promise<OrderDocument> {
     const order = await this.getById(organizationId, orderId);
     if (order.status !== 'open') {
@@ -332,6 +345,7 @@ export class OrdersService {
       quantity: input.quantity,
       unitPrice: offer.pricing.amount,
       taxRate: offer.pricing.taxRate,
+      modifiers: input.modifiers,
     };
     const items: LineItemInput[] = [
       ...order.items.map((item) => ({
@@ -340,6 +354,7 @@ export class OrdersService {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         taxRate: item.taxRate,
+        modifiers: item.modifiers,
       })),
       newItem,
     ];
@@ -421,6 +436,7 @@ export class OrdersService {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         taxRate: item.taxRate,
+        modifiers: item.modifiers,
       }));
     const totals = computeTotals(items);
 
@@ -531,6 +547,7 @@ export class OrdersService {
       notes?: string;
       source: OrderDocument['source'];
       bookingId?: string;
+      resourceId?: string;
       /** Defaults to the schema's own default ('pending') when omitted — only createOpen()
        *  passes 'open' explicitly. */
       status?: OrderDocument['status'];
@@ -578,6 +595,9 @@ export class OrdersService {
             status: input.status,
             bookingId: input.bookingId
               ? new Types.ObjectId(input.bookingId)
+              : undefined,
+            resourceId: input.resourceId
+              ? new Types.ObjectId(input.resourceId)
               : undefined,
             items: toLineItemDocs(input.items),
             currency: input.currency,
@@ -806,6 +826,7 @@ export class OrdersService {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         taxRate: item.taxRate,
+        modifiers: item.modifiers,
       })),
     });
 

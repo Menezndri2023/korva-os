@@ -11,7 +11,7 @@ import {
   type CreateOpenOrderInput,
   type CreateOrderInput,
 } from "@korva/validation";
-import type { Contact, Order } from "@korva/types";
+import type { Contact, Order, Resource } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -42,6 +42,15 @@ export default function OrdersPage() {
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
     enabled: authReady,
   });
+  const { data: resources } = useQuery({
+    queryKey: ["resources", ""],
+    queryFn: () => apiClient.get<Resource[]>("/resources"),
+    enabled: authReady,
+  });
+  function resourceName(resourceId?: string): string {
+    if (!resourceId) return "—";
+    return resources?.find((r) => r.id === resourceId)?.name ?? "—";
+  }
 
   const { register, control, handleSubmit, reset } = useForm<CreateOrderInput>({
     resolver: zodResolver(createOrderSchema),
@@ -140,6 +149,20 @@ export default function OrdersPage() {
             ))}
           </select>
           <Input placeholder="Devise (EUR)" className="w-28" {...registerOpen("currency")} />
+          <select
+            className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            defaultValue=""
+            {...registerOpen("resourceId", {
+              setValueAs: (v: string) => (v === "" ? undefined : v),
+            })}
+          >
+            <option value="">Table (optionnel)</option>
+            {resources?.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
           {createOpenMutation.isError && (
             <p className="w-full text-sm text-destructive">
               {createOpenMutation.error instanceof ApiError
@@ -239,6 +262,7 @@ export default function OrdersPage() {
               <tr>
                 <th className="px-4 py-2">N°</th>
                 <th className="px-4 py-2">Client</th>
+                <th className="px-4 py-2">Table</th>
                 <th className="px-4 py-2">Origine</th>
                 <th className="px-4 py-2">Total</th>
                 <th className="px-4 py-2">Statut</th>
@@ -248,14 +272,14 @@ export default function OrdersPage() {
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
+                  <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
                     Chargement...
                   </td>
                 </tr>
               )}
               {!isLoading && orders?.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
+                  <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
                     Aucune commande.
                   </td>
                 </tr>
@@ -271,6 +295,7 @@ export default function OrdersPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-2 text-text-muted">{contactName(order.contactId)}</td>
+                  <td className="px-4 py-2 text-text-muted">{resourceName(order.resourceId)}</td>
                   <td className="px-4 py-2 text-text-muted">{order.source}</td>
                   <td className="px-4 py-2 text-text-muted">
                     {order.total} {order.currency}

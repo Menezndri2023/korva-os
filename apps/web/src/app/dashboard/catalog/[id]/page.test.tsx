@@ -18,6 +18,7 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
     apiClient: {
       ...actual.apiClient,
       get: vi.fn(),
+      post: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),
     },
@@ -27,6 +28,7 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
 const getMock = vi.mocked(apiClient.get);
+const postMock = vi.mocked(apiClient.post);
 const patchMock = vi.mocked(apiClient.patch);
 const deleteMock = vi.mocked(apiClient.delete);
 
@@ -54,6 +56,7 @@ function mockGetByPath(path: string) {
 describe("OfferDetailPage", () => {
   beforeEach(() => {
     getMock.mockReset();
+    postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
     pushMock.mockReset();
@@ -69,6 +72,43 @@ describe("OfferDetailPage", () => {
     expect(screen.getByText("Une belle chaise")).toBeInTheDocument();
     expect(screen.getByText("mobilier")).toBeInTheDocument();
     expect(screen.getByText("Rouge")).toBeInTheDocument();
+  });
+
+  it("86's a tracked item (sets stockOnHand to 0) via POST /offers/:id/stock/adjust", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/offers/offer-1") {
+        return Promise.resolve({ ...offer, trackStock: true, stockOnHand: 5 });
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+    postMock.mockResolvedValue({ ...offer, trackStock: true, stockOnHand: 0 });
+    const user = userEvent.setup();
+    renderWithProviders(<OfferDetailPage />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "86 (marquer indisponible)" }),
+    );
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/offers/offer-1/stock/adjust", {
+        stockOnHand: 0,
+      }),
+    );
+  });
+
+  it("does not show the 86 button once stock is already at 0", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/offers/offer-1") {
+        return Promise.resolve({ ...offer, trackStock: true, stockOnHand: 0 });
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+    renderWithProviders(<OfferDetailPage />);
+
+    await screen.findByText("Ajuster le stock");
+    expect(
+      screen.queryByRole("button", { name: "86 (marquer indisponible)" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a message and a link back when the offer does not exist", async () => {

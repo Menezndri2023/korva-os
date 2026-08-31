@@ -2,6 +2,20 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Types } from 'mongoose';
 import type { LineItemInput } from '@korva/validation';
 
+/** A named add-on/variation with a per-unit price delta (e.g. "sans oignon": 0, "extra fromage":
+ *  +1.50) — generic, not restaurant-specific (any vertical selling configurable items, from
+ *  e-commerce add-ons to salon service extras, can reuse this identically). */
+@Schema({ _id: false })
+export class LineItemModifier {
+  @Prop({ required: true })
+  name!: string;
+
+  @Prop({ required: true })
+  priceDelta!: number;
+}
+export const LineItemModifierSchema =
+  SchemaFactory.createForClass(LineItemModifier);
+
 /**
  * Shared across Finance (Quote/Invoice) and Commerce (Order) — a quote line,
  * invoice line, and order line all have the same shape (per spec section 18,
@@ -23,6 +37,15 @@ export class LineItem {
 
   @Prop()
   taxRate?: number;
+
+  // `default: undefined` is required here, not redundant — Mongoose array paths implicitly
+  // default to `[]` even with no `default` option at all, which would otherwise silently add a
+  // `modifiers: []` key to every pre-existing LineItem document/assertion that never expected
+  // one (confirmed the hard way — see this feature's own e2e run). Explicitly suppressing that
+  // built-in default is the only way to keep this field genuinely absent when unset, matching
+  // every other optional field on this schema (taxRate, offerId).
+  @Prop({ type: [LineItemModifierSchema], default: undefined })
+  modifiers?: LineItemModifier[];
 }
 export const LineItemSchema = SchemaFactory.createForClass(LineItem);
 
@@ -52,7 +75,11 @@ export function computeTotals(
   let taxTotal = 0;
 
   for (const item of items) {
-    const lineAmount = item.quantity * item.unitPrice;
+    const modifiersDelta = (item.modifiers ?? []).reduce(
+      (sum, modifier) => sum + modifier.priceDelta,
+      0,
+    );
+    const lineAmount = item.quantity * (item.unitPrice + modifiersDelta);
     subtotal += lineAmount;
     taxTotal += lineAmount * ((item.taxRate ?? 0) / 100);
   }
@@ -86,5 +113,6 @@ export function toLineItemDocs(items: LineItemInput[]): LineItem[] {
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     taxRate: item.taxRate,
+    modifiers: item.modifiers,
   }));
 }

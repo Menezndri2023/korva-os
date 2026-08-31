@@ -33,6 +33,7 @@ export interface Order {
   status: OrderStatus;
   source: OrderSource;
   bookingId?: string;
+  resourceId?: string;
   invoiceId?: string;
   items: LineItem[];
   currency: string;

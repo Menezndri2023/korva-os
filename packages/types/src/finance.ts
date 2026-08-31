@@ -14,12 +14,18 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export const PAYMENT_STATUSES = ["pending", "processing", "completed", "failed", "refunded"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
+export interface LineItemModifier {
+  name: string;
+  priceDelta: number;
+}
+
 export interface LineItem {
   offerId?: string;
   description: string;
   quantity: number;
   unitPrice: number;
   taxRate?: number;
+  modifiers?: LineItemModifier[];
 }
 
 export interface Quote {
@@ -73,6 +79,8 @@ export interface Payment {
   provider: string;
   providerReference?: string;
   method?: string;
+  tipAmount?: number;
+  tipStaffMembershipId?: string;
   createdAt: string;
 }
 

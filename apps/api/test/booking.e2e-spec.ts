@@ -1471,8 +1471,7 @@ describe('Booking module (e2e)', () => {
         .set('X-Organization-Id', ctx.organizationId)
         .expect(200);
       expect(
-        asSuccess<CreditBalancePayload>(afterAttendedRes.body)
-          .remainingCredits,
+        asSuccess<CreditBalancePayload>(afterAttendedRes.body).remainingCredits,
       ).toBe(1);
     });
 

@@ -244,6 +244,16 @@ export default function OfferDetailPage() {
                 >
                   Ajuster le stock
                 </Button>
+                {offer.stockOnHand !== 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    loading={adjustStockMutation.isPending}
+                    onClick={() => adjustStockMutation.mutate(0)}
+                  >
+                    86 (marquer indisponible)
+                  </Button>
+                )}
               </div>
             )}
 

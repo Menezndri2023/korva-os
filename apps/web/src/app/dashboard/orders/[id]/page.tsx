@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addOrderItemSchema, type AddOrderItemInput } from "@korva/validation";
-import type { Contact, Offer, Order } from "@korva/types";
+import type { Contact, Offer, Order, Resource } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -40,6 +40,11 @@ export default function OrderDetailPage() {
     queryFn: () => apiClient.get<Offer[]>("/offers"),
     enabled: authReady,
   });
+  const resourcesQuery = useQuery({
+    queryKey: ["resources", ""],
+    queryFn: () => apiClient.get<Resource[]>("/resources"),
+    enabled: authReady,
+  });
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -48,18 +53,24 @@ export default function OrderDetailPage() {
 
   const {
     register: registerItem,
+    control: itemControl,
     handleSubmit: handleItemSubmit,
     reset: resetItemForm,
   } = useForm<AddOrderItemInput>({
     resolver: zodResolver(addOrderItemSchema),
-    defaultValues: { quantity: 1 },
+    defaultValues: { quantity: 1, modifiers: [] },
   });
+  const {
+    fields: modifierFields,
+    append: appendModifier,
+    remove: removeModifier,
+  } = useFieldArray({ control: itemControl, name: "modifiers" });
   const addItemMutation = useMutation({
     mutationFn: (input: AddOrderItemInput) =>
       apiClient.post<Order>(`/orders/${id}/items`, input),
     onSuccess: () => {
       invalidate();
-      resetItemForm({ offerId: "", quantity: 1 });
+      resetItemForm({ offerId: "", quantity: 1, modifiers: [] });
     },
   });
   const removeItemMutation = useMutation({
@@ -108,6 +119,10 @@ export default function OrderDetailPage() {
       contact.company ||
       "—"
     );
+  }
+  function resourceName(resourceId?: string): string {
+    if (!resourceId) return "—";
+    return resourcesQuery.data?.find((r) => r.id === resourceId)?.name ?? "—";
   }
 
   if (orderQuery.isLoading) {
@@ -218,6 +233,12 @@ export default function OrderDetailPage() {
             <dt className="text-text-muted">Créée le</dt>
             <dd className="mt-0.5">{new Date(order.createdAt).toLocaleString("fr-FR")}</dd>
           </div>
+          {order.resourceId && (
+            <div>
+              <dt className="text-text-muted">Table</dt>
+              <dd className="mt-0.5">{resourceName(order.resourceId)}</dd>
+            </div>
+          )}
           {order.invoiceId && (
             <div>
               <dt className="text-text-muted">Facture</dt>
@@ -258,17 +279,36 @@ export default function OrderDetailPage() {
                   </td>
                 </tr>
               )}
-              {order.items.map((item, index) => (
+              {order.items.map((item, index) => {
+                const modifiersDelta = (item.modifiers ?? []).reduce(
+                  (sum, modifier) => sum + modifier.priceDelta,
+                  0,
+                );
+                return (
                 <tr key={index}>
-                  <td className="px-4 py-2 font-medium">{item.description}</td>
+                  <td className="px-4 py-2 font-medium">
+                    {item.description}
+                    {item.modifiers && item.modifiers.length > 0 && (
+                      <p className="mt-0.5 text-xs font-normal text-text-muted">
+                        {item.modifiers
+                          .map(
+                            (m) =>
+                              `${m.name} (${m.priceDelta >= 0 ? "+" : ""}${formatCurrency(m.priceDelta, order.currency)})`,
+                          )
+                          .join(", ")}
+                      </p>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-text-muted">{item.quantity}</td>
                   <td className="px-4 py-2 text-text-muted">
-                    {formatCurrency(item.unitPrice, order.currency)}
+                    {formatCurrency(item.unitPrice + modifiersDelta, order.currency)}
                   </td>
                   <td className="px-4 py-2 text-text-muted">{item.taxRate ?? 0}%</td>
                   <td className="px-4 py-2 text-text-muted">
                     {formatCurrency(
-                      item.quantity * item.unitPrice * (1 + (item.taxRate ?? 0) / 100),
+                      item.quantity *
+                        (item.unitPrice + modifiersDelta) *
+                        (1 + (item.taxRate ?? 0) / 100),
                       order.currency,
                     )}
                   </td>
@@ -284,7 +324,8 @@ export default function OrderDetailPage() {
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -303,32 +344,68 @@ export default function OrderDetailPage() {
         {order.status === "open" && (
           <form
             onSubmit={handleItemSubmit((values) => addItemMutation.mutate(values))}
-            className="flex flex-wrap items-end gap-2 border-t border-border p-4"
+            className="space-y-2 border-t border-border p-4"
           >
-            <select
-              className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
-              defaultValue=""
-              {...registerItem("offerId")}
-            >
-              <option value="" disabled>
-                Choisir un article
-              </option>
-              {offersQuery.data?.map((offer) => (
-                <option key={offer.id} value={offer.id}>
-                  {offer.name} — {formatCurrency(offer.pricing.amount, offer.pricing.currency)}
+            <div className="flex flex-wrap items-end gap-2">
+              <select
+                className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+                defaultValue=""
+                {...registerItem("offerId")}
+              >
+                <option value="" disabled>
+                  Choisir un article
                 </option>
+                {offersQuery.data?.map((offer) => (
+                  <option key={offer.id} value={offer.id}>
+                    {offer.name} — {formatCurrency(offer.pricing.amount, offer.pricing.currency)}
+                  </option>
+                ))}
+              </select>
+              <Input
+                type="number"
+                step="1"
+                placeholder="Qté"
+                className="w-20"
+                {...registerItem("quantity", { valueAsNumber: true })}
+              />
+              <Button type="submit" size="sm" loading={addItemMutation.isPending}>
+                {addItemMutation.isPending ? "Ajout..." : "Ajouter l'article"}
+              </Button>
+            </div>
+            <div className="space-y-1">
+              {modifierFields.map((field, index) => (
+                <div key={field.id} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Modificateur (ex: Sans oignon)"
+                    className="w-56"
+                    {...registerItem(`modifiers.${index}.name`)}
+                  />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="Supplément"
+                    className="w-28"
+                    {...registerItem(`modifiers.${index}.priceDelta`, {
+                      valueAsNumber: true,
+                    })}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeModifier(index)}
+                    className="text-xs text-destructive hover:underline"
+                  >
+                    ✕
+                  </button>
+                </div>
               ))}
-            </select>
-            <Input
-              type="number"
-              step="1"
-              placeholder="Qté"
-              className="w-20"
-              {...registerItem("quantity", { valueAsNumber: true })}
-            />
-            <Button type="submit" size="sm" loading={addItemMutation.isPending}>
-              {addItemMutation.isPending ? "Ajout..." : "Ajouter l'article"}
-            </Button>
+              <button
+                type="button"
+                onClick={() => appendModifier({ name: "", priceDelta: 0 })}
+                className="text-xs text-text-muted hover:underline"
+              >
+                + Ajouter un modificateur
+              </button>
+            </div>
           </form>
         )}
       </Card>

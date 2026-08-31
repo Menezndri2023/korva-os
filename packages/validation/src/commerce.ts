@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ORDER_STATUSES, FULFILLMENT_STATUSES } from "@korva/types";
-import { lineItemInputSchema } from "./finance.ts";
+import { lineItemInputSchema, lineItemModifierSchema } from "./finance.ts";
 
 export const createCartSchema = z.object({
   contactId: z.string().min(1),
@@ -36,6 +36,7 @@ export const createOpenOrderSchema = z.object({
   contactId: z.string().min(1),
   currency: z.string().length(3),
   bookingId: z.string().optional(),
+  resourceId: z.string().optional(),
   notes: z.string().max(2000).optional(),
 });
 export type CreateOpenOrderInput = z.infer<typeof createOpenOrderSchema>;
@@ -43,6 +44,7 @@ export type CreateOpenOrderInput = z.infer<typeof createOpenOrderSchema>;
 export const addOrderItemSchema = z.object({
   offerId: z.string().min(1),
   quantity: z.number().positive(),
+  modifiers: z.array(lineItemModifierSchema).max(20).optional(),
 });
 export type AddOrderItemInput = z.infer<typeof addOrderItemSchema>;
 

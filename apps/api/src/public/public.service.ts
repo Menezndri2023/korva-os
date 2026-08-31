@@ -348,6 +348,7 @@ export class PublicService {
         description: item.description,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
+        modifiers: item.modifiers,
       })),
       total: order.total,
       currency: order.currency,

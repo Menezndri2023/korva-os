@@ -32,6 +32,12 @@ export class Order {
   @Prop({ type: Types.ObjectId, ref: 'Booking' })
   bookingId?: Types.ObjectId;
 
+  /** Reuses Resource as a physical table — same "never fork the generic model" precedent as
+   *  Resource.type staying free-form. Any organization can tag an order to a resource; a
+   *  restaurant just benefits most (one open tab per table). */
+  @Prop({ type: Types.ObjectId, ref: 'Resource' })
+  resourceId?: Types.ObjectId;
+
   @Prop({ type: Types.ObjectId, ref: 'Invoice' })
   invoiceId?: Types.ObjectId;
 

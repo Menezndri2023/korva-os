@@ -11,6 +11,18 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
 
+interface MemberOption {
+  id: string;
+  userId: { firstName?: string; lastName?: string; email: string };
+}
+
+function memberName(member: MemberOption): string {
+  return (
+    [member.userId.firstName, member.userId.lastName].filter(Boolean).join(" ") ||
+    member.userId.email
+  );
+}
+
 const STATUS_LABELS: Record<Invoice["status"], string> = {
   draft: "Brouillon",
   issued: "Émise",
@@ -40,6 +52,15 @@ export default function InvoiceDetailPage() {
     queryFn: () => apiClient.get<Payment[]>(`/payments?invoiceId=${id}`),
     enabled: authReady,
   });
+  const { data: members } = useQuery({
+    queryKey: ["organizations", "me", "members"],
+    queryFn: () => apiClient.get<MemberOption[]>("/organizations/me/members"),
+    enabled: authReady,
+  });
+  function staffName(membershipId?: string): string {
+    const member = members?.find((m) => m.id === membershipId);
+    return member ? memberName(member) : "—";
+  }
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -54,7 +75,12 @@ export default function InvoiceDetailPage() {
     onSuccess: invalidate,
   });
 
-  const { register, handleSubmit, reset } = useForm<{ amount: number; method?: string }>();
+  const { register, handleSubmit, reset } = useForm<{
+    amount: number;
+    method?: string;
+    tipAmount?: number;
+    tipStaffMembershipId?: string;
+  }>();
   const payMutation = useMutation({
     mutationFn: (input: CreatePaymentInput) => apiClient.post<Payment>("/payments", input),
     onSuccess: () => {
@@ -259,6 +285,13 @@ export default function InvoiceDetailPage() {
                   <span>
                     {formatCurrency(payment.amount, payment.currency)}
                     {payment.method ? ` — ${payment.method}` : ""}
+                    {payment.tipAmount
+                      ? ` (+ ${formatCurrency(payment.tipAmount, payment.currency)} pourboire${
+                          payment.tipStaffMembershipId
+                            ? ` pour ${staffName(payment.tipStaffMembershipId)}`
+                            : ""
+                        })`
+                      : ""}
                   </span>
                   <span className="text-text-muted">
                     {new Date(payment.createdAt).toLocaleString("fr-FR")}
@@ -276,6 +309,8 @@ export default function InvoiceDetailPage() {
                 invoiceId: invoice.id,
                 amount: Number(values.amount),
                 method: values.method,
+                tipAmount: values.tipAmount ? Number(values.tipAmount) : undefined,
+                tipStaffMembershipId: values.tipStaffMembershipId || undefined,
               }),
             )}
             className="mt-4 flex flex-col gap-2 border-t border-border pt-4"
@@ -292,6 +327,24 @@ export default function InvoiceDetailPage() {
                 {...register("amount", { required: true, valueAsNumber: true })}
               />
               <Input placeholder="Méthode (cash, virement...)" {...register("method")} />
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Pourboire (optionnel)"
+                {...register("tipAmount", { valueAsNumber: true })}
+              />
+              <select
+                className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+                defaultValue=""
+                {...register("tipStaffMembershipId")}
+              >
+                <option value="">Pourboire pour (optionnel)</option>
+                {members?.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {memberName(member)}
+                  </option>
+                ))}
+              </select>
               <Button type="submit" loading={payMutation.isPending}>
                 {payMutation.isPending ? "..." : "Enregistrer le paiement"}
               </Button>

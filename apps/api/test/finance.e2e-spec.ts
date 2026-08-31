@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -44,6 +44,12 @@ interface InvoicePayload {
 interface PaymentPayload {
   id: string;
   status: string;
+  amount: number;
+  tipAmount?: number;
+  tipStaffMembershipId?: string;
+}
+interface MemberPayload {
+  id: string;
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -619,6 +625,92 @@ describe('Finance module (e2e)', () => {
         .send({ invoiceId, amount: 500 })
         .expect(400);
       expect(asError(res.body).code).toBe('PAYMENT_EXCEEDS_BALANCE');
+    });
+
+    it('records a tip alongside a payment, attributed to a staff member, without it counting against the invoice balance', async () => {
+      const tipInvoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Dinner', quantity: 1, unitPrice: 50 }],
+        })
+        .expect(201);
+      const tipInvoiceId = asSuccess<InvoicePayload>(tipInvoiceRes.body).id;
+      await request(server)
+        .post(`/api/v1/invoices/${tipInvoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const membersRes = await request(server)
+        .get('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const staffMembershipId = asSuccess<MemberPayload[]>(membersRes.body)[0]!
+        .id;
+
+      const res = await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          invoiceId: tipInvoiceId,
+          amount: 50,
+          tipAmount: 8,
+          tipStaffMembershipId: staffMembershipId,
+        })
+        .expect(201);
+      const payment = asSuccess<PaymentPayload>(res.body);
+      expect(payment.amount).toBe(50);
+      expect(payment.tipAmount).toBe(8);
+      expect(payment.tipStaffMembershipId).toBe(staffMembershipId);
+
+      // The tip is extra money, not part of what's owed — the invoice is fully paid by the
+      // 50 alone, regardless of the 8 tip riding alongside it.
+      const invoiceRes = await request(server)
+        .get(`/api/v1/invoices/${tipInvoiceId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const invoice = asSuccess<InvoicePayload>(invoiceRes.body);
+      expect(invoice.status).toBe('paid');
+      expect(invoice.amountPaid).toBe(50);
+    });
+
+    it('rejects a payment with a tip attributed to a membership that does not exist', async () => {
+      const tipInvoiceRes = await request(server)
+        .post('/api/v1/invoices')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          items: [{ description: 'Dinner', quantity: 1, unitPrice: 50 }],
+        })
+        .expect(201);
+      const tipInvoiceId = asSuccess<InvoicePayload>(tipInvoiceRes.body).id;
+      await request(server)
+        .post(`/api/v1/invoices/${tipInvoiceId}/issue`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const res = await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          invoiceId: tipInvoiceId,
+          amount: 50,
+          tipAmount: 5,
+          tipStaffMembershipId: new Types.ObjectId().toString(),
+        })
+        .expect(404);
+      expect(asError(res.body).code).toBe('MEMBERSHIP_NOT_FOUND');
     });
 
     it('marks the invoice paid once the balance is fully settled', async () => {

@@ -7,13 +7,17 @@ import { apiClient } from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn(), getList: vi.fn() } };
+  return {
+    ...actual,
+    apiClient: { ...actual.apiClient, get: vi.fn(), getList: vi.fn(), post: vi.fn() },
+  };
 });
 
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
 const getMock = vi.mocked(apiClient.get);
 const getListMock = vi.mocked(apiClient.getList);
+const postMock = vi.mocked(apiClient.post);
 
 const order = {
   id: "order-1",
@@ -37,8 +41,10 @@ describe("OrdersPage — pagination", () => {
   beforeEach(() => {
     getMock.mockReset();
     getListMock.mockReset();
+    postMock.mockReset();
     getMock.mockImplementation((path: string) => {
       if (path.startsWith("/contacts")) return Promise.resolve([contact]);
+      if (path.startsWith("/resources")) return Promise.resolve([{ id: "res-1", name: "Table 5" }]);
       throw new Error(`unexpected get ${path}`);
     });
     mockOrdersPage([]);
@@ -80,6 +86,31 @@ describe("OrdersPage — pagination", () => {
 
     await waitFor(() => expect(getListMock).toHaveBeenCalledWith("/orders?page=2"));
     expect(await screen.findByText("Page 2 sur 3")).toBeInTheDocument();
+  });
+
+  it("shows the order's table in its own column", async () => {
+    mockOrdersPage([{ ...order, resourceId: "res-1" }]);
+    renderWithProviders(<OrdersPage />);
+    expect(await screen.findByText("Table 5")).toBeInTheDocument();
+  });
+
+  it("opens a tab with the selected table and calls POST /orders/open with resourceId", async () => {
+    postMock.mockResolvedValue({ id: "order-2" });
+    const user = userEvent.setup();
+    renderWithProviders(<OrdersPage />);
+
+    await user.click(screen.getByRole("button", { name: "Ouvrir une addition" }));
+    await user.selectOptions(screen.getByDisplayValue("Choisir un client"), "contact-1");
+    await user.selectOptions(screen.getByDisplayValue("Table (optionnel)"), "res-1");
+    await user.click(screen.getByRole("button", { name: "Ouvrir" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/orders/open", {
+        contactId: "contact-1",
+        currency: "EUR",
+        resourceId: "res-1",
+      }),
+    );
   });
 
   it("disables both pagination buttons while a page is loading", async () => {

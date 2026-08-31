@@ -6,12 +6,19 @@ import {
   TIME_ENTRY_STATUSES,
 } from "@korva/types";
 
+export const lineItemModifierSchema = z.object({
+  name: z.string().min(1).max(100),
+  priceDelta: z.number(),
+});
+export type LineItemModifierInput = z.infer<typeof lineItemModifierSchema>;
+
 export const lineItemInputSchema = z.object({
   offerId: z.string().optional(),
   description: z.string().min(1).max(300),
   quantity: z.number().positive(),
   unitPrice: z.number().nonnegative(),
   taxRate: z.number().min(0).max(100).optional(),
+  modifiers: z.array(lineItemModifierSchema).max(20).optional(),
 });
 export type LineItemInput = z.infer<typeof lineItemInputSchema>;
 
@@ -70,6 +77,8 @@ export const createPaymentSchema = z.object({
   invoiceId: z.string().min(1),
   amount: z.number().positive(),
   method: z.string().max(60).optional(),
+  tipAmount: z.number().positive().optional(),
+  tipStaffMembershipId: z.string().optional(),
 });
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 

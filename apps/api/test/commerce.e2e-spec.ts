@@ -43,6 +43,7 @@ interface OrderItemPayload {
   description: string;
   quantity: number;
   unitPrice: number;
+  modifiers?: { name: string; priceDelta: number }[];
 }
 interface OrderPayload {
   id: string;
@@ -52,6 +53,7 @@ interface OrderPayload {
   subtotal: number;
   invoiceId?: string;
   bookingId?: string;
+  resourceId?: string;
   items: OrderItemPayload[];
 }
 interface InvoicePayload {
@@ -1190,6 +1192,106 @@ describe('Commerce module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .expect(403);
       expect(asError(closeAsStaffRes.body).code).toBe('PERMISSION_DENIED');
+    });
+
+    it('links a tab to a table (Resource), surfaced on the order and unaffected by a later addItem/removeItem', async () => {
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name: 'Table 9', type: 'table' })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      const openRes = await request(server)
+        .post('/api/v1/orders/open')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, currency: 'EUR', resourceId })
+        .expect(201);
+      const order = asSuccess<OrderPayload>(openRes.body);
+      expect(order.resourceId).toBe(resourceId);
+
+      const afterItemRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId: starterOfferId, quantity: 1 })
+        .expect(201);
+      expect(asSuccess<OrderPayload>(afterItemRes.body).resourceId).toBe(
+        resourceId,
+      );
+    });
+
+    it('rejects opening a tab against a resource that does not exist', async () => {
+      const res = await request(server)
+        .post('/api/v1/orders/open')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          currency: 'EUR',
+          resourceId: new Types.ObjectId().toString(),
+        })
+        .expect(404);
+      expect(asError(res.body).code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    it('folds item modifiers into unit price for totals, preserves them across addItem/removeItem, and carries them onto the generated invoice', async () => {
+      const order = await openTab();
+      const afterItemRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          offerId: starterOfferId,
+          quantity: 2,
+          modifiers: [{ name: 'Extra fromage', priceDelta: 1.5 }],
+        })
+        .expect(201);
+      const afterItem = asSuccess<OrderPayload>(afterItemRes.body);
+      // (12 + 1.5) * 2 = 27
+      expect(afterItem.total).toBe(27);
+      expect(afterItem.items[0]!.modifiers).toEqual([
+        { name: 'Extra fromage', priceDelta: 1.5 },
+      ]);
+
+      // A second addItem call must not drop the first item's modifiers when rebuilding the list.
+      const afterSecondRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/items`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ offerId: dessertOfferId, quantity: 1 })
+        .expect(201);
+      const afterSecond = asSuccess<OrderPayload>(afterSecondRes.body);
+      expect(afterSecond.items[0]!.modifiers).toEqual([
+        { name: 'Extra fromage', priceDelta: 1.5 },
+      ]);
+      expect(afterSecond.total).toBe(27 + 8);
+
+      await request(server)
+        .post(`/api/v1/orders/${order.id}/close`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      await request(server)
+        .post(`/api/v1/orders/${order.id}/confirm`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      await request(server)
+        .post(`/api/v1/orders/${order.id}/fulfill`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      const invoiceRes = await request(server)
+        .post(`/api/v1/orders/${order.id}/generate-invoice`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      // Must match the order's own total (27 + 8) — confirms generate-invoice carried the
+      // modifiers through rather than recomputing totals from unitPrice alone.
+      expect(asSuccess<InvoicePayload>(invoiceRes.body).total).toBe(35);
     });
   });
 

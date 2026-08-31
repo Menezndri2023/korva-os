@@ -14,6 +14,7 @@ import { Invoice, InvoiceSchema } from '../../invoices/schemas/invoice.schema';
 import { InvoicesRepository } from '../../invoices/invoices.repository';
 import { InvoicesService } from '../../invoices/invoices.service';
 import { AuditService } from '../../../audit/audit.service';
+import { MembershipsService } from '../../../identity/memberships/memberships.service';
 import { EventBusService } from '../../../core/events/event-bus.service';
 import {
   PAYMENT_PROVIDER,
@@ -172,6 +173,10 @@ describe('Wave 4 Stage 2.6 — payment lifecycle hardening (real Mongo, fixture 
           provide: AuditService,
           useValue: { record: jest.fn().mockResolvedValue(undefined) },
         },
+        // Only touched by PaymentsService.create()'s optional tipStaffMembershipId validation —
+        // never exercised by this lifecycle suite — so an inert stand-in is safe, same reasoning
+        // as the InvoicesService factory below.
+        { provide: MembershipsService, useValue: {} },
         // Real InvoicesService, constructed directly rather than via Nest's class-provider
         // resolution — its `contactsService`/`countersService`/`discountCodesService`
         // constructor params are never touched by applyPaymentDelta/applyPaymentIfWithinBalance,

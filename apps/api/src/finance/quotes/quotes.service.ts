@@ -225,6 +225,7 @@ export class QuotesService {
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         taxRate: item.taxRate,
+        modifiers: item.modifiers,
       })),
     });
   }

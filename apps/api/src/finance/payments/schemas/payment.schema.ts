@@ -42,6 +42,20 @@ export class Payment {
   method?: string;
 
   /**
+   * Gratuity collected alongside this payment — deliberately NOT folded into `amount` or
+   * validated against the invoice's remaining balance (the tip isn't part of what's owed on the
+   * invoice, it's extra money the customer chose to give). A restaurant-motivated addition, but
+   * generic: any vertical taking a payment in person could record one.
+   */
+  @Prop({ min: 0 })
+  tipAmount?: number;
+
+  /** Optional attribution to the staff member who served the customer — same optional-Membership
+   *  reference pattern as Resource.membershipId/Booking.staffMembershipId. */
+  @Prop({ type: Types.ObjectId, ref: 'Membership' })
+  tipStaffMembershipId?: Types.ObjectId;
+
+  /**
    * Denormalized running total of refunds accepted against this payment — exists solely so
    * PaymentsRepository.incrementRefundedAmountWithinLimit can enforce
    * `refundedAmount + delta <= amount` atomically in a single MongoDB write, the same pattern

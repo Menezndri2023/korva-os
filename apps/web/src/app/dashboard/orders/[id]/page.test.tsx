@@ -44,6 +44,8 @@ const order = {
 function mockGetByPath(path: string) {
   if (path === "/orders/order-1") return Promise.resolve(order);
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
+  if (path.startsWith("/offers")) return Promise.resolve([]);
+  if (path.startsWith("/resources")) return Promise.resolve([]);
   throw new Error(`unexpected GET ${path}`);
 }
 
@@ -136,5 +138,81 @@ describe("OrderDetailPage", () => {
     await user.click(screen.getByRole("button", { name: "Confirmer" }));
 
     expect(await screen.findByText("Cannot confirm this order")).toBeInTheDocument();
+  });
+
+  describe("open tab — table link, item modifiers", () => {
+    const openOrder = { ...order, status: "open" as const, resourceId: "res-1" };
+
+    beforeEach(() => {
+      getMock.mockImplementation((path: string) => {
+        if (path === "/orders/order-1") return Promise.resolve(openOrder);
+        if (path.startsWith("/contacts")) return Promise.resolve([contact]);
+        if (path.startsWith("/offers")) {
+          return Promise.resolve([
+            { id: "offer-1", name: "Burger", pricing: { amount: 12, currency: "EUR" } },
+          ]);
+        }
+        if (path.startsWith("/resources")) {
+          return Promise.resolve([{ id: "res-1", name: "Table 5" }]);
+        }
+        throw new Error(`unexpected GET ${path}`);
+      });
+    });
+
+    it("shows the order's table", async () => {
+      renderWithProviders(<OrderDetailPage />);
+      expect(await screen.findByText("Table 5")).toBeInTheDocument();
+    });
+
+    it("shows an item's modifiers next to its description", async () => {
+      getMock.mockImplementation((path: string) => {
+        if (path === "/orders/order-1") {
+          return Promise.resolve({
+            ...openOrder,
+            items: [
+              {
+                description: "Burger",
+                quantity: 1,
+                unitPrice: 12,
+                taxRate: 0,
+                modifiers: [{ name: "Extra fromage", priceDelta: 1.5 }],
+              },
+            ],
+          });
+        }
+        if (path.startsWith("/contacts")) return Promise.resolve([contact]);
+        if (path.startsWith("/offers")) return Promise.resolve([]);
+        if (path.startsWith("/resources")) {
+          return Promise.resolve([{ id: "res-1", name: "Table 5" }]);
+        }
+        throw new Error(`unexpected GET ${path}`);
+      });
+      renderWithProviders(<OrderDetailPage />);
+      expect(await screen.findByText(/Extra fromage/)).toBeInTheDocument();
+    });
+
+    it("submits a modifier alongside the new item via POST /orders/:id/items", async () => {
+      postMock.mockResolvedValue(openOrder);
+      const user = userEvent.setup();
+      renderWithProviders(<OrderDetailPage />);
+      await screen.findByRole("heading", { name: "ORD-1" });
+
+      await user.selectOptions(screen.getByDisplayValue("Choisir un article"), "offer-1");
+      await user.click(screen.getByRole("button", { name: "+ Ajouter un modificateur" }));
+      await user.type(
+        screen.getByPlaceholderText("Modificateur (ex: Sans oignon)"),
+        "Extra fromage",
+      );
+      await user.type(screen.getByPlaceholderText("Supplément"), "1.5");
+      await user.click(screen.getByRole("button", { name: "Ajouter l'article" }));
+
+      await waitFor(() =>
+        expect(postMock).toHaveBeenCalledWith("/orders/order-1/items", {
+          offerId: "offer-1",
+          quantity: 1,
+          modifiers: [{ name: "Extra fromage", priceDelta: 1.5 }],
+        }),
+      );
+    });
   });
 });

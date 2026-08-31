@@ -13,6 +13,7 @@ import { PaymentsRepository } from './payments.repository';
 import { Payment, PaymentDocument } from './schemas/payment.schema';
 import { Refund, RefundDocument } from './schemas/refund.schema';
 import { InvoicesService } from '../invoices/invoices.service';
+import { MembershipsService } from '../../identity/memberships/memberships.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
 import {
@@ -48,6 +49,7 @@ export class PaymentsService {
   constructor(
     private readonly paymentsRepository: PaymentsRepository,
     private readonly invoicesService: InvoicesService,
+    private readonly membershipsService: MembershipsService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
     @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
@@ -110,6 +112,20 @@ export class PaymentsService {
         code: 'PAYMENT_EXCEEDS_BALANCE',
         message: `Payment amount (${input.amount}) exceeds the remaining balance (${remaining})`,
       });
+    }
+    // Deliberately NOT checked against `remaining`/amountPaid — a tip is extra money the
+    // customer chose to give, not part of what's owed on the invoice (see the schema's own doc).
+    if (input.tipStaffMembershipId) {
+      const membership = await this.membershipsService.findByIdForOrganization(
+        input.tipStaffMembershipId,
+        organizationId,
+      );
+      if (!membership) {
+        throw new NotFoundException({
+          code: 'MEMBERSHIP_NOT_FOUND',
+          message: 'Membership not found',
+        });
+      }
     }
 
     // Claims the idempotency key BEFORE calling the provider — the atomic unique index on
@@ -217,6 +233,10 @@ export class PaymentsService {
       provider: this.paymentProvider.name,
       providerReference: result.providerReference,
       method: input.method,
+      tipAmount: input.tipAmount,
+      tipStaffMembershipId: input.tipStaffMembershipId
+        ? new Types.ObjectId(input.tipStaffMembershipId)
+        : undefined,
       ...(idempotencyKey ? { idempotencyKey } : {}),
     };
 
@@ -282,7 +302,8 @@ export class PaymentsService {
     const sameRequest =
       existing.invoiceId.toString() === input.invoiceId &&
       existing.amount === input.amount &&
-      (existing.method ?? null) === (input.method ?? null);
+      (existing.method ?? null) === (input.method ?? null) &&
+      (existing.tipAmount ?? null) === (input.tipAmount ?? null);
     if (!sameRequest) {
       throw new BadRequestException({
         code: 'IDEMPOTENCY_KEY_MISMATCH',
