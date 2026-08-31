@@ -518,6 +518,15 @@ export class OrdersService {
       items: LineItemInput[];
       currency: string;
       notes?: string;
+      discountCode?: string;
+      shippingCost?: number;
+      shippingAddress?: {
+        line1: string;
+        line2?: string;
+        city: string;
+        postalCode: string;
+        country: string;
+      };
     },
   ): Promise<OrderDocument> {
     return this.createOrderRecord(organizationId, undefined, {
@@ -526,6 +535,9 @@ export class OrdersService {
       currency: input.currency,
       notes: input.notes,
       source: 'storefront',
+      discountCode: input.discountCode,
+      shippingCost: input.shippingCost,
+      shippingAddress: input.shippingAddress,
     });
   }
 
@@ -552,6 +564,14 @@ export class OrdersService {
        *  passes 'open' explicitly. */
       status?: OrderDocument['status'];
       discountCode?: string;
+      shippingCost?: number;
+      shippingAddress?: {
+        line1: string;
+        line2?: string;
+        city: string;
+        postalCode: string;
+        country: string;
+      };
     },
   ): Promise<OrderDocument> {
     const session = await this.connection.startSession();
@@ -602,6 +622,9 @@ export class OrdersService {
             items: toLineItemDocs(input.items),
             currency: input.currency,
             ...totals,
+            total: totals.total + (input.shippingCost ?? 0),
+            shippingCost: input.shippingCost ?? 0,
+            shippingAddress: input.shippingAddress,
             discountCodeId: reservation
               ? new Types.ObjectId(reservation.discountCodeId)
               : undefined,

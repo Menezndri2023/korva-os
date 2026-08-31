@@ -26,6 +26,8 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   heroImage: z.string().url().optional(),
   /** Omit to show every section `enabledModules` allows; pass an explicit array to restrict. */
   storefrontSections: z.array(z.enum(STOREFRONT_SECTIONS)).optional(),
+  /** Flat shipping rate applied to every storefront order at checkout. */
+  shippingFlatRate: z.number().nonnegative().optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
 });
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;

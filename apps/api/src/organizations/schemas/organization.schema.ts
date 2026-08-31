@@ -67,6 +67,12 @@ export class Organization {
   @Prop({ type: [String], default: undefined })
   storefrontSections?: StorefrontSection[];
 
+  /** Flat shipping rate applied to every storefront order at checkout — undefined means no
+   *  shipping cost is charged. Simplest of the "tarif fixe ou par méthode" options the plan
+   *  allowed; a per-method rate table is a fast-follow if a real need for it comes up. */
+  @Prop()
+  shippingFlatRate?: number;
+
   @Prop({ type: Object, default: { onboardingCompleted: false } })
   settings!: OrganizationSettings;
 

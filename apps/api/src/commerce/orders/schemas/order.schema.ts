@@ -7,6 +7,26 @@ import { LineItem, LineItemSchema } from '../../../shared/line-item.schema';
 
 export type OrderDocument = HydratedDocument<Order>;
 
+@Schema({ _id: false })
+export class ShippingAddress {
+  @Prop({ required: true })
+  line1!: string;
+
+  @Prop()
+  line2?: string;
+
+  @Prop({ required: true })
+  city!: string;
+
+  @Prop({ required: true })
+  postalCode!: string;
+
+  @Prop({ required: true })
+  country!: string;
+}
+export const ShippingAddressSchema =
+  SchemaFactory.createForClass(ShippingAddress);
+
 @Schema({ timestamps: true, collection: 'orders', toJSON: idToJson })
 export class Order {
   @Prop({
@@ -58,6 +78,15 @@ export class Order {
 
   @Prop({ default: 0 })
   discountTotal!: number;
+
+  /** Flat rate, resolved server-side from Organization.shippingFlatRate at order-creation time
+   *  (a snapshot, like every other price on this document) — never client-supplied. Folded into
+   *  `total` on top of the line-item totals, since shipping isn't a line item itself. */
+  @Prop({ default: 0 })
+  shippingCost!: number;
+
+  @Prop({ type: ShippingAddressSchema })
+  shippingAddress?: ShippingAddress;
 
   @Prop({ required: true })
   total!: number;

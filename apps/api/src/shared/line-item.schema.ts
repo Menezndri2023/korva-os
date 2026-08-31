@@ -26,6 +26,12 @@ export class LineItem {
   @Prop({ type: Types.ObjectId, ref: 'Offer' })
   offerId?: Types.ObjectId;
 
+  // Not a Mongoose ref — an Offer's variants are subdocuments (their own auto-generated `_id`
+  // within Offer.variants), not a top-level collection, so this is stored as a plain string
+  // snapshot of that subdocument id rather than a `ref`.
+  @Prop()
+  variantId?: string;
+
   @Prop({ required: true })
   description!: string;
 
@@ -109,6 +115,7 @@ export function computeTotals(
 export function toLineItemDocs(items: LineItemInput[]): LineItem[] {
   return items.map((item) => ({
     offerId: item.offerId ? new Types.ObjectId(item.offerId) : undefined,
+    variantId: item.variantId,
     description: item.description,
     quantity: item.quantity,
     unitPrice: item.unitPrice,

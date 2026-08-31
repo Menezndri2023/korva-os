@@ -274,6 +274,7 @@ export default function SettingsPage() {
       brandColor: organization.brandColor,
       tagline: organization.tagline,
       heroImage: organization.heroImage,
+      shippingFlatRate: organization.shippingFlatRate,
       // Undefined (nothing configured yet) means "show everything modules allow" — pre-check
       // both boxes in that case so the form's visual default matches the real current behavior.
       storefrontSections: organization.storefrontSections ?? [...STOREFRONT_SECTIONS],
@@ -543,6 +544,14 @@ export default function SettingsPage() {
               <dd className="mt-0.5 truncate">{organization?.heroImage ?? "—"}</dd>
             </div>
             <div>
+              <dt className="text-text-muted">Frais de livraison (boutique en ligne)</dt>
+              <dd className="mt-0.5">
+                {organization?.shippingFlatRate != null
+                  ? `${organization.shippingFlatRate} ${organization.currency}`
+                  : "Gratuit"}
+              </dd>
+            </div>
+            <div>
               <dt className="text-text-muted">Sections visibles (page publique)</dt>
               <dd className="mt-0.5">
                 {organization?.storefrontSections
@@ -695,6 +704,25 @@ export default function SettingsPage() {
               />
               {orgErrors.heroImage && (
                 <p className="mt-1 text-xs text-destructive">{orgErrors.heroImage.message}</p>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-shipping-flat-rate">
+                Frais de livraison (boutique en ligne)
+              </label>
+              <Input
+                id="org-shipping-flat-rate"
+                type="number"
+                step="0.01"
+                className="w-full"
+                placeholder="Gratuit"
+                error={!!orgErrors.shippingFlatRate}
+                {...registerOrg("shippingFlatRate", {
+                  setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+                })}
+              />
+              {orgErrors.shippingFlatRate && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.shippingFlatRate.message}</p>
               )}
             </div>
             {(organization?.enabledModules.includes("catalog") ||

@@ -31,13 +31,32 @@ export type CreatePublicBookingInput = z.infer<typeof createPublicBookingSchema>
 
 const publicOrderLineItemSchema = z.object({
   offerId: z.string().min(1),
+  variantId: z.string().min(1).optional(),
   quantity: z.number().positive(),
 });
+// All fields optional at this layer, even though a "complete" address needs all four — a
+// storefront checkout form always submits its shippingAddress object once any field is
+// registered (react-hook-form mounts every registered path as "" by default), so requiring
+// fields here would block checkout entirely for a shopper who left the whole (optional) address
+// section untouched. PublicService#createOrder is what decides whether the submitted address is
+// actually complete enough to persist — an incomplete one is silently dropped, not rejected.
+export const publicShippingAddressSchema = z.object({
+  line1: z.string().max(200).optional(),
+  line2: z.string().max(200).optional(),
+  city: z.string().max(120).optional(),
+  postalCode: z.string().max(20).optional(),
+  country: z.string().max(120).optional(),
+});
+export type PublicShippingAddressInput = z.infer<
+  typeof publicShippingAddressSchema
+>;
 export const createPublicOrderSchema = z.object({
   items: z.array(publicOrderLineItemSchema).min(1),
   currency: z.string().length(3),
   notes: z.string().max(2000).optional(),
   contact: publicContactSchema,
+  discountCode: z.string().max(40).optional(),
+  shippingAddress: publicShippingAddressSchema.optional(),
 });
 export type CreatePublicOrderInput = z.infer<typeof createPublicOrderSchema>;
 

@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { DecisionEngineService } from './decision-engine.service';
 import { InvoiceOverdueFollowupRule } from './rules/invoice-overdue-followup.rule';
 import { CustomerReactivationRule } from './rules/customer-reactivation.rule';
+import { LowStockAlertRule } from './rules/low-stock-alert.rule';
 import type { RecommendationsRepository } from './recommendations.repository';
 import type { AuditService } from '../audit/audit.service';
 
@@ -22,6 +23,7 @@ function buildService(overrides: { createIfNotExists?: jest.Mock } = {}) {
   const service = new DecisionEngineService(
     new InvoiceOverdueFollowupRule(),
     new CustomerReactivationRule(),
+    new LowStockAlertRule(),
     recommendationsRepository,
     auditService,
   );
@@ -105,5 +107,33 @@ describe('DecisionEngineService', () => {
     };
     expect(draft.title).toBe('Client inactif à relancer');
     expect(draft.description).toContain('61 jours');
+  });
+
+  it('creates a Recommendation for the low-stock alert rule on offer.stock_depleted', async () => {
+    const { service, createIfNotExists } = buildService();
+
+    await service.handleEvent(ORG_ID, 'offer.stock_depleted', {
+      offerId: '507f1f77bcf86cd799439044',
+    });
+
+    const call = createIfNotExists.mock.calls[0] as unknown[];
+    const draft = call[0] as {
+      entityType: string;
+      entityId: Types.ObjectId;
+      title: string;
+    };
+    expect(draft.entityType).toBe('offer');
+    expect(draft.entityId.toString()).toBe('507f1f77bcf86cd799439044');
+    expect(draft.title).toBe('Stock épuisé');
+  });
+
+  it('ignores offer.stock_depleted with a non-string offerId (malformed payload)', async () => {
+    const { service, createIfNotExists } = buildService();
+
+    await service.handleEvent(ORG_ID, 'offer.stock_depleted', {
+      offerId: 12345,
+    });
+
+    expect(createIfNotExists).not.toHaveBeenCalled();
   });
 });

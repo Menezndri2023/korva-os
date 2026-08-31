@@ -232,16 +232,20 @@ export function CheckoutPanel({
   slug,
   cart,
   currency,
+  shippingFlatRate,
   onClose,
   onSuccess,
 }: {
   slug: string;
   cart: CartLine[];
   currency: string;
+  shippingFlatRate?: number;
   onClose: () => void;
   onSuccess: (orderNumber: string) => void;
 }) {
-  const total = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
+  const itemsTotal = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
+  const shippingCost = shippingFlatRate ?? 0;
+  const total = itemsTotal + shippingCost;
 
   const {
     register,
@@ -250,9 +254,15 @@ export function CheckoutPanel({
   } = useForm<CreatePublicOrderInput>({
     resolver: zodResolver(createPublicOrderSchema),
     defaultValues: {
-      items: cart.map((line) => ({ offerId: line.offerId, quantity: line.quantity })),
+      items: cart.map((line) => ({
+        offerId: line.offerId,
+        variantId: line.variantId,
+        quantity: line.quantity,
+      })),
       currency,
       contact: { email: "", firstName: "", phone: "" },
+      discountCode: "",
+      shippingAddress: { line1: "", line2: "", city: "", postalCode: "", country: "" },
     },
   });
 
@@ -265,6 +275,8 @@ export function CheckoutPanel({
           firstName: values.contact.firstName || undefined,
           phone: values.contact.phone || undefined,
         },
+        discountCode: values.discountCode || undefined,
+        shippingAddress: values.shippingAddress,
       }),
     onSuccess: (order) => onSuccess(order.number),
   });
@@ -275,7 +287,7 @@ export function CheckoutPanel({
       <form onSubmit={handleSubmit((values) => orderMutation.mutate(values))} className="space-y-3 text-sm">
         <ul className="divide-y divide-border rounded-md border border-border">
           {cart.map((line) => (
-            <li key={line.offerId} className="flex justify-between px-3 py-2">
+            <li key={`${line.offerId}:${line.variantId ?? ""}`} className="flex justify-between px-3 py-2">
               <span>
                 {line.name} × {line.quantity}
               </span>
@@ -285,9 +297,22 @@ export function CheckoutPanel({
             </li>
           ))}
         </ul>
-        <p className="text-right text-sm font-medium text-text">
-          Total : {total.toFixed(2)} {currency}
-        </p>
+        <div className="space-y-1 text-right text-sm">
+          {shippingCost > 0 && (
+            <p className="text-text-muted">
+              Livraison : {shippingCost.toFixed(2)} {currency}
+            </p>
+          )}
+          <p className="font-medium text-text">
+            Total : {total.toFixed(2)} {currency}
+          </p>
+        </div>
+
+        <Input
+          placeholder="Code promo (optionnel)"
+          aria-label="Code promo"
+          {...register("discountCode")}
+        />
 
         <Input
           placeholder="Prénom"
@@ -313,6 +338,39 @@ export function CheckoutPanel({
           {...register("contact.phone")}
           error={!!errors.contact?.phone}
         />
+
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="text-xs font-medium text-text-muted">Adresse de livraison (optionnel)</p>
+          <Input
+            placeholder="Adresse"
+            aria-label="Adresse"
+            {...register("shippingAddress.line1")}
+          />
+          <Input
+            placeholder="Complément d'adresse"
+            aria-label="Complément d'adresse"
+            {...register("shippingAddress.line2")}
+          />
+          <div className="flex gap-2">
+            <Input
+              placeholder="Ville"
+              aria-label="Ville"
+              className="flex-1"
+              {...register("shippingAddress.city")}
+            />
+            <Input
+              placeholder="Code postal"
+              aria-label="Code postal"
+              className="w-28"
+              {...register("shippingAddress.postalCode")}
+            />
+          </div>
+          <Input
+            placeholder="Pays"
+            aria-label="Pays"
+            {...register("shippingAddress.country")}
+          />
+        </div>
 
         {errors.items && <p className="text-xs text-destructive">{errors.items.message ?? "Panier invalide."}</p>}
         {orderMutation.isError && (

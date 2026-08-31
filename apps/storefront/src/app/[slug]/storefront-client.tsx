@@ -149,6 +149,7 @@ export default function StorefrontClient({ slug }: { slug: string }) {
           slug={slug}
           cart={cart}
           currency={organization.currency}
+          shippingFlatRate={organization.shippingFlatRate}
           onClose={() => setShowCheckout(false)}
           onSuccess={(orderNumber) => {
             clearCart();

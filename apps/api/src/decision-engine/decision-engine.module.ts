@@ -10,6 +10,7 @@ import { RecommendationsController } from './recommendations.controller';
 import { DecisionEngineService } from './decision-engine.service';
 import { InvoiceOverdueFollowupRule } from './rules/invoice-overdue-followup.rule';
 import { CustomerReactivationRule } from './rules/customer-reactivation.rule';
+import { LowStockAlertRule } from './rules/low-stock-alert.rule';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
@@ -25,6 +26,7 @@ import { AuditModule } from '../audit/audit.module';
     RecommendationsService,
     InvoiceOverdueFollowupRule,
     CustomerReactivationRule,
+    LowStockAlertRule,
     DecisionEngineService,
   ],
   exports: [DecisionEngineService, RecommendationsService],

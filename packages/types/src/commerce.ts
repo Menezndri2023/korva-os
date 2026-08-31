@@ -41,6 +41,14 @@ export interface Order {
   taxTotal: number;
   discountCodeId?: string;
   discountTotal: number;
+  shippingCost: number;
+  shippingAddress?: {
+    line1: string;
+    line2?: string;
+    city: string;
+    postalCode: string;
+    country: string;
+  };
   total: number;
   notes?: string;
   createdAt: string;

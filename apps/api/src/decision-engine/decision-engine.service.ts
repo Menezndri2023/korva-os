@@ -4,6 +4,7 @@ import { RecommendationsRepository } from './recommendations.repository';
 import { DecisionRule } from './rules/rule.interface';
 import { InvoiceOverdueFollowupRule } from './rules/invoice-overdue-followup.rule';
 import { CustomerReactivationRule } from './rules/customer-reactivation.rule';
+import { LowStockAlertRule } from './rules/low-stock-alert.rule';
 import { AuditService } from '../audit/audit.service';
 
 /**
@@ -24,10 +25,15 @@ export class DecisionEngineService {
   constructor(
     invoiceOverdueFollowupRule: InvoiceOverdueFollowupRule,
     customerReactivationRule: CustomerReactivationRule,
+    lowStockAlertRule: LowStockAlertRule,
     private readonly recommendationsRepository: RecommendationsRepository,
     private readonly auditService: AuditService,
   ) {
-    this.rules = [invoiceOverdueFollowupRule, customerReactivationRule];
+    this.rules = [
+      invoiceOverdueFollowupRule,
+      customerReactivationRule,
+      lowStockAlertRule,
+    ];
   }
 
   /**

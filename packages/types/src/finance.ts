@@ -21,6 +21,7 @@ export interface LineItemModifier {
 
 export interface LineItem {
   offerId?: string;
+  variantId?: string;
   description: string;
   quantity: number;
   unitPrice: number;

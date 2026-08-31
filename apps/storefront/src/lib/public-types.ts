@@ -23,6 +23,8 @@ export interface PublicOrganization {
    *  and the org's own storefrontSections choice server-side; render based on this, not
    *  enabledModules, for the offer grid and booking panel. */
   visibleSections: string[];
+  /** Flat shipping rate charged at checkout — undefined means no shipping cost. */
+  shippingFlatRate?: number;
 }
 
 /**
@@ -65,6 +67,7 @@ export interface ContactFormValues {
 
 export interface CartLine {
   offerId: string;
+  variantId?: string;
   name: string;
   unitPrice: number;
   quantity: number;

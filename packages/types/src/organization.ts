@@ -53,6 +53,8 @@ export interface Organization {
   heroImage?: string;
   /** Undefined means "show every section `enabledModules` allows" — see STOREFRONT_SECTIONS doc. */
   storefrontSections?: StorefrontSection[];
+  /** Flat shipping rate applied to every storefront order at checkout — undefined charges none. */
+  shippingFlatRate?: number;
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
   createdAt: string;

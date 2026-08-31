@@ -33,6 +33,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const [imageFailed, setImageFailed] = useState(false);
+  const [selectedVariantId, setSelectedVariantId] = useState("");
 
   if (orgQuery.isLoading || (orgQuery.data && offersQuery.isLoading)) {
     return <DetailSkeleton slug={slug} />;
@@ -83,6 +84,8 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
   const commerceEnabled = organization.enabledModules.includes("commerce");
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
   const images = offer.images;
+  const selectedVariant =
+    offer.variants.find((v) => v.id === selectedVariantId) ?? offer.variants[0];
 
   return (
     <div className="min-h-screen bg-app-background">
@@ -178,7 +181,9 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
                 <Button onClick={() => setShowBooking(true)}>Réserver</Button>
               )}
               {offer.type !== "booking" && commerceEnabled && (
-                <Button onClick={() => addToCart(offer)}>Ajouter au panier</Button>
+                <Button onClick={() => addToCart(offer, selectedVariant)}>
+                  Ajouter au panier
+                </Button>
               )}
             </div>
 
@@ -194,14 +199,32 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
                     <table className="w-full text-sm">
                       <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
                         <tr>
+                          {commerceEnabled && offer.type !== "booking" && (
+                            <th className="px-3 py-2" aria-hidden />
+                          )}
                           <th className="px-3 py-2">Variante</th>
                           <th className="px-3 py-2">SKU</th>
                           <th className="px-3 py-2">Prix</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {offer.variants.map((variant) => (
+                        {offer.variants.map((variant, index) => (
                           <tr key={variant.id}>
+                            {commerceEnabled && offer.type !== "booking" && (
+                              <td className="px-3 py-2">
+                                <input
+                                  type="radio"
+                                  name="variant"
+                                  aria-label={`Choisir ${variant.name}`}
+                                  checked={
+                                    selectedVariantId
+                                      ? selectedVariantId === variant.id
+                                      : index === 0
+                                  }
+                                  onChange={() => setSelectedVariantId(variant.id)}
+                                />
+                              </td>
+                            )}
                             <td className="whitespace-nowrap px-3 py-2 font-medium text-text">
                               {variant.name}
                             </td>
@@ -242,6 +265,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
           slug={slug}
           cart={cart}
           currency={organization.currency}
+          shippingFlatRate={organization.shippingFlatRate}
           onClose={() => setShowCheckout(false)}
           onSuccess={(orderNumber) => {
             clearCart();

@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -25,6 +25,12 @@ interface OrganizationPayload {
 interface OfferPayload {
   id: string;
   name: string;
+  variants: {
+    id: string;
+    name: string;
+    sku?: string;
+    priceOverride?: number;
+  }[];
 }
 interface ResourcePayload {
   id: string;
@@ -33,6 +39,12 @@ interface PublicOfferPayload {
   id: string;
   name: string;
   pricing: { amount: number; currency: string };
+  variants: {
+    id: string;
+    name: string;
+    sku?: string;
+    priceOverride?: number;
+  }[];
 }
 interface PublicBookingPayload {
   id: string;
@@ -44,6 +56,25 @@ interface PublicOrderPayload {
   total: number;
   status: string;
 }
+interface FullOrderPayload {
+  id: string;
+  total: number;
+  subtotal: number;
+  shippingCost: number;
+  shippingAddress?: {
+    line1: string;
+    city: string;
+    postalCode: string;
+    country: string;
+  };
+  discountCodeId?: string;
+  items: {
+    offerId?: string;
+    variantId?: string;
+    description: string;
+    unitPrice: number;
+  }[];
+}
 interface PublicOrganizationPayload {
   name: string;
   enabledModules: string[];
@@ -52,6 +83,7 @@ interface PublicOrganizationPayload {
   tagline?: string;
   heroImage?: string;
   visibleSections: string[];
+  shippingFlatRate?: number;
 }
 interface TrackedOrderPayload {
   number: string;
@@ -72,6 +104,25 @@ function asSuccess<T>(body: unknown): T {
 }
 function asError(body: unknown): ApiError['error'] {
   return (body as ApiError).error;
+}
+
+/** Polls `check` until it returns a defined value (the Decision Engine processes events
+ *  asynchronously via a real Redis-backed BullMQ queue, not synchronously with the triggering
+ *  request) or times out. */
+async function waitFor<T>(
+  check: () => Promise<T | undefined>,
+  timeoutMs = 15000,
+  intervalMs = 300,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await check();
+    if (result !== undefined) return result;
+    if (Date.now() > deadline) {
+      throw new Error('waitFor: timed out waiting for condition');
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 }
 
 describe('Public storefront API (e2e)', () => {
@@ -150,6 +201,26 @@ describe('Public storefront API (e2e)', () => {
     let organizationId: string;
     let slug: string;
     let activeOfferId: string;
+
+    async function createVariantOffer(): Promise<{
+      offerId: string;
+      variantId: string;
+    }> {
+      const res = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Hoodie',
+          status: 'active',
+          pricing: { amount: 40, currency: 'EUR' },
+          variants: [{ name: 'Large', sku: 'HOOD-L', priceOverride: 45 }],
+        })
+        .expect(201);
+      const offer = asSuccess<OfferPayload>(res.body);
+      return { offerId: offer.id, variantId: offer.variants[0]!.id };
+    }
 
     beforeAll(async () => {
       ({ accessToken, organizationId, slug } = await setupStorefrontOrg(
@@ -254,6 +325,179 @@ describe('Public storefront API (e2e)', () => {
         })
         .expect(404);
       expect(asError(res.body).code).toBe('OFFER_NOT_FOUND');
+    });
+
+    it('prices a public order line from the selected variant, not the base offer price', async () => {
+      const { offerId: variantOfferId, variantId: largeVariantId } =
+        await createVariantOffer();
+      const res = await request(server)
+        .post(`/api/v1/public/${slug}/orders`)
+        .send({
+          items: [
+            { offerId: variantOfferId, variantId: largeVariantId, quantity: 1 },
+          ],
+          currency: 'EUR',
+          contact: { email: 'variant-buyer@customer.test' },
+        })
+        .expect(201);
+      const order = asSuccess<PublicOrderPayload>(res.body);
+      expect(order.total).toBe(45);
+
+      const orderDetailRes = await request(server)
+        .get(`/api/v1/orders/${order.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const detail = asSuccess<FullOrderPayload>(orderDetailRes.body);
+      expect(detail.items[0]!.variantId).toBe(largeVariantId);
+      expect(detail.items[0]!.description).toContain('Large');
+    });
+
+    it('rejects a public order whose variantId does not belong to the given offer', async () => {
+      const { offerId: variantOfferId } = await createVariantOffer();
+      const res = await request(server)
+        .post(`/api/v1/public/${slug}/orders`)
+        .send({
+          items: [
+            {
+              offerId: variantOfferId,
+              variantId: new Types.ObjectId().toString(),
+              quantity: 1,
+            },
+          ],
+          currency: 'EUR',
+          contact: { email: 'bad-variant@customer.test' },
+        })
+        .expect(404);
+      expect(asError(res.body).code).toBe('VARIANT_NOT_FOUND');
+    });
+
+    it('applies a discount code and shipping cost at storefront checkout, and drops an incomplete shipping address rather than rejecting the order', async () => {
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          enabledModules: ['catalog', 'booking', 'commerce', 'crm', 'finance'],
+        })
+        .expect(200);
+      await request(server)
+        .post('/api/v1/discount-codes')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ code: 'STORE10', type: 'fixed', value: 5, currency: 'EUR' })
+        .expect(201);
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ shippingFlatRate: 4 })
+        .expect(200);
+
+      const orgRes = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      expect(
+        asSuccess<PublicOrganizationPayload>(orgRes.body).shippingFlatRate,
+      ).toBe(4);
+
+      const res = await request(server)
+        .post(`/api/v1/public/${slug}/orders`)
+        .send({
+          items: [{ offerId: activeOfferId, quantity: 1 }],
+          currency: 'EUR',
+          contact: { email: 'discount-shipping-buyer@customer.test' },
+          discountCode: 'STORE10',
+          // Incomplete on purpose (no city/postalCode/country) — must be silently dropped, not
+          // rejected, since the whole shipping-address section is optional at checkout.
+          shippingAddress: { line1: '12 Rue de la Paix' },
+        })
+        .expect(201);
+      const order = asSuccess<PublicOrderPayload>(res.body);
+      // 25 (offer) - 5 (discount) + 4 (shipping) = 24
+      expect(order.total).toBe(24);
+
+      const detailRes = await request(server)
+        .get(`/api/v1/orders/${order.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const detail = asSuccess<FullOrderPayload>(detailRes.body);
+      expect(detail.discountCodeId).toBeDefined();
+      expect(detail.shippingCost).toBe(4);
+      expect(detail.shippingAddress).toBeUndefined();
+    });
+
+    it('persists a complete shipping address on a public order', async () => {
+      const res = await request(server)
+        .post(`/api/v1/public/${slug}/orders`)
+        .send({
+          items: [{ offerId: activeOfferId, quantity: 1 }],
+          currency: 'EUR',
+          contact: { email: 'shipping-buyer@customer.test' },
+          shippingAddress: {
+            line1: '12 Rue de la Paix',
+            city: 'Paris',
+            postalCode: '75002',
+            country: 'France',
+          },
+        })
+        .expect(201);
+      const order = asSuccess<PublicOrderPayload>(res.body);
+
+      const detailRes = await request(server)
+        .get(`/api/v1/orders/${order.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const detail = asSuccess<FullOrderPayload>(detailRes.body);
+      expect(detail.shippingAddress).toEqual({
+        line1: '12 Rue de la Paix',
+        city: 'Paris',
+        postalCode: '75002',
+        country: 'France',
+      });
+    });
+
+    it("triggers a low-stock Recommendation once a public order depletes a tracked offer's stock", async () => {
+      const trackedOfferRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Limited Mug',
+          status: 'active',
+          pricing: { amount: 15, currency: 'EUR' },
+          trackStock: true,
+          stockOnHand: 1,
+        })
+        .expect(201);
+      const trackedOfferId = asSuccess<OfferPayload>(trackedOfferRes.body).id;
+
+      await request(server)
+        .post(`/api/v1/public/${slug}/orders`)
+        .send({
+          items: [{ offerId: trackedOfferId, quantity: 1 }],
+          currency: 'EUR',
+          contact: { email: 'last-mug-buyer@customer.test' },
+        })
+        .expect(201);
+
+      const recommendation = await waitFor(async () => {
+        const listRes = await request(server)
+          .get('/api/v1/recommendations')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+        const recommendations = asSuccess<
+          { entityType: string; entityId: string; title: string }[]
+        >(listRes.body);
+        return recommendations.find(
+          (r) => r.entityType === 'offer' && r.entityId === trackedOfferId,
+        );
+      });
+      expect(recommendation?.title).toBe('Stock épuisé');
     });
   });
 

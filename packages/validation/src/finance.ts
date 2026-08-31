@@ -14,6 +14,7 @@ export type LineItemModifierInput = z.infer<typeof lineItemModifierSchema>;
 
 export const lineItemInputSchema = z.object({
   offerId: z.string().optional(),
+  variantId: z.string().optional(),
   description: z.string().min(1).max(300),
   quantity: z.number().positive(),
   unitPrice: z.number().nonnegative(),

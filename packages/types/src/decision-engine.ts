@@ -5,7 +5,7 @@ export type RecommendationStatus = (typeof RECOMMENDATION_STATUSES)[number];
  * What business entity this recommendation is about — always resolvable back into the
  * Business Graph (see business-graph.ts) via `entityType`/`entityId`.
  */
-export const RECOMMENDATION_ENTITY_TYPES = ["invoice", "contact"] as const;
+export const RECOMMENDATION_ENTITY_TYPES = ["invoice", "contact", "offer"] as const;
 export type RecommendationEntityType =
   (typeof RECOMMENDATION_ENTITY_TYPES)[number];
 

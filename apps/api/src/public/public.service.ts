@@ -111,6 +111,7 @@ export class PublicService {
       heroImage: organization.heroImage,
       enabledModules: organization.enabledModules,
       visibleSections: this.computeVisibleSections(organization),
+      shippingFlatRate: organization.shippingFlatRate,
     };
   }
 
@@ -240,13 +241,45 @@ export class PublicService {
         this.offersService.getById(organizationId, item.offerId),
       ),
     );
-    const items = input.items.map((item, index) => ({
-      offerId: item.offerId,
-      description: offers[index]!.name,
-      quantity: item.quantity,
-      unitPrice: offers[index]!.pricing.amount,
-      taxRate: offers[index]!.pricing.taxRate,
-    }));
+    const items = input.items.map((item, index) => {
+      const offer = offers[index]!;
+      // OfferVariant subdocuments always carry a Mongoose-assigned `_id` at runtime (the schema
+      // declares `{ _id: true }`), just not as a field on the TS class itself — same runtime-only
+      // access the schema's own toJSON transform already relies on (see offer.schema.ts).
+      const variant = item.variantId
+        ? offer.variants.find(
+            (v) =>
+              String((v as unknown as { _id: Types.ObjectId })._id) ===
+              item.variantId,
+          )
+        : undefined;
+      if (item.variantId && !variant) {
+        throw new NotFoundException({
+          code: 'VARIANT_NOT_FOUND',
+          message: 'Variant not found for this offer',
+        });
+      }
+      return {
+        offerId: item.offerId,
+        variantId: item.variantId,
+        description: variant ? `${offer.name} — ${variant.name}` : offer.name,
+        quantity: item.quantity,
+        unitPrice: variant?.priceOverride ?? offer.pricing.amount,
+        taxRate: offer.pricing.taxRate,
+      };
+    });
+
+    const address = input.shippingAddress;
+    const shippingAddress =
+      address?.line1 && address.city && address.postalCode && address.country
+        ? {
+            line1: address.line1,
+            line2: address.line2,
+            city: address.city,
+            postalCode: address.postalCode,
+            country: address.country,
+          }
+        : undefined;
 
     const order = await this.ordersService.createFromStorefront(
       organizationId,
@@ -255,6 +288,9 @@ export class PublicService {
         items,
         currency: input.currency,
         notes: input.notes,
+        discountCode: input.discountCode,
+        shippingCost: organization.shippingFlatRate,
+        shippingAddress,
       },
     );
 

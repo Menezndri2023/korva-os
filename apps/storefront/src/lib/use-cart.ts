@@ -50,17 +50,36 @@ export function useCart(slug: string) {
     }
   }, [slug, cart, hydrated]);
 
-  const addToCart = useCallback((offer: { id: string; name: string; pricing: { amount: number } }) => {
-    setCart((prev) => {
-      const existing = prev.find((line) => line.offerId === offer.id);
-      if (existing) {
-        return prev.map((line) =>
-          line.offerId === offer.id ? { ...line, quantity: line.quantity + 1 } : line,
+  const addToCart = useCallback(
+    (
+      offer: { id: string; name: string; pricing: { amount: number } },
+      variant?: { id: string; name: string; priceOverride?: number },
+    ) => {
+      setCart((prev) => {
+        const existing = prev.find(
+          (line) => line.offerId === offer.id && line.variantId === variant?.id,
         );
-      }
-      return [...prev, { offerId: offer.id, name: offer.name, unitPrice: offer.pricing.amount, quantity: 1 }];
-    });
-  }, []);
+        if (existing) {
+          return prev.map((line) =>
+            line.offerId === offer.id && line.variantId === variant?.id
+              ? { ...line, quantity: line.quantity + 1 }
+              : line,
+          );
+        }
+        return [
+          ...prev,
+          {
+            offerId: offer.id,
+            variantId: variant?.id,
+            name: variant ? `${offer.name} — ${variant.name}` : offer.name,
+            unitPrice: variant?.priceOverride ?? offer.pricing.amount,
+            quantity: 1,
+          },
+        ];
+      });
+    },
+    [],
+  );
 
   const clearCart = useCallback(() => setCart([]), []);
 
