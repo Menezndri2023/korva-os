@@ -134,6 +134,45 @@ async function request<T>(
   return payload;
 }
 
+interface UploadResult {
+  url: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+/**
+ * Multipart file upload against POST /uploads (apps/api/src/shared/storage/uploads.controller.ts)
+ * — a separate function from `request()` above because that one always JSON.stringifies its body
+ * and forces `Content-Type: application/json`, neither of which a multipart upload can use (the
+ * browser must set its own `Content-Type: multipart/form-data; boundary=...`, never a manual one).
+ * Deliberately skips `request()`'s silent 401-refresh-and-retry dance for simplicity — an upload
+ * is a rare, user-initiated action with its own visible loading/error state, so surfacing "please
+ * try again" on an expired token is an acceptable trade-off here, unlike the many-small-reads
+ * pattern that dance exists for elsewhere.
+ */
+export async function uploadFile(file: File): Promise<UploadResult> {
+  const { accessToken, activeOrganizationId } = useAuthStore.getState();
+  const headers: Record<string, string> = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  if (activeOrganizationId) headers["X-Organization-Id"] = activeOrganizationId;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_URL}/uploads`, {
+    method: "POST",
+    headers,
+    body: formData,
+    credentials: "include",
+  });
+  const payload = (await response.json()) as ApiResponse<UploadResult>;
+  if (!payload.success) {
+    throw toApiError(payload);
+  }
+  return payload.data;
+}
+
 export const apiClient = {
   get: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, { ...options, method: "GET" }).then((payload) => payload.data as T),

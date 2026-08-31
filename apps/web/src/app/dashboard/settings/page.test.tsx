@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SettingsPage from "./page";
 import { renderWithProviders } from "@/test/render";
-import { apiClient, ApiError } from "@/lib/api-client";
+import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
@@ -16,6 +16,7 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
       patch: vi.fn(),
       delete: vi.fn(),
     },
+    uploadFile: vi.fn(),
   };
 });
 
@@ -35,6 +36,7 @@ const getMock = vi.mocked(apiClient.get);
 const postMock = vi.mocked(apiClient.post);
 const patchMock = vi.mocked(apiClient.patch);
 const deleteMock = vi.mocked(apiClient.delete);
+const uploadFileMock = vi.mocked(uploadFile);
 
 const subscription = {
   subscription: { id: "sub-1", status: "active" },
@@ -74,6 +76,7 @@ describe("SettingsPage — Modules section (LOT F1)", () => {
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    uploadFileMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
@@ -225,6 +228,7 @@ describe("SettingsPage — Organization profile edit", () => {
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    uploadFileMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
@@ -322,12 +326,68 @@ describe("SettingsPage — Organization profile edit", () => {
     await screen.findByText("Org de test");
     await user.click(screen.getByRole("button", { name: "Modifier" }));
 
-    const heroInput = screen.getByLabelText("Image de bannière (URL, page publique)");
+    const heroInput = screen.getByLabelText("Image de bannière (page publique)");
     await user.clear(heroInput);
     await user.type(heroInput, "not-a-url");
     await user.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     await waitFor(() => expect(patchMock).not.toHaveBeenCalled());
+  });
+
+  it("the color picker updates the brand color text field", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    const colorPicker = screen.getByLabelText("Choisir la couleur de marque");
+    fireEvent.change(colorPicker, { target: { value: "#00ff00" } });
+
+    expect(screen.getByLabelText("Couleur de marque")).toHaveValue("#00ff00");
+  });
+
+  it("uploading a logo file sets the logo field to the returned URL", async () => {
+    uploadFileMock.mockResolvedValue({
+      url: "https://api.korva.test/uploads/org-1/logo.png",
+      filename: "logo.png",
+      mimeType: "image/png",
+      size: 1234,
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    const fileInput = screen.getByLabelText("Envoyer un fichier pour le logo");
+    const file = new File(["fake-image-bytes"], "logo.png", { type: "image/png" });
+    await user.upload(fileInput, file);
+
+    await waitFor(() => expect(uploadFileMock).toHaveBeenCalledWith(file));
+    await waitFor(() =>
+      expect(screen.getByLabelText("Logo")).toHaveValue(
+        "https://api.korva.test/uploads/org-1/logo.png",
+      ),
+    );
+  });
+
+  it("shows an error and leaves the logo field untouched when the upload fails", async () => {
+    uploadFileMock.mockRejectedValue(new ApiError("UNSUPPORTED_FILE_TYPE", "File type not allowed"));
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    // The API, not the client's accept="image/*" hint, is what actually enforces allowed file
+    // types — an image-typed file the mocked upload rejects still exercises this error path.
+    const fileInput = screen.getByLabelText("Envoyer un fichier pour le logo");
+    const file = new File(["bad"], "corrupt.png", { type: "image/png" });
+    await user.upload(fileInput, file);
+
+    await waitFor(() => expect(screen.getByText("File type not allowed")).toBeInTheDocument());
+    expect(screen.getByLabelText("Logo")).toHaveValue("");
   });
 
   it("Annuler discards changes without calling the API", async () => {
@@ -377,6 +437,7 @@ describe("SettingsPage — storefront section visibility", () => {
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    uploadFileMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
@@ -486,6 +547,7 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    uploadFileMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
@@ -770,6 +832,7 @@ describe("SettingsPage — member role change and removal", () => {
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    uploadFileMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
@@ -931,6 +994,7 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    uploadFileMock.mockReset();
     mockIntegrationsGet(() => []);
   });
 
@@ -1307,6 +1371,7 @@ describe("SettingsPage — embeddable widget snippet (docs/BUSINESS_OS_AUDIT.md 
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    uploadFileMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);
@@ -1360,6 +1425,21 @@ describe("SettingsPage — embeddable widget snippet (docs/BUSINESS_OS_AUDIT.md 
 
     expect(await screen.findByRole("button", { name: "Copié !" })).toBeInTheDocument();
   });
+
+  it('"Afficher" reveals a live storefront preview iframe pointed at the real page, "Masquer" removes it', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Aperçu de ma page publique");
+    expect(screen.queryByTitle("Aperçu de la page publique")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Afficher" }));
+    const iframe = screen.getByTitle("Aperçu de la page publique");
+    expect(iframe).toHaveAttribute("src", "http://localhost:3001/org-de-test");
+
+    await user.click(screen.getByRole("button", { name: "Masquer" }));
+    expect(screen.queryByTitle("Aperçu de la page publique")).not.toBeInTheDocument();
+  });
 });
 
 describe("SettingsPage — outbound webhook subscriptions (docs/BUSINESS_OS_AUDIT.md §6)", () => {
@@ -1380,6 +1460,7 @@ describe("SettingsPage — outbound webhook subscriptions (docs/BUSINESS_OS_AUDI
     postMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
+    uploadFileMock.mockReset();
 
     getMock.mockImplementation((path: string) => {
       if (path === "/organizations/me") return Promise.resolve(organization);

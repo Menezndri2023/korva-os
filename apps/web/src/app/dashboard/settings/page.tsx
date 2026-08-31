@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,7 +31,7 @@ import {
 } from "@korva/validation";
 import { Badge, Button, Input, Select } from "@korva/ui";
 import type { BadgeVariant } from "@korva/ui";
-import { apiClient, ApiError } from "@/lib/api-client";
+import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthStore } from "@/lib/auth-store";
@@ -256,8 +256,36 @@ export default function SettingsPage() {
     register: registerOrg,
     handleSubmit: handleOrgSubmit,
     reset: resetOrgForm,
+    setValue: setOrgValue,
+    watch: watchOrg,
     formState: { errors: orgErrors },
   } = useForm<UpdateOrganizationInput>({ resolver: zodResolver(updateOrganizationSchema) });
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [heroImageUploading, setHeroImageUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const watchedLogo = watchOrg("logo");
+  const watchedHeroImage = watchOrg("heroImage");
+  const watchedBrandColor = watchOrg("brandColor");
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const heroImageFileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageUpload(
+    field: "logo" | "heroImage",
+    file: File | undefined,
+    setUploading: (value: boolean) => void,
+  ) {
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const result = await uploadFile(file);
+      setOrgValue(field, result.url, { shouldDirty: true });
+    } catch (error) {
+      setUploadError(error instanceof ApiError ? error.message : "Échec de l'envoi du fichier.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function startOrgEdit() {
     if (!organization) return;
@@ -650,28 +678,64 @@ export default function SettingsPage() {
                   `undefined`, regardless of what reset() set as the default), which fails the
                   regex/.url() check even though the field is meant to be skippable. Converting
                   "" to undefined here is what actually makes it skippable. */}
-              <Input
-                id="org-brand-color"
-                className="w-full"
-                placeholder="#1a73e8"
-                error={!!orgErrors.brandColor}
-                {...registerOrg("brandColor", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  aria-label="Choisir la couleur de marque"
+                  className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border-input bg-transparent p-0.5"
+                  value={/^#([0-9a-fA-F]{6})$/.test(watchedBrandColor ?? "") ? watchedBrandColor! : "#1a73e8"}
+                  onChange={(event) => setOrgValue("brandColor", event.target.value, { shouldDirty: true })}
+                />
+                <Input
+                  id="org-brand-color"
+                  className="w-full"
+                  placeholder="#1a73e8"
+                  error={!!orgErrors.brandColor}
+                  {...registerOrg("brandColor", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                />
+              </div>
               {orgErrors.brandColor && (
                 <p className="mt-1 text-xs text-destructive">{orgErrors.brandColor.message}</p>
               )}
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-logo">
-                Logo (URL)
+                Logo
               </label>
-              <Input
-                id="org-logo"
-                className="w-full"
-                placeholder="https://..."
-                error={!!orgErrors.logo}
-                {...registerOrg("logo", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-              />
+              <div className="flex items-center gap-3">
+                {watchedLogo && (
+                  // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
+                  <img src={watchedLogo} alt="" className="h-10 w-10 rounded object-contain" />
+                )}
+                <Input
+                  id="org-logo"
+                  className="w-full"
+                  placeholder="https://... ou envoyez un fichier"
+                  error={!!orgErrors.logo}
+                  {...registerOrg("logo", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                />
+                <input
+                  ref={logoFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  aria-label="Envoyer un fichier pour le logo"
+                  onChange={(event) => {
+                    void handleImageUpload("logo", event.target.files?.[0], setLogoUploading);
+                    event.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  loading={logoUploading}
+                  onClick={() => logoFileInputRef.current?.click()}
+                >
+                  Envoyer
+                </Button>
+              </div>
               {orgErrors.logo && (
                 <p className="mt-1 text-xs text-destructive">{orgErrors.logo.message}</p>
               )}
@@ -693,15 +757,42 @@ export default function SettingsPage() {
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-hero-image">
-                Image de bannière (URL, page publique)
+                Image de bannière (page publique)
               </label>
-              <Input
-                id="org-hero-image"
-                className="w-full"
-                placeholder="https://..."
-                error={!!orgErrors.heroImage}
-                {...registerOrg("heroImage", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-              />
+              <div className="flex items-center gap-3">
+                {watchedHeroImage && (
+                  // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
+                  <img src={watchedHeroImage} alt="" className="h-10 w-16 rounded object-cover" />
+                )}
+                <Input
+                  id="org-hero-image"
+                  className="w-full"
+                  placeholder="https://... ou envoyez un fichier"
+                  error={!!orgErrors.heroImage}
+                  {...registerOrg("heroImage", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                />
+                <input
+                  ref={heroImageFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  aria-label="Envoyer un fichier pour la bannière"
+                  onChange={(event) => {
+                    void handleImageUpload("heroImage", event.target.files?.[0], setHeroImageUploading);
+                    event.target.value = "";
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0"
+                  loading={heroImageUploading}
+                  onClick={() => heroImageFileInputRef.current?.click()}
+                >
+                  Envoyer
+                </Button>
+              </div>
               {orgErrors.heroImage && (
                 <p className="mt-1 text-xs text-destructive">{orgErrors.heroImage.message}</p>
               )}
@@ -756,6 +847,10 @@ export default function SettingsPage() {
               </div>
             )}
 
+            {uploadError && (
+              <p className="text-sm text-destructive sm:col-span-2">{uploadError}</p>
+            )}
+
             {updateOrgMutation.isError && (
               <p className="text-sm text-destructive sm:col-span-2">
                 {updateOrgMutation.error instanceof ApiError
@@ -775,6 +870,8 @@ export default function SettingsPage() {
           </form>
         )}
       </section>
+
+      {organization?.slug && <StorefrontPreviewSection slug={organization.slug} />}
 
       <section className="rounded-lg border border-border bg-surface p-6">
         <h2 className="text-sm font-semibold text-text">Abonnement</h2>
@@ -1652,6 +1749,51 @@ const WIDGET_MODE_OPTIONS: { value: string; label: string; description: string }
     description: "Les deux, avec des onglets dans le widget.",
   },
 ];
+
+/**
+ * Live preview of the org's public storefront right inside Settings, so a change made just
+ * above (in the Organisation form) can be checked without leaving the page or opening a new
+ * tab. This embeds the REAL storefront (via iframe), not a client-side re-render of unsaved
+ * form state — so it only reflects what's actually been saved; "Rafraîchir" reloads it after a
+ * save. Collapsed by default (an iframe pointed at a heavy Next.js page is not free to load).
+ */
+function StorefrontPreviewSection({ slug }: { slug: string }) {
+  const [open, setOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const storefrontUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
+  const storefrontPageUrl = `${storefrontUrl}/${slug}`;
+
+  return (
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-text">Aperçu de ma page publique</h2>
+        <div className="flex items-center gap-2">
+          {open && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setReloadKey((key) => key + 1)}
+            >
+              Rafraîchir
+            </Button>
+          )}
+          <Button type="button" variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
+            {open ? "Masquer" : "Afficher"}
+          </Button>
+        </div>
+      </div>
+      {open && (
+        <iframe
+          key={reloadKey}
+          src={storefrontPageUrl}
+          title="Aperçu de la page publique"
+          className="mt-4 h-[600px] w-full rounded-md border border-border"
+        />
+      )}
+    </section>
+  );
+}
 
 function ExternalWebsiteSection({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
