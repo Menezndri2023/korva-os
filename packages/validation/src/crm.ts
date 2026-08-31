@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CONTACT_TYPES, LEAD_STATUSES, TASK_STATUSES, ACTIVITY_TYPES } from "@korva/types";
+import { CONTACT_TYPES, LEAD_STATUSES, TASK_STATUSES, TASK_ENTITIES, ACTIVITY_TYPES } from "@korva/types";
 
 const customFieldsSchema = z.record(z.string(), z.unknown()).optional();
 
@@ -84,7 +84,7 @@ export type UpdatePipelineInput = z.infer<typeof updatePipelineSchema>;
 export const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
-  entity: z.enum(["contact", "lead"]).optional(),
+  entity: z.enum(TASK_ENTITIES).optional(),
   entityId: z.string().optional(),
   assigneeId: z.string().optional(),
   dueAt: z.string().datetime().optional(),

@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { FilterQuery, Model, Types } from 'mongoose';
+import type { TaskEntity } from '@korva/types';
 import { Task, TaskDocument } from './schemas/task.schema';
 
 export interface FindTasksOptions {
   status?: string;
   assigneeId?: string;
-  entity?: 'contact' | 'lead';
+  entity?: TaskEntity;
   entityId?: string;
 }
 

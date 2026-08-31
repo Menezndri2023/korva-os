@@ -13,6 +13,7 @@ import {
   TIME_ENTRY_STATUSES,
   type Contact,
   type Invoice,
+  type Project,
   type TimeEntry,
   type TimeEntryStatus,
 } from "@korva/types";
@@ -76,6 +77,12 @@ export default function TimeEntriesPage() {
   const { data: contacts } = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
+    enabled: authReady,
+  });
+
+  const { data: projects } = useQuery({
+    queryKey: ["projects", ""],
+    queryFn: () => apiClient.get<Project[]>("/projects"),
     enabled: authReady,
   });
 
@@ -219,6 +226,21 @@ export default function TimeEntriesPage() {
               {errors.contactId.message}
             </p>
           )}
+
+          <select
+            className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            defaultValue=""
+            {...register("projectId", {
+              setValueAs: (v: string) => (v === "" ? undefined : v),
+            })}
+          >
+            <option value="">Aucun projet (optionnel)</option>
+            {projects?.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
 
           <Input
             placeholder="Description"

@@ -136,6 +136,7 @@ export interface TimeEntry {
   organizationId: string;
   contactId: string;
   userId: string;
+  projectId?: string;
   date: string;
   durationMinutes: number;
   description: string;

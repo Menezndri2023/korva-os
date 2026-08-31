@@ -7,6 +7,7 @@ import type { ContactsService } from '../../crm/contacts/contacts.service';
 import type { AuditService } from '../../audit/audit.service';
 import type { InvoicesService } from '../invoices/invoices.service';
 import type { MembershipsService } from '../../identity/memberships/memberships.service';
+import type { ProjectsService } from '../../crm/projects/projects.service';
 
 type TimeEntriesRepositoryMock = jest.Mocked<
   Pick<TimeEntriesRepository, 'create' | 'findByIds' | 'markInvoiced'>
@@ -81,6 +82,7 @@ function buildService(overrides?: {
   invoices?: InvoicesServiceMock;
   contacts?: { existsById: jest.Mock; getById: jest.Mock };
   memberships?: { findByUserAndOrganization: jest.Mock };
+  projects?: { existsById: jest.Mock };
 }) {
   const timeEntriesRepository =
     overrides?.timeEntries ?? buildTimeEntriesRepositoryMock();
@@ -93,6 +95,9 @@ function buildService(overrides?: {
   const membershipsService = overrides?.memberships ?? {
     findByUserAndOrganization: jest.fn(),
   };
+  const projectsService = overrides?.projects ?? {
+    existsById: jest.fn(),
+  };
   const connection = buildConnectionMock();
 
   const service = new TimeEntriesService(
@@ -101,6 +106,7 @@ function buildService(overrides?: {
     auditService as unknown as AuditService,
     asInvoicesService(invoicesService),
     membershipsService as unknown as MembershipsService,
+    projectsService as unknown as ProjectsService,
     connection,
   );
   return {

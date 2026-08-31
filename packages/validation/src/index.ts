@@ -18,3 +18,4 @@ export * from "./webhook-subscriptions.ts";
 export * from "./discount-codes.ts";
 export * from "./customer-auth.ts";
 export * from "./reviews.ts";
+export * from "./projects.ts";

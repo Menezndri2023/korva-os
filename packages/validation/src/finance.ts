@@ -146,6 +146,7 @@ export type ListExpensesQuery = z.infer<typeof listExpensesQuerySchema>;
 export const createTimeEntrySchema = z.object({
   contactId: z.string().min(1),
   userId: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
   date: z.string().datetime(),
   durationMinutes: z.number().int().positive().max(24 * 60),
   description: z.string().min(1).max(300),
@@ -157,6 +158,7 @@ export const createTimeEntrySchema = z.object({
 export type CreateTimeEntryInput = z.infer<typeof createTimeEntrySchema>;
 
 export const updateTimeEntrySchema = z.object({
+  projectId: z.string().min(1).optional(),
   date: z.string().datetime().optional(),
   durationMinutes: z.number().int().positive().max(24 * 60).optional(),
   description: z.string().min(1).max(300).optional(),
@@ -173,6 +175,7 @@ export const listTimeEntriesQuerySchema = z.object({
   status: z.enum(TIME_ENTRY_STATUSES).optional(),
   contactId: z.string().optional(),
   userId: z.string().optional(),
+  projectId: z.string().optional(),
   billable: z.coerce.boolean().optional(),
 });
 export type ListTimeEntriesQuery = z.infer<typeof listTimeEntriesQuerySchema>;

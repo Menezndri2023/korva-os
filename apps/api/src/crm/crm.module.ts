@@ -29,6 +29,13 @@ import {
   Conversation,
   ConversationSchema,
 } from '../communication/conversations/schemas/conversation.schema';
+// Same rationale as Invoice/Quote above — FinanceModule already imports CrmModule (for
+// ContactsService), so ProjectsService needs read-only access to TimeEntry without CrmModule
+// importing FinanceModule back (which would be circular).
+import {
+  TimeEntry,
+  TimeEntrySchema,
+} from '../finance/time-entries/schemas/time-entry.schema';
 
 import { ContactsRepository } from './contacts/contacts.repository';
 import { ContactReferencesRepository } from './contacts/contact-references.repository';
@@ -60,6 +67,11 @@ import { TagsRepository } from './tags/tags.repository';
 import { TagsService } from './tags/tags.service';
 import { TagsController } from './tags/tags.controller';
 
+import { ProjectsRepository } from './projects/projects.repository';
+import { ProjectsService } from './projects/projects.service';
+import { ProjectsController } from './projects/projects.controller';
+import { Project, ProjectSchema } from './projects/schemas/project.schema';
+
 import { CustomFieldsModule } from '../custom-fields/custom-fields.module';
 import { AuditModule } from '../audit/audit.module';
 
@@ -79,6 +91,8 @@ import { AuditModule } from '../audit/audit.module';
       { name: Invoice.name, schema: InvoiceSchema },
       { name: Quote.name, schema: QuoteSchema },
       { name: Conversation.name, schema: ConversationSchema },
+      { name: TimeEntry.name, schema: TimeEntrySchema },
+      { name: Project.name, schema: ProjectSchema },
     ]),
     CustomFieldsModule,
     AuditModule,
@@ -91,6 +105,7 @@ import { AuditModule } from '../audit/audit.module';
     TasksController,
     NotesController,
     TagsController,
+    ProjectsController,
   ],
   providers: [
     ContactsRepository,
@@ -109,6 +124,8 @@ import { AuditModule } from '../audit/audit.module';
     NotesService,
     TagsRepository,
     TagsService,
+    ProjectsRepository,
+    ProjectsService,
   ],
   exports: [
     ContactsService,
@@ -116,6 +133,7 @@ import { AuditModule } from '../audit/audit.module';
     LeadsService,
     NotesService,
     PipelinesService,
+    ProjectsService,
   ],
 })
 export class CrmModule {}

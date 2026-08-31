@@ -10,6 +10,7 @@ export interface FindTimeEntriesOptions {
   status?: string;
   contactId?: string;
   userId?: string;
+  projectId?: string;
   billable?: boolean;
 }
 
@@ -82,6 +83,8 @@ export class TimeEntriesRepository {
     if (options.contactId)
       filter.contactId = new Types.ObjectId(options.contactId);
     if (options.userId) filter.userId = new Types.ObjectId(options.userId);
+    if (options.projectId)
+      filter.projectId = new Types.ObjectId(options.projectId);
     if (options.billable !== undefined) filter.billable = options.billable;
 
     const skip = (options.page - 1) * options.limit;

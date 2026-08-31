@@ -22,6 +22,9 @@ export class TimeEntry {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   userId!: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'Project' })
+  projectId?: Types.ObjectId;
+
   @Prop({ required: true })
   date!: Date;
 
@@ -55,3 +58,4 @@ TimeEntrySchema.index({ organizationId: 1, status: 1, date: -1 });
 TimeEntrySchema.index({ organizationId: 1, contactId: 1, status: 1 });
 TimeEntrySchema.index({ organizationId: 1, userId: 1, date: -1 });
 TimeEntrySchema.index({ organizationId: 1, invoiceId: 1 }, { sparse: true });
+TimeEntrySchema.index({ organizationId: 1, projectId: 1 }, { sparse: true });

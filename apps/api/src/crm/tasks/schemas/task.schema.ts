@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import type { TaskStatus } from '@korva/types';
-import { TASK_STATUSES } from '@korva/types';
+import type { TaskEntity, TaskStatus } from '@korva/types';
+import { TASK_ENTITIES, TASK_STATUSES } from '@korva/types';
 import { idToJson } from '../../../core/mongoose/schema-options';
 
 export type TaskDocument = HydratedDocument<Task>;
@@ -22,8 +22,8 @@ export class Task {
   @Prop()
   description?: string;
 
-  @Prop({ type: String, enum: ['contact', 'lead'] })
-  entity?: 'contact' | 'lead';
+  @Prop({ type: String, enum: TASK_ENTITIES })
+  entity?: TaskEntity;
 
   @Prop({ type: Types.ObjectId })
   entityId?: Types.ObjectId;

@@ -91,12 +91,19 @@ export interface Activity {
 export const TASK_STATUSES = ["pending", "done", "cancelled"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
+/** Wider than Note/Activity's own "contact" | "lead" — Task is the one CRM entity that also
+ *  attaches to a Project (see @korva/types projects.ts), which has no Note/Activity equivalent
+ *  today. Kept as its own union rather than widening Note/Activity too, since neither has a
+ *  genuine "attach to a project" use case yet — don't widen them speculatively. */
+export const TASK_ENTITIES = ["contact", "lead", "project"] as const;
+export type TaskEntity = (typeof TASK_ENTITIES)[number];
+
 export interface Task {
   id: string;
   organizationId: string;
   title: string;
   description?: string;
-  entity?: "contact" | "lead";
+  entity?: TaskEntity;
   entityId?: string;
   assigneeId?: string;
   dueAt?: string;

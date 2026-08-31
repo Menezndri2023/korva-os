@@ -14,7 +14,7 @@ import {
   type CreateTaskInput,
   type UpdateTaskInput,
 } from '@korva/validation';
-import type { TenantContext } from '@korva/types';
+import type { TenantContext, TaskEntity } from '@korva/types';
 import { TasksService } from './tasks.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -33,7 +33,7 @@ export class TasksController {
     @CurrentTenant() tenant: TenantContext,
     @Query('status') status?: string,
     @Query('assigneeId') assigneeId?: string,
-    @Query('entity') entity?: 'contact' | 'lead',
+    @Query('entity') entity?: TaskEntity,
     @Query('entityId') entityId?: string,
   ) {
     return this.tasksService.list(tenant.organizationId, {

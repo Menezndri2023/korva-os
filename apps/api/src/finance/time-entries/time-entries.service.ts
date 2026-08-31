@@ -21,6 +21,7 @@ import { AuditService } from '../../audit/audit.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { InvoiceDocument } from '../invoices/schemas/invoice.schema';
 import { MembershipsService } from '../../identity/memberships/memberships.service';
+import { ProjectsService } from '../../crm/projects/projects.service';
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -34,6 +35,7 @@ export class TimeEntriesService {
     private readonly auditService: AuditService,
     private readonly invoicesService: InvoicesService,
     private readonly membershipsService: MembershipsService,
+    private readonly projectsService: ProjectsService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
@@ -70,6 +72,19 @@ export class TimeEntriesService {
       input.contactId,
     );
 
+    if (input.projectId) {
+      const projectExists = await this.projectsService.existsById(
+        organizationId,
+        input.projectId,
+      );
+      if (!projectExists) {
+        throw new NotFoundException({
+          code: 'PROJECT_NOT_FOUND',
+          message: 'Project not found',
+        });
+      }
+    }
+
     const userId = input.userId ?? callerUserId;
     const hourlyRate = await this.resolveHourlyRate(
       organizationId,
@@ -89,6 +104,9 @@ export class TimeEntriesService {
       organizationId: new Types.ObjectId(organizationId),
       contactId: new Types.ObjectId(input.contactId),
       userId: new Types.ObjectId(userId),
+      projectId: input.projectId
+        ? new Types.ObjectId(input.projectId)
+        : undefined,
       date: new Date(input.date),
       durationMinutes: input.durationMinutes,
       description: input.description,
@@ -156,10 +174,26 @@ export class TimeEntriesService {
       });
     }
 
+    if (input.projectId) {
+      const projectExists = await this.projectsService.existsById(
+        organizationId,
+        input.projectId,
+      );
+      if (!projectExists) {
+        throw new NotFoundException({
+          code: 'PROJECT_NOT_FOUND',
+          message: 'Project not found',
+        });
+      }
+    }
+
     const updated = await this.timeEntriesRepository.update(
       organizationId,
       id,
       {
+        projectId: input.projectId
+          ? new Types.ObjectId(input.projectId)
+          : undefined,
         date: input.date ? new Date(input.date) : undefined,
         durationMinutes: input.durationMinutes,
         description: input.description,

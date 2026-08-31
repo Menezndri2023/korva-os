@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Contact, ReturnRequest, ReturnRequestStatus } from "@korva/types";
-import { Badge, Button, Card, Pagination } from "@korva/ui";
+import { Badge, Card, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
