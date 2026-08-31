@@ -174,11 +174,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )}
           </div>
 
-          <UserMenu
-            name={[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || ""}
-            email={user?.email ?? ""}
-            onLogout={() => void logout()}
-          />
+          <div className="flex items-center gap-2">
+            {organization?.slug && <StorefrontLinkMenu slug={organization.slug} />}
+            <UserMenu
+              name={[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || ""}
+              email={user?.email ?? ""}
+              onLogout={() => void logout()}
+            />
+          </div>
         </header>
 
         <main className="flex-1 p-4 md:p-8">{children}</main>
@@ -235,6 +238,97 @@ function OrgSwitcher({
         ))}
       </select>
     </label>
+  );
+}
+
+/**
+ * Always-visible, one-click access to the org's live public storefront from anywhere in the
+ * dashboard — previously this link only existed buried in Settings' "Mon site existant" card.
+ * "Copier le lien" is the direct answer to "l'accès au storefront devrait être possible via un
+ * lien pour ses clients" — the owner can grab the exact client-facing URL and share it (WhatsApp,
+ * SMS, email, ...) without having to open the storefront tab and copy from the address bar.
+ */
+function StorefrontLinkMenu({ slug }: { slug: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const storefrontUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
+  const storefrontPageUrl = `${storefrontUrl}/${slug}`;
+
+  return (
+    <div className="relative">
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="hidden sm:inline-flex"
+      >
+        Ma boutique en ligne
+      </Button>
+      <Button
+        variant="secondary"
+        size="sm"
+        aria-label="Ma boutique en ligne"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="p-2 sm:hidden"
+      >
+        <StorefrontIcon />
+      </Button>
+
+      {open && (
+        <>
+          <button
+            aria-label="Fermer le menu boutique en ligne"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40"
+          />
+          <div className="absolute right-0 z-50 mt-2 w-64 rounded-md border border-border bg-surface p-1 shadow-lg">
+            <a
+              href={storefrontPageUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setOpen(false)}
+              className="block rounded-md px-3 py-2 text-sm font-medium text-text hover:bg-surface-muted"
+            >
+              Ouvrir ma boutique →
+            </a>
+            <button
+              onClick={() => {
+                void navigator.clipboard.writeText(storefrontPageUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="block w-full rounded-md px-3 py-2 text-left text-sm font-medium text-text hover:bg-surface-muted"
+            >
+              {copied ? "Lien copié !" : "Copier le lien pour mes clients"}
+            </button>
+            <div className="my-1 h-px bg-border" />
+            <Link
+              href="/dashboard/settings"
+              onClick={() => setOpen(false)}
+              className="block rounded-md px-3 py-2 text-sm text-text-muted hover:bg-surface-muted"
+            >
+              Personnaliser ma boutique
+            </Link>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function StorefrontIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M3 8l1-4h12l1 4M3 8v7a1 1 0 001 1h3v-4h6v4h3a1 1 0 001-1V8M3 8h14"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
