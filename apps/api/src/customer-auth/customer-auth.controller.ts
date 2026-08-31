@@ -23,6 +23,7 @@ import {
   listCustomerHistoryQuerySchema,
   createReviewSchema,
   signQuoteSchema,
+  createReturnRequestSchema,
   type CustomerRegisterInput,
   type CustomerLoginInput,
   type CustomerRefreshInput,
@@ -32,6 +33,7 @@ import {
   type ListCustomerHistoryQuery,
   type CreateReviewInput,
   type SignQuoteInput,
+  type CreateReturnRequestInput,
 } from '@korva/validation';
 import { CustomerAuthService } from './customer-auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -291,5 +293,37 @@ export class CustomerAuthController {
     @Body(new ZodValidationPipe(createReviewSchema)) body: CreateReviewInput,
   ) {
     return this.customerAuthService.createReview(slug, req.user!, body);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('returns')
+  listReturns(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+    @Query(new ZodValidationPipe(listCustomerHistoryQuerySchema))
+    query: ListCustomerHistoryQuery,
+  ) {
+    return this.customerAuthService.listReturnRequests(slug, req.user!, query);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('returns/:id')
+  getReturn(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getReturnRequestDetail(slug, req.user!, id);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Post('returns')
+  createReturn(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+    @Body(new ZodValidationPipe(createReturnRequestSchema))
+    body: CreateReturnRequestInput,
+  ) {
+    return this.customerAuthService.createReturnRequest(slug, req.user!, body);
   }
 }

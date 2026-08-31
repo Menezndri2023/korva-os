@@ -31,6 +31,9 @@ export const SYSTEM_EVENTS = [
   "recurring_billing.created",
   "recurring_billing.charged",
   "recurring_billing.cancelled",
+  "return_request.created",
+  "return_request.approved",
+  "return_request.rejected",
 ] as const;
 export type SystemEvent = (typeof SYSTEM_EVENTS)[number];
 

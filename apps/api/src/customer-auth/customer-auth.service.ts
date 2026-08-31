@@ -18,6 +18,7 @@ import type {
   ListCustomerHistoryQuery,
   CreateReviewInput,
   SignQuoteInput,
+  CreateReturnRequestInput,
 } from '@korva/validation';
 import {
   EMAIL_PROVIDER,
@@ -37,6 +38,8 @@ import { QuotesService } from '../finance/quotes/quotes.service';
 import { QuoteDocument } from '../finance/quotes/schemas/quote.schema';
 import { OffersService } from '../catalog/offers/offers.service';
 import { ReviewsService } from '../reviews/reviews.service';
+import { ReturnRequestsService } from '../commerce/returns/return-requests.service';
+import { ReturnRequestDocument } from '../commerce/returns/schemas/return-request.schema';
 import { CustomerAccountRepository } from './customer-account.repository';
 import { CustomerSessionRepository } from './customer-session.repository';
 import { CustomerPasswordResetRepository } from './customer-password-reset.repository';
@@ -101,6 +104,7 @@ export class CustomerAuthService {
     private readonly quotesService: QuotesService,
     private readonly offersService: OffersService,
     private readonly reviewsService: ReviewsService,
+    private readonly returnRequestsService: ReturnRequestsService,
     private readonly customerAccountRepository: CustomerAccountRepository,
     private readonly customerSessionRepository: CustomerSessionRepository,
     private readonly customerPasswordResetRepository: CustomerPasswordResetRepository,
@@ -723,6 +727,82 @@ export class CustomerAuthService {
       customer.contactId,
       input,
     );
+  }
+
+  private assertOwnsReturnRequest(
+    returnRequest: ReturnRequestDocument,
+    customer: AuthenticatedCustomer,
+  ): void {
+    if (returnRequest.contactId.toString() !== customer.contactId) {
+      throw new NotFoundException({
+        code: 'RETURN_REQUEST_NOT_FOUND',
+        message: 'Return request not found',
+      });
+    }
+  }
+
+  /** Eligibility (fulfilled order, quantities not already returned) is enforced inside
+   *  ReturnRequestsService.create itself — the customer's own contactId is passed as
+   *  `expectedContactId` so a return can never be filed against another customer's order. */
+  async createReturnRequest(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    input: CreateReturnRequestInput,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    return this.returnRequestsService.create(
+      organization.id as string,
+      input,
+      customer.contactId,
+    );
+  }
+
+  async listReturnRequests(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    query: ListCustomerHistoryQuery,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const { data, pagination } = await this.returnRequestsService.list(
+      organization.id as string,
+      {
+        page: query.page,
+        limit: query.limit,
+        contactId: customer.contactId,
+      },
+    );
+    return {
+      data: data.map((returnRequest) => ({
+        id: returnRequest.id as string,
+        orderId: returnRequest.orderId.toString(),
+        status: returnRequest.status,
+        reason: returnRequest.reason,
+        refundAmount: returnRequest.refundAmount,
+        currency: returnRequest.currency,
+        createdAt: (returnRequest as unknown as { createdAt: Date }).createdAt,
+      })),
+      pagination,
+    };
+  }
+
+  async getReturnRequestDetail(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    id: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const returnRequest = await this.returnRequestsService.getById(
+      organization.id as string,
+      id,
+    );
+    this.assertOwnsReturnRequest(returnRequest, customer);
+    return returnRequest;
   }
 
   /** Same never-reveal-existence posture as PasswordResetService.forgotPassword. */

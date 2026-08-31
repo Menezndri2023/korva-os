@@ -1885,6 +1885,9 @@ const WEBHOOK_EVENT_LABELS: Record<string, string> = {
   "recurring_billing.created": "Abonnement client créé",
   "recurring_billing.charged": "Abonnement client facturé",
   "recurring_billing.cancelled": "Abonnement client résilié",
+  "return_request.created": "Demande de retour créée",
+  "return_request.approved": "Retour approuvé (remboursé)",
+  "return_request.rejected": "Retour refusé",
 };
 
 /**

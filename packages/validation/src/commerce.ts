@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ORDER_STATUSES, FULFILLMENT_STATUSES } from "@korva/types";
+import { ORDER_STATUSES, FULFILLMENT_STATUSES, RETURN_REQUEST_STATUSES } from "@korva/types";
 import { lineItemInputSchema, lineItemModifierSchema } from "./finance.ts";
 
 export const createCartSchema = z.object({
@@ -62,3 +62,29 @@ export const updateFulfillmentSchema = z.object({
   trackingNumber: z.string().max(120).optional(),
 });
 export type UpdateFulfillmentInput = z.infer<typeof updateFulfillmentSchema>;
+
+export const returnRequestItemInputSchema = z.object({
+  lineItemIndex: z.number().int().min(0),
+  quantity: z.number().positive(),
+});
+export type ReturnRequestItemInput = z.infer<typeof returnRequestItemInputSchema>;
+
+export const createReturnRequestSchema = z.object({
+  orderId: z.string().min(1),
+  items: z.array(returnRequestItemInputSchema).min(1),
+  reason: z.string().min(1).max(1000),
+});
+export type CreateReturnRequestInput = z.infer<typeof createReturnRequestSchema>;
+
+export const rejectReturnRequestSchema = z.object({
+  reason: z.string().min(1).max(1000).optional(),
+});
+export type RejectReturnRequestInput = z.infer<typeof rejectReturnRequestSchema>;
+
+export const listReturnRequestsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(RETURN_REQUEST_STATUSES).optional(),
+  orderId: z.string().optional(),
+});
+export type ListReturnRequestsQuery = z.infer<typeof listReturnRequestsQuerySchema>;

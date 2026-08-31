@@ -151,6 +151,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setSidebarOpen(false)}
             />
           )}
+          {enabledModules.has("commerce") && (
+            <NavLink
+              href="/dashboard/returns"
+              label="Retours"
+              active={pathname === "/dashboard/returns"}
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
           <NavLink
             href="/dashboard/settings"
             label="Paramètres"

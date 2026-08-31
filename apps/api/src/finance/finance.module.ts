@@ -146,6 +146,7 @@ import { DocumentsModule } from '../documents/documents.module';
     PaymentReconciliationService,
     DiscountCodesService,
     RecurringBillingService,
+    PaymentsService,
   ],
 })
 export class FinanceModule {}

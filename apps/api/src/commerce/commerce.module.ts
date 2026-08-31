@@ -20,6 +20,14 @@ import { FulfillmentsRepository } from './fulfillments/fulfillments.repository';
 import { FulfillmentsService } from './fulfillments/fulfillments.service';
 import { FulfillmentsController } from './fulfillments/fulfillments.controller';
 
+import {
+  ReturnRequest,
+  ReturnRequestSchema,
+} from './returns/schemas/return-request.schema';
+import { ReturnRequestsRepository } from './returns/return-requests.repository';
+import { ReturnRequestsService } from './returns/return-requests.service';
+import { ReturnRequestsController } from './returns/return-requests.controller';
+
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { BookingModule } from '../booking/booking.module';
@@ -33,6 +41,7 @@ import { AuditModule } from '../audit/audit.module';
       { name: Cart.name, schema: CartSchema },
       { name: Order.name, schema: OrderSchema },
       { name: Fulfillment.name, schema: FulfillmentSchema },
+      { name: ReturnRequest.name, schema: ReturnRequestSchema },
     ]),
     CrmModule,
     CatalogModule,
@@ -41,7 +50,12 @@ import { AuditModule } from '../audit/audit.module';
     CountersModule,
     AuditModule,
   ],
-  controllers: [CartsController, OrdersController, FulfillmentsController],
+  controllers: [
+    CartsController,
+    OrdersController,
+    FulfillmentsController,
+    ReturnRequestsController,
+  ],
   providers: [
     CartsRepository,
     CartsService,
@@ -49,7 +63,9 @@ import { AuditModule } from '../audit/audit.module';
     OrdersService,
     FulfillmentsRepository,
     FulfillmentsService,
+    ReturnRequestsRepository,
+    ReturnRequestsService,
   ],
-  exports: [OrdersService],
+  exports: [OrdersService, ReturnRequestsService],
 })
 export class CommerceModule {}

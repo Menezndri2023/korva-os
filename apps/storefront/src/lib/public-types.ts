@@ -6,6 +6,7 @@ import type {
   OfferVariant,
   OrderStatus,
   QuoteStatus,
+  ReturnRequestStatus,
 } from "@korva/types";
 
 /** Mirrors PublicService#getOrganization (apps/api/src/public/public.service.ts) exactly. */
@@ -141,6 +142,17 @@ export interface CustomerOrderDetail {
   total: number;
   currency: string;
   hasInvoice: boolean;
+  createdAt: string;
+}
+
+/** Mirrors CustomerAuthService#listReturnRequests' mapped item shape. */
+export interface CustomerReturnRequestSummary {
+  id: string;
+  orderId: string;
+  status: ReturnRequestStatus;
+  reason: string;
+  refundAmount: number;
+  currency: string;
   createdAt: string;
 }
 

@@ -63,4 +63,7 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'recurring_billing.created': 'recurringBillingId',
   'recurring_billing.charged': 'recurringBillingId',
   'recurring_billing.cancelled': 'recurringBillingId',
+  'return_request.created': 'returnRequestId',
+  'return_request.approved': 'returnRequestId',
+  'return_request.rejected': 'returnRequestId',
 };

@@ -85,6 +85,27 @@ export class PaymentsRepository {
       .exec();
   }
 
+  /** The most recent completed payment against an invoice — used by ReturnRequestsService to
+   *  find something refundable for an order without the caller needing to already know a
+   *  paymentId (an order only exposes its invoiceId, never a paymentId directly). An invoice
+   *  paid in several partial installments has several completed Payments; picking the most
+   *  recent one is a deliberate v1 simplification (mirrors this codebase's other documented
+   *  "pick one, don't try to be clever" choices, e.g. the single-platform-wide Paystack secret) —
+   *  revisit only if partial/split payments across multiple providers becomes a real scenario. */
+  findCompletedByInvoiceId(
+    organizationId: string,
+    invoiceId: string,
+  ): Promise<PaymentDocument | null> {
+    return this.paymentModel
+      .findOne({
+        organizationId: new Types.ObjectId(organizationId),
+        invoiceId: new Types.ObjectId(invoiceId),
+        status: 'completed',
+      })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
   /** Scoped by organizationId — an Idempotency-Key only has meaning within the org that issued it. */
   findByIdempotencyKey(
     organizationId: string,

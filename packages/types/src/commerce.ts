@@ -70,3 +70,37 @@ export interface Fulfillment {
   createdAt: string;
   updatedAt: string;
 }
+
+export const RETURN_REQUEST_STATUSES = ["pending", "approved", "rejected"] as const;
+export type ReturnRequestStatus = (typeof RETURN_REQUEST_STATUSES)[number];
+
+export interface ReturnRequestItem {
+  lineItemIndex: number;
+  offerId?: string;
+  variantId?: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+/** A customer- or staff-initiated request to return some (or all) of an already-fulfilled
+ *  Order's line items. Approving one triggers a real refund against the order's payment (via
+ *  the existing Payments/Refund pipeline) and restocks any tracked-stock offers involved —
+ *  see ReturnRequestsService's own doc comment in the API for the full flow. */
+export interface ReturnRequest {
+  id: string;
+  organizationId: string;
+  orderId: string;
+  contactId: string;
+  items: ReturnRequestItem[];
+  reason: string;
+  status: ReturnRequestStatus;
+  refundAmount: number;
+  currency: string;
+  refundId?: string;
+  rejectionReason?: string;
+  reviewedByUserId?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}

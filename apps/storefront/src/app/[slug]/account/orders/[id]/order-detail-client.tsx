@@ -12,6 +12,7 @@ import type { CustomerOrderDetail } from "@/lib/public-types";
 import type { OrderStatus } from "@korva/types";
 import { AccountShell } from "../../account-shell";
 import { ReviewForm } from "../../review-form";
+import { ReturnRequestForm } from "../../return-request-form";
 
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   open: "En cours (addition ouverte)",
@@ -143,7 +144,14 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
           </Card>
 
           {orderQuery.data.status === "fulfilled" && (
-            <ReviewForm slug={slug} entity="order" entityId={orderId} />
+            <>
+              <ReturnRequestForm
+                slug={slug}
+                orderId={orderId}
+                items={orderQuery.data.items}
+              />
+              <ReviewForm slug={slug} entity="order" entityId={orderId} />
+            </>
           )}
         </>
       )}

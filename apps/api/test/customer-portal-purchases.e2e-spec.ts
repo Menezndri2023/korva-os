@@ -524,4 +524,183 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
       expect(quote.signedByName).toBe('Quote Customer');
     });
   });
+
+  describe('return requests', () => {
+    let slug: string;
+    let organizationId: string;
+    let staffToken: string;
+    let customerToken: string;
+    let otherCustomerToken: string;
+    let orderId: string;
+
+    beforeAll(async () => {
+      const authRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: 'owner-cust-9@example.com', password: 'password123' })
+        .expect(201);
+      staffToken = asSuccess<AuthPayload>(authRes.body).accessToken;
+
+      const orgRes = await request(server)
+        .post('/api/v1/organizations')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .send({
+          name: 'Cust Auth Org 9',
+          type: 'commerce',
+          country: 'FR',
+          currency: 'EUR',
+          timezone: 'Europe/Paris',
+          language: 'fr',
+        })
+        .expect(201);
+      const organization = asSuccess<OrganizationPayload>(orgRes.body);
+      slug = organization.slug;
+      organizationId = organization.id;
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['crm', 'catalog', 'commerce', 'finance'] })
+        .expect(200);
+
+      const contactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'person',
+          firstName: 'Return',
+          email: 'return-customer@example.com',
+        })
+        .expect(201);
+      const contactId = asSuccess<{ id: string }>(contactRes.body).id;
+
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Return Widget',
+          status: 'active',
+          pricing: { amount: 25, currency: 'EUR' },
+        })
+        .expect(201);
+      const offerId = asSuccess<{ id: string }>(offerRes.body).id;
+
+      // Order: create -> confirm -> generate invoice -> issue -> pay in full -> fulfill.
+      const orderRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          contactId,
+          items: [
+            {
+              offerId,
+              description: 'Return Widget',
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+          currency: 'EUR',
+        })
+        .expect(201);
+      orderId = asSuccess<{ id: string }>(orderRes.body).id;
+      await request(server)
+        .post(`/api/v1/orders/${orderId}/confirm`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      const invoiceRes = await request(server)
+        .post(`/api/v1/orders/${orderId}/generate-invoice`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      const invoiceId = asSuccess<{ id: string }>(invoiceRes.body).id;
+      await request(server)
+        .post(`/api/v1/invoices/${invoiceId}/issue`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      await request(server)
+        .post('/api/v1/payments')
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ invoiceId, amount: 25, method: 'cash' })
+        .expect(201);
+      await request(server)
+        .post(`/api/v1/orders/${orderId}/fulfill`)
+        .set('Authorization', `Bearer ${staffToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const custRes = await request(server)
+        .post(`/api/v1/public/${slug}/account/register`)
+        .send({
+          email: 'return-customer@example.com',
+          password: 'clientpass123',
+        })
+        .expect(201);
+      customerToken = asSuccess<CustomerAuthPayload>(custRes.body).accessToken;
+
+      const otherRes = await request(server)
+        .post(`/api/v1/public/${slug}/account/register`)
+        .send({
+          email: 'other-return-customer@example.com',
+          password: 'clientpass123',
+        })
+        .expect(201);
+      otherCustomerToken = asSuccess<CustomerAuthPayload>(
+        otherRes.body,
+      ).accessToken;
+    });
+
+    it('lets the customer request a return on their own fulfilled order', async () => {
+      const res = await request(server)
+        .post(`/api/v1/public/${slug}/account/returns`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          orderId,
+          items: [{ lineItemIndex: 0, quantity: 1 }],
+          reason: 'Ne convient pas',
+        })
+        .expect(201);
+      const returnRequest = asSuccess<{ id: string; status: string }>(res.body);
+      expect(returnRequest.status).toBe('pending');
+
+      const listRes = await request(server)
+        .get(`/api/v1/public/${slug}/account/returns`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(200);
+      expect(asSuccess<unknown[]>(listRes.body)).toHaveLength(1);
+
+      const detailRes = await request(server)
+        .get(`/api/v1/public/${slug}/account/returns/${returnRequest.id}`)
+        .set('Authorization', `Bearer ${customerToken}`)
+        .expect(200);
+      expect(asSuccess<{ id: string }>(detailRes.body).id).toBe(
+        returnRequest.id,
+      );
+
+      // Another customer must not be able to see this return request.
+      await request(server)
+        .get(`/api/v1/public/${slug}/account/returns/${returnRequest.id}`)
+        .set('Authorization', `Bearer ${otherCustomerToken}`)
+        .expect(404);
+    });
+
+    it("rejects filing a return against another customer's order", async () => {
+      const res = await request(server)
+        .post(`/api/v1/public/${slug}/account/returns`)
+        .set('Authorization', `Bearer ${otherCustomerToken}`)
+        .send({
+          orderId,
+          items: [{ lineItemIndex: 0, quantity: 1 }],
+          reason: 'Not mine',
+        })
+        .expect(404);
+      expect(asError(res.body).code).toBe('ORDER_NOT_FOUND');
+    });
+  });
 });

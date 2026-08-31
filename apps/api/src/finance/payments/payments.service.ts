@@ -56,6 +56,19 @@ export class PaymentsService {
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
+  /** Thin pass-through to the repository — kept on the service so callers outside FinanceModule
+   *  (e.g. ReturnRequestsService) never need PaymentsRepository exported directly, matching this
+   *  codebase's convention that a module's Service, not its Repository, is the module boundary. */
+  findCompletedPaymentForInvoice(
+    organizationId: string,
+    invoiceId: string,
+  ): Promise<PaymentDocument | null> {
+    return this.paymentsRepository.findCompletedByInvoiceId(
+      organizationId,
+      invoiceId,
+    );
+  }
+
   /**
    * `idempotencyKey`, when given (from the `Idempotency-Key` HTTP header — see
    * PaymentsController.create), guarantees that retrying this exact call never calls the

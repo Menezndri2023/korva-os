@@ -66,7 +66,10 @@ describe('Recurring billing (e2e)', () => {
 
     const authRes = await request(server)
       .post('/api/v1/auth/register')
-      .send({ email: 'recurring-billing-owner@example.com', password: 'password123' })
+      .send({
+        email: 'recurring-billing-owner@example.com',
+        password: 'password123',
+      })
       .expect(201);
     accessToken = asSuccess<AuthPayload>(authRes.body).accessToken;
 
@@ -95,7 +98,11 @@ describe('Recurring billing (e2e)', () => {
       .post('/api/v1/contacts')
       .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Organization-Id', organizationId)
-      .send({ type: 'person', firstName: 'Member', email: 'member@example.com' })
+      .send({
+        type: 'person',
+        firstName: 'Member',
+        email: 'member@example.com',
+      })
       .expect(201);
     contactId = asSuccess<{ id: string }>(contactRes.body).id;
 
@@ -145,7 +152,11 @@ describe('Recurring billing (e2e)', () => {
       .post('/api/v1/recurring-billing')
       .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Organization-Id', organizationId)
-      .send({ contactId, offerId: '000000000000000000000000', interval: 'monthly' })
+      .send({
+        contactId,
+        offerId: '000000000000000000000000',
+        interval: 'monthly',
+      })
       .expect(404);
     expect(asError(res.body).code).toBe('OFFER_NOT_FOUND');
   });
@@ -182,14 +193,18 @@ describe('Recurring billing (e2e)', () => {
         .expect(200);
       const plan = asSuccess<RecurringBillingPayload>(res.body);
       expect(plan.lastInvoiceId).toBeDefined();
-      expect(new Date(plan.nextBillingDate).getTime()).toBeGreaterThan(Date.now());
+      expect(new Date(plan.nextBillingDate).getTime()).toBeGreaterThan(
+        Date.now(),
+      );
 
       const invoiceRes = await request(server)
         .get(`/api/v1/invoices/${plan.lastInvoiceId}`)
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      const invoice = asSuccess<{ total: number; contactId: string }>(invoiceRes.body);
+      const invoice = asSuccess<{ total: number; contactId: string }>(
+        invoiceRes.body,
+      );
       expect(invoice.total).toBe(49);
       expect(invoice.contactId).toBe(contactId);
     });
@@ -212,7 +227,9 @@ describe('Recurring billing (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      const invoiceCountBefore = asSuccess<RecurringBillingPayload>(before.body).lastInvoiceId;
+      const invoiceCountBefore = asSuccess<RecurringBillingPayload>(
+        before.body,
+      ).lastInvoiceId;
 
       await app.get(RecurringBillingSchedulerService).runSweep();
 
@@ -246,7 +263,9 @@ describe('Recurring billing (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(201);
-      expect(asSuccess<RecurringBillingPayload>(res.body).status).toBe('cancelled');
+      expect(asSuccess<RecurringBillingPayload>(res.body).status).toBe(
+        'cancelled',
+      );
     });
 
     it('rejects cancelling an already-cancelled plan', async () => {
@@ -255,7 +274,9 @@ describe('Recurring billing (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(400);
-      expect(asError(res.body).code).toBe('RECURRING_BILLING_ALREADY_CANCELLED');
+      expect(asError(res.body).code).toBe(
+        'RECURRING_BILLING_ALREADY_CANCELLED',
+      );
     });
   });
 });
