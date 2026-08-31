@@ -33,6 +33,29 @@ import { CreditBalancesRepository } from './credit-balances/credit-balances.repo
 import { CreditBalancesService } from './credit-balances/credit-balances.service';
 import { CreditBalancesController } from './credit-balances/credit-balances.controller';
 
+import { Course, CourseSchema } from './courses/schemas/course.schema';
+import {
+  Cohort,
+  CohortSchema,
+  CohortSession,
+  CohortSessionSchema,
+} from './courses/schemas/cohort.schema';
+import {
+  Quiz,
+  QuizSchema,
+  QuizAttempt,
+  QuizAttemptSchema,
+} from './courses/schemas/quiz.schema';
+import { CoursesRepository } from './courses/courses.repository';
+import { CoursesService } from './courses/courses.service';
+import { CoursesController } from './courses/courses.controller';
+import { CohortsRepository } from './courses/cohorts.repository';
+import { CohortsService } from './courses/cohorts.service';
+import { CohortsController } from './courses/cohorts.controller';
+import { QuizzesRepository } from './courses/quizzes.repository';
+import { QuizzesService } from './courses/quizzes.service';
+import { QuizzesController } from './courses/quizzes.controller';
+
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { AuditModule } from '../audit/audit.module';
@@ -58,6 +81,11 @@ import { DocumentsModule } from '../documents/documents.module';
       { name: Booking.name, schema: BookingSchema },
       { name: WaitlistEntry.name, schema: WaitlistEntrySchema },
       { name: CreditBalance.name, schema: CreditBalanceSchema },
+      { name: Course.name, schema: CourseSchema },
+      { name: Cohort.name, schema: CohortSchema },
+      { name: CohortSession.name, schema: CohortSessionSchema },
+      { name: Quiz.name, schema: QuizSchema },
+      { name: QuizAttempt.name, schema: QuizAttemptSchema },
     ]),
     CrmModule,
     CatalogModule,
@@ -73,6 +101,9 @@ import { DocumentsModule } from '../documents/documents.module';
     BookingsController,
     WaitlistController,
     CreditBalancesController,
+    CoursesController,
+    CohortsController,
+    QuizzesController,
   ],
   providers: [
     ResourcesRepository,
@@ -86,6 +117,12 @@ import { DocumentsModule } from '../documents/documents.module';
     WaitlistService,
     CreditBalancesRepository,
     CreditBalancesService,
+    CoursesRepository,
+    CoursesService,
+    CohortsRepository,
+    CohortsService,
+    QuizzesRepository,
+    QuizzesService,
   ],
   exports: [
     BookingsService,
@@ -93,6 +130,9 @@ import { DocumentsModule } from '../documents/documents.module';
     ResourcesService,
     WaitlistService,
     CreditBalancesService,
+    CoursesService,
+    CohortsService,
+    QuizzesService,
   ],
 })
 export class BookingModule {}

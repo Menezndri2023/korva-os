@@ -22,3 +22,4 @@ export * from "./verticals.ts";
 export * from "./webhook-subscriptions.ts";
 export * from "./reviews.ts";
 export * from "./projects.ts";
+export * from "./courses.ts";

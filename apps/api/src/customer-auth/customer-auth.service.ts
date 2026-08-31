@@ -20,6 +20,7 @@ import type {
   SignQuoteInput,
   CreateReturnRequestInput,
   AddWishlistItemInput,
+  SubmitQuizAttemptInput,
 } from '@korva/validation';
 import {
   EMAIL_PROVIDER,
@@ -42,6 +43,8 @@ import { ReviewsService } from '../reviews/reviews.service';
 import { ReturnRequestsService } from '../commerce/returns/return-requests.service';
 import { ReturnRequestDocument } from '../commerce/returns/schemas/return-request.schema';
 import { WishlistService } from '../commerce/wishlist/wishlist.service';
+import { CohortsService } from '../booking/courses/cohorts.service';
+import { QuizzesService } from '../booking/courses/quizzes.service';
 import { CustomerAccountRepository } from './customer-account.repository';
 import { CustomerSessionRepository } from './customer-session.repository';
 import { CustomerPasswordResetRepository } from './customer-password-reset.repository';
@@ -108,6 +111,8 @@ export class CustomerAuthService {
     private readonly reviewsService: ReviewsService,
     private readonly returnRequestsService: ReturnRequestsService,
     private readonly wishlistService: WishlistService,
+    private readonly cohortsService: CohortsService,
+    private readonly quizzesService: QuizzesService,
     private readonly customerAccountRepository: CustomerAccountRepository,
     private readonly customerSessionRepository: CustomerSessionRepository,
     private readonly customerPasswordResetRepository: CustomerPasswordResetRepository,
@@ -845,6 +850,125 @@ export class CustomerAuthService {
       organization.id as string,
       customer.contactId,
       offerId,
+    );
+  }
+
+  /** Cohorts the customer is enrolled in — never a staff-supplied contactId, always the
+   *  authenticated customer's own. */
+  async listMyCohorts(slug: string, customer: AuthenticatedCustomer) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const { data } = await this.cohortsService.list(organization.id as string, {
+      page: 1,
+      limit: 100,
+      enrolledContactId: customer.contactId,
+    });
+    return data;
+  }
+
+  private assertEnrolledInCohort(
+    cohort: Awaited<ReturnType<CohortsService['getById']>>,
+    customer: AuthenticatedCustomer,
+  ): void {
+    const isEnrolled = cohort.enrolledContactIds.some(
+      (id) => id.toString() === customer.contactId,
+    );
+    if (!isEnrolled) {
+      throw new NotFoundException({
+        code: 'COHORT_NOT_FOUND',
+        message: 'Cohort not found',
+      });
+    }
+  }
+
+  async getMyCohort(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    cohortId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const cohort = await this.cohortsService.getById(
+      organization.id as string,
+      cohortId,
+    );
+    this.assertEnrolledInCohort(cohort, customer);
+    return cohort;
+  }
+
+  /** Every quiz for the cohort's own course, pre-stripped of the answer key — lets a learner
+   *  browse what's available without already knowing a quizId. */
+  async listQuizzesForCohort(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    cohortId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const cohort = await this.cohortsService.getById(
+      organization.id as string,
+      cohortId,
+    );
+    this.assertEnrolledInCohort(cohort, customer);
+    const quizzes = await this.quizzesService.listByCourse(
+      organization.id as string,
+      cohort.courseId.toString(),
+    );
+    return quizzes.map((quiz) => this.quizzesService.toPublic(quiz));
+  }
+
+  /** Only served to a customer once they're confirmed enrolled in a cohort running this quiz's
+   *  course — served pre-stripped of the answer key (see QuizzesService.toPublic). */
+  async getQuizForCohort(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    cohortId: string,
+    quizId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const cohort = await this.cohortsService.getById(
+      organization.id as string,
+      cohortId,
+    );
+    this.assertEnrolledInCohort(cohort, customer);
+    const quiz = await this.quizzesService.getById(
+      organization.id as string,
+      quizId,
+    );
+    if (quiz.courseId.toString() !== cohort.courseId.toString()) {
+      throw new NotFoundException({
+        code: 'QUIZ_NOT_FOUND',
+        message: 'Quiz not found',
+      });
+    }
+
+    const attempts = await this.quizzesService.listAttemptsForContact(
+      organization.id as string,
+      quizId,
+      customer.contactId,
+    );
+    return { quiz: this.quizzesService.toPublic(quiz), attempts };
+  }
+
+  async submitQuizAttempt(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    quizId: string,
+    input: SubmitQuizAttemptInput,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    return this.quizzesService.submitAttempt(
+      organization.id as string,
+      customer.contactId,
+      quizId,
+      input,
     );
   }
 

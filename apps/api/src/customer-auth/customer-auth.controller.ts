@@ -26,6 +26,7 @@ import {
   signQuoteSchema,
   createReturnRequestSchema,
   addWishlistItemSchema,
+  submitQuizAttemptSchema,
   type CustomerRegisterInput,
   type CustomerLoginInput,
   type CustomerRefreshInput,
@@ -37,6 +38,7 @@ import {
   type SignQuoteInput,
   type CreateReturnRequestInput,
   type AddWishlistItemInput,
+  type SubmitQuizAttemptInput,
 } from '@korva/validation';
 import { CustomerAuthService } from './customer-auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -328,6 +330,68 @@ export class CustomerAuthController {
     body: CreateReturnRequestInput,
   ) {
     return this.customerAuthService.createReturnRequest(slug, req.user!, body);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('cohorts')
+  listMyCohorts(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.listMyCohorts(slug, req.user!);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('cohorts/:id')
+  getMyCohort(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getMyCohort(slug, req.user!, id);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('cohorts/:id/quizzes')
+  listQuizzesForCohort(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.listQuizzesForCohort(slug, req.user!, id);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('cohorts/:cohortId/quizzes/:quizId')
+  getQuizForCohort(
+    @Param('organizationSlug') slug: string,
+    @Param('cohortId') cohortId: string,
+    @Param('quizId') quizId: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getQuizForCohort(
+      slug,
+      req.user!,
+      cohortId,
+      quizId,
+    );
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Post('quizzes/:quizId/attempts')
+  submitQuizAttempt(
+    @Param('organizationSlug') slug: string,
+    @Param('quizId') quizId: string,
+    @Req() req: RequestWithCustomer,
+    @Body(new ZodValidationPipe(submitQuizAttemptSchema))
+    body: SubmitQuizAttemptInput,
+  ) {
+    return this.customerAuthService.submitQuizAttempt(
+      slug,
+      req.user!,
+      quizId,
+      body,
+    );
   }
 
   @UseGuards(CustomerAuthGuard)

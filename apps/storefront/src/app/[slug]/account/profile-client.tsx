@@ -79,6 +79,9 @@ export default function ProfileClient({ slug }: { slug: string }) {
         <Link href={`/${slug}/account/wishlist`} className="font-medium text-text hover:underline">
           Ma liste de souhaits
         </Link>
+        <Link href={`/${slug}/account/learning`} className="font-medium text-text hover:underline">
+          Mes formations
+        </Link>
       </div>
 
       <Card className="p-4">
