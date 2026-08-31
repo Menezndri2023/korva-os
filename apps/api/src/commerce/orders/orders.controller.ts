@@ -15,11 +15,13 @@ import {
   createOrderFromBookingSchema,
   createOrderSchema,
   listOrdersQuerySchema,
+  splitOrderSchema,
   type AddOrderItemInput,
   type CreateOpenOrderInput,
   type CreateOrderFromBookingInput,
   type CreateOrderInput,
   type ListOrdersQuery,
+  type SplitOrderInput,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import type { AuthenticatedUser } from '../../core/tenant/request-context.types';
@@ -120,6 +122,22 @@ export class OrdersController {
       user.userId,
       id,
       index,
+    );
+  }
+
+  @RequirePermissions('orders.update')
+  @Post(':id/split')
+  splitBill(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(splitOrderSchema)) body: SplitOrderInput,
+  ) {
+    return this.ordersService.splitBill(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body.groups,
     );
   }
 

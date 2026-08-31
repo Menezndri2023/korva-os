@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -82,6 +83,28 @@ export default function OrderDetailPage() {
     onSuccess: invalidate,
   });
 
+  const [selectedForSplit, setSelectedForSplit] = useState<Set<number>>(new Set());
+  const [lastSplits, setLastSplits] = useState<Order[] | null>(null);
+  const splitMutation = useMutation({
+    mutationFn: (items: number[]) =>
+      apiClient.post<{ original: Order; splits: Order[] }>(`/orders/${id}/split`, {
+        groups: [{ items }],
+      }),
+    onSuccess: (result) => {
+      invalidate();
+      setSelectedForSplit(new Set());
+      setLastSplits(result.splits);
+    },
+  });
+  function toggleSplitSelection(index: number) {
+    setSelectedForSplit((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
   const confirmMutation = useMutation({
     mutationFn: () => apiClient.post(`/orders/${id}/confirm`),
     onSuccess: invalidate,
@@ -107,6 +130,7 @@ export default function OrderDetailPage() {
     closeMutation,
     addItemMutation,
     removeItemMutation,
+    splitMutation,
   ]
     .map((mutation) => mutation.error)
     .find((error) => error instanceof ApiError);
@@ -260,6 +284,7 @@ export default function OrderDetailPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
+                {order.status === "open" && <th className="px-4 py-2" aria-label="Sélection" />}
                 <th className="px-4 py-2">Description</th>
                 <th className="px-4 py-2">Qté</th>
                 <th className="px-4 py-2">Prix unitaire</th>
@@ -272,7 +297,7 @@ export default function OrderDetailPage() {
               {order.items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={order.status === "open" ? 6 : 5}
+                    colSpan={order.status === "open" ? 7 : 5}
                     className="px-4 py-6 text-center text-text-muted"
                   >
                     Aucun article pour le moment.
@@ -286,6 +311,16 @@ export default function OrderDetailPage() {
                 );
                 return (
                 <tr key={index}>
+                  {order.status === "open" && (
+                    <td className="px-4 py-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`Sélectionner ${item.description}`}
+                        checked={selectedForSplit.has(index)}
+                        onChange={() => toggleSplitSelection(index)}
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-2 font-medium">
                     {item.description}
                     {item.modifiers && item.modifiers.length > 0 && (
@@ -341,6 +376,38 @@ export default function OrderDetailPage() {
             <p className="font-semibold">{formatCurrency(order.total, order.currency)}</p>
           </div>
         </div>
+        {order.status === "open" && selectedForSplit.size > 0 && (
+          <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+            <p className="text-sm text-text-muted">
+              {selectedForSplit.size} article(s) sélectionné(s)
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={splitMutation.isPending}
+              onClick={() => splitMutation.mutate([...selectedForSplit])}
+            >
+              Créer une note séparée
+            </Button>
+          </div>
+        )}
+        {lastSplits && lastSplits.length > 0 && (
+          <div className="border-t border-border bg-surface-muted px-4 py-3 text-sm">
+            <p className="text-text-muted">Note(s) séparée(s) créée(s) :</p>
+            <ul className="mt-1 space-y-0.5">
+              {lastSplits.map((split) => (
+                <li key={split.id}>
+                  <Link
+                    href={`/dashboard/orders/${split.id}`}
+                    className="text-text underline"
+                  >
+                    Commande {split.number} — {formatCurrency(split.total, split.currency)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {order.status === "open" && (
           <form
             onSubmit={handleItemSubmit((values) => addItemMutation.mutate(values))}

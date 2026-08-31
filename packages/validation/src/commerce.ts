@@ -48,6 +48,17 @@ export const addOrderItemSchema = z.object({
 });
 export type AddOrderItemInput = z.infer<typeof addOrderItemSchema>;
 
+export const splitOrderSchema = z.object({
+  groups: z
+    .array(
+      z.object({
+        items: z.array(z.number().int().min(0)).min(1),
+      }),
+    )
+    .min(1),
+});
+export type SplitOrderInput = z.infer<typeof splitOrderSchema>;
+
 export const listOrdersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

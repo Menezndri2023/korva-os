@@ -487,6 +487,147 @@ export class OrdersService {
     return updated;
   }
 
+  /**
+   * Splits some (or all) of an open tab's line items off into their own new open orders — "can
+   * we get that on a separate check?". Each group in `input.groups` becomes one new Order
+   * sharing the original's contactId/resourceId/currency; any item index not referenced by any
+   * group simply stays on the original order, which remains open and editable exactly as before
+   * (a partial split leaves a real, still-usable tab behind — not every split is "close out the
+   * whole table"). Deliberately NOT a change to Order:Invoice cardinality — each split is a
+   * completely ordinary, independent Order that flows through the existing unmodified
+   * confirm→fulfill→generate-invoice pipeline with its own single Invoice, the same as any order
+   * created any other way. No new stock operation is needed either: the moved items were already
+   * reserved when they were first added to the tab, and moving which Order document holds them
+   * doesn't change how many units are reserved.
+   */
+  async splitBill(
+    organizationId: string,
+    userId: string,
+    orderId: string,
+    groups: { items: number[] }[],
+  ): Promise<{ original: OrderDocument; splits: OrderDocument[] }> {
+    const order = await this.getById(organizationId, orderId);
+    if (order.status !== 'open') {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_OPEN',
+        message: 'Only an open order can be split',
+      });
+    }
+    if (order.discountCodeId) {
+      throw new BadRequestException({
+        code: 'ORDER_SPLIT_NOT_SUPPORTED_WITH_DISCOUNT',
+        message: 'An order with a discount code applied cannot be split',
+      });
+    }
+
+    const assignedIndexes = new Set<number>();
+    for (const group of groups) {
+      for (const index of group.items) {
+        if (index < 0 || index >= order.items.length) {
+          throw new BadRequestException({
+            code: 'ORDER_SPLIT_INVALID_ITEM',
+            message: `Order has no line item at index ${index}`,
+          });
+        }
+        if (assignedIndexes.has(index)) {
+          throw new BadRequestException({
+            code: 'ORDER_SPLIT_ITEM_ASSIGNED_TWICE',
+            message: `Line item ${index} was assigned to more than one split`,
+          });
+        }
+        assignedIndexes.add(index);
+      }
+    }
+
+    const toLineItemInput = (
+      item: OrderDocument['items'][number],
+    ): LineItemInput => ({
+      offerId: item.offerId?.toString(),
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      taxRate: item.taxRate,
+      modifiers: item.modifiers,
+    });
+
+    const session = await this.connection.startSession();
+    let result: { original: OrderDocument; splits: OrderDocument[] };
+    try {
+      result = await session.withTransaction(async () => {
+        const splits: OrderDocument[] = [];
+        for (const group of groups) {
+          const items = group.items.map((index) =>
+            toLineItemInput(order.items[index]!),
+          );
+          const totals = computeTotals(items);
+          const number = await this.countersService.nextFormatted(
+            organizationId,
+            'order',
+            'CMD',
+          );
+          const split = await this.ordersRepository.create(
+            {
+              organizationId: order.organizationId,
+              contactId: order.contactId,
+              number,
+              source: 'manual',
+              status: 'open',
+              resourceId: order.resourceId,
+              items: toLineItemDocs(items),
+              currency: order.currency,
+              ...totals,
+              total: totals.total,
+              shippingCost: 0,
+            },
+            session,
+          );
+          splits.push(split);
+        }
+
+        const remainingItems = order.items
+          .filter((_item, index) => !assignedIndexes.has(index))
+          .map(toLineItemInput);
+        const remainingTotals = computeTotals(remainingItems);
+        const updatedOriginal = await this.ordersRepository.setItemsIfOpen(
+          organizationId,
+          orderId,
+          toLineItemDocs(remainingItems),
+          remainingTotals,
+          session,
+        );
+        if (!updatedOriginal) {
+          throw new BadRequestException({
+            code: 'ORDER_NOT_OPEN',
+            message: 'Only an open order can be split',
+          });
+        }
+
+        return { original: updatedOriginal, splits };
+      });
+    } finally {
+      await session.endSession();
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'UPDATE',
+      entity: 'order',
+      entityId: orderId,
+      metadata: { splitInto: result.splits.map((s) => s.id as string) },
+    });
+    for (const split of result.splits) {
+      await this.eventBus.publish(organizationId, 'order.created', {
+        orderId: split.id as string,
+        contactId: order.contactId.toString(),
+        total: split.total,
+        source: 'manual',
+      });
+    }
+
+    return result;
+  }
+
   /** Freezes an open tab — from here on the order behaves exactly like any other order created
    *  today (existing confirm/cancel/fulfill/generate-invoice, entirely unmodified). */
   async close(

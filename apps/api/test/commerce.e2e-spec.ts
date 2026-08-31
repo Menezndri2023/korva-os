@@ -1131,8 +1131,13 @@ describe('Commerce module (e2e)', () => {
           resourceId,
           offerId: starterOfferId,
           contactId,
-          startAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          endAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+          // Fixed mid-day time, not `Date.now() + Nh` — a relative offset can cross the UTC
+          // midnight boundary depending on what time this suite happens to run, tripping a real
+          // pre-existing bug in availability.service.ts#isWithinWeeklyWindows (a booking whose
+          // window straddles the day boundary is wrongly rejected even with a full 00:00-23:59
+          // availability window). Same fix already applied in courses.e2e-spec.ts.
+          startAt: `${monday}T10:00:00.000Z`,
+          endAt: `${monday}T11:00:00.000Z`,
         })
         .expect(201);
       const bookingId = asSuccess<BookingPayload>(bookingRes.body).id;
@@ -1292,6 +1297,146 @@ describe('Commerce module (e2e)', () => {
       // Must match the order's own total (27 + 8) — confirms generate-invoice carried the
       // modifiers through rather than recomputing totals from unitPrice alone.
       expect(asSuccess<InvoicePayload>(invoiceRes.body).total).toBe(35);
+    });
+
+    describe('splitting the bill between diners', () => {
+      it('splits one item off into its own new order, leaving the rest on the original tab', async () => {
+        const order = await openTab();
+        await request(server)
+          .post(`/api/v1/orders/${order.id}/items`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ offerId: starterOfferId, quantity: 1 })
+          .expect(201);
+        await request(server)
+          .post(`/api/v1/orders/${order.id}/items`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ offerId: dessertOfferId, quantity: 2 })
+          .expect(201);
+
+        const splitRes = await request(server)
+          .post(`/api/v1/orders/${order.id}/split`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ groups: [{ items: [1] }] }) // just the dessert line
+          .expect(201);
+        const result = asSuccess<{
+          original: OrderPayload;
+          splits: OrderPayload[];
+        }>(splitRes.body);
+
+        expect(result.original.items).toHaveLength(1);
+        expect(result.original.items[0]!.description).toBe('Salade César');
+        expect(result.original.total).toBe(12);
+        expect(result.original.status).toBe('open');
+
+        expect(result.splits).toHaveLength(1);
+        expect(result.splits[0]!.items).toHaveLength(1);
+        expect(result.splits[0]!.items[0]!.description).toBe('Tarte au citron');
+        expect(result.splits[0]!.total).toBe(16);
+        expect(result.splits[0]!.status).toBe('open');
+
+        // Each split flows through the completely unmodified confirm -> fulfill ->
+        // generate-invoice pipeline, exactly like any other order.
+        const splitId = result.splits[0]!.id;
+        await request(server)
+          .post(`/api/v1/orders/${splitId}/close`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(201);
+        await request(server)
+          .post(`/api/v1/orders/${splitId}/confirm`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(201);
+        await request(server)
+          .post(`/api/v1/orders/${splitId}/fulfill`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(201);
+        const splitInvoiceRes = await request(server)
+          .post(`/api/v1/orders/${splitId}/generate-invoice`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(201);
+        expect(asSuccess<InvoicePayload>(splitInvoiceRes.body).total).toBe(16);
+      });
+
+      it('splits every item into N separate checks, evenly, one item per check', async () => {
+        const order = await openTab();
+        await request(server)
+          .post(`/api/v1/orders/${order.id}/items`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ offerId: starterOfferId, quantity: 1 })
+          .expect(201);
+        await request(server)
+          .post(`/api/v1/orders/${order.id}/items`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ offerId: dessertOfferId, quantity: 1 })
+          .expect(201);
+
+        const splitRes = await request(server)
+          .post(`/api/v1/orders/${order.id}/split`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ groups: [{ items: [0] }, { items: [1] }] })
+          .expect(201);
+        const result = asSuccess<{
+          original: OrderPayload;
+          splits: OrderPayload[];
+        }>(splitRes.body);
+
+        expect(result.original.items).toHaveLength(0);
+        expect(result.original.total).toBe(0);
+        expect(result.splits).toHaveLength(2);
+        expect(result.splits.map((s) => s.total).sort((a, b) => a - b)).toEqual(
+          [8, 12],
+        );
+      });
+
+      it('rejects splitting an item into two different groups', async () => {
+        const order = await openTab();
+        await request(server)
+          .post(`/api/v1/orders/${order.id}/items`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ offerId: starterOfferId, quantity: 1 })
+          .expect(201);
+
+        const res = await request(server)
+          .post(`/api/v1/orders/${order.id}/split`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ groups: [{ items: [0] }, { items: [0] }] })
+          .expect(400);
+        expect(asError(res.body).code).toBe('ORDER_SPLIT_ITEM_ASSIGNED_TWICE');
+      });
+
+      it('rejects splitting a non-open order', async () => {
+        const order = await openTab();
+        await request(server)
+          .post(`/api/v1/orders/${order.id}/items`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ offerId: starterOfferId, quantity: 1 })
+          .expect(201);
+        await request(server)
+          .post(`/api/v1/orders/${order.id}/close`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(201);
+
+        const res = await request(server)
+          .post(`/api/v1/orders/${order.id}/split`)
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send({ groups: [{ items: [0] }] })
+          .expect(400);
+        expect(asError(res.body).code).toBe('ORDER_NOT_OPEN');
+      });
     });
   });
 

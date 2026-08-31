@@ -214,5 +214,32 @@ describe("OrderDetailPage", () => {
         }),
       );
     });
+
+    it("splits selected items into a new order and shows a link to it", async () => {
+      postMock.mockResolvedValue({
+        original: { ...openOrder, items: [openOrder.items[0]] },
+        splits: [
+          {
+            id: "order-2",
+            number: "ORD-2",
+            currency: "EUR",
+            total: 30,
+          },
+        ],
+      });
+      const user = userEvent.setup();
+      renderWithProviders(<OrderDetailPage />);
+      await screen.findByRole("heading", { name: "ORD-1" });
+
+      await user.click(screen.getByLabelText("Sélectionner Coussin"));
+      await user.click(screen.getByRole("button", { name: "Créer une note séparée" }));
+
+      await waitFor(() =>
+        expect(postMock).toHaveBeenCalledWith("/orders/order-1/split", {
+          groups: [{ items: [1] }],
+        }),
+      );
+      expect(await screen.findByText(/Commande ORD-2/)).toBeInTheDocument();
+    });
   });
 });
