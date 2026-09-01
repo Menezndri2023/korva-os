@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -24,6 +26,7 @@ import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
 import { computeTotals, toLineItemDocs } from '../../shared/line-item.schema';
 import { DiscountCodesService } from '../../finance/discount-codes/discount-codes.service';
+import { KitchenTicketsService } from '../kitchen/kitchen-tickets.service';
 
 @Injectable()
 export class OrdersService {
@@ -43,6 +46,12 @@ export class OrdersService {
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
     private readonly discountCodesService: DiscountCodesService,
+    // KitchenTicketsService.list() needs OrdersService back (to join a ticket with its live
+    // order), so this pair is a genuine circular provider dependency within CommerceModule —
+    // forwardRef() on both sides is the standard, documented NestJS resolution for that, not a
+    // workaround for a design mistake (see kitchen-tickets.service.ts's matching forwardRef).
+    @Inject(forwardRef(() => KitchenTicketsService))
+    private readonly kitchenTicketsService: KitchenTicketsService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
@@ -301,7 +310,7 @@ export class OrdersService {
       await this.resourcesService.getById(organizationId, input.resourceId);
     }
 
-    return this.createOrderRecord(organizationId, userId, {
+    const order = await this.createOrderRecord(organizationId, userId, {
       contactId: input.contactId,
       items: [],
       currency: input.currency,
@@ -311,6 +320,20 @@ export class OrdersService {
       resourceId: input.resourceId,
       status: 'open',
     });
+
+    // Every open tab gets a kitchen ticket immediately, even before it has any items — see
+    // KitchenTicketsService's own doc comment for why. Best-effort in spirit (a kitchen display
+    // is an operational convenience, not part of the order's own correctness) but not wrapped
+    // in try/catch: a failure here should surface loudly during development rather than
+    // silently leave a table with no ticket, and this call has no side effect worth protecting
+    // the caller from (it's a pure upsert).
+    await this.kitchenTicketsService.ensureTicketForOrder(
+      organizationId,
+      order.id as string,
+      input.resourceId,
+    );
+
+    return order;
   }
 
   /** Appends one offer-driven line item to an open order, resolving the offer the same way
@@ -401,6 +424,10 @@ export class OrdersService {
       entityId: orderId,
       metadata: { itemAdded: offer.id as string },
     });
+    await this.kitchenTicketsService.handleItemsChanged(
+      organizationId,
+      orderId,
+    );
 
     return updated;
   }
@@ -904,6 +931,7 @@ export class OrdersService {
       entityId: id,
       metadata: { status: 'cancelled' },
     });
+    await this.kitchenTicketsService.handleOrderCancelled(organizationId, id);
 
     return updated;
   }
