@@ -61,23 +61,26 @@ interface PaystackEnvelope {
 }
 
 /**
- * `PaymentProvider.createPayment`'s interface-level input is intentionally minimal
- * (`amount`/`currency`/`invoiceId`) — this adapter accepts a wider object (TypeScript's bivariant
- * method-parameter checking allows this while still satisfying the interface), matching
- * FlutterwaveCreatePaymentInput's own reasoning:
+ * `PaymentProvider.createPayment`'s interface-level `customerEmail`/`redirectUrl` are optional
+ * (a manual/staff-recorded payment has neither) — this adapter makes both REQUIRED (TypeScript's
+ * bivariant method-parameter checking allows this while still satisfying the interface),
+ * matching FlutterwaveCreatePaymentInput's own reasoning:
  *
  * - `customerEmail` is REQUIRED by Paystack's real Initialize Transaction API (`email`) — same
  *   "no sane fallback" reasoning as Flutterwave's adapter.
- * - `callbackUrl` is optional on Paystack's side (it falls back to a dashboard-configured default)
- *   but required by this adapter for the same "a hosted checkout link with nowhere to return the
- *   customer to is not a usable real integration" reasoning as Flutterwave's `redirectUrl`.
+ * - `redirectUrl` is optional on Paystack's side (it falls back to a dashboard-configured
+ *   default, and Paystack's own field is named `callback_url`) but required by this adapter for
+ *   the same "a hosted checkout link with nowhere to return the customer to is not a usable real
+ *   integration" reasoning as Flutterwave's adapter — named `redirectUrl` here (not
+ *   `callbackUrl`) specifically so a caller coding against the shared `PaymentProvider` interface
+ *   can pass one common field name regardless of which provider gets resolved.
  */
 export interface PaystackCreatePaymentInput {
   amount: number;
   currency: string;
   invoiceId: string;
   customerEmail: string;
-  callbackUrl: string;
+  redirectUrl: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -123,7 +126,7 @@ export class PaystackProvider implements PaymentProvider {
       email: input.customerEmail,
       amount: toMinorUnits(input.amount),
       currency: input.currency,
-      callback_url: input.callbackUrl,
+      callback_url: input.redirectUrl,
     };
 
     // Same correlation-capture reasoning as FlutterwaveProvider.createPayment's own comment:
@@ -159,7 +162,11 @@ export class PaystackProvider implements PaymentProvider {
       );
     }
 
-    return { providerReference: reference, status: 'pending' };
+    return {
+      providerReference: reference,
+      status: 'pending',
+      checkoutUrl: authorizationUrl,
+    };
   }
 
   /**

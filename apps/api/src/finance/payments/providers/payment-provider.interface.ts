@@ -6,6 +6,15 @@ export interface PaymentProviderResult {
   providerReference: string;
   status: PaymentStatus;
   /**
+   * A hosted checkout URL the payer must be redirected to — set by `createPayment()` when the
+   * provider's real API returns one (Flutterwave's `data.link`, Paystack's
+   * `data.authorization_url`) and a `redirectUrl` was supplied in the input; absent for
+   * `ManualPaymentProvider` (no real checkout exists) and for every other result type
+   * (`verifyPayment`/`getPaymentStatus`/`refundPayment` never set this — there is nothing left
+   * to redirect to once a payment is already resolved).
+   */
+  checkoutUrl?: string;
+  /**
    * Stage 2.12 — a genuinely REFUND-specific provider identifier (e.g. Flutterwave's own numeric
    * refund `id`), distinct from `providerReference` (which for a refund is always the underlying
    * Payment's own merchant reference/tx_ref, never a refund-specific value — see
@@ -37,6 +46,17 @@ export interface PaymentProvider {
     amount: number;
     currency: string;
     invoiceId: string;
+    /**
+     * Required by every real hosted-checkout adapter (Flutterwave/Paystack), unused by
+     * `ManualPaymentProvider` — optional at the interface level since a caller that only ever
+     * exercises the manual/staff-recorded path has no email to give. A caller that resolves a
+     * real provider (see PaymentProviderResolverService) for a customer-initiated online
+     * payment must supply both this and `redirectUrl`, or the concrete adapter throws.
+     */
+    customerEmail?: string;
+    /** Where the payer's browser returns to after completing (or abandoning) a hosted checkout
+     *  — see `customerEmail`'s doc comment for the same optionality rationale. */
+    redirectUrl?: string;
   }): Promise<PaymentProviderResult>;
   verifyPayment(providerReference: string): Promise<PaymentProviderResult>;
   getPaymentStatus(providerReference: string): Promise<PaymentStatus>;

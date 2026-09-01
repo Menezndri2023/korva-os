@@ -74,6 +74,9 @@ describe('FlutterwaveProvider', () => {
 
       expect(result.status).toBe('pending');
       expect(result.providerReference).toMatch(/^korva_inv_123_[0-9a-f]{16}$/);
+      expect(result.checkoutUrl).toBe(
+        'https://checkout.flutterwave.com/v3/hosted/pay/abc',
+      );
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
@@ -248,7 +251,7 @@ describe('FlutterwaveProvider', () => {
       await expect(provider.createPayment(baseInput)).rejects.toBe(rawError);
     });
 
-    it('TEST (Stage 2.12 / P6) — success path result shape is completely unchanged (no generatedReference leaks onto a successful result)', async () => {
+    it('TEST (Stage 2.12 / P6) — success path result shape never leaks generatedReference onto a successful result', async () => {
       fetchSpy.mockResolvedValue(
         mockJsonResponse(200, {
           status: 'success',
@@ -259,7 +262,7 @@ describe('FlutterwaveProvider', () => {
       const result = await provider.createPayment(baseInput);
 
       expect(Object.keys(result).sort()).toEqual(
-        ['providerReference', 'status'].sort(),
+        ['checkoutUrl', 'providerReference', 'status'].sort(),
       );
     });
   });

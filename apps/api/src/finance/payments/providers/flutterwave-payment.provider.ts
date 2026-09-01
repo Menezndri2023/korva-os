@@ -100,16 +100,16 @@ export interface FlutterwavePayoutSplit {
 }
 
 /**
- * `PaymentProvider.createPayment`'s interface-level input is intentionally minimal
- * (`amount`/`currency`/`invoiceId`) and is not modified by this lot. This adapter accepts a wider
- * object (TypeScript's bivariant method-parameter checking allows this while still satisfying the
- * interface) carrying the additional fields Flutterwave's real Standard Payment API requires or
- * that this Merchant-of-Record architecture needs:
+ * `PaymentProvider.createPayment`'s interface-level `customerEmail`/`redirectUrl` are optional
+ * (a manual/staff-recorded payment has neither); this adapter accepts a wider object making both
+ * REQUIRED (TypeScript's bivariant method-parameter checking allows this while still satisfying
+ * the interface) plus `payoutDestination`, which the base interface has no equivalent for at all:
  *
- * - `customerEmail` is a REQUIRED field on Flutterwave's own API (`customer.email`) — assumed the
- *   real caller (out of scope for this lot — see class doc comment) resolves it from the paying
- *   contact/organization before calling `createPayment`. There is no sane fallback value, so this
- *   adapter treats it as required rather than silently sending an empty string to Flutterwave.
+ * - `customerEmail` is a REQUIRED field on Flutterwave's own API (`customer.email`) — the real
+ *   caller (a customer-initiated online payment, resolving a provider via
+ *   PaymentProviderResolverService) must resolve it from the paying contact before calling
+ *   `createPayment`. There is no sane fallback value, so this adapter treats it as required
+ *   rather than silently sending an empty string to Flutterwave.
  * - `redirectUrl` is technically optional on Flutterwave's side but is required by this adapter:
  *   a hosted checkout link with nowhere to send the customer back to is not a usable real
  *   integration.
@@ -191,6 +191,8 @@ export class FlutterwaveProvider implements PaymentProvider {
    * Per docs/architecture/integrations-platform.md §7 ("HTTP 200 ≠ paid"), a successful response
    * here only means a checkout link was created — status is always `'pending'`, never
    * `'completed'`. Completion is only ever asserted by `verifyPayment` or a verified webhook.
+   * `checkoutUrl` on the result is that same `data.link` — the caller must redirect the payer
+   * there to actually complete anything.
    */
   async createPayment(
     input: FlutterwaveCreatePaymentInput,
@@ -271,7 +273,7 @@ export class FlutterwaveProvider implements PaymentProvider {
       );
     }
 
-    return { providerReference: txRef, status: 'pending' };
+    return { providerReference: txRef, status: 'pending', checkoutUrl: link };
   }
 
   /**

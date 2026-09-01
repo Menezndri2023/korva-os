@@ -54,7 +54,7 @@ describe('PaystackProvider', () => {
       currency: 'NGN',
       invoiceId: 'inv_123',
       customerEmail: 'customer@example.com',
-      callbackUrl: 'https://korva.example/return',
+      redirectUrl: 'https://korva.example/return',
     };
 
     it('TEST — success: posts to /transaction/initialize with the amount converted to kobo, returns a pending result with the generated reference', async () => {
@@ -191,7 +191,7 @@ describe('PaystackProvider', () => {
       expect(error?.generatedReference).toMatch(/^korva_inv_123_[0-9a-f]{16}$/);
     });
 
-    it('TEST — success path result shape carries only providerReference and status', async () => {
+    it('TEST — success path result shape carries providerReference, status, and checkoutUrl', async () => {
       fetchSpy.mockResolvedValue(
         mockJsonResponse(200, {
           status: true,
@@ -202,8 +202,9 @@ describe('PaystackProvider', () => {
       const result = await provider.createPayment(baseInput);
 
       expect(Object.keys(result).sort()).toEqual(
-        ['providerReference', 'status'].sort(),
+        ['checkoutUrl', 'providerReference', 'status'].sort(),
       );
+      expect(result.checkoutUrl).toBe('https://checkout.paystack.com/abc');
     });
   });
 
