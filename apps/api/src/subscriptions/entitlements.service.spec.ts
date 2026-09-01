@@ -115,6 +115,99 @@ describe('EntitlementsService — subscription status enforcement', () => {
     });
   });
 
+  describe('assertStorefrontThemeAllowed', () => {
+    function buildServiceWithPlan(planKey: string) {
+      const getForOrganization = jest
+        .fn()
+        .mockResolvedValue({ status: 'active' });
+      const getActivePlan = jest.fn().mockResolvedValue({
+        key: planKey,
+        name: planKey,
+        modules: [],
+        limits: {},
+      });
+      const subscriptionsService = {
+        getForOrganization,
+        getActivePlan,
+      } as unknown as SubscriptionsService;
+      const usageRepository = {} as unknown as UsageRepository;
+      const membershipsService = {} as unknown as MembershipsService;
+
+      return new EntitlementsService(
+        subscriptionsService,
+        usageRepository,
+        membershipsService,
+      );
+    }
+
+    it('does nothing when the update touches no template (e.g. a caller resolved no effective template)', async () => {
+      const service = buildServiceWithPlan('free');
+      await expect(
+        service.assertStorefrontThemeAllowed(ORG_ID, {}),
+      ).resolves.toBeUndefined();
+    });
+
+    it('allows "essentiel" on the free plan', async () => {
+      const service = buildServiceWithPlan('free');
+      await expect(
+        service.assertStorefrontThemeAllowed(ORG_ID, { template: 'essentiel' }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects a sector template (starter+) on the free plan', async () => {
+      const service = buildServiceWithPlan('free');
+      await expectForbiddenCode(
+        service.assertStorefrontThemeAllowed(ORG_ID, { template: 'boutique' }),
+        'STOREFRONT_TEMPLATE_NOT_IN_PLAN',
+      );
+    });
+
+    it('allows a sector template on starter, but only its default palette/font pairing', async () => {
+      const service = buildServiceWithPlan('starter');
+      await expect(
+        service.assertStorefrontThemeAllowed(ORG_ID, {
+          template: 'boutique',
+          palette: 'marine',
+          fontPairing: 'geometrique',
+        }),
+      ).resolves.toBeUndefined();
+
+      await expectForbiddenCode(
+        service.assertStorefrontThemeAllowed(ORG_ID, {
+          template: 'boutique',
+          palette: 'corail',
+        }),
+        'STOREFRONT_PALETTE_NOT_IN_PLAN',
+      );
+      await expectForbiddenCode(
+        service.assertStorefrontThemeAllowed(ORG_ID, {
+          template: 'boutique',
+          fontPairing: 'sobre',
+        }),
+        'STOREFRONT_FONT_PAIRING_NOT_IN_PLAN',
+      );
+    });
+
+    it("allows any of the template's palettes/font pairings on pro", async () => {
+      const service = buildServiceWithPlan('pro');
+      await expect(
+        service.assertStorefrontThemeAllowed(ORG_ID, {
+          template: 'boutique',
+          palette: 'corail',
+          fontPairing: 'sobre',
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects an unrecognized plan key as the lowest tier — fails closed, never grants access', async () => {
+      const service = buildServiceWithPlan('mystery-plan');
+      await expectForbiddenCode(
+        service.assertStorefrontThemeAllowed(ORG_ID, { template: 'vitrine' }),
+        'STOREFRONT_TEMPLATE_NOT_IN_PLAN',
+      );
+    });
+  });
+
   describe('checkAndRecordUsage', () => {
     it('rejects with SUBSCRIPTION_CANCELED when canceled, without recording any usage', async () => {
       const { service, increment } = buildService('canceled');

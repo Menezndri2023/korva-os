@@ -77,6 +77,7 @@ interface FullOrderPayload {
 }
 interface PublicOrganizationPayload {
   name: string;
+  type: string;
   enabledModules: string[];
   logo?: string;
   brandColor?: string;
@@ -84,6 +85,12 @@ interface PublicOrganizationPayload {
   heroImage?: string;
   visibleSections: string[];
   shippingFlatRate?: number;
+  storefrontTheme: {
+    template: string;
+    palette?: string;
+    fontPairing: string;
+    customAccentApplied: boolean;
+  };
 }
 interface TrackedOrderPayload {
   number: string;
@@ -539,6 +546,142 @@ describe('Public storefront API (e2e)', () => {
       expect(info.heroImage).toBe(
         'https://cdn.korva.test/hero/branding-storefront.png',
       );
+    });
+  });
+
+  describe('storefront theme resolution (packages/types storefront-themes.ts)', () => {
+    it('defaults a brand-new (free-plan) organization to the "essentiel" template', async () => {
+      const { slug } = await setupStorefrontOrg(
+        'storefront-theme-default@korva.test',
+        'Theme Default Org',
+      );
+
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const info = asSuccess<PublicOrganizationPayload>(res.body);
+      expect(info.storefrontTheme.template).toBe('essentiel');
+      expect(info.storefrontTheme.palette).toBeUndefined();
+    });
+
+    it('resolves the vertical default template once the plan covers it, with a deterministic palette/font', async () => {
+      const authRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({
+          email: 'storefront-theme-vertical@korva.test',
+          password: 'password123',
+        })
+        .expect(201);
+      const accessToken = asSuccess<AuthPayload>(authRes.body).accessToken;
+
+      // "commerce" matches VERTICAL_TEMPLATES' commerce entry (defaultStorefrontTemplate:
+      // "boutique") — see packages/types/src/verticals.ts.
+      const orgRes = await request(server)
+        .post('/api/v1/organizations')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          name: 'Theme Vertical Org',
+          type: 'commerce',
+          country: 'FR',
+          currency: 'EUR',
+          timezone: 'Europe/Paris',
+          language: 'fr',
+        })
+        .expect(201);
+      const organization = asSuccess<OrganizationPayload>(orgRes.body);
+
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organization.id)
+        .send({ planKey: 'starter' })
+        .expect(201);
+
+      const res = await request(server)
+        .get(`/api/v1/public/${organization.slug}`)
+        .expect(200);
+      const theme = asSuccess<PublicOrganizationPayload>(
+        res.body,
+      ).storefrontTheme;
+      expect(theme.template).toBe('boutique');
+      expect(['marine', 'corail', 'graphite']).toContain(theme.palette);
+      expect(['geometrique', 'sobre']).toContain(theme.fontPairing);
+
+      // Deterministic, not random: refetching must yield the exact same palette/font every time.
+      const again = await request(server)
+        .get(`/api/v1/public/${organization.slug}`)
+        .expect(200);
+      const themeAgain = asSuccess<PublicOrganizationPayload>(
+        again.body,
+      ).storefrontTheme;
+      expect(themeAgain).toEqual(theme);
+    });
+
+    it('rejects saving a template the current plan does not cover', async () => {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        'storefront-theme-reject@korva.test',
+        'Theme Reject Org',
+      );
+
+      const res = await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ storefrontTemplate: 'salon' })
+        .expect(403);
+      expect(asError(res.body).code).toBe('STOREFRONT_TEMPLATE_NOT_IN_PLAN');
+
+      // The rejected PATCH must not have partially applied — still "essentiel" publicly.
+      const stillDefault = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      expect(
+        asSuccess<PublicOrganizationPayload>(stillDefault.body).storefrontTheme
+          .template,
+      ).toBe('essentiel');
+    });
+
+    it('clamps an explicitly saved template back down after a downgrade, without erroring', async () => {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        'storefront-theme-clamp@korva.test',
+        'Theme Clamp Org',
+      );
+
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'business' })
+        .expect(201);
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ storefrontTemplate: 'salon', storefrontPalette: 'corail' })
+        .expect(200);
+
+      const onBusiness = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      expect(
+        asSuccess<PublicOrganizationPayload>(onBusiness.body).storefrontTheme,
+      ).toMatchObject({ template: 'salon', palette: 'corail' });
+
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'free' })
+        .expect(201);
+
+      const onFree = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      expect(
+        asSuccess<PublicOrganizationPayload>(onFree.body).storefrontTheme
+          .template,
+      ).toBe('essentiel');
     });
   });
 
