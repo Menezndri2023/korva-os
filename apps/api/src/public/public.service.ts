@@ -159,7 +159,10 @@ export class PublicService {
       };
     }
 
-    const canRefine = planMeetsMinimum(planKey, templateDef.refinedChoiceMinPlan);
+    const canRefine = planMeetsMinimum(
+      planKey,
+      templateDef.refinedChoiceMinPlan,
+    );
     const allowedPalettes = canRefine
       ? templateDef.palettes
       : templateDef.palettes.slice(0, 1);

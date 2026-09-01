@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import StorefrontClient from "./storefront-client";
 import { publicApiClient } from "@/lib/public-api-client";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
@@ -92,5 +93,8 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
 
 export default async function StorefrontPage({ params }: StorefrontPageProps) {
   const { slug } = await params;
-  return <StorefrontClient slug={slug} />;
+  // Same nonce middleware.ts put on the CSP's `style-src` for this request — see
+  // templates/storefront-theme-style.tsx for why StorefrontClient needs it.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  return <StorefrontClient slug={slug} nonce={nonce} />;
 }

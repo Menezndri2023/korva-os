@@ -1,19 +1,83 @@
 "use client";
 
-import Link from "next/link";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge, Button, Card } from "@korva/ui";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { StorefrontFontPairingKey, StorefrontPaletteKey, StorefrontTemplateKey } from "@korva/types";
 import { publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
-import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "./commerce-panels";
-import { WishlistButton } from "./wishlist-button";
+import { resolveStorefrontStyle } from "@/templates/palette";
+import { StorefrontThemeStyle } from "@/templates/storefront-theme-style";
+import type { StorefrontTemplateProps } from "@/templates/types";
+import { EssentielTemplate } from "@/templates/essentiel/EssentielTemplate";
+import { VitrineTemplate } from "@/templates/vitrine/VitrineTemplate";
+import { TableTemplate } from "@/templates/table/TableTemplate";
+import { BoutiqueTemplate } from "@/templates/boutique/BoutiqueTemplate";
+import { AcademieTemplate } from "@/templates/academie/AcademieTemplate";
+import { SalonTemplate } from "@/templates/salon/SalonTemplate";
 
-export default function StorefrontClient({ slug }: { slug: string }) {
+/**
+ * Renders the concrete, statically-named template component for `props.style`'s template key.
+ * Deliberately a switch over literal JSX tags rather than a `key -> component` lookup used as a
+ * dynamic tag (`<TemplateComponent .../>`) — several templates (e.g. BoutiqueTemplate) call
+ * hooks internally, so the rendered component identity must stay static across renders for
+ * hooks ordering to stay valid, which the eslint-plugin-react-hooks "static-components" rule
+ * enforces by requiring a literal tag name here.
+ */
+function renderTemplate(key: string, props: StorefrontTemplateProps) {
+  switch (key) {
+    case "vitrine":
+      return <VitrineTemplate {...props} />;
+    case "table":
+      return <TableTemplate {...props} />;
+    case "boutique":
+      return <BoutiqueTemplate {...props} />;
+    case "academie":
+      return <AcademieTemplate {...props} />;
+    case "salon":
+      return <SalonTemplate {...props} />;
+    default:
+      return <EssentielTemplate {...props} />;
+  }
+}
+
+/**
+ * Live-preview-only override read from the URL — used exclusively by the dashboard's storefront
+ * preview iframe (apps/web Settings page) so an unsaved template/palette/font choice can be
+ * previewed before the organization update is actually submitted. Purely presentational: it
+ * never bypasses plan gating for what actually gets *saved* (that's enforced server-side by
+ * EntitlementsService.assertStorefrontThemeAllowed), it only changes what this one page renders.
+ */
+function usePreviewOverride() {
+  // Lazy initializer (not an effect) so this only ever runs once, on mount — `window` is absent
+  // during the server render, which is fine: no real storefront visitor ever has these query
+  // params, only the dashboard's preview iframe does.
+  const [override] = useState<{
+    template?: StorefrontTemplateKey;
+    palette?: StorefrontPaletteKey;
+    fontPairing?: StorefrontFontPairingKey;
+  } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    const template = params.get("template") as StorefrontTemplateKey | null;
+    const palette = params.get("palette") as StorefrontPaletteKey | null;
+    const fontPairing = params.get("font") as StorefrontFontPairingKey | null;
+    if (!template && !palette && !fontPairing) return null;
+    return {
+      template: template ?? undefined,
+      palette: palette ?? undefined,
+      fontPairing: fontPairing ?? undefined,
+    };
+  });
+
+  return override;
+}
+
+export default function StorefrontClient({ slug, nonce }: { slug: string; nonce?: string }) {
   const queryClient = useQueryClient();
+  const previewOverride = usePreviewOverride();
 
   const orgQuery = useQuery({
     queryKey: ["public-org", slug],
@@ -32,6 +96,20 @@ export default function StorefrontClient({ slug }: { slug: string }) {
   const [showCheckout, setShowCheckout] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
 
+  // Computed before the loading/error early returns below so every hook in this component runs
+  // on every render, regardless of which branch is ultimately returned — `organization.storefrontTheme`
+  // isn't available yet while `orgQuery` is loading, so this falls back to "essentiel" until it is.
+  const baseTheme = orgQuery.data?.storefrontTheme ?? {
+    template: "essentiel" as const,
+    fontPairing: "sobre" as const,
+    customAccentApplied: false,
+  };
+  const effectiveTheme = {
+    ...baseTheme,
+    ...(previewOverride?.template ? { template: previewOverride.template } : {}),
+    ...(previewOverride?.palette ? { palette: previewOverride.palette } : {}),
+    ...(previewOverride?.fontPairing ? { fontPairing: previewOverride.fontPairing } : {}),
+  };
   if (orgQuery.isLoading) {
     return <StorefrontSkeleton />;
   }
@@ -39,109 +117,44 @@ export default function StorefrontClient({ slug }: { slug: string }) {
     return (
       <CenteredMessage>
         <p>Cette boutique n&apos;existe pas.</p>
-        <button
-          onClick={() => orgQuery.refetch()}
-          className="mt-2 text-sm font-medium text-zinc-900 underline"
-        >
+        <button onClick={() => orgQuery.refetch()} className="mt-2 text-sm font-medium text-zinc-900 underline">
           Réessayer
         </button>
       </CenteredMessage>
     );
   }
   const organization = orgQuery.data;
+  const style = resolveStorefrontStyle(effectiveTheme, organization.brandColor);
+
   const catalogVisible = organization.visibleSections.includes("catalog");
   const bookingEnabled = organization.visibleSections.includes("booking");
   const commerceEnabled = organization.enabledModules.includes("commerce");
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
-  const brandColor = organization.brandColor;
+
+  const templateProps: StorefrontTemplateProps = {
+    slug,
+    organization,
+    catalogVisible,
+    offers: offersQuery.data,
+    offersLoading: offersQuery.isLoading,
+    offersError: offersQuery.isError,
+    onRetryOffers: () => offersQuery.refetch(),
+    bookingEnabled,
+    commerceEnabled,
+    onBook: (offer) => setBookingOffer(offer),
+    onAddToCart: (offer) => addToCart(offer),
+    cartCount,
+    onOpenCheckout: () => setShowCheckout(true),
+    confirmation,
+    authHydrated,
+    isAuthenticated,
+    customerFirstName: customer?.firstName,
+  };
 
   return (
-    <div className="min-h-screen bg-app-background">
-      <header
-        className="border-b border-border bg-surface px-6 py-4"
-        style={brandColor ? { borderBottomColor: brandColor, borderBottomWidth: 3 } : undefined}
-      >
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <OrganizationLogo organization={organization} />
-            <h1 className="text-lg font-semibold text-text">{organization.name}</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href={`/${slug}/track`}
-              className="text-sm text-text-muted hover:underline"
-            >
-              Suivre ma commande
-            </Link>
-            {authHydrated && (
-              <Link
-                href={`/${slug}/account${isAuthenticated ? "" : "/login"}`}
-                className="text-sm text-text-muted hover:underline"
-              >
-                {isAuthenticated ? (customer?.firstName ?? "Mon compte") : "Se connecter"}
-              </Link>
-            )}
-            {commerceEnabled && cartCount > 0 && (
-              <Button
-                size="sm"
-                onClick={() => setShowCheckout(true)}
-                style={brandColor ? { backgroundColor: brandColor } : undefined}
-              >
-                Panier ({cartCount})
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {(organization.heroImage || organization.tagline) && (
-        <HeroSection organization={organization} />
-      )}
-
-      <main className="mx-auto max-w-4xl space-y-4 px-6 py-8">
-        {confirmation && (
-          <div className="rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">
-            {confirmation}
-          </div>
-        )}
-
-        {!catalogVisible && (
-          <p className="text-sm text-text-muted">Aucun catalogue disponible pour le moment.</p>
-        )}
-
-        {catalogVisible && offersQuery.isLoading && <OffersSkeleton />}
-
-        {catalogVisible && offersQuery.isError && (
-          <Card className="p-4 text-sm text-destructive">
-            Impossible de charger les offres.{" "}
-            <button onClick={() => offersQuery.refetch()} className="underline">
-              Réessayer
-            </button>
-          </Card>
-        )}
-
-        {catalogVisible && offersQuery.isSuccess && offersQuery.data.length === 0 && (
-          <Card className="p-6 text-center text-sm text-text-muted">
-            Aucune offre disponible pour le moment.
-          </Card>
-        )}
-
-        {catalogVisible && offersQuery.isSuccess && offersQuery.data.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {offersQuery.data.map((offer) => (
-              <OfferCard
-                key={offer.id}
-                slug={slug}
-                offer={offer}
-                bookingEnabled={bookingEnabled}
-                commerceEnabled={commerceEnabled}
-                onBook={() => setBookingOffer(offer)}
-                onAddToCart={() => addToCart(offer)}
-              />
-            ))}
-          </div>
-        )}
-      </main>
+    <>
+      <StorefrontThemeStyle style={style} nonce={nonce} />
+      {renderTemplate(effectiveTheme.template, templateProps)}
 
       {bookingOffer && (
         <BookingPanel
@@ -171,127 +184,7 @@ export default function StorefrontClient({ slug }: { slug: string }) {
           }}
         />
       )}
-    </div>
-  );
-}
-
-function OfferCard({
-  slug,
-  offer,
-  bookingEnabled,
-  commerceEnabled,
-  onBook,
-  onAddToCart,
-}: {
-  slug: string;
-  offer: PublicOffer;
-  bookingEnabled: boolean;
-  commerceEnabled: boolean;
-  onBook: () => void;
-  onAddToCart: () => void;
-}) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const thumbnail = offer.images[0];
-
-  return (
-    <Card className="p-4">
-      {thumbnail && !imageFailed && (
-        // Arbitrary tenant-supplied host, not one of Next's configured image domains (see
-        // middleware.ts img-src comment).
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={thumbnail}
-          alt=""
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setImageFailed(true)}
-          className="mb-3 h-32 w-full rounded-md object-cover"
-        />
-      )}
-      <div className="flex items-start justify-between gap-2">
-        <Link href={`/${slug}/offers/${offer.id}`} className="font-medium text-text hover:underline">
-          {offer.name}
-        </Link>
-        <WishlistButton slug={slug} offerId={offer.id} />
-      </div>
-      <div className="mt-1 flex items-center gap-2">
-        <Badge>{OFFER_TYPE_LABELS[offer.type]}</Badge>
-      </div>
-      {offer.description && <p className="mt-2 text-sm text-text-muted">{offer.description}</p>}
-      <p className="mt-2 text-sm font-medium text-text">
-        {formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}
-      </p>
-      <div className="mt-3 flex gap-2">
-        {offer.type === "booking" && bookingEnabled && (
-          <Button variant="secondary" size="sm" onClick={onBook}>
-            Réserver
-          </Button>
-        )}
-        {offer.type !== "booking" && commerceEnabled && (
-          <Button variant="secondary" size="sm" onClick={onAddToCart}>
-            Ajouter au panier
-          </Button>
-        )}
-        <Link
-          href={`/${slug}/offers/${offer.id}`}
-          className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-text-muted hover:underline"
-        >
-          Détails
-        </Link>
-      </div>
-    </Card>
-  );
-}
-
-/**
- * Fully optional — absent for every organization that hasn't set a tagline/heroImage, which
- * leaves the storefront looking exactly as it did before this section existed (see the
- * `organization.heroImage || organization.tagline` guard at the call site).
- */
-function HeroSection({ organization }: { organization: PublicOrganization }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = organization.heroImage && !imageFailed;
-
-  return (
-    <div className="relative border-b border-border bg-surface-muted">
-      {showImage && (
-        // Arbitrary tenant-supplied host — same rationale as OfferCard's thumbnail above.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={organization.heroImage}
-          alt=""
-          referrerPolicy="no-referrer"
-          onError={() => setImageFailed(true)}
-          className="h-48 w-full object-cover sm:h-64"
-        />
-      )}
-      {organization.tagline && (
-        <div className="mx-auto max-w-4xl px-6 py-4">
-          <p className="text-sm text-text-muted sm:text-base">{organization.tagline}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Renders the organization's logo when it has one and it loads successfully; renders nothing otherwise. */
-function OrganizationLogo({ organization }: { organization: PublicOrganization }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  if (!organization.logo || imageFailed) {
-    return null;
-  }
-  return (
-    // Arbitrary tenant-supplied host, not one of Next's configured image domains — same
-    // rationale as OfferCard's thumbnail above.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={organization.logo}
-      alt=""
-      loading="eager"
-      referrerPolicy="no-referrer"
-      onError={() => setImageFailed(true)}
-      className="h-8 w-8 rounded object-contain"
-    />
+    </>
   );
 }
 
@@ -312,23 +205,12 @@ function StorefrontSkeleton() {
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-6 py-8">
-        <OffersSkeleton />
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-48 animate-pulse rounded-md border border-border bg-surface" />
+          ))}
+        </div>
       </main>
-    </div>
-  );
-}
-
-function OffersSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {[0, 1, 2, 3].map((i) => (
-        <Card key={i} className="p-4">
-          <div className="mb-3 h-32 w-full animate-pulse rounded-md bg-surface-muted" />
-          <div className="h-4 w-2/3 animate-pulse rounded bg-surface-muted" />
-          <div className="mt-2 h-3 w-full animate-pulse rounded bg-surface-muted" />
-          <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-surface-muted" />
-        </Card>
-      ))}
     </div>
   );
 }

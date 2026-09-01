@@ -20,8 +20,12 @@ const dashboardOrigin = new URL(process.env.APP_URL ?? "http://localhost:3000").
  * (https://nextjs.org/docs/app/guides/content-security-policy). Deliberately NOT copied from
  * apps/web — the storefront's real usage is checked independently:
  *  - script-src: 'strict-dynamic' + nonce, no third-party JS anywhere in this app.
- *  - style-src: 'self' only (no 'unsafe-inline') — unlike apps/web, this app has zero
- *    `style={{...}}` usage today (confirmed by search), so it can be stricter.
+ *  - style-src: 'self' plus this request's nonce — the storefront template system
+ *    (src/templates/) renders one nonce'd `<style>` tag per page holding an organization's
+ *    resolved theme as CSS custom properties (`--kt-*`; see templates/storefront-theme-style.tsx),
+ *    which every template then only ever reads via static Tailwind classes
+ *    (`bg-[var(--kt-accent)]`, never a React `style={{...}}` prop) — so no `'unsafe-inline'` and
+ *    no per-element inline style is ever needed despite per-tenant theming.
  *  - img-src: 'self' + data: + https: — the storefront renders offer.images, Organization.logo/
  *    heroImage, and other tenant-supplied image URLs. apps/api's upload endpoint
  *    (POST /uploads, apps/shared/storage) stores files under its own domain, but a tenant can
@@ -42,7 +46,7 @@ export function middleware(request: NextRequest) {
   const directives = [
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isProduction ? "" : " 'unsafe-eval'"}`,
-    `style-src 'self'`,
+    `style-src 'self' 'nonce-${nonce}'`,
     `img-src 'self' data: https:`,
     `font-src 'self'`,
     `connect-src 'self' ${apiOrigin}`,

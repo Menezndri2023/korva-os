@@ -124,7 +124,10 @@ export class EntitlementsService {
       });
     }
 
-    const canRefine = planMeetsMinimum(plan.key, templateDef.refinedChoiceMinPlan);
+    const canRefine = planMeetsMinimum(
+      plan.key,
+      templateDef.refinedChoiceMinPlan,
+    );
     const allowedPalettes = canRefine
       ? templateDef.palettes
       : templateDef.palettes.slice(0, 1);
