@@ -62,6 +62,10 @@ export default function OnboardingPage() {
   const router = useRouter();
   const setActiveOrganization = useAuthStore((state) => state.setActiveOrganization);
   const [selectedVertical, setSelectedVertical] = useState<string | null>(null);
+  const [verticalFilter, setVerticalFilter] = useState("");
+  const filteredVerticals = VERTICAL_TEMPLATES.filter((template) =>
+    `${template.label} ${template.description}`.toLowerCase().includes(verticalFilter.trim().toLowerCase()),
+  );
   const [importUrl, setImportUrl] = useState("");
   const [imported, setImported] = useState<ImportPreview | null>(null);
 
@@ -114,6 +118,11 @@ export default function OnboardingPage() {
       const brandingUpdate: { tagline?: string; logo?: string } = {};
       if (imported?.tagline) brandingUpdate.tagline = imported.tagline;
       if (imported?.logo) brandingUpdate.logo = imported.logo;
+      // No explicit storefrontTemplate PATCH here: PublicService#resolveStorefrontTheme already
+      // falls back to the vertical's defaultStorefrontTemplate from `organization.type` alone
+      // (set above via `type: template.suggestedType`), clamped to whatever the org's plan
+      // covers — sending it explicitly would just get rejected outright since every new
+      // organization starts on the free plan (see @korva/types storefront-themes.ts minPlan).
       if (modules.length > 0 || Object.keys(brandingUpdate).length > 0) {
         await apiClient.patch<Organization>("/organizations/me", {
           ...(modules.length > 0 ? { enabledModules: modules } : {}),
@@ -203,8 +212,18 @@ export default function OnboardingPage() {
               Optionnel — préremplit le secteur et les modules suggérés ci-dessous, modifiables
               librement.
             </p>
+            <Input
+              type="search"
+              placeholder="Rechercher un secteur (ex: restaurant, artisanat, immobilier...)"
+              value={verticalFilter}
+              onChange={(event) => setVerticalFilter(event.target.value)}
+              className="mt-2 w-full"
+            />
+            {filteredVerticals.length === 0 && (
+              <p className="mt-2 text-xs text-zinc-500">Aucun secteur ne correspond à cette recherche.</p>
+            )}
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {VERTICAL_TEMPLATES.map((template) => (
+              {filteredVerticals.map((template) => (
                 <button
                   key={template.key}
                   type="button"

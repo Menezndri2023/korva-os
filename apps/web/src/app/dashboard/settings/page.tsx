@@ -4,7 +4,18 @@ import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KORVA_MODULES, STOREFRONT_SECTIONS, SYSTEM_EVENTS } from "@korva/types";
+import {
+  KORVA_MODULES,
+  STOREFRONT_SECTIONS,
+  STOREFRONT_TEMPLATES,
+  STOREFRONT_PALETTES,
+  STOREFRONT_FONT_PAIRINGS,
+  SYSTEM_EVENTS,
+  planMeetsMinimum,
+  type StorefrontFontPairingKey,
+  type StorefrontPaletteKey,
+  type StorefrontTemplateKey,
+} from "@korva/types";
 import type {
   AiUsageSummary,
   ConnectMessagingAccountInput,
@@ -266,6 +277,9 @@ export default function SettingsPage() {
   const watchedLogo = watchOrg("logo");
   const watchedHeroImage = watchOrg("heroImage");
   const watchedBrandColor = watchOrg("brandColor");
+  const watchedStorefrontTemplate = watchOrg("storefrontTemplate");
+  const watchedStorefrontPalette = watchOrg("storefrontPalette");
+  const watchedStorefrontFontPairing = watchOrg("storefrontFontPairing");
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const heroImageFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -303,6 +317,9 @@ export default function SettingsPage() {
       tagline: organization.tagline,
       heroImage: organization.heroImage,
       shippingFlatRate: organization.shippingFlatRate,
+      storefrontTemplate: organization.storefrontTemplate,
+      storefrontPalette: organization.storefrontPalette,
+      storefrontFontPairing: organization.storefrontFontPairing,
       // Undefined (nothing configured yet) means "show everything modules allow" — pre-check
       // both boxes in that case so the form's visual default matches the real current behavior.
       storefrontSections: organization.storefrontSections ?? [...STOREFRONT_SECTIONS],
@@ -816,6 +833,18 @@ export default function SettingsPage() {
                 <p className="mt-1 text-xs text-destructive">{orgErrors.shippingFlatRate.message}</p>
               )}
             </div>
+            <div className="sm:col-span-2">
+              <StorefrontThemePicker
+                planKey={subscription?.plan.key}
+                selectedTemplate={watchedStorefrontTemplate}
+                selectedPalette={watchedStorefrontPalette}
+                selectedFontPairing={watchedStorefrontFontPairing}
+                onChangeTemplate={(key) => setOrgValue("storefrontTemplate", key, { shouldDirty: true })}
+                onChangePalette={(key) => setOrgValue("storefrontPalette", key, { shouldDirty: true })}
+                onChangeFontPairing={(key) => setOrgValue("storefrontFontPairing", key, { shouldDirty: true })}
+              />
+            </div>
+
             {(organization?.enabledModules.includes("catalog") ||
               organization?.enabledModules.includes("booking")) && (
               <div className="sm:col-span-2">
@@ -871,7 +900,14 @@ export default function SettingsPage() {
         )}
       </section>
 
-      {organization?.slug && <StorefrontPreviewSection slug={organization.slug} />}
+      {organization?.slug && (
+        <StorefrontPreviewSection
+          slug={organization.slug}
+          previewTemplate={orgEditOpen ? watchedStorefrontTemplate : undefined}
+          previewPalette={orgEditOpen ? watchedStorefrontPalette : undefined}
+          previewFontPairing={orgEditOpen ? watchedStorefrontFontPairing : undefined}
+        />
+      )}
 
       <section className="rounded-lg border border-border bg-surface p-6">
         <h2 className="text-sm font-semibold text-text">Abonnement</h2>
@@ -1757,11 +1793,29 @@ const WIDGET_MODE_OPTIONS: { value: string; label: string; description: string }
  * form state — so it only reflects what's actually been saved; "Rafraîchir" reloads it after a
  * save. Collapsed by default (an iframe pointed at a heavy Next.js page is not free to load).
  */
-function StorefrontPreviewSection({ slug }: { slug: string }) {
+function StorefrontPreviewSection({
+  slug,
+  previewTemplate,
+  previewPalette,
+  previewFontPairing,
+}: {
+  slug: string;
+  /** Unsaved edits from the organization form — reflected in the preview immediately via query
+   *  params the storefront reads client-side only for this presentational override (see
+   *  apps/storefront storefront-client.tsx's usePreviewOverride). Never affects what gets saved. */
+  previewTemplate?: string;
+  previewPalette?: string;
+  previewFontPairing?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const storefrontUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
-  const storefrontPageUrl = `${storefrontUrl}/${slug}`;
+  const previewParams = new URLSearchParams();
+  if (previewTemplate) previewParams.set("template", previewTemplate);
+  if (previewPalette) previewParams.set("palette", previewPalette);
+  if (previewFontPairing) previewParams.set("font", previewFontPairing);
+  const query = previewParams.toString();
+  const storefrontPageUrl = `${storefrontUrl}/${slug}${query ? `?${query}` : ""}`;
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
@@ -1785,13 +1839,124 @@ function StorefrontPreviewSection({ slug }: { slug: string }) {
       </div>
       {open && (
         <iframe
-          key={reloadKey}
+          key={`${reloadKey}-${query}`}
           src={storefrontPageUrl}
           title="Aperçu de la page publique"
           className="mt-4 h-[600px] w-full rounded-md border border-border"
         />
       )}
     </section>
+  );
+}
+
+function StorefrontThemePicker({
+  planKey,
+  selectedTemplate,
+  selectedPalette,
+  selectedFontPairing,
+  onChangeTemplate,
+  onChangePalette,
+  onChangeFontPairing,
+}: {
+  planKey?: string;
+  selectedTemplate?: StorefrontTemplateKey;
+  selectedPalette?: StorefrontPaletteKey;
+  selectedFontPairing?: StorefrontFontPairingKey;
+  onChangeTemplate: (key: StorefrontTemplateKey) => void;
+  onChangePalette: (key: StorefrontPaletteKey) => void;
+  onChangeFontPairing: (key: StorefrontFontPairingKey) => void;
+}) {
+  const effectiveTemplateKey = selectedTemplate ?? "essentiel";
+  const currentTemplate =
+    STOREFRONT_TEMPLATES.find((t) => t.key === effectiveTemplateKey) ?? STOREFRONT_TEMPLATES[0];
+  const canRefine = !planKey || planMeetsMinimum(planKey, currentTemplate.refinedChoiceMinPlan);
+
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-text">Gabarit de la page publique</p>
+      <p className="mb-2 text-xs text-text-muted">
+        Chaque gabarit propose une mise en page différente, pensée pour un secteur d&apos;activité.
+      </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {STOREFRONT_TEMPLATES.map((template) => {
+          const isAllowed = !planKey || planMeetsMinimum(planKey, template.minPlan);
+          const isSelected = effectiveTemplateKey === template.key;
+          return (
+            <button
+              key={template.key}
+              type="button"
+              disabled={!isAllowed}
+              onClick={() => onChangeTemplate(template.key)}
+              className={`rounded-md border px-3 py-2 text-left text-sm ${
+                isSelected ? "border-text" : "border-border"
+              } ${!isAllowed ? "opacity-60" : ""}`}
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span className="font-medium text-text">{template.label}</span>
+                {!isAllowed && <Badge>Non inclus dans le plan</Badge>}
+              </span>
+              <span className="mt-0.5 block text-xs text-text-muted">{template.description}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {currentTemplate.palettes.length > 0 && (
+        <div className="mt-3 space-y-3">
+          <div>
+            <p className="mb-1 text-xs font-medium text-text">Palette de couleurs</p>
+            <div className="flex flex-wrap gap-2">
+              {currentTemplate.palettes.map((paletteKey, index) => {
+                const palette = STOREFRONT_PALETTES[paletteKey];
+                const isAllowed = index === 0 || canRefine;
+                const isSelected = (selectedPalette ?? currentTemplate.palettes[0]) === paletteKey;
+                return (
+                  <button
+                    key={paletteKey}
+                    type="button"
+                    disabled={!isAllowed}
+                    onClick={() => onChangePalette(paletteKey)}
+                    title={isAllowed ? palette.label : `${palette.label} — nécessite un plan supérieur`}
+                    className={`flex items-center gap-2 rounded-full border px-2 py-1 text-xs ${
+                      isSelected ? "border-text" : "border-border"
+                    } ${!isAllowed ? "opacity-50" : ""}`}
+                  >
+                    <span
+                      className="h-4 w-4 rounded-full border border-border-input"
+                      style={{ backgroundColor: palette.accent }}
+                    />
+                    {palette.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium text-text">Police</p>
+            <div className="flex flex-wrap gap-2">
+              {currentTemplate.fontPairings.map((fontKey, index) => {
+                const font = STOREFRONT_FONT_PAIRINGS[fontKey];
+                const isAllowed = index === 0 || canRefine;
+                const isSelected = (selectedFontPairing ?? currentTemplate.fontPairings[0]) === fontKey;
+                return (
+                  <button
+                    key={fontKey}
+                    type="button"
+                    disabled={!isAllowed}
+                    onClick={() => onChangeFontPairing(fontKey)}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      isSelected ? "border-text" : "border-border"
+                    } ${!isAllowed ? "opacity-50" : ""}`}
+                  >
+                    {font.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
