@@ -1,3 +1,9 @@
+import type {
+  StorefrontFontPairingKey,
+  StorefrontPaletteKey,
+  StorefrontTemplateKey,
+} from "./storefront-themes.ts";
+
 /** Not a closed enum on purpose — organizations must not be limited to a fixed set of business types. */
 export const SUGGESTED_ORGANIZATION_TYPES = [
   "service",
@@ -53,6 +59,16 @@ export interface Organization {
   heroImage?: string;
   /** Undefined means "show every section `enabledModules` allows" — see STOREFRONT_SECTIONS doc. */
   storefrontSections?: StorefrontSection[];
+  /**
+   * Explicit storefront visual template choice — see storefront-themes.ts. Undefined means "use
+   * the vertical's default template" (VerticalTemplate.defaultStorefrontTemplate), or "essentiel"
+   * if the org's `type` doesn't match a known vertical. Enforced against the org's plan by
+   * EntitlementsService.assertStorefrontThemeAllowed.
+   */
+  storefrontTemplate?: StorefrontTemplateKey;
+  /** Undefined means "deterministically derived from the organization id" — see PublicService. */
+  storefrontPalette?: StorefrontPaletteKey;
+  storefrontFontPairing?: StorefrontFontPairingKey;
   /** Flat shipping rate applied to every storefront order at checkout — undefined charges none. */
   shippingFlatRate?: number;
   settings: OrganizationSettings;

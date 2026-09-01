@@ -7,6 +7,7 @@ import type {
   OrderStatus,
   QuoteStatus,
   ReturnRequestStatus,
+  StorefrontTheme,
 } from "@korva/types";
 
 /** Mirrors PublicService#getOrganization (apps/api/src/public/public.service.ts) exactly. */
@@ -17,7 +18,7 @@ export interface PublicOrganization {
   currency: string;
   language: string;
   logo?: string;
-  /** Hex color (e.g. "#1a73e8") — a single storefront accent, not a full theme. */
+  /** Hex color (e.g. "#1a73e8") — the org's custom accent, applied per `storefrontTheme.customAccentApplied`. */
   brandColor?: string;
   tagline?: string;
   heroImage?: string;
@@ -28,6 +29,9 @@ export interface PublicOrganization {
   visibleSections: string[];
   /** Flat shipping rate charged at checkout — undefined means no shipping cost. */
   shippingFlatRate?: number;
+  /** Resolved storefront visual template/palette/font-pairing — already clamped to the org's
+   *  plan server-side. See @/templates/registry.tsx. */
+  storefrontTheme: StorefrontTheme;
 }
 
 /**

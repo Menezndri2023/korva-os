@@ -3,8 +3,13 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
   STOREFRONT_SECTIONS,
+  VERTICAL_TEMPLATES,
+  getStorefrontTemplate,
+  pickDeterministic,
+  planMeetsMinimum,
   type KorvaModule,
   type StorefrontSection,
+  type StorefrontTheme,
 } from '@korva/types';
 import type {
   CreatePublicBookingInput,
@@ -13,6 +18,7 @@ import type {
   ListPublicOffersQuery,
 } from '@korva/validation';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { OffersService } from '../catalog/offers/offers.service';
 import { AvailabilityService } from '../booking/availability/availability.service';
 import { BookingsService } from '../booking/bookings/bookings.service';
@@ -63,6 +69,7 @@ function emailsMatch(storedEmail: string, candidateEmail: string): boolean {
 export class PublicService {
   constructor(
     private readonly organizationsService: OrganizationsService,
+    private readonly subscriptionsService: SubscriptionsService,
     private readonly offersService: OffersService,
     private readonly availabilityService: AvailabilityService,
     private readonly bookingsService: BookingsService,
@@ -99,6 +106,9 @@ export class PublicService {
 
   async getOrganization(slug: string) {
     const organization = await this.resolveOrganization(slug);
+    const plan = await this.subscriptionsService.getActivePlan(
+      organization.id as string,
+    );
     return {
       name: organization.name,
       slug: organization.slug,
@@ -112,6 +122,70 @@ export class PublicService {
       enabledModules: organization.enabledModules,
       visibleSections: this.computeVisibleSections(organization),
       shippingFlatRate: organization.shippingFlatRate,
+      storefrontTheme: this.resolveStorefrontTheme(organization, plan.key),
+    };
+  }
+
+  /**
+   * Resolves the organization's storefront visual template/palette/font-pairing, clamped to
+   * what its current plan actually allows — see @korva/types storefront-themes.ts and
+   * EntitlementsService.assertStorefrontThemeAllowed (which enforces the same rules at
+   * save-time; this is defense-in-depth for an organization downgraded after saving a choice a
+   * lower plan no longer allows). Palette/font-pairing default to a deterministic pick derived
+   * from the organization id when unset, so two same-vertical organizations that never touched
+   * these settings still render differently from each other.
+   */
+  private resolveStorefrontTheme(
+    organization: OrganizationDocument,
+    planKey: string,
+  ): StorefrontTheme {
+    const vertical = VERTICAL_TEMPLATES.find(
+      (v) => v.suggestedType === organization.type,
+    );
+    const requestedKey =
+      organization.storefrontTemplate ??
+      vertical?.defaultStorefrontTemplate ??
+      'essentiel';
+    let templateDef = getStorefrontTemplate(requestedKey);
+    if (!planMeetsMinimum(planKey, templateDef.minPlan)) {
+      templateDef = getStorefrontTemplate('essentiel');
+    }
+
+    if (templateDef.key === 'essentiel') {
+      return {
+        template: 'essentiel',
+        fontPairing: 'sobre',
+        customAccentApplied: !!organization.brandColor,
+      };
+    }
+
+    const canRefine = planMeetsMinimum(planKey, templateDef.refinedChoiceMinPlan);
+    const allowedPalettes = canRefine
+      ? templateDef.palettes
+      : templateDef.palettes.slice(0, 1);
+    const allowedFontPairings = canRefine
+      ? templateDef.fontPairings
+      : templateDef.fontPairings.slice(0, 1);
+
+    const seed = organization.id as string;
+    const palette =
+      organization.storefrontPalette &&
+      allowedPalettes.includes(organization.storefrontPalette)
+        ? organization.storefrontPalette
+        : pickDeterministic(seed, allowedPalettes);
+    const fontPairing =
+      organization.storefrontFontPairing &&
+      allowedFontPairings.includes(organization.storefrontFontPairing)
+        ? organization.storefrontFontPairing
+        : pickDeterministic(`${seed}:font`, allowedFontPairings);
+
+    return {
+      template: templateDef.key,
+      palette,
+      fontPairing,
+      customAccentApplied:
+        !!organization.brandColor &&
+        planMeetsMinimum(planKey, templateDef.customAccentMinPlan),
     };
   }
 

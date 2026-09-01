@@ -175,6 +175,18 @@ export class OrganizationsService {
         input.enabledModules,
       );
     }
+    if (
+      input.storefrontTemplate ||
+      input.storefrontPalette ||
+      input.storefrontFontPairing
+    ) {
+      const current = await this.organizationsRepository.findById(id);
+      await this.entitlementsService.assertStorefrontThemeAllowed(id, {
+        template: input.storefrontTemplate ?? current?.storefrontTemplate,
+        palette: input.storefrontPalette,
+        fontPairing: input.storefrontFontPairing,
+      });
+    }
     if (input.name) {
       const existing = await this.organizationsRepository.findBySlug(
         slugify(input.name),

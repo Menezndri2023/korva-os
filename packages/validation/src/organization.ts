@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { KORVA_MODULES, STOREFRONT_SECTIONS } from "@korva/types";
+import {
+  KORVA_MODULES,
+  STOREFRONT_SECTIONS,
+  STOREFRONT_TEMPLATE_KEYS,
+  STOREFRONT_PALETTE_KEYS,
+  STOREFRONT_FONT_PAIRING_KEYS,
+} from "@korva/types";
 
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(200),
@@ -36,6 +42,10 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   heroImage: z.string().url().optional(),
   /** Omit to show every section `enabledModules` allows; pass an explicit array to restrict. */
   storefrontSections: z.array(z.enum(STOREFRONT_SECTIONS)).optional(),
+  /** Omit to use the vertical's default template — see EntitlementsService.assertStorefrontThemeAllowed. */
+  storefrontTemplate: z.enum(STOREFRONT_TEMPLATE_KEYS).optional(),
+  storefrontPalette: z.enum(STOREFRONT_PALETTE_KEYS).optional(),
+  storefrontFontPairing: z.enum(STOREFRONT_FONT_PAIRING_KEYS).optional(),
   /** Flat shipping rate applied to every storefront order at checkout. */
   shippingFlatRate: z.number().nonnegative().optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),

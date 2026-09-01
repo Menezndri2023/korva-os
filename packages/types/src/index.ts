@@ -19,6 +19,7 @@ export * from "./business-graph.ts";
 export * from "./decision-engine.ts";
 export * from "./action-center.ts";
 export * from "./verticals.ts";
+export * from "./storefront-themes.ts";
 export * from "./webhook-subscriptions.ts";
 export * from "./reviews.ts";
 export * from "./projects.ts";

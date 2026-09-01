@@ -1,5 +1,6 @@
 import type { KorvaModule } from "./organization.ts";
 import type { SystemEvent, WorkflowAction } from "./workflow.ts";
+import type { StorefrontTemplateKey } from "./storefront-themes.ts";
 
 /**
  * Onboarding templates for common business verticals (Business OS brief §13-14,
@@ -27,6 +28,9 @@ export interface VerticalTemplate {
   suggestedType: string;
   suggestedModules: KorvaModule[];
   starterWorkflow?: VerticalStarterWorkflow;
+  /** Storefront visual template pre-selected for this vertical — see storefront-themes.ts.
+   *  Still just a default: the owner can change it afterwards in Settings. */
+  defaultStorefrontTemplate: StorefrontTemplateKey;
 }
 
 export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
@@ -55,6 +59,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         },
       },
     },
+    defaultStorefrontTemplate: "salon",
   },
   {
     key: "restaurant",
@@ -81,6 +86,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         },
       },
     },
+    defaultStorefrontTemplate: "table",
   },
   {
     key: "professional_services",
@@ -96,6 +102,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Qualifier le prospect {{leadId}}" },
       },
     },
+    defaultStorefrontTemplate: "vitrine",
   },
   {
     key: "training",
@@ -114,6 +121,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         },
       },
     },
+    defaultStorefrontTemplate: "academie",
   },
   {
     key: "commerce",
@@ -132,5 +140,198 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         },
       },
     },
+    defaultStorefrontTemplate: "boutique",
+  },
+  {
+    key: "health_practice",
+    label: "Santé & bien-être (non médical)",
+    description: "Kinésithérapie, ostéopathie, coaching santé, nutrition — rendez-vous et suivi.",
+    suggestedType: "santé",
+    suggestedModules: ["crm", "catalog", "booking", "finance", "workflow", "ai"],
+    starterWorkflow: {
+      name: "Confirmation de rendez-vous",
+      trigger: "booking.created",
+      action: {
+        type: "internal_notification",
+        config: { title: "Nouveau rendez-vous", body: "Réservation {{bookingId}} créée." },
+      },
+    },
+    defaultStorefrontTemplate: "salon",
+  },
+  {
+    key: "trades_construction",
+    label: "Artisanat & BTP",
+    description: "Plomberie, électricité, menuiserie, peinture — devis et interventions.",
+    suggestedType: "artisanat",
+    suggestedModules: ["crm", "catalog", "finance", "workflow", "ai"],
+    starterWorkflow: {
+      name: "Qualifier une nouvelle demande",
+      trigger: "lead.created",
+      action: {
+        type: "create_task",
+        config: { title: "Rappeler le prospect {{leadId}}" },
+      },
+    },
+    defaultStorefrontTemplate: "vitrine",
+  },
+  {
+    key: "real_estate",
+    label: "Immobilier",
+    description: "Agences immobilières, syndics, gestion locative — suivi des dossiers.",
+    suggestedType: "immobilier",
+    suggestedModules: ["crm", "catalog", "finance", "workflow", "ai"],
+    starterWorkflow: {
+      name: "Qualifier un nouveau contact",
+      trigger: "lead.created",
+      action: {
+        type: "create_task",
+        config: { title: "Qualifier le contact {{leadId}}" },
+      },
+    },
+    defaultStorefrontTemplate: "vitrine",
+  },
+  {
+    key: "hospitality",
+    label: "Hôtellerie & tourisme",
+    description: "Gîtes, chambres d'hôtes, hébergements — réservations de séjours.",
+    suggestedType: "hôtellerie",
+    suggestedModules: ["crm", "catalog", "booking", "finance", "workflow", "communication", "ai"],
+    starterWorkflow: {
+      name: "Confirmation de séjour",
+      trigger: "booking.created",
+      action: {
+        type: "internal_notification",
+        config: { title: "Nouvelle réservation", body: "Séjour {{bookingId}} confirmé." },
+      },
+    },
+    defaultStorefrontTemplate: "salon",
+  },
+  {
+    key: "fashion_retail",
+    label: "Mode & habillement",
+    description: "Prêt-à-porter, accessoires, chaussures — vente en boutique ou en ligne.",
+    suggestedType: "mode",
+    suggestedModules: ["crm", "catalog", "commerce", "finance", "analytics", "ai"],
+    starterWorkflow: {
+      name: "Nouvelle commande",
+      trigger: "order.created",
+      action: {
+        type: "internal_notification",
+        config: { title: "Nouvelle commande", body: "Commande {{orderId}} reçue." },
+      },
+    },
+    defaultStorefrontTemplate: "boutique",
+  },
+  {
+    key: "food_retail",
+    label: "Épicerie & alimentation",
+    description: "Épiceries, primeurs, boulangeries — vente au détail et sur commande.",
+    suggestedType: "alimentation",
+    suggestedModules: ["crm", "catalog", "commerce", "finance", "analytics", "ai"],
+    starterWorkflow: {
+      name: "Nouvelle commande",
+      trigger: "order.created",
+      action: {
+        type: "internal_notification",
+        config: { title: "Nouvelle commande", body: "Commande {{orderId}} reçue." },
+      },
+    },
+    defaultStorefrontTemplate: "boutique",
+  },
+  {
+    key: "fitness_sport",
+    label: "Sport & fitness",
+    description: "Salles de sport, coachs sportifs, cours collectifs — réservations de séances.",
+    suggestedType: "sport",
+    suggestedModules: ["crm", "catalog", "booking", "finance", "workflow", "ai"],
+    starterWorkflow: {
+      name: "Confirmation de séance",
+      trigger: "booking.created",
+      action: {
+        type: "internal_notification",
+        config: { title: "Nouvelle séance", body: "Réservation {{bookingId}} créée." },
+      },
+    },
+    defaultStorefrontTemplate: "salon",
+  },
+  {
+    key: "digital_agency",
+    label: "Informatique & agence digitale",
+    description: "Développement, marketing, design — suivi commercial et facturation de projets.",
+    suggestedType: "agence digitale",
+    suggestedModules: ["crm", "catalog", "finance", "workflow", "ai"],
+    starterWorkflow: {
+      name: "Qualifier un nouveau prospect",
+      trigger: "lead.created",
+      action: {
+        type: "create_task",
+        config: { title: "Qualifier le prospect {{leadId}}" },
+      },
+    },
+    defaultStorefrontTemplate: "vitrine",
+  },
+  {
+    key: "events_creative",
+    label: "Événementiel & création",
+    description: "Photographes, traiteurs événementiels, DJ, décorateurs — devis et prestations.",
+    suggestedType: "événementiel",
+    suggestedModules: ["crm", "catalog", "booking", "finance", "workflow", "ai"],
+    starterWorkflow: {
+      name: "Qualifier une nouvelle demande",
+      trigger: "lead.created",
+      action: {
+        type: "create_task",
+        config: { title: "Rappeler le prospect {{leadId}}" },
+      },
+    },
+    defaultStorefrontTemplate: "vitrine",
+  },
+  {
+    key: "nonprofit_association",
+    label: "Association & ONG",
+    description: "Associations, ONG — adhésions, dons et suivi des membres.",
+    suggestedType: "association",
+    suggestedModules: ["crm", "catalog", "finance", "communication", "ai"],
+    starterWorkflow: {
+      name: "Nouvelle adhésion",
+      trigger: "order.created",
+      action: {
+        type: "internal_notification",
+        config: { title: "Nouvelle adhésion", body: "Commande {{orderId}} reçue." },
+      },
+    },
+    defaultStorefrontTemplate: "vitrine",
+  },
+  {
+    key: "childcare_personal_services",
+    label: "Garde d'enfants & services à la personne",
+    description: "Garde d'enfants, aide à domicile, ménage — planification d'interventions.",
+    suggestedType: "services à la personne",
+    suggestedModules: ["crm", "catalog", "booking", "finance", "workflow", "ai"],
+    starterWorkflow: {
+      name: "Confirmation d'intervention",
+      trigger: "booking.created",
+      action: {
+        type: "internal_notification",
+        config: { title: "Nouvelle intervention", body: "Réservation {{bookingId}} créée." },
+      },
+    },
+    defaultStorefrontTemplate: "salon",
+  },
+  {
+    key: "agriculture_direct_sale",
+    label: "Agriculture & vente directe",
+    description: "Producteurs, fermes, vente directe — commandes et paniers.",
+    suggestedType: "agriculture",
+    suggestedModules: ["crm", "catalog", "commerce", "finance", "ai"],
+    starterWorkflow: {
+      name: "Nouvelle commande",
+      trigger: "order.created",
+      action: {
+        type: "internal_notification",
+        config: { title: "Nouvelle commande", body: "Commande {{orderId}} reçue." },
+      },
+    },
+    defaultStorefrontTemplate: "boutique",
   },
 ];

@@ -3,7 +3,10 @@ import { HydratedDocument } from 'mongoose';
 import type {
   KorvaModule,
   OrganizationSettings,
+  StorefrontFontPairingKey,
+  StorefrontPaletteKey,
   StorefrontSection,
+  StorefrontTemplateKey,
 } from '@korva/types';
 import { idToJson } from '../../core/mongoose/schema-options';
 
@@ -66,6 +69,20 @@ export class Organization {
    */
   @Prop({ type: [String], default: undefined })
   storefrontSections?: StorefrontSection[];
+
+  /** Explicit storefront visual template choice — see @korva/types storefront-themes.ts.
+   *  Undefined falls back to the org's vertical default, or "essentiel" — see
+   *  PublicService#resolveStorefrontTheme. Enforced against the org's plan by
+   *  EntitlementsService.assertStorefrontThemeAllowed. */
+  @Prop()
+  storefrontTemplate?: StorefrontTemplateKey;
+
+  /** Undefined means "deterministically derived from the organization id" — see PublicService. */
+  @Prop()
+  storefrontPalette?: StorefrontPaletteKey;
+
+  @Prop()
+  storefrontFontPairing?: StorefrontFontPairingKey;
 
   /** Flat shipping rate applied to every storefront order at checkout — undefined means no
    *  shipping cost is charged. Simplest of the "tarif fixe ou par méthode" options the plan

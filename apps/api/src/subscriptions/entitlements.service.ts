@@ -1,5 +1,12 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import type { KorvaModule, UsageSummaryItem } from '@korva/types';
+import type {
+  KorvaModule,
+  StorefrontFontPairingKey,
+  StorefrontPaletteKey,
+  StorefrontTemplateKey,
+  UsageSummaryItem,
+} from '@korva/types';
+import { getStorefrontTemplate, planMeetsMinimum } from '@korva/types';
 import { SubscriptionsService } from './subscriptions.service';
 import { UsageRepository } from './usage.repository';
 import { MembershipsService } from '../identity/memberships/memberships.service';
@@ -85,6 +92,58 @@ export class EntitlementsService {
         code: 'MODULE_NOT_IN_PLAN',
         message: `Your plan ("${plan.name}") does not include: ${notAllowed.join(', ')}`,
         details: { modules: notAllowed, plan: plan.key },
+      });
+    }
+  }
+
+  /**
+   * Gates the storefront visual template/palette/font-pairing an organization can save — see
+   * @korva/types storefront-themes.ts. `template` is the *effective* template for this update
+   * (caller resolves: the value being set, or the organization's current one if this update
+   * only touches palette/fontPairing) so a palette-only PATCH is still checked against the
+   * right template's allowed lists.
+   */
+  async assertStorefrontThemeAllowed(
+    organizationId: string,
+    theme: {
+      template?: StorefrontTemplateKey;
+      palette?: StorefrontPaletteKey;
+      fontPairing?: StorefrontFontPairingKey;
+    },
+  ): Promise<void> {
+    if (!theme.template) return;
+    await this.assertSubscriptionActive(organizationId);
+    const plan = await this.subscriptionsService.getActivePlan(organizationId);
+    const templateDef = getStorefrontTemplate(theme.template);
+
+    if (!planMeetsMinimum(plan.key, templateDef.minPlan)) {
+      throw new ForbiddenException({
+        code: 'STOREFRONT_TEMPLATE_NOT_IN_PLAN',
+        message: `Your plan ("${plan.name}") does not include the "${templateDef.label}" storefront template`,
+        details: { template: theme.template, plan: plan.key },
+      });
+    }
+
+    const canRefine = planMeetsMinimum(plan.key, templateDef.refinedChoiceMinPlan);
+    const allowedPalettes = canRefine
+      ? templateDef.palettes
+      : templateDef.palettes.slice(0, 1);
+    const allowedFontPairings = canRefine
+      ? templateDef.fontPairings
+      : templateDef.fontPairings.slice(0, 1);
+
+    if (theme.palette && !allowedPalettes.includes(theme.palette)) {
+      throw new ForbiddenException({
+        code: 'STOREFRONT_PALETTE_NOT_IN_PLAN',
+        message: `Your plan ("${plan.name}") does not include this palette for the "${templateDef.label}" template`,
+        details: { palette: theme.palette, plan: plan.key },
+      });
+    }
+    if (theme.fontPairing && !allowedFontPairings.includes(theme.fontPairing)) {
+      throw new ForbiddenException({
+        code: 'STOREFRONT_FONT_PAIRING_NOT_IN_PLAN',
+        message: `Your plan ("${plan.name}") does not include this font pairing for the "${templateDef.label}" template`,
+        details: { fontPairing: theme.fontPairing, plan: plan.key },
       });
     }
   }
