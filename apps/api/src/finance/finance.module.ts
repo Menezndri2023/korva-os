@@ -42,6 +42,7 @@ import { ReconciliationSchedulerService } from './payments/reconciliation-schedu
 import { PaymentsController } from './payments/payments.controller';
 import { PAYMENT_PROVIDER } from './payments/providers/payment-provider.interface';
 import { ManualPaymentProvider } from './payments/providers/manual-payment.provider';
+import { IntegrationsModule } from '../integrations/integrations.module';
 import { FlutterwaveWebhookController } from './payments/providers/flutterwave-webhook.controller';
 import { PaystackWebhookController } from './payments/providers/paystack-webhook.controller';
 
@@ -94,6 +95,7 @@ import { DocumentsModule } from '../documents/documents.module';
     CountersModule,
     AuditModule,
     IntegrationWebhookModule,
+    IntegrationsModule,
     IdentityModule,
     OrganizationsModule,
     DocumentsModule,
@@ -120,15 +122,14 @@ import { DocumentsModule } from '../documents/documents.module';
     PaymentsService,
     PaymentReconciliationService,
     ReconciliationSchedulerService,
-    // Real payment creation still goes exclusively through ManualPaymentProvider — unchanged
-    // from Stage 1. PaymentProviderResolverService/Registry (Wave 4 Stage 2) live in
-    // IntegrationsModule instead of here, despite being "payment-domain" conceptually — they
-    // depend on INTEGRATION_ACCOUNTS_READER, which only IntegrationsModule provides, and
-    // IntegrationsController (which needs the resolver) lives there too. Importing
-    // IntegrationsModule from here to get them back would create FinanceModule ↔
-    // IntegrationsModule circular imports (confirmed at boot: `Nest can't resolve dependencies
-    // of the PaymentProviderResolverService ... INTEGRATION_ACCOUNTS_READER ... available in the
-    // FinanceModule module` when they were tried here first).
+    // The staff dashboard's "record a payment" flow (PaymentsController.create with no
+    // explicit provider argument) still goes exclusively through ManualPaymentProvider — a
+    // manually-recorded payment (cash, bank transfer, ...) was collected outside KORVA
+    // entirely, so there is no real PSP to call regardless of what the organization has
+    // connected. Customer-initiated ONLINE payments (see PublicService's checkout flow) resolve
+    // a real PSP per-organization via PaymentProviderResolverService (now imported from
+    // IntegrationsModule below — the earlier belief that this import direction was circular was
+    // based on a different, incorrect wiring attempt; see IntegrationsModule's own doc comment).
     { provide: PAYMENT_PROVIDER, useClass: ManualPaymentProvider },
     ExpensesRepository,
     ExpensesService,

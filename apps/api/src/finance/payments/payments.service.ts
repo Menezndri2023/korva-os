@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { ClientSession, Connection, Types } from 'mongoose';
@@ -16,6 +17,7 @@ import { InvoicesService } from '../invoices/invoices.service';
 import { MembershipsService } from '../../identity/memberships/memberships.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { PaymentProviderResolverService } from './providers/payment-provider-resolver.service';
 import {
   PAYMENT_PROVIDER,
   isAmbiguousProviderError,
@@ -53,8 +55,45 @@ export class PaymentsService {
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
     @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: PaymentProvider,
+    private readonly paymentProviderResolver: PaymentProviderResolverService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
+
+  /**
+   * Resolves the PaymentProvider that must be used for an EXISTING payment/refund — always the
+   * one actually recorded on the row (`recordedProviderName`), never "whatever's currently
+   * configured for this organization's market" (an organization can reconfigure/replace its
+   * connected PSP at any time; a payment created under the old one must still be queried/
+   * refunded through that same one forever, or its `providerReference` means nothing to
+   * whichever gateway gets called). Returns the injected ManualPaymentProvider directly when it
+   * matches — the common case for every staff-recorded payment/refund, and the only case that
+   * existed before online payments did. For anything else, resolves through
+   * PaymentProviderResolverService and throws `PAYMENT_PROVIDER_MISMATCH` if the organization's
+   * currently configured provider for that market no longer matches what the row was created
+   * with, rather than silently querying/refunding through the wrong gateway — callers that
+   * already treat "provider query failed" as a benign, retry-later outcome (reconciliation)
+   * handle this identically; callers on the staff-facing HTTP path (refund()) surface it as a
+   * clear 422.
+   */
+  private async resolveProviderForExisting(
+    organizationId: string,
+    recordedProviderName: string,
+  ): Promise<PaymentProvider> {
+    if (recordedProviderName === this.paymentProvider.name) {
+      return this.paymentProvider;
+    }
+    const resolved = await this.paymentProviderResolver.resolve({
+      flow: 'commerce',
+      organizationId,
+    });
+    if (resolved.name !== recordedProviderName) {
+      throw new UnprocessableEntityException({
+        code: 'PAYMENT_PROVIDER_MISMATCH',
+        message: `This payment was created via "${recordedProviderName}", but the organization's currently configured provider is "${resolved.name}" — it cannot be safely queried or refunded through a different gateway.`,
+      });
+    }
+    return resolved;
+  }
 
   /** Thin pass-through to the repository — kept on the service so callers outside FinanceModule
    *  (e.g. ReturnRequestsService) never need PaymentsRepository exported directly, matching this
@@ -80,13 +119,26 @@ export class PaymentsService {
    * must return its original outcome unconditionally, even if the invoice's balance or status
    * has since changed (e.g. the original payment itself was what brought the balance to zero;
    * checking balance again on the retry would wrongly reject an already-successful replay).
+   *
+   * `userId` is undefined for a customer-initiated online payment (the storefront checkout has
+   * no staff member to attribute the audit-log entry to — see AuditService's own optional
+   * `userId`); `online`, when given, is used instead of the injected ManualPaymentProvider — the
+   * storefront checkout flow resolves a real PSP via PaymentProviderResolverService and passes
+   * it (plus the payer's email and where their browser should return to) here, so the exact
+   * same idempotency/atomicity machinery below is never duplicated for the online-payment path.
    */
   async create(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     input: CreatePaymentInput,
     idempotencyKey?: string,
+    online?: {
+      provider: PaymentProvider;
+      customerEmail: string;
+      redirectUrl: string;
+    },
   ): Promise<PaymentDocument> {
+    const provider = online?.provider ?? this.paymentProvider;
     if (idempotencyKey) {
       const existing = await this.paymentsRepository.findByIdempotencyKey(
         organizationId,
@@ -157,7 +209,7 @@ export class PaymentsService {
           amount: input.amount,
           currency: invoice.currency,
           status: 'processing',
-          provider: this.paymentProvider.name,
+          provider: provider.name,
           method: input.method,
           idempotencyKey,
         });
@@ -184,10 +236,16 @@ export class PaymentsService {
     // fact we're recording, not something a later abort could undo (see §3/§9 of the audit).
     let result: PaymentProviderResult;
     try {
-      result = await this.paymentProvider.createPayment({
+      result = await provider.createPayment({
         amount: input.amount,
         currency: invoice.currency,
         invoiceId: input.invoiceId,
+        ...(online
+          ? {
+              customerEmail: online.customerEmail,
+              redirectUrl: online.redirectUrl,
+            }
+          : {}),
       });
     } catch (error) {
       // Stage 2.6 — an AMBIGUOUS provider error (network timeout: no HTTP response was ever
@@ -243,8 +301,9 @@ export class PaymentsService {
       amount: input.amount,
       currency: invoice.currency,
       status: result.status,
-      provider: this.paymentProvider.name,
+      provider: provider.name,
       providerReference: result.providerReference,
+      checkoutUrl: result.checkoutUrl,
       method: input.method,
       tipAmount: input.tipAmount,
       tipStaffMembershipId: input.tipStaffMembershipId
@@ -527,7 +586,11 @@ export class PaymentsService {
 
     let providerStatus: PaymentStatus;
     try {
-      providerStatus = await this.paymentProvider.getPaymentStatus(
+      const provider = await this.resolveProviderForExisting(
+        organizationId,
+        payment.provider,
+      );
+      providerStatus = await provider.getPaymentStatus(
         payment.providerReference,
       );
     } catch (error) {
@@ -735,7 +798,11 @@ export class PaymentsService {
     // exists (nothing to reference).
     let refundResult: PaymentProviderResult;
     try {
-      refundResult = await this.paymentProvider.refundPayment(
+      const provider = await this.resolveProviderForExisting(
+        organizationId,
+        payment.provider,
+      );
+      refundResult = await provider.refundPayment(
         payment.providerReference ?? (payment.id as string),
         input.amount,
         claimedRefundId,
@@ -1001,9 +1068,26 @@ export class PaymentsService {
       return refund;
     }
 
+    // Refund itself carries no provider name of its own (see schema) — always resolved via the
+    // Payment it refunds, exactly like refund() above.
+    const payment = await this.paymentsRepository.findById(
+      organizationId,
+      refund.paymentId.toString(),
+    );
+    if (!payment) {
+      this.logger.error(
+        `Reconciliation: Payment ${refund.paymentId.toString()} for Refund ${refundId} no longer exists`,
+      );
+      return refund;
+    }
+
     let providerStatus: PaymentStatus;
     try {
-      providerStatus = await this.paymentProvider.getPaymentStatus(
+      const provider = await this.resolveProviderForExisting(
+        organizationId,
+        payment.provider,
+      );
+      providerStatus = await provider.getPaymentStatus(
         refund.providerReference,
       );
     } catch (error) {

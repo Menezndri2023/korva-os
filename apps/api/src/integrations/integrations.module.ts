@@ -37,6 +37,14 @@ import { MessagingProviderRegistry } from '../communication/providers/messaging-
  * Binds `INTEGRATION_ACCOUNTS_READER` (the token from integrations.types.ts) to
  * `IntegrationsRepository` itself, since the repository already implements
  * `IntegrationAccountsReader` directly — no separate adapter class needed.
+ *
+ * `PaymentProviderResolverService` is exported for the same reason and by the same safe,
+ * one-directional pattern as `MessagingProviderResolverService` above: `FinanceModule` now
+ * imports `IntegrationsModule` (not the reverse) so `PaymentsService` can resolve a real
+ * per-organization PSP for customer-initiated online payments — verified at boot (the full
+ * e2e suite, which builds `AppModule` end-to-end) that this direction is NOT the circular
+ * import the comment above warns against; only the reverse (`IntegrationsModule` importing
+ * `FinanceModule` back) is.
  */
 @Module({
   imports: [
@@ -63,6 +71,7 @@ import { MessagingProviderRegistry } from '../communication/providers/messaging-
     IntegrationsService,
     INTEGRATION_ACCOUNTS_READER,
     MessagingProviderResolverService,
+    PaymentProviderResolverService,
   ],
 })
 export class IntegrationsModule {}

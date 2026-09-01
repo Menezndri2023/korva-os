@@ -38,6 +38,13 @@ export class Payment {
   @Prop()
   providerReference?: string;
 
+  /** Hosted checkout URL the payer must be redirected to — set only for a customer-initiated
+   *  online payment (see PaymentProvider.createPayment's `checkoutUrl`), absent for a
+   *  manually-recorded one. Read back by the storefront if it needs to re-show/re-send the
+   *  same link (e.g. the customer navigated away before completing checkout). */
+  @Prop()
+  checkoutUrl?: string;
+
   @Prop()
   method?: string;
 

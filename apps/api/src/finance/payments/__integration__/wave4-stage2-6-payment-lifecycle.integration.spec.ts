@@ -16,6 +16,7 @@ import { InvoicesService } from '../../invoices/invoices.service';
 import { AuditService } from '../../../audit/audit.service';
 import { MembershipsService } from '../../../identity/memberships/memberships.service';
 import { EventBusService } from '../../../core/events/event-bus.service';
+import { PaymentProviderResolverService } from '../providers/payment-provider-resolver.service';
 import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
@@ -196,6 +197,12 @@ describe('Wave 4 Stage 2.6 — payment lifecycle hardening (real Mongo, fixture 
           inject: [InvoicesRepository, AuditService],
         },
         { provide: PAYMENT_PROVIDER, useValue: provider },
+        // Only consulted by PaymentsService's resolveProviderForExisting() when a Payment's
+        // recorded provider name differs from the injected PAYMENT_PROVIDER — never true in
+        // this suite (every Payment here is created via the default path, so it always records
+        // `provider.name` above), so an inert stand-in is safe, same reasoning as
+        // MembershipsService's above.
+        { provide: PaymentProviderResolverService, useValue: {} },
       ],
     }).compile();
 
