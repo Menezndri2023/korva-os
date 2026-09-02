@@ -856,7 +856,7 @@ export class OrdersService {
 
   async confirm(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     id: string,
   ): Promise<OrderDocument> {
     return this.transition(
@@ -954,7 +954,7 @@ export class OrdersService {
 
   private async transition(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     id: string,
     allowedFrom: OrderDocument['status'][],
     to: OrderDocument['status'],
@@ -991,7 +991,7 @@ export class OrdersService {
 
   async generateInvoice(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     id: string,
   ): Promise<InvoiceDocument> {
     const order = await this.getById(organizationId, id);

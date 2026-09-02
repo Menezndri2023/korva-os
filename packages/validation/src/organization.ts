@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   KORVA_MODULES,
+  PAYMENT_METHODS,
   STOREFRONT_SECTIONS,
   STOREFRONT_TEMPLATE_KEYS,
   STOREFRONT_PALETTE_KEYS,
@@ -48,6 +49,9 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   storefrontFontPairing: z.enum(STOREFRONT_FONT_PAIRING_KEYS).optional(),
   /** Flat shipping rate applied to every storefront order at checkout. */
   shippingFlatRate: z.number().nonnegative().optional(),
+  /** Omit to accept cash only (today's universal default). Must stay non-empty — a storefront
+   *  offering no payment method at all isn't a valid checkout configuration. */
+  acceptedPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).min(1).optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
 });
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;

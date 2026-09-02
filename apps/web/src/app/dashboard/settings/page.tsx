@@ -323,6 +323,7 @@ export default function SettingsPage() {
       // Undefined (nothing configured yet) means "show everything modules allow" — pre-check
       // both boxes in that case so the form's visual default matches the real current behavior.
       storefrontSections: organization.storefrontSections ?? [...STOREFRONT_SECTIONS],
+      acceptedPaymentMethods: organization.acceptedPaymentMethods ?? ["cash"],
     });
   }
   function cancelOrgEdit() {
@@ -606,6 +607,16 @@ export default function SettingsPage() {
                   : "Toutes"}
               </dd>
             </div>
+            {organization?.enabledModules.includes("commerce") && (
+              <div>
+                <dt className="text-text-muted">Moyens de paiement acceptés</dt>
+                <dd className="mt-0.5">
+                  {(organization.acceptedPaymentMethods ?? ["cash"])
+                    .map((m) => (m === "cash" ? "Espèces / à la livraison" : "En ligne"))
+                    .join(", ")}
+                </dd>
+              </div>
+            )}
           </dl>
         ) : (
           <form
@@ -872,6 +883,37 @@ export default function SettingsPage() {
                       Afficher les réservations
                     </label>
                   )}
+                </div>
+              </div>
+            )}
+
+            {organization?.enabledModules.includes("commerce") && (
+              <div className="sm:col-span-2">
+                <p className="mb-1 text-xs font-medium text-text">
+                  Moyens de paiement acceptés à la commande
+                </p>
+                <p className="mb-2 text-xs text-text-muted">
+                  &quot;En ligne&quot; ne s&apos;affiche à vos clients que si un moyen de paiement
+                  réel est connecté (voir Intégrations) — cochez-le dès maintenant si vous
+                  comptez en connecter un.
+                </p>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-text">
+                    <input
+                      type="checkbox"
+                      value="cash"
+                      {...registerOrg("acceptedPaymentMethods")}
+                    />
+                    Espèces / à la livraison ou au retrait
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-text">
+                    <input
+                      type="checkbox"
+                      value="online"
+                      {...registerOrg("acceptedPaymentMethods")}
+                    />
+                    Paiement en ligne
+                  </label>
                 </div>
               </div>
             )}

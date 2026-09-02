@@ -10,9 +10,15 @@ import {
   type CreatePublicBookingInput,
   type CreatePublicOrderInput,
 } from "@korva/validation";
+import type { PaymentMethod } from "@korva/types";
 import { Button, Dialog, Input, Select } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import type { CartLine, PublicAvailability, PublicOffer, PublicResource } from "@/lib/public-types";
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: "Espèces / à la livraison ou au retrait",
+  online: "Paiement en ligne",
+};
 
 const DURATIONS = [
   { label: "30 min", minutes: 30 },
@@ -233,6 +239,7 @@ export function CheckoutPanel({
   cart,
   currency,
   shippingFlatRate,
+  acceptedPaymentMethods,
   customer,
   onClose,
   onSuccess,
@@ -241,6 +248,9 @@ export function CheckoutPanel({
   cart: CartLine[];
   currency: string;
   shippingFlatRate?: number;
+  /** Never empty — see PublicOrganization's own doc comment. A single entry renders no choice
+   *  at all (today's exact pre-existing behavior when it's `["cash"]`). */
+  acceptedPaymentMethods: PaymentMethod[];
   /** When the visitor is logged into the customer portal, pre-fills (but never locks) the
    *  contact fields below — guest checkout stays fully unchanged when this is undefined. */
   customer?: { email: string; firstName?: string; phone?: string };
@@ -250,6 +260,10 @@ export function CheckoutPanel({
   const itemsTotal = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
   const shippingCost = shippingFlatRate ?? 0;
   const total = itemsTotal + shippingCost;
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    acceptedPaymentMethods[0] ?? "cash",
+  );
+  const [redirecting, setRedirecting] = useState(false);
 
   const {
     register,
@@ -274,9 +288,23 @@ export function CheckoutPanel({
     },
   });
 
+  // Only ever called when paymentMethod === "online" — redirects the browser to the PSP's
+  // hosted checkout page; there is nothing more for this dialog to render once that happens.
+  const payMutation = useMutation({
+    mutationFn: ({ orderId, email }: { orderId: string; email: string }) =>
+      publicApiClient.post<{ checkoutUrl: string }>(
+        `/public/${slug}/orders/${orderId}/pay`,
+        { email },
+      ),
+    onSuccess: (result) => {
+      setRedirecting(true);
+      window.location.href = result.checkoutUrl;
+    },
+  });
+
   const orderMutation = useMutation({
     mutationFn: (values: CreatePublicOrderInput) =>
-      publicApiClient.post<{ number: string }>(`/public/${slug}/orders`, {
+      publicApiClient.post<{ id: string; number: string }>(`/public/${slug}/orders`, {
         ...values,
         contact: {
           email: values.contact.email,
@@ -286,7 +314,13 @@ export function CheckoutPanel({
         discountCode: values.discountCode || undefined,
         shippingAddress: values.shippingAddress,
       }),
-    onSuccess: (order) => onSuccess(order.number),
+    onSuccess: (order, values) => {
+      if (paymentMethod === "online") {
+        payMutation.mutate({ orderId: order.id, email: values.contact.email });
+        return;
+      }
+      onSuccess(order.number);
+    },
   });
 
   return (
@@ -380,14 +414,50 @@ export function CheckoutPanel({
           />
         </div>
 
+        {acceptedPaymentMethods.length > 1 && (
+          <div className="space-y-1 border-t border-border pt-3">
+            <p className="text-xs font-medium text-text-muted">Mode de paiement</p>
+            {acceptedPaymentMethods.map((method) => (
+              <label key={method} className="flex items-center gap-2 text-sm text-text">
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value={method}
+                  checked={paymentMethod === method}
+                  onChange={() => setPaymentMethod(method)}
+                />
+                {PAYMENT_METHOD_LABELS[method]}
+              </label>
+            ))}
+          </div>
+        )}
+
         {errors.items && <p className="text-xs text-destructive">{errors.items.message ?? "Panier invalide."}</p>}
         {orderMutation.isError && (
           <p className="text-xs text-destructive">
             {orderMutation.error instanceof PublicApiError ? orderMutation.error.message : "Erreur"}
           </p>
         )}
-        <Button type="submit" loading={orderMutation.isPending} disabled={cart.length === 0} className="w-full">
-          {orderMutation.isPending ? "Envoi..." : "Confirmer la commande"}
+        {payMutation.isError && (
+          <p className="text-xs text-destructive">
+            {payMutation.error instanceof PublicApiError
+              ? payMutation.error.message
+              : "Impossible de démarrer le paiement en ligne."}
+          </p>
+        )}
+        <Button
+          type="submit"
+          loading={orderMutation.isPending || payMutation.isPending || redirecting}
+          disabled={cart.length === 0}
+          className="w-full"
+        >
+          {redirecting
+            ? "Redirection vers le paiement..."
+            : orderMutation.isPending || payMutation.isPending
+              ? "Envoi..."
+              : paymentMethod === "online"
+                ? "Payer en ligne"
+                : "Confirmer la commande"}
         </Button>
       </form>
     </Dialog>

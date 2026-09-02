@@ -266,6 +266,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
           cart={cart}
           currency={organization.currency}
           shippingFlatRate={organization.shippingFlatRate}
+          acceptedPaymentMethods={organization.acceptedPaymentMethods}
           onClose={() => setShowCheckout(false)}
           onSuccess={(orderNumber) => {
             clearCart();

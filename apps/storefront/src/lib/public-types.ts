@@ -5,6 +5,7 @@ import type {
   OfferType,
   OfferVariant,
   OrderStatus,
+  PaymentMethod,
   QuoteStatus,
   ReturnRequestStatus,
   StorefrontTheme,
@@ -30,8 +31,11 @@ export interface PublicOrganization {
   /** Flat shipping rate charged at checkout — undefined means no shipping cost. */
   shippingFlatRate?: number;
   /** Resolved storefront visual template/palette/font-pairing — already clamped to the org's
-   *  plan server-side. See @/templates/registry.tsx. */
+   *  plan server-side. See @/app/[slug]/storefront-client.tsx's `renderTemplate`. */
   storefrontTheme: StorefrontTheme;
+  /** Already resolved to what's actually usable — "online" is only ever present when a real PSP
+   *  is connected. Never empty. */
+  acceptedPaymentMethods: PaymentMethod[];
 }
 
 /**

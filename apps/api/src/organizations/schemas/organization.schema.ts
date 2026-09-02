@@ -3,6 +3,7 @@ import { HydratedDocument } from 'mongoose';
 import type {
   KorvaModule,
   OrganizationSettings,
+  PaymentMethod,
   StorefrontFontPairingKey,
   StorefrontPaletteKey,
   StorefrontSection,
@@ -89,6 +90,13 @@ export class Organization {
    *  allowed; a per-method rate table is a fast-follow if a real need for it comes up. */
   @Prop()
   shippingFlatRate?: number;
+
+  /** Undefined means "cash only" (see PublicService's `?? ['cash']` fallback) — `default:
+   *  undefined` opts out of Mongoose's array-path auto-`[]`-init, same reasoning as
+   *  `storefrontSections` above; a real stored `[]` would otherwise be indistinguishable from
+   *  "never configured" and silently accept no payment method at all. */
+  @Prop({ type: [String], default: undefined })
+  acceptedPaymentMethods?: PaymentMethod[];
 
   @Prop({ type: Object, default: { onboardingCompleted: false } })
   settings!: OrganizationSettings;

@@ -38,6 +38,18 @@ export type KorvaModule = (typeof KORVA_MODULES)[number];
 export const STOREFRONT_SECTIONS = ["catalog", "booking"] as const;
 export type StorefrontSection = (typeof STOREFRONT_SECTIONS)[number];
 
+/**
+ * Which checkout payment method(s) a storefront offers — independent of `enabledModules`. Every
+ * organization defaults to `["cash"]` (see the schema default) since that's the only method that
+ * has ever existed: order creation itself never collects payment, so "cash" really means "any
+ * arrangement made outside KORVA" (cash on delivery/pickup, bank transfer, an invoice sent
+ * later), not literally banknotes. "online" is only ever offered to the customer if it's both
+ * listed here AND a real PSP actually resolves for the organization's market (see
+ * PublicService — an org can't advertise online payment it has no way to actually collect).
+ */
+export const PAYMENT_METHODS = ["cash", "online"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
 export interface OrganizationSettings {
   onboardingCompleted: boolean;
   [key: string]: unknown;
@@ -71,6 +83,9 @@ export interface Organization {
   storefrontFontPairing?: StorefrontFontPairingKey;
   /** Flat shipping rate applied to every storefront order at checkout — undefined charges none. */
   shippingFlatRate?: number;
+  /** Never empty in practice — the schema defaults new organizations to `["cash"]`. See
+   *  PAYMENT_METHODS' own doc comment. */
+  acceptedPaymentMethods?: PaymentMethod[];
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
   createdAt: string;

@@ -174,6 +174,7 @@ export default function StorefrontClient({ slug, nonce }: { slug: string; nonce?
           cart={cart}
           currency={organization.currency}
           shippingFlatRate={organization.shippingFlatRate}
+          acceptedPaymentMethods={organization.acceptedPaymentMethods}
           customer={isAuthenticated && customer ? customer : undefined}
           onClose={() => setShowCheckout(false)}
           onSuccess={(orderNumber) => {

@@ -129,4 +129,21 @@ export class PublicController {
   ) {
     return this.publicService.trackBooking(slug, bookingId, query.email);
   }
+
+  /**
+   * Initiates a real online payment for an order just placed via POST .../orders — same
+   * email-as-sole-authorization model as trackOrder, and the same enumeration-risk throttle
+   * (this also triggers one real, billable call to the organization's connected PSP, which is
+   * its own reason to keep this rate-limited). See PublicService#initiateOnlinePayment.
+   */
+  @Throttle(PUBLIC_BOOKING_THROTTLE)
+  @Post('orders/:orderId/pay')
+  initiateOnlinePayment(
+    @Param('organizationSlug') slug: string,
+    @Param('orderId') orderId: string,
+    @Body(new ZodValidationPipe(trackByEmailQuerySchema))
+    body: TrackByEmailQuery,
+  ) {
+    return this.publicService.initiateOnlinePayment(slug, orderId, body.email);
+  }
 }

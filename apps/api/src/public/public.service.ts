@@ -1,4 +1,10 @@
-import { NotFoundException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -8,6 +14,7 @@ import {
   pickDeterministic,
   planMeetsMinimum,
   type KorvaModule,
+  type PaymentMethod,
   type StorefrontSection,
   type StorefrontTheme,
 } from '@korva/types';
@@ -24,6 +31,14 @@ import { AvailabilityService } from '../booking/availability/availability.servic
 import { BookingsService } from '../booking/bookings/bookings.service';
 import { ResourcesService } from '../booking/resources/resources.service';
 import { OrdersService } from '../commerce/orders/orders.service';
+import { InvoicesService } from '../finance/invoices/invoices.service';
+import { PaymentsService } from '../finance/payments/payments.service';
+import { PaymentProviderResolverService } from '../finance/payments/providers/payment-provider-resolver.service';
+import {
+  EMAIL_PROVIDER,
+  type EmailProvider,
+} from '../communication/providers/email-provider.interface';
+import { interpolate } from '../shared/template';
 import { ContactsService } from '../crm/contacts/contacts.service';
 import { LeadsService } from '../crm/leads/leads.service';
 import { NotesService } from '../crm/notes/notes.service';
@@ -58,6 +73,10 @@ function emailsMatch(storedEmail: string, candidateEmail: string): boolean {
   return storedEmail === candidateEmail.trim().toLowerCase();
 }
 
+const ORDER_CONFIRMATION_BODY_TEMPLATE = `<p>Bonjour {{firstName}},</p>
+<p>Votre commande <strong>{{orderNumber}}</strong> d'un montant de {{total}} {{currency}} a bien été enregistrée.</p>
+<p>Vous pouvez suivre son statut à tout moment depuis la page de suivi de commande de la boutique.</p>`;
+
 /**
  * Backs the public, unauthenticated storefront API (`/public/:organizationSlug/...`). Never
  * exposes internal fields (customFields, SKUs, blocked-slot reasons, ...) and never accepts
@@ -67,6 +86,8 @@ function emailsMatch(storedEmail: string, candidateEmail: string): boolean {
  */
 @Injectable()
 export class PublicService {
+  private readonly logger = new Logger(PublicService.name);
+
   constructor(
     private readonly organizationsService: OrganizationsService,
     private readonly subscriptionsService: SubscriptionsService,
@@ -75,6 +96,10 @@ export class PublicService {
     private readonly bookingsService: BookingsService,
     private readonly resourcesService: ResourcesService,
     private readonly ordersService: OrdersService,
+    private readonly invoicesService: InvoicesService,
+    private readonly paymentsService: PaymentsService,
+    private readonly paymentProviderResolver: PaymentProviderResolverService,
+    @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
     private readonly contactsService: ContactsService,
     private readonly leadsService: LeadsService,
     private readonly notesService: NotesService,
@@ -123,7 +148,47 @@ export class PublicService {
       visibleSections: this.computeVisibleSections(organization),
       shippingFlatRate: organization.shippingFlatRate,
       storefrontTheme: this.resolveStorefrontTheme(organization, plan.key),
+      acceptedPaymentMethods:
+        await this.resolveAvailablePaymentMethods(organization),
     };
+  }
+
+  /**
+   * `organization.acceptedPaymentMethods` alone isn't enough to decide whether the storefront
+   * can actually offer "online" as a checkout option — it also needs a real PSP to resolve for
+   * this organization's market (see PaymentProviderResolverService), or there is nothing to
+   * actually charge the payer through. Falls back to `["cash"]` if filtering out an
+   * unavailable "online" would otherwise leave the storefront with no payment method at all.
+   */
+  private async resolveAvailablePaymentMethods(
+    organization: OrganizationDocument,
+  ): Promise<PaymentMethod[]> {
+    const configured = organization.acceptedPaymentMethods ?? ['cash'];
+    if (!configured.includes('online')) {
+      return configured;
+    }
+    const onlineAvailable = await this.isOnlinePaymentAvailable(
+      organization.id as string,
+    );
+    if (onlineAvailable) {
+      return configured;
+    }
+    const withoutOnline = configured.filter((m) => m !== 'online');
+    return withoutOnline.length > 0 ? withoutOnline : ['cash'];
+  }
+
+  private async isOnlinePaymentAvailable(
+    organizationId: string,
+  ): Promise<boolean> {
+    try {
+      await this.paymentProviderResolver.resolve({
+        flow: 'commerce',
+        organizationId,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -371,6 +436,35 @@ export class PublicService {
       },
     );
 
+    // Best-effort, same posture as PasswordResetService.forgotPassword's own email send — a
+    // delivery failure must never fail order creation itself (the order is already real either
+    // way), only ever logged. `contact.email` is required by input.contact's own validation
+    // (publicContactSchema) so it's always set in practice; the guard is only to satisfy
+    // Contact's own wider (optional) schema type.
+    if (contact.email) {
+      try {
+        await this.emailProvider.send({
+          to: contact.email,
+          subject: `Confirmation de commande ${order.number}`,
+          body: interpolate(
+            ORDER_CONFIRMATION_BODY_TEMPLATE,
+            {
+              firstName: contact.firstName ?? '',
+              orderNumber: order.number,
+              total: order.total.toFixed(2),
+              currency: order.currency,
+            },
+            { escapeHtml: true },
+          ),
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to send order confirmation email for order ${order.number}`,
+          error,
+        );
+      }
+    }
+
     return {
       id: order.id as string,
       number: order.number,
@@ -378,6 +472,121 @@ export class PublicService {
       currency: order.currency,
       status: order.status,
     };
+  }
+
+  /**
+   * Initiates a real online payment for an order just placed via createOrder — never trusts a
+   * client-supplied amount, always charges the invoice's own total. `email` is the sole
+   * authorization check, same generic-404-on-mismatch model as trackOrder (a raw MongoDB
+   * ObjectId `orderId`, unlike the short sequential order NUMBER trackOrder guards against, has
+   * enough entropy that it isn't realistically guessable — but this still doesn't rely on that
+   * alone). Confirms the order and generates its invoice on first call if needed (an order paid
+   * online is, by definition, confirmed — there's no separate staff review step for it); a
+   * second call for the same order reuses the same invoice/payment via
+   * PaymentsService.create's own idempotency (keyed deterministically off `orderId`, since an
+   * anonymous storefront customer has no `Idempotency-Key` header to send).
+   */
+  async initiateOnlinePayment(slug: string, orderId: string, email: string) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'commerce');
+    const organizationId = organization.id as string;
+
+    const acceptedMethods =
+      await this.resolveAvailablePaymentMethods(organization);
+    if (!acceptedMethods.includes('online')) {
+      throw new BadRequestException({
+        code: 'ONLINE_PAYMENT_NOT_AVAILABLE',
+        message: 'This organization does not accept online payment.',
+      });
+    }
+
+    let order;
+    try {
+      order = await this.orderModel
+        .findOne({
+          _id: new Types.ObjectId(orderId),
+          organizationId: new Types.ObjectId(organizationId),
+        })
+        .exec();
+    } catch {
+      // Malformed orderId (not a valid ObjectId) — same generic 404 as "doesn't exist".
+      throw trackingNotFound('order');
+    }
+    if (!order) {
+      throw trackingNotFound('order');
+    }
+    const contact = await this.contactModel
+      .findOne({ _id: order.contactId, organizationId: organization._id })
+      .exec();
+    if (!contact?.email || !emailsMatch(contact.email, email)) {
+      throw trackingNotFound('order');
+    }
+
+    let provider;
+    try {
+      provider = await this.paymentProviderResolver.resolve({
+        flow: 'commerce',
+        organizationId,
+      });
+    } catch {
+      throw new BadRequestException({
+        code: 'ONLINE_PAYMENT_NOT_AVAILABLE',
+        message: 'This organization does not accept online payment.',
+      });
+    }
+
+    if (order.status === 'pending') {
+      await this.ordersService.confirm(organizationId, undefined, orderId);
+    } else if (order.status !== 'confirmed' && order.status !== 'fulfilled') {
+      throw new BadRequestException({
+        code: 'ORDER_NOT_PAYABLE',
+        message: `Cannot pay for an order with status "${order.status}"`,
+      });
+    }
+
+    const invoice = order.invoiceId
+      ? await this.invoicesService.getById(
+          organizationId,
+          order.invoiceId.toString(),
+        )
+      : await this.ordersService.generateInvoice(
+          organizationId,
+          undefined,
+          orderId,
+        );
+
+    if (invoice.status === 'paid') {
+      throw new BadRequestException({
+        code: 'ORDER_ALREADY_PAID',
+        message: 'This order has already been paid.',
+      });
+    }
+
+    const storefrontUrl = (
+      process.env.STOREFRONT_URL ?? 'http://localhost:3001'
+    ).replace(/\/$/, '');
+    const redirectUrl = `${storefrontUrl}/${slug}/track`;
+
+    const payment = await this.paymentsService.create(
+      organizationId,
+      undefined,
+      {
+        invoiceId: invoice.id as string,
+        amount: Math.round((invoice.total - invoice.amountPaid) * 100) / 100,
+        method: 'online',
+      },
+      `public-order-payment:${orderId}`,
+      { provider, customerEmail: contact.email, redirectUrl },
+    );
+
+    if (!payment.checkoutUrl) {
+      throw new BadRequestException({
+        code: 'ONLINE_PAYMENT_NOT_AVAILABLE',
+        message: 'Unable to start an online payment for this order right now.',
+      });
+    }
+
+    return { checkoutUrl: payment.checkoutUrl, orderNumber: order.number };
   }
 
   /**
