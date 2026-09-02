@@ -25,3 +25,4 @@ export * from "./reviews.ts";
 export * from "./projects.ts";
 export * from "./courses.ts";
 export * from "./kitchen.ts";
+export * from "./audit.ts";

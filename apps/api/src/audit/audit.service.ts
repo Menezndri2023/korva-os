@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
+import type { Pagination } from '@korva/types';
+import type { ListAuditLogsQuery } from '@korva/validation';
 import {
   AuditAction,
   AuditLog,
@@ -43,5 +45,37 @@ export class AuditService {
       .sort({ createdAt: -1 })
       .limit(limit)
       .exec();
+  }
+
+  /** Paginated, filterable audit trail for a "who did what" read UI — see AuditController. */
+  async list(
+    organizationId: string,
+    query: ListAuditLogsQuery,
+  ): Promise<{ data: AuditLogDocument[]; pagination: Pagination }> {
+    const filter: FilterQuery<AuditLog> = {
+      organizationId: new Types.ObjectId(organizationId),
+    };
+    if (query.action) filter.action = query.action;
+    if (query.entity) filter.entity = query.entity;
+
+    const [data, total] = await Promise.all([
+      this.auditLogModel
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((query.page - 1) * query.limit)
+        .limit(query.limit)
+        .exec(),
+      this.auditLogModel.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      data,
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / query.limit)),
+      },
+    };
   }
 }

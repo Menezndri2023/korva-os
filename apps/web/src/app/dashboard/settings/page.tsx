@@ -18,6 +18,7 @@ import {
 } from "@korva/types";
 import type {
   AiUsageSummary,
+  AuditLogEntry,
   ConnectMessagingAccountInput,
   ConnectPaymentPayoutInput,
   IntegrationAccountStatus,
@@ -1794,6 +1795,7 @@ export default function SettingsPage() {
 
       {organization && <ExternalWebsiteSection slug={organization.slug} />}
       <WebhookSubscriptionsSection />
+      <AuditLogSection />
     </div>
   );
 }
@@ -2340,6 +2342,88 @@ function WebhookSubscriptionsSection() {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  CREATE: "Création",
+  UPDATE: "Modification",
+  DELETE: "Suppression",
+  LOGIN: "Connexion",
+  LOGOUT: "Déconnexion",
+  PAYMENT: "Paiement",
+  REFUND: "Remboursement",
+  BOOKING: "Réservation",
+  AI_ACTION: "Action IA",
+  ROLE_CHANGE: "Changement de rôle",
+  SETTINGS_CHANGE: "Changement de paramètres",
+};
+
+/** First read UI for AuditService.record — see apps/api/src/audit/audit.controller.ts. */
+function AuditLogSection() {
+  const [page, setPage] = useState(1);
+  const limit = 20;
+  const { data, isLoading } = useQuery({
+    queryKey: ["audit-logs", page],
+    queryFn: () => apiClient.getList<AuditLogEntry>(`/audit-logs?page=${page}&limit=${limit}`),
+  });
+
+  return (
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <h2 className="text-sm font-semibold text-text">Journal d&apos;audit</h2>
+      <p className="mt-1 text-sm text-text-muted">
+        Historique des actions effectuées sur votre organisation (créations, modifications,
+        paiements...).
+      </p>
+
+      {isLoading ? (
+        <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+      ) : !data || data.data.length === 0 ? (
+        <p className="mt-4 text-sm text-text-muted">Aucune entrée pour le moment.</p>
+      ) : (
+        <>
+          <ul className="mt-4 divide-y divide-border">
+            {data.data.map((entry) => (
+              <li key={entry.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <Badge>{AUDIT_ACTION_LABELS[entry.action] ?? entry.action}</Badge>
+                  <span className="text-text">{entry.entity}</span>
+                  {entry.entityId && (
+                    <span className="text-xs text-text-muted">#{entry.entityId.slice(-6)}</span>
+                  )}
+                </div>
+                <span className="text-xs text-text-muted">
+                  {new Date(entry.createdAt).toLocaleString("fr-FR")}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-3 flex items-center justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Précédent
+            </Button>
+            <span className="text-xs text-text-muted">
+              Page {data.pagination.page} / {data.pagination.totalPages}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={page >= data.pagination.totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Suivant
+            </Button>
+          </div>
+        </>
+      )}
     </section>
   );
 }

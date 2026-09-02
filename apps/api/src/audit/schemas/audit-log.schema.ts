@@ -1,23 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
+import { AUDIT_ACTIONS, type AuditAction } from '@korva/types';
 import { idToJson } from '../../core/mongoose/schema-options';
 
 export type AuditLogDocument = HydratedDocument<AuditLog>;
-
-export const AUDIT_ACTIONS = [
-  'CREATE',
-  'UPDATE',
-  'DELETE',
-  'LOGIN',
-  'LOGOUT',
-  'PAYMENT',
-  'REFUND',
-  'BOOKING',
-  'AI_ACTION',
-  'ROLE_CHANGE',
-  'SETTINGS_CHANGE',
-] as const;
-export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+export { AUDIT_ACTIONS };
+export type { AuditAction };
 
 @Schema({
   timestamps: { createdAt: true, updatedAt: false },
