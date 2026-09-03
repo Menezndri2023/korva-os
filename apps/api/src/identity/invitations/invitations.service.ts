@@ -111,7 +111,12 @@ export class InvitationsService {
           'You cannot assign a role with higher privileges than your own.',
       });
     }
-    if (requireSystemRoleRank(actorRole) > requireSystemRoleRank(role)) {
+    if (
+      requireSystemRoleRank(actorRole) >
+      requireSystemRoleRank(role, {
+        allowCustomAsMostSenior: actorRole.systemKey === 'OWNER',
+      })
+    ) {
       throw new ForbiddenException({
         code: 'ROLE_HIERARCHY_VIOLATION',
         message:

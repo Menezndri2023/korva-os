@@ -21,3 +21,4 @@ export * from "./reviews.ts";
 export * from "./projects.ts";
 export * from "./courses.ts";
 export * from "./audit.ts";
+export * from "./roles.ts";

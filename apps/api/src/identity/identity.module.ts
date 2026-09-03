@@ -27,6 +27,7 @@ import { UsersRepository } from './users/users.repository';
 import { UsersService } from './users/users.service';
 import { RolesRepository } from './roles/roles.repository';
 import { RolesService } from './roles/roles.service';
+import { RolesController } from './roles/roles.controller';
 import { MembershipsRepository } from './memberships/memberships.repository';
 import { MembershipsService } from './memberships/memberships.service';
 import { SessionsRepository } from './auth/sessions.repository';
@@ -96,6 +97,7 @@ import { ApiKeyGuard } from '../core/guards/api-key.guard';
     InvitationsController,
     InvitationsAcceptController,
     ApiKeysController,
+    RolesController,
   ],
   providers: [
     UsersRepository,

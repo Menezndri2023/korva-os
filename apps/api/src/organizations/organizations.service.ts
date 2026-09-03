@@ -30,10 +30,24 @@ import { EntitlementsService } from '../subscriptions/entitlements.service';
  * Rank of a role for role-assignment hierarchy purposes only (see addMember). Custom roles
  * (no systemKey, or an unrecognized one) have no known rank and must never be assumed to
  * outrank anything — callers must fail closed rather than fall back to a permissive default.
+ *
+ * `allowCustomAsMostSenior` is the one deliberate escape hatch, and must ONLY ever be passed
+ * when checking a TARGET role being granted/removed/kept — never for the actor's own role,
+ * which must always fail closed regardless. A custom role's real seniority is business-defined
+ * and unknowable here; ties it with OWNER (rank 0) purely so the `actorRank > targetRank`
+ * comparison at the call site evaluates false — safe only because every call site only ever
+ * sets this to `true` after independently confirming the actor's OWN role is OWNER, who may
+ * already grant/edit/remove anything by definition.
  */
-export function requireSystemRoleRank(role: RoleDocument): number {
+export function requireSystemRoleRank(
+  role: RoleDocument,
+  options?: { allowCustomAsMostSenior?: boolean },
+): number {
   const rank = role.systemKey ? SYSTEM_ROLE_RANK[role.systemKey] : undefined;
   if (rank === undefined) {
+    if (options?.allowCustomAsMostSenior) {
+      return 0;
+    }
     throw new ForbiddenException({
       code: 'ROLE_HIERARCHY_UNKNOWN',
       message: 'You cannot assign a role with higher privileges than your own.',
@@ -248,7 +262,11 @@ export class OrganizationsService {
           'You cannot assign a role with higher privileges than your own.',
       });
     }
-    if (requireSystemRoleRank(actorRole) > requireSystemRoleRank(role)) {
+    const actorIsOwner = actorRole.systemKey === 'OWNER';
+    if (
+      requireSystemRoleRank(actorRole) >
+      requireSystemRoleRank(role, { allowCustomAsMostSenior: actorIsOwner })
+    ) {
       throw new ForbiddenException({
         code: 'ROLE_HIERARCHY_VIOLATION',
         message:
@@ -317,9 +335,16 @@ export class OrganizationsService {
       });
     }
     const currentRole = membership.roleId as unknown as RoleDocument;
+    const actorIsOwner = actorRole.systemKey === 'OWNER';
     if (
-      requireSystemRoleRank(actorRole) > requireSystemRoleRank(newRole) ||
-      requireSystemRoleRank(actorRole) > requireSystemRoleRank(currentRole)
+      requireSystemRoleRank(actorRole) >
+        requireSystemRoleRank(newRole, {
+          allowCustomAsMostSenior: actorIsOwner,
+        }) ||
+      requireSystemRoleRank(actorRole) >
+        requireSystemRoleRank(currentRole, {
+          allowCustomAsMostSenior: actorIsOwner,
+        })
     ) {
       throw new ForbiddenException({
         code: 'ROLE_HIERARCHY_VIOLATION',
@@ -475,7 +500,10 @@ export class OrganizationsService {
     const currentRole = membership.roleId as unknown as RoleDocument;
     if (
       !actorRole ||
-      requireSystemRoleRank(actorRole) > requireSystemRoleRank(currentRole)
+      requireSystemRoleRank(actorRole) >
+        requireSystemRoleRank(currentRole, {
+          allowCustomAsMostSenior: actorRole.systemKey === 'OWNER',
+        })
     ) {
       throw new ForbiddenException({
         code: 'ROLE_HIERARCHY_VIOLATION',

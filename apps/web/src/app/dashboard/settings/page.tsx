@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  CORE_PERMISSIONS,
   KORVA_MODULES,
   STOREFRONT_SECTIONS,
   STOREFRONT_TEMPLATES,
@@ -35,9 +36,11 @@ import type {
 } from "@korva/types";
 import {
   addMemberSchema,
+  createRoleSchema,
   createWebhookSubscriptionSchema,
   updateOrganizationSchema,
   type AddMemberInput,
+  type CreateRoleInput,
   type CreateWebhookSubscriptionInput,
   type UpdateOrganizationInput,
 } from "@korva/validation";
@@ -1795,8 +1798,142 @@ export default function SettingsPage() {
 
       {organization && <ExternalWebsiteSection slug={organization.slug} />}
       <WebhookSubscriptionsSection />
+      <RolesManagementSection />
       <AuditLogSection />
     </div>
+  );
+}
+
+interface RoleDetail {
+  id: string;
+  name: string;
+  systemKey?: string;
+  isSystem: boolean;
+  permissions: string[];
+}
+
+/** Custom (organization-defined) role management — see apps/api/src/identity/roles/roles.controller.ts.
+ *  System roles are listed for visibility but never editable/deletable here (the API itself
+ *  refuses, this UI just doesn't offer the buttons for them). */
+function RolesManagementSection() {
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const { data: roles, isLoading } = useQuery({
+    queryKey: ["roles"],
+    queryFn: () => apiClient.get<RoleDetail[]>("/roles"),
+  });
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<CreateRoleInput>({
+    resolver: zodResolver(createRoleSchema),
+    defaultValues: { name: "", permissions: [] },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (input: CreateRoleInput) => apiClient.post<RoleDetail>("/roles", input),
+    onSuccess: () => {
+      reset({ name: "", permissions: [] });
+      setCreateOpen(false);
+      return queryClient.invalidateQueries({ queryKey: ["roles"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/roles/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roles"] }),
+  });
+
+  return (
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-text">Rôles personnalisés</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            En plus des 6 rôles standards, créez des rôles avec exactement les permissions dont
+            vos équipes ont besoin.
+          </p>
+        </div>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setCreateOpen((v) => !v)}>
+          {createOpen ? "Annuler" : "Créer un rôle"}
+        </Button>
+      </div>
+
+      {createOpen && (
+        <form
+          onSubmit={handleSubmit((values) => createMutation.mutate(values))}
+          className="mt-4 space-y-3 rounded-md border border-border p-4"
+        >
+          <div>
+            <Input placeholder="Nom du rôle" className="w-full" error={!!errors.name} {...register("name")} />
+            {errors.name && <p className="mt-1 text-xs text-destructive">{errors.name.message}</p>}
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium text-text">Permissions</p>
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
+              {CORE_PERMISSIONS.map((permission) => (
+                <label key={permission} className="flex items-center gap-2 text-xs text-text">
+                  <input type="checkbox" value={permission} {...register("permissions")} />
+                  {permission}
+                </label>
+              ))}
+            </div>
+          </div>
+          {createMutation.isError && (
+            <p className="text-sm text-destructive">
+              {createMutation.error instanceof ApiError
+                ? createMutation.error.message
+                : "Impossible de créer ce rôle."}
+            </p>
+          )}
+          <Button type="submit" loading={createMutation.isPending}>
+            {createMutation.isPending ? "Création..." : "Créer le rôle"}
+          </Button>
+        </form>
+      )}
+
+      {isLoading ? (
+        <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-border">
+          {roles?.map((role) => (
+            <li key={role.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-text">{role.name}</span>
+                {role.isSystem ? (
+                  <Badge>Standard</Badge>
+                ) : (
+                  <span className="text-xs text-text-muted">
+                    {role.permissions.length} permission(s)
+                  </span>
+                )}
+              </div>
+              {!role.isSystem && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  loading={deleteMutation.isPending && deleteMutation.variables === role.id}
+                  onClick={() => deleteMutation.mutate(role.id)}
+                >
+                  Supprimer
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {deleteMutation.isError && (
+        <p className="mt-2 text-sm text-destructive">
+          {deleteMutation.error instanceof ApiError
+            ? deleteMutation.error.message
+            : "Impossible de supprimer ce rôle."}
+        </p>
+      )}
+    </section>
   );
 }
 

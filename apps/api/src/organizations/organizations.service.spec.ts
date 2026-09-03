@@ -176,14 +176,22 @@ describe('OrganizationsService.addMember — role-hierarchy enforcement', () => 
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('TEST 12: an unknown/custom role (no systemKey) fails closed with 403, no membership created', async () => {
+  it('TEST 12: an actor holding an unknown/custom role (no systemKey) fails closed with 403, no membership created — regardless of the target role', async () => {
     const asActor = attempt('role-custom', 'role-staff');
     await expect(asActor.promise).rejects.toBeInstanceOf(ForbiddenException);
     expect(asActor.create).not.toHaveBeenCalled();
+  });
 
-    const asTarget = attempt('role-owner', 'role-custom');
-    await expect(asTarget.promise).rejects.toBeInstanceOf(ForbiddenException);
-    expect(asTarget.create).not.toHaveBeenCalled();
+  it('TEST 13: ADMIN still cannot assign a custom (no-systemKey) role — only OWNER gets that escape hatch', async () => {
+    const { promise, create } = attempt('role-admin', 'role-custom');
+    await expect(promise).rejects.toBeInstanceOf(ForbiddenException);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('TEST 14: OWNER CAN assign a custom (no-systemKey) role — the one deliberate escape hatch backing organization-defined custom roles', async () => {
+    const { promise, create } = attempt('role-owner', 'role-custom');
+    await expect(promise).resolves.toEqual({ id: 'membership-1' });
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });
 
