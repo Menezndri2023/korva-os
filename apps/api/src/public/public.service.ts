@@ -23,7 +23,9 @@ import type {
   CreatePublicLeadInput,
   CreatePublicOrderInput,
   ListPublicOffersQuery,
+  SearchPublicOffersQuery,
 } from '@korva/validation';
+import type { OfferDocument } from '../catalog/offers/schemas/offer.schema';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { OffersService } from '../catalog/offers/offers.service';
@@ -275,17 +277,8 @@ export class PublicService {
     );
   }
 
-  async listOffers(slug: string, query: ListPublicOffersQuery) {
-    const organization = await this.resolveOrganization(slug);
-    this.assertModuleEnabled(organization, 'catalog');
-
-    const { data } = await this.offersService.list(organization.id as string, {
-      page: 1,
-      limit: 50,
-      status: 'active',
-      type: query.type,
-    });
-    return data.map((offer) => ({
+  private toPublicOffer(offer: OfferDocument) {
+    return {
       id: offer.id as string,
       type: offer.type,
       name: offer.name,
@@ -294,7 +287,85 @@ export class PublicService {
       categories: offer.categories,
       pricing: offer.pricing,
       variants: offer.variants,
-    }));
+    };
+  }
+
+  /** Small, unpaginated preview — backs the homepage templates and generateMetadata. Capped at
+   *  50 for backward compatibility with those existing callers; a catalog larger than that is
+   *  only ever fully reachable through searchOffers()/the dedicated catalogue page below. */
+  async listOffers(slug: string, query: ListPublicOffersQuery) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'catalog');
+
+    const { data } = await this.offersService.list(organization.id as string, {
+      page: 1,
+      limit: 50,
+      sort: 'newest',
+      status: 'active',
+      type: query.type,
+    });
+    return data.map((offer) => this.toPublicOffer(offer));
+  }
+
+  /** Real pagination/search/sort/category-filter over the FULL active catalog — backs the
+   *  dedicated `/[slug]/catalogue` page, unlike listOffers()'s fixed 50-item preview above. */
+  async searchOffers(slug: string, query: SearchPublicOffersQuery) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'catalog');
+
+    const { data, pagination } = await this.offersService.list(
+      organization.id as string,
+      {
+        page: query.page,
+        limit: query.limit,
+        status: 'active',
+        type: query.type,
+        category: query.category,
+        search: query.search,
+        sort: query.sort,
+      },
+    );
+    return {
+      data: data.map((offer) => this.toPublicOffer(offer)),
+      pagination,
+    };
+  }
+
+  async listOfferCategories(slug: string): Promise<string[]> {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'catalog');
+    return this.offersService.distinctActiveCategories(
+      organization.id as string,
+    );
+  }
+
+  /** Single-offer lookup — never distinguishes "doesn't exist" from "exists but isn't active"
+   *  (draft/archived), same generic-404 principle as trackingNotFound() above: an offer id a
+   *  visitor could only have guessed or scraped from a stale link must never confirm its own
+   *  existence once it's no longer for sale. */
+  async getOffer(slug: string, offerId: string) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'catalog');
+
+    let offer: OfferDocument;
+    try {
+      offer = await this.offersService.getById(
+        organization.id as string,
+        offerId,
+      );
+    } catch {
+      throw new NotFoundException({
+        code: 'OFFER_NOT_FOUND',
+        message: 'Offer not found',
+      });
+    }
+    if (offer.status !== 'active') {
+      throw new NotFoundException({
+        code: 'OFFER_NOT_FOUND',
+        message: 'Offer not found',
+      });
+    }
+    return this.toPublicOffer(offer);
   }
 
   async listResources(slug: string) {

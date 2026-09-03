@@ -65,6 +65,9 @@ export function SalonTemplate({
       <header className={`border-b ${KT.border} ${KT.surface} px-6 py-3`}>
         <div className="mx-auto flex max-w-3xl items-center justify-between text-sm">
           <div className={`flex items-center gap-4 ${KT.textMuted}`}>
+            {catalogVisible && (
+              <Link href={`/${slug}/catalogue`} className="hover:underline">Tous nos services</Link>
+            )}
             <Link href={`/${slug}/track`} className="hover:underline">Suivre ma réservation</Link>
             {authHydrated && (
               <Link href={`/${slug}/account${isAuthenticated ? "" : "/login"}`} className="hover:underline">

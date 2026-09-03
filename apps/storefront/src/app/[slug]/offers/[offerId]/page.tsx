@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import OfferDetailClient from "./offer-detail-client";
 import { publicApiClient } from "@/lib/public-api-client";
-import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
+import type { PublicOrganization } from "@/lib/public-types";
 
 // Server-side only — see the same note in ../page.tsx.
 const SITE_URL = (process.env.STOREFRONT_URL ?? "http://localhost:3001").replace(/\/$/, "");
@@ -33,19 +33,16 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
     return notFoundMetadata;
   }
 
-  // GET /public/:slug/offers has no single-offer lookup — it returns the organization's whole
-  // active catalog (server-capped at page 1 / 50 items, see PublicService#listOffers). We look
-  // up the requested id from that same list, exactly like the client component does. A catalog
-  // with more than 50 active offers can contain items that exist but aren't reachable this way —
-  // see this wave's BACKEND CONTRACT REQUIRED note for a proper GET /public/:slug/offers/:id.
-  let offers: PublicOffer[] = [];
+  let offer;
   try {
-    offers = await publicApiClient.get<PublicOffer[]>(`/public/${slug}/offers`);
+    offer = await publicApiClient.get<{
+      name: string;
+      description?: string;
+      images: string[];
+    }>(`/public/${slug}/offers/${offerId}`);
   } catch {
-    return notFoundMetadata;
-  }
-  const offer = offers.find((o) => o.id === offerId);
-  if (!offer) {
+    // Same generic-404 metadata whether the offer never existed or is a draft/archived — see
+    // PublicService#getOffer for why those two cases are deliberately indistinguishable.
     return notFoundMetadata;
   }
 

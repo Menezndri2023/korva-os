@@ -38,6 +38,7 @@ interface ResourcePayload {
 interface PublicOfferPayload {
   id: string;
   name: string;
+  categories: string[];
   pricing: { amount: number; currency: string };
   variants: {
     id: string;
@@ -45,6 +46,16 @@ interface PublicOfferPayload {
     sku?: string;
     priceOverride?: number;
   }[];
+}
+interface ApiPaginatedSuccess<T> {
+  success: true;
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 interface PublicBookingPayload {
   id: string;
@@ -281,6 +292,126 @@ describe('Public storefront API (e2e)', () => {
       const offers = asSuccess<PublicOfferPayload[]>(res.body);
       expect(offers).toHaveLength(1);
       expect(offers[0]!.name).toBe('T-Shirt');
+    });
+
+    it('searchOffers paginates/sorts/filters over the FULL active catalog, unlike the 50-item preview', async () => {
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}/offers/search`)
+        .expect(200);
+      const body = res.body as ApiPaginatedSuccess<PublicOfferPayload>;
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0]!.name).toBe('T-Shirt');
+      expect(body.pagination).toEqual({
+        page: 1,
+        limit: 24,
+        total: 1,
+        totalPages: 1,
+      });
+
+      const page2 = await request(server)
+        .get(`/api/v1/public/${slug}/offers/search`)
+        .query({ page: 2, limit: 1 })
+        .expect(200);
+      expect(
+        (page2.body as ApiPaginatedSuccess<PublicOfferPayload>).data,
+      ).toHaveLength(0);
+
+      const priceDesc = await request(server)
+        .get(`/api/v1/public/${slug}/offers/search`)
+        .query({ sort: 'price_desc' })
+        .expect(200);
+      expect(
+        (priceDesc.body as ApiPaginatedSuccess<PublicOfferPayload>).data[0]!
+          .name,
+      ).toBe('T-Shirt');
+
+      const noMatch = await request(server)
+        .get(`/api/v1/public/${slug}/offers/search`)
+        .query({ search: 'does-not-exist-anywhere' })
+        .expect(200);
+      expect(
+        (noMatch.body as ApiPaginatedSuccess<PublicOfferPayload>).data,
+      ).toHaveLength(0);
+
+      // The draft "Unreleased Product" must never surface, whatever the filter combination.
+      const all = await request(server)
+        .get(`/api/v1/public/${slug}/offers/search`)
+        .query({ limit: 48 })
+        .expect(200);
+      expect(
+        (all.body as ApiPaginatedSuccess<PublicOfferPayload>).data.some(
+          (o) => o.name === 'Unreleased Product',
+        ),
+      ).toBe(false);
+    });
+
+    it('listOfferCategories only reflects categories on active offers', async () => {
+      const categorizedRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Sneakers',
+          status: 'active',
+          categories: ['chaussures'],
+          pricing: { amount: 80, currency: 'EUR' },
+        })
+        .expect(201);
+      expect(asSuccess<OfferPayload>(categorizedRes.body).name).toBe(
+        'Sneakers',
+      );
+
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}/offers/categories`)
+        .expect(200);
+      expect(asSuccess<string[]>(res.body)).toEqual(['chaussures']);
+
+      const filtered = await request(server)
+        .get(`/api/v1/public/${slug}/offers/search`)
+        .query({ category: 'chaussures' })
+        .expect(200);
+      const filteredBody =
+        filtered.body as ApiPaginatedSuccess<PublicOfferPayload>;
+      expect(filteredBody.data).toHaveLength(1);
+      expect(filteredBody.data[0]!.name).toBe('Sneakers');
+    });
+
+    it('getOffer returns the real active offer by id', async () => {
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}/offers/${activeOfferId}`)
+        .expect(200);
+      expect(asSuccess<PublicOfferPayload>(res.body).name).toBe('T-Shirt');
+    });
+
+    it('getOffer returns a generic 404 for a draft offer, an unknown id, and a malformed id alike', async () => {
+      const draftOfferRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Still A Draft',
+          status: 'draft',
+          pricing: { amount: 10, currency: 'EUR' },
+        })
+        .expect(201);
+      const draftOfferId = asSuccess<OfferPayload>(draftOfferRes.body).id;
+
+      const draft = await request(server)
+        .get(`/api/v1/public/${slug}/offers/${draftOfferId}`)
+        .expect(404);
+      expect(asError(draft.body).code).toBe('OFFER_NOT_FOUND');
+
+      const unknown = await request(server)
+        .get(`/api/v1/public/${slug}/offers/${new Types.ObjectId().toString()}`)
+        .expect(404);
+      expect(asError(unknown.body).code).toBe('OFFER_NOT_FOUND');
+
+      const malformed = await request(server)
+        .get(`/api/v1/public/${slug}/offers/not-an-object-id`)
+        .expect(404);
+      expect(asError(malformed.body).code).toBe('OFFER_NOT_FOUND');
     });
 
     it('creates a public order, always pricing from the real offer server-side', async () => {

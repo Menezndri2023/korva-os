@@ -40,6 +40,7 @@ export class SearchOffersTool implements AiTool<z.infer<typeof inputSchema>> {
     const { data } = await this.offersService.list(organizationId, {
       page: 1,
       limit: 10,
+      sort: 'newest',
       search: input.search,
       type: input.type,
     });

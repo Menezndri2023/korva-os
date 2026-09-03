@@ -7,12 +7,14 @@ import {
   createPublicOrderSchema,
   listPublicOffersQuerySchema,
   publicAvailabilityQuerySchema,
+  searchPublicOffersQuerySchema,
   trackByEmailQuerySchema,
   type CreatePublicBookingInput,
   type CreatePublicLeadInput,
   type CreatePublicOrderInput,
   type ListPublicOffersQuery,
   type PublicAvailabilityQuery,
+  type SearchPublicOffersQuery,
   type TrackByEmailQuery,
 } from '@korva/validation';
 import { PublicService } from './public.service';
@@ -53,6 +55,33 @@ export class PublicController {
     query: ListPublicOffersQuery,
   ) {
     return this.publicService.listOffers(slug, query);
+  }
+
+  /**
+   * Registered before `offers/:offerId` below — Express/Nest match routes in declaration order,
+   * so a literal `offers/search` segment must come first or it would be swallowed as an
+   * `:offerId` value of "search" (same reasoning applies to `offers/categories`).
+   */
+  @Get('offers/search')
+  searchOffers(
+    @Param('organizationSlug') slug: string,
+    @Query(new ZodValidationPipe(searchPublicOffersQuerySchema))
+    query: SearchPublicOffersQuery,
+  ) {
+    return this.publicService.searchOffers(slug, query);
+  }
+
+  @Get('offers/categories')
+  listOfferCategories(@Param('organizationSlug') slug: string) {
+    return this.publicService.listOfferCategories(slug);
+  }
+
+  @Get('offers/:offerId')
+  getOffer(
+    @Param('organizationSlug') slug: string,
+    @Param('offerId') offerId: string,
+  ) {
+    return this.publicService.getOffer(slug, offerId);
   }
 
   @Get('resources')

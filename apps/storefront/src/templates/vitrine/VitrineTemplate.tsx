@@ -44,6 +44,9 @@ export function VitrineTemplate({
           </div>
           <nav className={`flex items-center gap-5 text-sm ${KT.textMuted}`}>
             <a href="#services" className="hover:underline">Services</a>
+            {catalogVisible && (
+              <Link href={`/${slug}/catalogue`} className="hover:underline">Tous nos services</Link>
+            )}
             <Link href={`/${slug}/track`} className="hover:underline">Suivi</Link>
             {authHydrated && (
               <Link href={`/${slug}/account${isAuthenticated ? "" : "/login"}`} className="hover:underline">

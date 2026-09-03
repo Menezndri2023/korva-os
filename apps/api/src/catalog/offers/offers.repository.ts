@@ -11,7 +11,17 @@ export interface FindOffersOptions {
   type?: string;
   status?: string;
   category?: string;
+  sort?: 'newest' | 'price_asc' | 'price_desc';
 }
+
+const SORT_SPECS: Record<
+  NonNullable<FindOffersOptions['sort']>,
+  Record<string, 1 | -1>
+> = {
+  newest: { createdAt: -1 },
+  price_asc: { 'pricing.amount': 1 },
+  price_desc: { 'pricing.amount': -1 },
+};
 
 @Injectable()
 export class OffersRepository {
@@ -127,7 +137,7 @@ export class OffersRepository {
     const [data, total] = await Promise.all([
       this.offerModel
         .find(filter)
-        .sort({ createdAt: -1 })
+        .sort(SORT_SPECS[options.sort ?? 'newest'])
         .skip(skip)
         .limit(options.limit)
         .exec(),
@@ -135,6 +145,16 @@ export class OffersRepository {
     ]);
 
     return { data, total };
+  }
+
+  /** Distinct category values across an organization's ACTIVE offers only — backs the public
+   *  catalogue page's filter list, which must never surface a category that only exists on a
+   *  draft/archived offer a visitor could never actually see in the results. */
+  distinctActiveCategories(organizationId: string): Promise<string[]> {
+    return this.offerModel.distinct('categories', {
+      organizationId: new Types.ObjectId(organizationId),
+      status: 'active',
+    });
   }
 
   async update(

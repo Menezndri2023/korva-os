@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { OFFER_TYPES } from "@korva/types";
+import { OFFER_SORT_OPTIONS } from "./catalog.ts";
 
 export const publicContactSchema = z.object({
   email: z.string().email(),
@@ -12,6 +13,24 @@ export const listPublicOffersQuerySchema = z.object({
   type: z.enum(OFFER_TYPES).optional(),
 });
 export type ListPublicOffersQuery = z.infer<typeof listPublicOffersQuerySchema>;
+
+/** Backs the dedicated `/[slug]/catalogue` storefront page — distinct from
+ *  listPublicOffersQuerySchema above, which stays a small, unpaginated preview used by the
+ *  homepage templates and generateMetadata. limit is capped lower than the internal
+ *  listOffersQuerySchema (100): a public visitor never needs more than a couple of screens per
+ *  page, and a lower cap keeps a single request cheap on an unauthenticated, unthrottled-by-tier
+ *  route. */
+export const searchPublicOffersQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(48).default(24),
+  type: z.enum(OFFER_TYPES).optional(),
+  category: z.string().optional(),
+  search: z.string().min(1).max(200).optional(),
+  sort: z.enum(OFFER_SORT_OPTIONS).default("newest"),
+});
+export type SearchPublicOffersQuery = z.infer<
+  typeof searchPublicOffersQuerySchema
+>;
 
 export const publicAvailabilityQuerySchema = z.object({
   resourceId: z.string().min(1),

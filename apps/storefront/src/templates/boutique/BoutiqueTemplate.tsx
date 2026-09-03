@@ -54,6 +54,9 @@ export function BoutiqueTemplate({
             <span className={`text-lg font-semibold ${KT.headingFont}`}>{organization.name}</span>
           </div>
           <div className={`flex items-center gap-4 text-sm ${KT.textMuted}`}>
+            {catalogVisible && (
+              <Link href={`/${slug}/catalogue`} className="hover:underline">Catalogue complet</Link>
+            )}
             <Link href={`/${slug}/track`} className="hover:underline">Suivre ma commande</Link>
             {authHydrated && (
               <Link href={`/${slug}/account${isAuthenticated ? "" : "/login"}`} className="hover:underline">

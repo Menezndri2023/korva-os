@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card } from "@korva/ui";
-import { publicApiClient } from "@/lib/public-api-client";
+import { PublicApiError, publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
 import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
@@ -18,13 +18,13 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
     queryFn: () => publicApiClient.get<PublicOrganization>(`/public/${slug}`),
     retry: false,
   });
-  // Same query key as the catalog page's offersQuery — reuses its cache when navigating from
-  // there, and fetches fresh on a direct link. See page.tsx for the "no single-offer endpoint,
-  // capped at 50 items" limitation this lookup-by-id inherits.
-  const offersQuery = useQuery({
-    queryKey: ["public-offers", slug],
-    queryFn: () => publicApiClient.get<PublicOffer[]>(`/public/${slug}/offers`),
+  // A dedicated single-offer lookup (not a client-side .find() over the homepage's capped
+  // 50-item preview list) — an offer beyond that cap must still have a working detail page.
+  const offerQuery = useQuery({
+    queryKey: ["public-offer", slug, offerId],
+    queryFn: () => publicApiClient.get<PublicOffer>(`/public/${slug}/offers/${offerId}`),
     enabled: !!orgQuery.data?.enabledModules.includes("catalog"),
+    retry: false,
   });
 
   const { cart, addToCart, clearCart } = useCart(slug);
@@ -35,7 +35,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
   const [imageFailed, setImageFailed] = useState(false);
   const [selectedVariantId, setSelectedVariantId] = useState("");
 
-  if (orgQuery.isLoading || (orgQuery.data && offersQuery.isLoading)) {
+  if (orgQuery.isLoading || (orgQuery.data && offerQuery.isLoading)) {
     return <DetailSkeleton slug={slug} />;
   }
   if (orgQuery.isError || !orgQuery.data) {
@@ -59,18 +59,28 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
     );
   }
 
-  if (offersQuery.isError) {
+  if (offerQuery.isError) {
+    const isNotFound =
+      offerQuery.error instanceof PublicApiError && offerQuery.error.code === "OFFER_NOT_FOUND";
+    if (isNotFound) {
+      return (
+        <CenteredMessage>
+          <p>Cette offre n&apos;existe pas ou n&apos;est plus disponible.</p>
+          <BackLink slug={slug} />
+        </CenteredMessage>
+      );
+    }
     return (
       <CenteredMessage>
         <p>Impossible de charger cette offre.</p>
-        <button onClick={() => offersQuery.refetch()} className="mt-2 text-sm font-medium underline">
+        <button onClick={() => offerQuery.refetch()} className="mt-2 text-sm font-medium underline">
           Réessayer
         </button>
       </CenteredMessage>
     );
   }
 
-  const offer = offersQuery.data?.find((o) => o.id === offerId);
+  const offer = offerQuery.data;
   if (!offer) {
     return (
       <CenteredMessage>
@@ -273,6 +283,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
             setShowCheckout(false);
             setConfirmation(`Commande ${orderNumber} confirmée, merci !`);
             void queryClient.invalidateQueries({ queryKey: ["public-offers", slug] });
+            void queryClient.invalidateQueries({ queryKey: ["public-offer", slug, offerId] });
           }}
         />
       )}

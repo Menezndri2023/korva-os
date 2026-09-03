@@ -40,6 +40,11 @@ export function EssentielTemplate({
             <h1 className="text-lg font-semibold">{organization.name}</h1>
           </div>
           <div className="flex items-center gap-3">
+            {catalogVisible && (
+              <Link href={`/${slug}/catalogue`} className={`text-sm hover:underline ${KT.textMuted}`}>
+                Catalogue complet
+              </Link>
+            )}
             <Link href={`/${slug}/track`} className={`text-sm hover:underline ${KT.textMuted}`}>
               Suivre ma commande
             </Link>

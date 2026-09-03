@@ -1,4 +1,10 @@
-import type { ApiListResponse, ApiResponse } from "@korva/types";
+import type {
+  ApiListResponse,
+  ApiListSuccess,
+  ApiResponse,
+  ApiSuccess,
+  Pagination,
+} from "@korva/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
@@ -20,7 +26,10 @@ interface RequestOptions {
   accessToken?: string;
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<ApiSuccess<T> | ApiListSuccess<T>> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (options.accessToken) {
     headers.Authorization = `Bearer ${options.accessToken}`;
@@ -39,17 +48,28 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new PublicApiError(payload.error.code, payload.error.message, payload.error.details);
   }
 
-  return payload.data as T;
+  return payload;
 }
 
 export const publicApiClient = {
-  get: <T>(path: string, accessToken?: string) => request<T>(path, { accessToken }),
+  get: <T>(path: string, accessToken?: string) =>
+    request<T>(path, { accessToken }).then((payload) => payload.data as T),
+  /** Unlike get(), preserves `pagination` — for the paginated public endpoints (the dedicated
+   *  catalogue page's offers/search) rather than the small fixed-size preview lists that get()
+   *  already covers everywhere else. */
+  getList: <T>(path: string, accessToken?: string) =>
+    request<T>(path, { accessToken }).then((payload) => {
+      if (!("pagination" in payload)) {
+        throw new Error(`Expected a paginated list response from ${path}`);
+      }
+      return { data: payload.data, pagination: payload.pagination as Pagination };
+    }),
   post: <T>(path: string, body?: unknown, accessToken?: string) =>
-    request<T>(path, { method: "POST", body, accessToken }),
+    request<T>(path, { method: "POST", body, accessToken }).then((payload) => payload.data as T),
   patch: <T>(path: string, body?: unknown, accessToken?: string) =>
-    request<T>(path, { method: "PATCH", body, accessToken }),
+    request<T>(path, { method: "PATCH", body, accessToken }).then((payload) => payload.data as T),
   delete: <T>(path: string, accessToken?: string) =>
-    request<T>(path, { method: "DELETE", accessToken }),
+    request<T>(path, { method: "DELETE", accessToken }).then((payload) => payload.data as T),
 };
 
 /**

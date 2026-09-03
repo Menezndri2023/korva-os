@@ -48,6 +48,9 @@ export const adjustStockSchema = z.object({
 });
 export type AdjustStockInput = z.infer<typeof adjustStockSchema>;
 
+export const OFFER_SORT_OPTIONS = ["newest", "price_asc", "price_desc"] as const;
+export type OfferSort = (typeof OFFER_SORT_OPTIONS)[number];
+
 export const listOffersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -55,5 +58,6 @@ export const listOffersQuerySchema = z.object({
   type: z.enum(OFFER_TYPES).optional(),
   status: z.enum(OFFER_STATUSES).optional(),
   category: z.string().optional(),
+  sort: z.enum(OFFER_SORT_OPTIONS).default("newest"),
 });
 export type ListOffersQuery = z.infer<typeof listOffersQuerySchema>;

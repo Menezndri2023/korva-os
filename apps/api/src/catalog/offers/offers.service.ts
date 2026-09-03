@@ -148,6 +148,10 @@ export class OffersService {
     };
   }
 
+  distinctActiveCategories(organizationId: string): Promise<string[]> {
+    return this.offersRepository.distinctActiveCategories(organizationId);
+  }
+
   async update(
     organizationId: string,
     userId: string,
