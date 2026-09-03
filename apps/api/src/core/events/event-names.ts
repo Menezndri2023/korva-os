@@ -55,6 +55,7 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'whatsapp.status_updated': 'messageId',
   'offer.created': 'offerId',
   'offer.stock_depleted': 'offerId',
+  'offer.low_stock': 'offerId',
   'discount_code.redeemed': 'discountCodeId',
   'discount_code.exhausted': 'discountCodeId',
   'message.sent': 'messageId',

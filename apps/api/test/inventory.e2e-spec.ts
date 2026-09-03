@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -28,6 +28,21 @@ interface OfferPayload {
   id: string;
   stockOnHand?: number;
   trackStock: boolean;
+  lowStockThreshold?: number;
+  variants: { id: string; name: string; stockOnHand?: number }[];
+}
+interface StockMovementPayload {
+  id: string;
+  type: string;
+  quantity: number;
+  stockAfter: number;
+  variantId?: string;
+  reason?: string;
+}
+interface ApiPaginatedSuccess<T> {
+  success: true;
+  data: T[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 interface OrderPayload {
   id: string;
@@ -444,5 +459,436 @@ describe('Inventory / stock ledger (e2e)', () => {
       expect(executions[0]!.eventName).toBe('offer.stock_depleted');
       expect(executions[0]!.payload.offerId).toBe(offer.id);
     }, 20000);
+  });
+
+  describe('offer.low_stock event (configurable reorder threshold)', () => {
+    it('publishes offer.low_stock once stock drops to or below the configured threshold, verified by a Workflow firing', async () => {
+      const ctx = await registerOrgContact(
+        'inventory-lowstock-owner@korva.test',
+        'Inventory Low Stock Org',
+      );
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          type: 'product',
+          name: 'Threshold Widget',
+          pricing: { amount: 10, currency: 'EUR' },
+          trackStock: true,
+          stockOnHand: 10,
+          lowStockThreshold: 5,
+        })
+        .expect(201);
+      const offer = asSuccess<OfferPayload>(offerRes.body);
+
+      const workflowRes = await request(server)
+        .post('/api/v1/workflows')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          name: 'On low stock',
+          trigger: 'offer.low_stock',
+          conditions: [],
+          actions: [
+            { type: 'create_task', config: { title: 'Restock {{offerId}}' } },
+          ],
+        })
+        .expect(201);
+      const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
+
+      // Leaves 5 in stock — exactly at the threshold, must fire; not yet at 0, so
+      // offer.stock_depleted must NOT also fire here.
+      await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          contactId: ctx.contactId,
+          items: [
+            {
+              offerId: offer.id,
+              description: 'Threshold Widget',
+              quantity: 5,
+              unitPrice: 10,
+            },
+          ],
+          currency: 'EUR',
+        })
+        .expect(201);
+
+      const executions = await waitFor(async () => {
+        const res = await request(server)
+          .get(`/api/v1/workflows/${workflowId}/executions`)
+          .set('Authorization', `Bearer ${ctx.accessToken}`)
+          .set('X-Organization-Id', ctx.organizationId)
+          .expect(200);
+        const data = asSuccess<WorkflowExecutionPayload[]>(res.body);
+        return data.length > 0 ? data : undefined;
+      });
+
+      expect(executions).toHaveLength(1);
+      expect(executions[0]!.eventName).toBe('offer.low_stock');
+      expect(executions[0]!.payload.offerId).toBe(offer.id);
+      expect(executions[0]!.payload.stockOnHand).toBe(5);
+      expect(executions[0]!.payload.lowStockThreshold).toBe(5);
+    }, 20000);
+
+    it('never fires for an offer with no lowStockThreshold configured, even at exactly 0 (stock_depleted alone covers that case)', async () => {
+      const ctx = await registerOrgContact(
+        'inventory-nolowstock-owner@korva.test',
+        'Inventory No Low Stock Org',
+      );
+      const offer = await createTrackedOffer(
+        ctx.accessToken,
+        ctx.organizationId,
+        3,
+      );
+
+      const workflowRes = await request(server)
+        .post('/api/v1/workflows')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          name: 'On low stock (should never fire)',
+          trigger: 'offer.low_stock',
+          conditions: [],
+          actions: [{ type: 'create_task', config: { title: 'Restock' } }],
+        })
+        .expect(201);
+      const workflowId = asSuccess<WorkflowPayload>(workflowRes.body).id;
+
+      await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          contactId: ctx.contactId,
+          items: [
+            {
+              offerId: offer.id,
+              description: 'Tracked Widget',
+              quantity: 3,
+              unitPrice: 10,
+            },
+          ],
+          currency: 'EUR',
+        })
+        .expect(201);
+
+      // No polling wait-for-success here on purpose — there's nothing that will ever arrive.
+      // A short, fixed pause is the only way to assert a negative against an async pipeline.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const res = await request(server)
+        .get(`/api/v1/workflows/${workflowId}/executions`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      expect(asSuccess<WorkflowExecutionPayload[]>(res.body)).toHaveLength(0);
+    });
+  });
+
+  describe('per-variant stock (independent of the offer and of sibling variants)', () => {
+    it('reserves/restocks each variant independently, never touching the offer-level counter or the other variant', async () => {
+      const ctx = await registerOrgContact(
+        'inventory-variant-owner@korva.test',
+        'Inventory Variant Org',
+      );
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          type: 'product',
+          name: 'T-Shirt',
+          pricing: { amount: 20, currency: 'EUR' },
+          trackStock: true,
+          variants: [
+            { name: 'Small', stockOnHand: 3 },
+            { name: 'Large', stockOnHand: 1 },
+          ],
+        })
+        .expect(201);
+      const offer = asSuccess<OfferPayload>(offerRes.body);
+      const small = offer.variants.find((v) => v.name === 'Small')!;
+      const large = offer.variants.find((v) => v.name === 'Large')!;
+
+      // Buying the last "Large" must fail once its own stock hits 0, while "Small" is
+      // untouched — proves the two variants really are independent counters.
+      await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          contactId: ctx.contactId,
+          items: [
+            {
+              offerId: offer.id,
+              variantId: large.id,
+              description: 'T-Shirt (Large)',
+              quantity: 1,
+              unitPrice: 20,
+            },
+          ],
+          currency: 'EUR',
+        })
+        .expect(201);
+
+      const afterFirstOrder = asSuccess<OfferPayload>(
+        (
+          await request(server)
+            .get(`/api/v1/offers/${offer.id}`)
+            .set('Authorization', `Bearer ${ctx.accessToken}`)
+            .set('X-Organization-Id', ctx.organizationId)
+            .expect(200)
+        ).body,
+      );
+      expect(
+        afterFirstOrder.variants.find((v) => v.id === large.id)?.stockOnHand,
+      ).toBe(0);
+      expect(
+        afterFirstOrder.variants.find((v) => v.id === small.id)?.stockOnHand,
+      ).toBe(3);
+
+      const rejectedRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          contactId: ctx.contactId,
+          items: [
+            {
+              offerId: offer.id,
+              variantId: large.id,
+              description: 'T-Shirt (Large)',
+              quantity: 1,
+              unitPrice: 20,
+            },
+          ],
+          currency: 'EUR',
+        })
+        .expect(400);
+      expect(asError(rejectedRes.body).code).toBe('INSUFFICIENT_STOCK');
+
+      // "Small" can still be bought — its own stock was never affected by Large's depletion.
+      const secondOrderRes = await request(server)
+        .post('/api/v1/orders')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          contactId: ctx.contactId,
+          items: [
+            {
+              offerId: offer.id,
+              variantId: small.id,
+              description: 'T-Shirt (Small)',
+              quantity: 2,
+              unitPrice: 20,
+            },
+          ],
+          currency: 'EUR',
+        })
+        .expect(201);
+      const secondOrderId = asSuccess<OrderPayload>(secondOrderRes.body).id;
+
+      const afterSecondOrder = asSuccess<OfferPayload>(
+        (
+          await request(server)
+            .get(`/api/v1/offers/${offer.id}`)
+            .set('Authorization', `Bearer ${ctx.accessToken}`)
+            .set('X-Organization-Id', ctx.organizationId)
+            .expect(200)
+        ).body,
+      );
+      expect(
+        afterSecondOrder.variants.find((v) => v.id === small.id)?.stockOnHand,
+      ).toBe(1);
+
+      // Cancelling restores exactly the cancelled variant's stock.
+      await request(server)
+        .post(`/api/v1/orders/${secondOrderId}/cancel`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(201);
+
+      const afterCancel = asSuccess<OfferPayload>(
+        (
+          await request(server)
+            .get(`/api/v1/offers/${offer.id}`)
+            .set('Authorization', `Bearer ${ctx.accessToken}`)
+            .set('X-Organization-Id', ctx.organizationId)
+            .expect(200)
+        ).body,
+      );
+      expect(
+        afterCancel.variants.find((v) => v.id === small.id)?.stockOnHand,
+      ).toBe(3);
+      expect(
+        afterCancel.variants.find((v) => v.id === large.id)?.stockOnHand,
+      ).toBe(0);
+    });
+
+    it('adjustStock (absolute set) targets one variant via variantId, leaving the sibling untouched', async () => {
+      const ctx = await registerOrgContact(
+        'inventory-variant-adjust-owner@korva.test',
+        'Inventory Variant Adjust Org',
+      );
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          type: 'product',
+          name: 'Mug',
+          pricing: { amount: 8, currency: 'EUR' },
+          trackStock: true,
+          variants: [
+            { name: 'Blanc', stockOnHand: 10 },
+            { name: 'Noir', stockOnHand: 10 },
+          ],
+        })
+        .expect(201);
+      const offer = asSuccess<OfferPayload>(offerRes.body);
+      const white = offer.variants.find((v) => v.name === 'Blanc')!;
+      const black = offer.variants.find((v) => v.name === 'Noir')!;
+
+      await request(server)
+        .post(`/api/v1/offers/${offer.id}/stock/adjust`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ variantId: white.id, stockOnHand: 25 })
+        .expect(201);
+
+      const afterAdjust = asSuccess<OfferPayload>(
+        (
+          await request(server)
+            .get(`/api/v1/offers/${offer.id}`)
+            .set('Authorization', `Bearer ${ctx.accessToken}`)
+            .set('X-Organization-Id', ctx.organizationId)
+            .expect(200)
+        ).body,
+      );
+      expect(
+        afterAdjust.variants.find((v) => v.id === white.id)?.stockOnHand,
+      ).toBe(25);
+      expect(
+        afterAdjust.variants.find((v) => v.id === black.id)?.stockOnHand,
+      ).toBe(10);
+    });
+  });
+
+  describe('stock movements ledger (POST/GET /offers/:id/stock/movements)', () => {
+    it('records received/damaged/correction movements, each with the resulting stockAfter, and rejects a subtractive movement that would go below 0', async () => {
+      const ctx = await registerOrgContact(
+        'inventory-movements-owner@korva.test',
+        'Inventory Movements Org',
+      );
+      const offer = await createTrackedOffer(
+        ctx.accessToken,
+        ctx.organizationId,
+        10,
+      );
+
+      const receivedRes = await request(server)
+        .post(`/api/v1/offers/${offer.id}/stock/movements`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ type: 'received', quantity: 5, reason: 'Livraison fournisseur' })
+        .expect(201);
+      const received = asSuccess<StockMovementPayload>(receivedRes.body);
+      expect(received.type).toBe('received');
+      expect(received.quantity).toBe(5);
+      expect(received.stockAfter).toBe(15);
+      expect(received.reason).toBe('Livraison fournisseur');
+
+      const damagedRes = await request(server)
+        .post(`/api/v1/offers/${offer.id}/stock/movements`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ type: 'damaged', quantity: 3 })
+        .expect(201);
+      expect(asSuccess<StockMovementPayload>(damagedRes.body).stockAfter).toBe(
+        12,
+      );
+
+      const correctionRes = await request(server)
+        .post(`/api/v1/offers/${offer.id}/stock/movements`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ type: 'correction', quantity: -2 })
+        .expect(201);
+      expect(
+        asSuccess<StockMovementPayload>(correctionRes.body).stockAfter,
+      ).toBe(10);
+
+      const overdraftRes = await request(server)
+        .post(`/api/v1/offers/${offer.id}/stock/movements`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ type: 'damaged', quantity: 999 })
+        .expect(400);
+      expect(asError(overdraftRes.body).code).toBe('INSUFFICIENT_STOCK');
+
+      const listRes = await request(server)
+        .get(`/api/v1/offers/${offer.id}/stock/movements`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .expect(200);
+      const page = listRes.body as ApiPaginatedSuccess<StockMovementPayload>;
+      // Newest first: the rejected overdraft never wrote a row, so exactly 3 movements exist.
+      expect(page.data).toHaveLength(3);
+      expect(page.data[0]!.type).toBe('correction');
+      expect(page.pagination.total).toBe(3);
+    });
+
+    it('rejects a manual movement on an offer without trackStock enabled', async () => {
+      const ctx = await registerOrgContact(
+        'inventory-movements-untracked-owner@korva.test',
+        'Inventory Movements Untracked Org',
+      );
+      const untrackedRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          type: 'product',
+          name: 'Untracked Item',
+          pricing: { amount: 5, currency: 'EUR' },
+        })
+        .expect(201);
+      const untracked = asSuccess<OfferPayload>(untrackedRes.body);
+
+      const res = await request(server)
+        .post(`/api/v1/offers/${untracked.id}/stock/movements`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({ type: 'received', quantity: 5 })
+        .expect(400);
+      expect(asError(res.body).code).toBe('STOCK_TRACKING_NOT_ENABLED');
+    });
+
+    it('rejects a movement naming a variant that does not exist on this offer', async () => {
+      const ctx = await registerOrgContact(
+        'inventory-movements-badvariant-owner@korva.test',
+        'Inventory Movements Bad Variant Org',
+      );
+      const offer = await createTrackedOffer(
+        ctx.accessToken,
+        ctx.organizationId,
+        10,
+      );
+
+      const res = await request(server)
+        .post(`/api/v1/offers/${offer.id}/stock/movements`)
+        .set('Authorization', `Bearer ${ctx.accessToken}`)
+        .set('X-Organization-Id', ctx.organizationId)
+        .send({
+          type: 'received',
+          quantity: 5,
+          variantId: new Types.ObjectId().toString(),
+        })
+        .expect(404);
+      expect(asError(res.body).code).toBe('OFFER_VARIANT_NOT_FOUND');
+    });
   });
 });

@@ -11,6 +11,7 @@ import { DecisionEngineService } from './decision-engine.service';
 import { InvoiceOverdueFollowupRule } from './rules/invoice-overdue-followup.rule';
 import { CustomerReactivationRule } from './rules/customer-reactivation.rule';
 import { LowStockAlertRule } from './rules/low-stock-alert.rule';
+import { LowStockThresholdAlertRule } from './rules/low-stock-threshold-alert.rule';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
@@ -27,6 +28,7 @@ import { AuditModule } from '../audit/audit.module';
     InvoiceOverdueFollowupRule,
     CustomerReactivationRule,
     LowStockAlertRule,
+    LowStockThresholdAlertRule,
     DecisionEngineService,
   ],
   exports: [DecisionEngineService, RecommendationsService],

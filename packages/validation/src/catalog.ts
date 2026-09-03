@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { OFFER_STATUSES, OFFER_TYPES } from "@korva/types";
 
+/** The subset of StockMovementType a human can enter manually — "sold" is always automatic
+ *  (order reservation), never a direct user action, so it's deliberately excluded here rather
+ *  than filtered out of the shared STOCK_MOVEMENT_TYPES at runtime. */
+const MANUAL_STOCK_MOVEMENT_TYPES = ["received", "returned", "damaged", "correction"] as const;
+
 const customFieldsSchema = z.record(z.string(), z.unknown()).optional();
 
 export const createCategorySchema = z.object({
@@ -22,6 +27,7 @@ export const offerVariantInputSchema = z.object({
   name: z.string().min(1).max(120),
   sku: z.string().max(80).optional(),
   priceOverride: z.number().nonnegative().optional(),
+  stockOnHand: z.number().int().min(0).optional(),
 });
 
 export const createOfferSchema = z.object({
@@ -37,6 +43,7 @@ export const createOfferSchema = z.object({
   customFields: customFieldsSchema,
   trackStock: z.boolean().default(false),
   stockOnHand: z.number().int().min(0).optional(),
+  lowStockThreshold: z.number().int().min(0).optional(),
 });
 export type CreateOfferInput = z.infer<typeof createOfferSchema>;
 
@@ -44,9 +51,37 @@ export const updateOfferSchema = createOfferSchema.partial();
 export type UpdateOfferInput = z.infer<typeof updateOfferSchema>;
 
 export const adjustStockSchema = z.object({
+  variantId: z.string().optional(),
   stockOnHand: z.number().int().min(0),
 });
 export type AdjustStockInput = z.infer<typeof adjustStockSchema>;
+
+/** Delta-based, reason-tracked stock entry — distinct from adjustStockSchema's absolute "set to
+ *  N" (a stocktake correction), this is the "logistics" side: receiving a supplier delivery,
+ *  writing off damaged units, or a signed correction. Every entry becomes a StockMovement row,
+ *  never just a silent stockOnHand mutation. */
+export const recordStockMovementSchema = z
+  .object({
+    variantId: z.string().optional(),
+    type: z.enum(MANUAL_STOCK_MOVEMENT_TYPES),
+    quantity: z
+      .number()
+      .int()
+      .refine((v) => v !== 0, "quantity must not be zero"),
+    reason: z.string().max(500).optional(),
+  })
+  .refine((data) => data.type === "correction" || data.quantity > 0, {
+    message: "quantity must be positive for received/returned/damaged",
+    path: ["quantity"],
+  });
+export type RecordStockMovementInput = z.infer<typeof recordStockMovementSchema>;
+
+export const listStockMovementsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  variantId: z.string().optional(),
+});
+export type ListStockMovementsQuery = z.infer<typeof listStockMovementsQuerySchema>;
 
 export const OFFER_SORT_OPTIONS = ["newest", "price_asc", "price_desc"] as const;
 export type OfferSort = (typeof OFFER_SORT_OPTIONS)[number];

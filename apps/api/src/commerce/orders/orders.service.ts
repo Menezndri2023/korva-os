@@ -491,6 +491,7 @@ export class OrdersService {
           [
             {
               offerId: removedItem.offerId?.toString(),
+              variantId: removedItem.variantId,
               quantity: removedItem.quantity,
             },
           ],
@@ -908,6 +909,7 @@ export class OrdersService {
           organizationId,
           result.items.map((item) => ({
             offerId: item.offerId?.toString(),
+            variantId: item.variantId,
             quantity: item.quantity,
           })),
           session,

@@ -5,6 +5,7 @@ import { DecisionRule } from './rules/rule.interface';
 import { InvoiceOverdueFollowupRule } from './rules/invoice-overdue-followup.rule';
 import { CustomerReactivationRule } from './rules/customer-reactivation.rule';
 import { LowStockAlertRule } from './rules/low-stock-alert.rule';
+import { LowStockThresholdAlertRule } from './rules/low-stock-threshold-alert.rule';
 import { AuditService } from '../audit/audit.service';
 
 /**
@@ -26,6 +27,7 @@ export class DecisionEngineService {
     invoiceOverdueFollowupRule: InvoiceOverdueFollowupRule,
     customerReactivationRule: CustomerReactivationRule,
     lowStockAlertRule: LowStockAlertRule,
+    lowStockThresholdAlertRule: LowStockThresholdAlertRule,
     private readonly recommendationsRepository: RecommendationsRepository,
     private readonly auditService: AuditService,
   ) {
@@ -33,6 +35,7 @@ export class DecisionEngineService {
       invoiceOverdueFollowupRule,
       customerReactivationRule,
       lowStockAlertRule,
+      lowStockThresholdAlertRule,
     ];
   }
 

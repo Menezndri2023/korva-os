@@ -77,48 +77,105 @@ export class OffersRepository {
    * or there isn't enough stock — the caller can't tell those apart from this alone, which is
    * fine: InventoryService.reserveStock skips non-tracked offers before ever calling this, so a
    * null here always means "insufficient stock" in practice.
+   *
+   * Variant-aware: when `variantId` is given, decrements that specific variant's stockOnHand
+   * (via arrayFilters) instead of the offer's own — an offer with variants keeps its stock
+   * entirely on each variant, independent of the others (see OfferVariant.stockOnHand).
    */
-  decrementStockIfAvailable(
+  async decrementStockIfAvailable(
     organizationId: string,
     offerId: string,
     quantity: number,
+    variantId: string | undefined,
     session?: ClientSession,
-  ): Promise<OfferDocument | null> {
-    if (!Types.ObjectId.isValid(offerId)) return Promise.resolve(null);
-    return this.offerModel
-      .findOneAndUpdate(
-        {
-          _id: new Types.ObjectId(offerId),
-          organizationId: new Types.ObjectId(organizationId),
-          trackStock: true,
-          stockOnHand: { $gte: quantity },
-        },
-        { $inc: { stockOnHand: -quantity } },
-        { new: true, session },
-      )
-      .exec();
+  ): Promise<{ offer: OfferDocument; stockAfter: number } | null> {
+    if (!Types.ObjectId.isValid(offerId)) return null;
+    if (variantId && !Types.ObjectId.isValid(variantId)) return null;
+
+    const offer = variantId
+      ? await this.offerModel
+          .findOneAndUpdate(
+            {
+              _id: new Types.ObjectId(offerId),
+              organizationId: new Types.ObjectId(organizationId),
+              trackStock: true,
+              variants: {
+                $elemMatch: {
+                  _id: new Types.ObjectId(variantId),
+                  stockOnHand: { $gte: quantity },
+                },
+              },
+            },
+            { $inc: { 'variants.$[v].stockOnHand': -quantity } },
+            {
+              new: true,
+              session,
+              arrayFilters: [{ 'v._id': new Types.ObjectId(variantId) }],
+            },
+          )
+          .exec()
+      : await this.offerModel
+          .findOneAndUpdate(
+            {
+              _id: new Types.ObjectId(offerId),
+              organizationId: new Types.ObjectId(organizationId),
+              trackStock: true,
+              stockOnHand: { $gte: quantity },
+            },
+            { $inc: { stockOnHand: -quantity } },
+            { new: true, session },
+          )
+          .exec();
+
+    if (!offer) return null;
+    return { offer, stockAfter: extractStock(offer, variantId) };
   }
 
   /** Restock path (order cancelled/item removed) — only meaningful for tracked offers; a no-op
-   *  (matches nothing) for an untracked offer, same as decrementStockIfAvailable. */
-  incrementStock(
+   *  (matches nothing) for an untracked offer, same as decrementStockIfAvailable. Never guarded
+   *  by a $gte check (there is no upper bound to restore stock past), so this always succeeds
+   *  for a tracked offer/variant that exists. */
+  async incrementStock(
     organizationId: string,
     offerId: string,
     quantity: number,
+    variantId: string | undefined,
     session?: ClientSession,
-  ): Promise<OfferDocument | null> {
-    if (!Types.ObjectId.isValid(offerId)) return Promise.resolve(null);
-    return this.offerModel
-      .findOneAndUpdate(
-        {
-          _id: new Types.ObjectId(offerId),
-          organizationId: new Types.ObjectId(organizationId),
-          trackStock: true,
-        },
-        { $inc: { stockOnHand: quantity } },
-        { new: true, session },
-      )
-      .exec();
+  ): Promise<{ offer: OfferDocument; stockAfter: number } | null> {
+    if (!Types.ObjectId.isValid(offerId)) return null;
+    if (variantId && !Types.ObjectId.isValid(variantId)) return null;
+
+    const offer = variantId
+      ? await this.offerModel
+          .findOneAndUpdate(
+            {
+              _id: new Types.ObjectId(offerId),
+              organizationId: new Types.ObjectId(organizationId),
+              trackStock: true,
+              'variants._id': new Types.ObjectId(variantId),
+            },
+            { $inc: { 'variants.$[v].stockOnHand': quantity } },
+            {
+              new: true,
+              session,
+              arrayFilters: [{ 'v._id': new Types.ObjectId(variantId) }],
+            },
+          )
+          .exec()
+      : await this.offerModel
+          .findOneAndUpdate(
+            {
+              _id: new Types.ObjectId(offerId),
+              organizationId: new Types.ObjectId(organizationId),
+              trackStock: true,
+            },
+            { $inc: { stockOnHand: quantity } },
+            { new: true, session },
+          )
+          .exec();
+
+    if (!offer) return null;
+    return { offer, stockAfter: extractStock(offer, variantId) };
   }
 
   async findAll(
@@ -157,6 +214,31 @@ export class OffersRepository {
     });
   }
 
+  /** Absolute-set counterpart to update() scoped to one variant's stockOnHand — used by
+   *  OffersService.adjustStock's variant path, since `data: Partial<Offer>` has no way to target
+   *  a specific array element. */
+  updateVariantStock(
+    organizationId: string,
+    id: string,
+    variantId: string,
+    stockOnHand: number,
+  ): Promise<OfferDocument | null> {
+    if (!Types.ObjectId.isValid(id) || !Types.ObjectId.isValid(variantId)) {
+      return Promise.resolve(null);
+    }
+    return this.offerModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          'variants._id': new Types.ObjectId(variantId),
+        },
+        { $set: { 'variants.$[v].stockOnHand': stockOnHand } },
+        { new: true, arrayFilters: [{ 'v._id': new Types.ObjectId(variantId) }] },
+      )
+      .exec();
+  }
+
   async update(
     organizationId: string,
     id: string,
@@ -185,4 +267,16 @@ export class OffersRepository {
       .exec();
     return res.deletedCount > 0;
   }
+}
+
+/** Reads whichever stockOnHand a stock operation actually affected — the variant's if a
+ *  variantId was given, else the offer's own. Variant subdocuments carry `_id` at runtime
+ *  (OfferVariant's schema declares `{_id: true}`) even though the plain OfferVariant class
+ *  doesn't type it, so this reaches in via an unknown-cast rather than widening that type. */
+function extractStock(offer: OfferDocument, variantId?: string): number {
+  if (!variantId) return offer.stockOnHand ?? 0;
+  const variant = offer.variants.find(
+    (v) => (v as unknown as { _id: Types.ObjectId })._id.toString() === variantId,
+  );
+  return variant?.stockOnHand ?? 0;
 }

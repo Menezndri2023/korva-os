@@ -28,6 +28,10 @@ export class OfferVariant {
 
   @Prop()
   priceOverride?: number;
+
+  /** See OfferVariant.stockOnHand in @korva/types for the field-level rationale. */
+  @Prop({ min: 0 })
+  stockOnHand?: number;
 }
 export const OfferVariantSchema = SchemaFactory.createForClass(OfferVariant);
 
@@ -97,6 +101,10 @@ export class Offer {
 
   @Prop({ min: 0 })
   stockOnHand?: number;
+
+  /** See Offer.lowStockThreshold in @korva/types for the field-level rationale. */
+  @Prop({ min: 0 })
+  lowStockThreshold?: number;
 }
 
 export const OfferSchema = SchemaFactory.createForClass(Offer);

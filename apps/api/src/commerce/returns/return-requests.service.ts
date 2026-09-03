@@ -239,6 +239,7 @@ export class ReturnRequestsService {
           .filter((item) => item.offerId)
           .map((item) => ({
             offerId: item.offerId!.toString(),
+            variantId: item.variantId,
             quantity: item.quantity,
           })),
       );

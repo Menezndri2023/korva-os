@@ -75,13 +75,26 @@ describe("OfferDetailPage", () => {
   });
 
   it("86's a tracked item (sets stockOnHand to 0) via POST /offers/:id/stock/adjust", async () => {
+    // Offer-level stock adjustment only applies when the offer has no variants — see
+    // page.tsx's own comment on that control. variants: [] here (not the shared `offer`
+    // fixture's one variant) is what actually exercises this control at all.
     getMock.mockImplementation((path: string) => {
       if (path === "/offers/offer-1") {
-        return Promise.resolve({ ...offer, trackStock: true, stockOnHand: 5 });
+        return Promise.resolve({
+          ...offer,
+          variants: [],
+          trackStock: true,
+          stockOnHand: 5,
+        });
       }
       throw new Error(`unexpected GET ${path}`);
     });
-    postMock.mockResolvedValue({ ...offer, trackStock: true, stockOnHand: 0 });
+    postMock.mockResolvedValue({
+      ...offer,
+      variants: [],
+      trackStock: true,
+      stockOnHand: 0,
+    });
     const user = userEvent.setup();
     renderWithProviders(<OfferDetailPage />);
 
@@ -99,7 +112,12 @@ describe("OfferDetailPage", () => {
   it("does not show the 86 button once stock is already at 0", async () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/offers/offer-1") {
-        return Promise.resolve({ ...offer, trackStock: true, stockOnHand: 0 });
+        return Promise.resolve({
+          ...offer,
+          variants: [],
+          trackStock: true,
+          stockOnHand: 0,
+        });
       }
       throw new Error(`unexpected GET ${path}`);
     });

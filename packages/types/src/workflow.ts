@@ -23,6 +23,7 @@ export const SYSTEM_EVENTS = [
   "whatsapp.status_updated",
   "offer.created",
   "offer.stock_depleted",
+  "offer.low_stock",
   "discount_code.redeemed",
   "discount_code.exhausted",
   "message.sent",

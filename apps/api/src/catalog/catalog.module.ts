@@ -1,7 +1,12 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Offer, OfferSchema } from './offers/schemas/offer.schema';
+import {
+  StockMovement,
+  StockMovementSchema,
+} from './offers/schemas/stock-movement.schema';
 import { OffersRepository } from './offers/offers.repository';
+import { StockMovementsRepository } from './offers/stock-movements.repository';
 import { OffersService } from './offers/offers.service';
 import { OffersController } from './offers/offers.controller';
 import { InventoryService } from './offers/inventory.service';
@@ -35,6 +40,7 @@ import { StorageModule } from '../shared/storage/storage.module';
     // crm.module.ts (LOT F5).
     MongooseModule.forFeature([
       { name: Offer.name, schema: OfferSchema },
+      { name: StockMovement.name, schema: StockMovementSchema },
       { name: Category.name, schema: CategorySchema },
       { name: Order.name, schema: OrderSchema },
       { name: Cart.name, schema: CartSchema },
@@ -51,6 +57,7 @@ import { StorageModule } from '../shared/storage/storage.module';
   controllers: [OffersController, CategoriesController],
   providers: [
     OffersRepository,
+    StockMovementsRepository,
     OffersService,
     InventoryService,
     OfferReferencesRepository,

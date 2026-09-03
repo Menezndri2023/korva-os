@@ -6,12 +6,38 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { updateOfferSchema, type UpdateOfferInput } from "@korva/validation";
-import { OFFER_STATUSES, OFFER_TYPES, type Offer, type OfferType } from "@korva/types";
-import { Badge, Button, Card, Dialog, Input, Select } from "@korva/ui";
+import {
+  recordStockMovementSchema,
+  updateOfferSchema,
+  type RecordStockMovementInput,
+  type UpdateOfferInput,
+} from "@korva/validation";
+import {
+  OFFER_STATUSES,
+  OFFER_TYPES,
+  STOCK_MOVEMENT_TYPES,
+  type Offer,
+  type OfferType,
+  type StockMovement,
+  type StockMovementType,
+} from "@korva/types";
+import { Badge, Button, Card, Dialog, Input, Pagination, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
+
+const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
+  received: "Réception",
+  sold: "Vente",
+  returned: "Retour",
+  damaged: "Casse/perte",
+  correction: "Correction",
+};
+
+/** "sold" is always automatic (order reservation) — never an option in the manual entry form. */
+const MANUAL_STOCK_MOVEMENT_TYPES = STOCK_MOVEMENT_TYPES.filter(
+  (type) => type !== "sold",
+);
 
 const TYPE_LABELS: Record<OfferType, string> = {
   product: "Produit",
@@ -71,6 +97,7 @@ export default function OfferDetailPage() {
       status: offer.status,
       trackStock: offer.trackStock,
       stockOnHand: offer.stockOnHand,
+      lowStockThreshold: offer.lowStockThreshold,
     });
   }
   function cancelEdit() {
@@ -88,8 +115,8 @@ export default function OfferDetailPage() {
 
   const [stockInput, setStockInput] = useState("");
   const adjustStockMutation = useMutation({
-    mutationFn: (stockOnHand: number) =>
-      apiClient.post<Offer>(`/offers/${id}/stock/adjust`, { stockOnHand }),
+    mutationFn: ({ stockOnHand, variantId }: { stockOnHand: number; variantId?: string }) =>
+      apiClient.post<Offer>(`/offers/${id}/stock/adjust`, { stockOnHand, variantId }),
     onSuccess: () => {
       setStockInput("");
       return queryClient.invalidateQueries({ queryKey: ["offers", id] });
@@ -215,15 +242,26 @@ export default function OfferDetailPage() {
                   <dd className="mt-0.5">{offer.pricing.taxRate}%</dd>
                 </div>
               )}
-              <div>
-                <dt className="text-text-muted">Stock</dt>
-                <dd className="mt-0.5">
-                  {offer.trackStock ? offer.stockOnHand ?? 0 : "Non suivi"}
-                </dd>
-              </div>
+              {offer.variants.length === 0 && (
+                <div>
+                  <dt className="text-text-muted">Stock</dt>
+                  <dd className="mt-0.5">
+                    {offer.trackStock ? offer.stockOnHand ?? 0 : "Non suivi"}
+                  </dd>
+                </div>
+              )}
+              {offer.trackStock && offer.lowStockThreshold != null && (
+                <div>
+                  <dt className="text-text-muted">Seuil d&apos;alerte</dt>
+                  <dd className="mt-0.5">{offer.lowStockThreshold}</dd>
+                </div>
+              )}
             </dl>
 
-            {offer.trackStock && (
+            {/* Offer-level adjust — only meaningful when there are no variants: with variants,
+                stock lives entirely on each one (see the variants table below), never on the
+                offer itself. */}
+            {offer.trackStock && offer.variants.length === 0 && (
               <div className="mt-4 flex items-end gap-2">
                 <Input
                   type="number"
@@ -239,7 +277,7 @@ export default function OfferDetailPage() {
                   loading={adjustStockMutation.isPending}
                   disabled={stockInput === ""}
                   onClick={() =>
-                    adjustStockMutation.mutate(Number(stockInput))
+                    adjustStockMutation.mutate({ stockOnHand: Number(stockInput) })
                   }
                 >
                   Ajuster le stock
@@ -249,7 +287,7 @@ export default function OfferDetailPage() {
                     variant="ghost"
                     size="sm"
                     loading={adjustStockMutation.isPending}
-                    onClick={() => adjustStockMutation.mutate(0)}
+                    onClick={() => adjustStockMutation.mutate({ stockOnHand: 0 })}
                   >
                     86 (marquer indisponible)
                   </Button>
@@ -332,6 +370,18 @@ export default function OfferDetailPage() {
                 })}
               />
             )}
+            {trackStock && (
+              <Input
+                type="number"
+                step="1"
+                min="0"
+                placeholder="Seuil d'alerte stock bas (optionnel)"
+                className="col-span-2"
+                {...register("lowStockThreshold", {
+                  setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+                })}
+              />
+            )}
 
             {updateMutation.isError && (
               <p className="col-span-2 text-sm text-destructive">
@@ -362,6 +412,7 @@ export default function OfferDetailPage() {
                   <th className="px-4 py-2">Variante</th>
                   <th className="px-4 py-2">SKU</th>
                   <th className="px-4 py-2">Prix</th>
+                  {offer.trackStock && <th className="px-4 py-2">Stock</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -374,6 +425,19 @@ export default function OfferDetailPage() {
                         ? formatCurrency(variant.priceOverride, offer.pricing.currency)
                         : "—"}
                     </td>
+                    {offer.trackStock && (
+                      <td className="px-4 py-2">
+                        <VariantStockCell
+                          offerId={id}
+                          variantId={variant.id}
+                          stockOnHand={variant.stockOnHand ?? 0}
+                          onAdjust={(stockOnHand) =>
+                            adjustStockMutation.mutate({ stockOnHand, variantId: variant.id })
+                          }
+                          adjusting={adjustStockMutation.isPending}
+                        />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -381,6 +445,227 @@ export default function OfferDetailPage() {
           </div>
         </Card>
       )}
+
+      {offer.trackStock && <StockMovementsSection offerId={id} variants={offer.variants} />}
     </div>
+  );
+}
+
+/** Inline "N — Ajuster" control for one variant row — a full form per row would be noisy for
+ *  what's usually a quick correction; toggling a small input in place matches this table's own
+ *  density. */
+function VariantStockCell({
+  stockOnHand,
+  onAdjust,
+  adjusting,
+}: {
+  offerId: string;
+  variantId: string;
+  stockOnHand: number;
+  onAdjust: (stockOnHand: number) => void;
+  adjusting: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(stockOnHand));
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setValue(String(stockOnHand));
+          setEditing(true);
+        }}
+        className="text-text underline-offset-2 hover:underline"
+      >
+        {stockOnHand}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        type="number"
+        step="1"
+        min="0"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-20"
+        autoFocus
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        loading={adjusting}
+        onClick={() => {
+          onAdjust(Number(value));
+          setEditing(false);
+        }}
+      >
+        OK
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+        ✕
+      </Button>
+    </div>
+  );
+}
+
+/** The "logistics" side: a delta-with-reason entry (supplier delivery, breakage, a signed
+ *  correction) plus the resulting movement history — distinct from the absolute-set "Ajuster"
+ *  controls above (a stocktake correction), this is what actually explains *why* stock changed. */
+function StockMovementsSection({
+  offerId,
+  variants,
+}: {
+  offerId: string;
+  variants: Offer["variants"];
+}) {
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<RecordStockMovementInput>({
+    resolver: zodResolver(recordStockMovementSchema),
+    defaultValues: { type: "received", quantity: 1 },
+  });
+  const movementType = watch("type");
+
+  const recordMutation = useMutation({
+    mutationFn: (input: RecordStockMovementInput) =>
+      apiClient.post(`/offers/${offerId}/stock/movements`, input),
+    onSuccess: () => {
+      reset({ type: "received", quantity: 1 });
+      setPage(1);
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["offers", offerId] }),
+        queryClient.invalidateQueries({ queryKey: ["stock-movements", offerId] }),
+      ]);
+    },
+  });
+
+  const movementsQuery = useQuery({
+    queryKey: ["stock-movements", offerId, page],
+    queryFn: () =>
+      apiClient.getList<StockMovement>(`/offers/${offerId}/stock/movements?page=${page}`),
+  });
+  const movements = movementsQuery.data?.data;
+
+  return (
+    <Card className="p-6">
+      <h2 className="text-sm font-semibold text-text">Mouvements de stock</h2>
+
+      <form
+        onSubmit={handleSubmit((values) => recordMutation.mutate(values))}
+        className="mt-3 flex flex-wrap items-end gap-2"
+      >
+        <Select aria-label="Type de mouvement" {...register("type")}>
+          {MANUAL_STOCK_MOVEMENT_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {STOCK_MOVEMENT_LABELS[type]}
+            </option>
+          ))}
+        </Select>
+        {variants.length > 0 && (
+          <Select aria-label="Variante" {...register("variantId")}>
+            {variants.map((variant) => (
+              <option key={variant.id} value={variant.id}>
+                {variant.name}
+              </option>
+            ))}
+          </Select>
+        )}
+        <Input
+          type="number"
+          step="1"
+          aria-label="Quantité"
+          placeholder={movementType === "correction" ? "± Quantité" : "Quantité"}
+          className="w-32"
+          {...register("quantity", { valueAsNumber: true })}
+        />
+        <Input
+          placeholder="Motif (optionnel)"
+          className="w-56"
+          {...register("reason")}
+        />
+        <Button type="submit" size="sm" loading={recordMutation.isPending}>
+          Enregistrer
+        </Button>
+      </form>
+      {errors.quantity && (
+        <p className="mt-1 text-xs text-destructive">{errors.quantity.message}</p>
+      )}
+      {recordMutation.isError && (
+        <p className="mt-1 text-xs text-destructive">
+          {recordMutation.error instanceof ApiError
+            ? recordMutation.error.message
+            : "Impossible d'enregistrer ce mouvement."}
+        </p>
+      )}
+
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+            <tr>
+              <th className="px-3 py-2">Date</th>
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Quantité</th>
+              <th className="px-3 py-2">Stock après</th>
+              <th className="px-3 py-2">Motif</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {movementsQuery.isLoading && (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-center text-text-muted">
+                  Chargement...
+                </td>
+              </tr>
+            )}
+            {!movementsQuery.isLoading && movements?.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-center text-text-muted">
+                  Aucun mouvement enregistré.
+                </td>
+              </tr>
+            )}
+            {movements?.map((movement) => (
+              <tr key={movement.id}>
+                <td className="px-3 py-2 text-text-muted">
+                  {new Date(movement.createdAt).toLocaleDateString("fr-FR")}
+                </td>
+                <td className="px-3 py-2">{STOCK_MOVEMENT_LABELS[movement.type]}</td>
+                <td
+                  className={`px-3 py-2 font-medium ${
+                    movement.quantity < 0 ? "text-destructive" : "text-success"
+                  }`}
+                >
+                  {movement.quantity > 0 ? `+${movement.quantity}` : movement.quantity}
+                </td>
+                <td className="px-3 py-2 text-text-muted">{movement.stockAfter}</td>
+                <td className="px-3 py-2 text-text-muted">{movement.reason ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {movementsQuery.data && movementsQuery.data.pagination.totalPages > 1 && (
+        <div className="mt-3">
+          <Pagination
+            page={movementsQuery.data.pagination.page}
+            totalPages={movementsQuery.data.pagination.totalPages}
+            onPageChange={setPage}
+            disabled={movementsQuery.isFetching}
+          />
+        </div>
+      )}
+    </Card>
   );
 }

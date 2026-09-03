@@ -9,12 +9,16 @@ import type {
   AdjustStockInput,
   CreateOfferInput,
   ListOffersQuery,
+  ListStockMovementsQuery,
+  RecordStockMovementInput,
   UpdateOfferInput,
 } from '@korva/validation';
 import type { Pagination } from '@korva/types';
 import { OffersRepository } from './offers.repository';
 import { OfferReferencesRepository } from './offer-references.repository';
+import { StockMovementsRepository } from './stock-movements.repository';
 import { OfferDocument } from './schemas/offer.schema';
+import { StockMovementDocument } from './schemas/stock-movement.schema';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
@@ -24,6 +28,7 @@ export class OffersService {
   constructor(
     private readonly offersRepository: OffersRepository,
     private readonly offerReferencesRepository: OfferReferencesRepository,
+    private readonly stockMovementsRepository: StockMovementsRepository,
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
@@ -54,6 +59,7 @@ export class OffersService {
       customFields,
       trackStock: input.trackStock,
       stockOnHand: input.stockOnHand,
+      lowStockThreshold: input.lowStockThreshold,
     });
 
     await this.auditService.record({
@@ -191,7 +197,10 @@ export class OffersService {
 
   /** Manual stock correction (stocktake, restock delivery) — sets stockOnHand to an absolute
    *  value rather than a delta, since that's what a physical count actually produces. Requires
-   *  the offer to already have trackStock enabled (turn tracking on via update() first). */
+   *  the offer to already have trackStock enabled (turn tracking on via update() first).
+   *  Variant-aware: pass `variantId` to correct one variant's count instead of the offer's own —
+   *  also records a `correction` StockMovement for the resulting delta, so this absolute-set
+   *  action still leaves a real audit trail rather than silently overwriting the counter. */
   async adjustStock(
     organizationId: string,
     userId: string,
@@ -206,13 +215,45 @@ export class OffersService {
       });
     }
 
-    const updated = await this.offersRepository.update(organizationId, id, {
-      stockOnHand: input.stockOnHand,
-    });
+    const before = input.variantId
+      ? offer.variants.find(
+          (v) => (v as unknown as { _id: Types.ObjectId })._id.toString() === input.variantId,
+        )?.stockOnHand
+      : offer.stockOnHand;
+    if (input.variantId && before === undefined) {
+      throw new NotFoundException({
+        code: 'OFFER_VARIANT_NOT_FOUND',
+        message: 'Variant not found on this offer',
+      });
+    }
+
+    const updated = input.variantId
+      ? await this.offersRepository.updateVariantStock(
+          organizationId,
+          id,
+          input.variantId,
+          input.stockOnHand,
+        )
+      : await this.offersRepository.update(organizationId, id, {
+          stockOnHand: input.stockOnHand,
+        });
     if (!updated) {
       throw new NotFoundException({
         code: 'OFFER_NOT_FOUND',
         message: 'Offer not found',
+      });
+    }
+
+    const delta = input.stockOnHand - (before ?? 0);
+    if (delta !== 0) {
+      await this.stockMovementsRepository.create({
+        organizationId: new Types.ObjectId(organizationId),
+        offerId: new Types.ObjectId(id),
+        variantId: input.variantId ? new Types.ObjectId(input.variantId) : undefined,
+        type: 'correction',
+        quantity: delta,
+        stockAfter: input.stockOnHand,
+        userId: new Types.ObjectId(userId),
       });
     }
 
@@ -222,10 +263,115 @@ export class OffersService {
       action: 'UPDATE',
       entity: 'offer',
       entityId: id,
-      metadata: { stockAdjustedTo: input.stockOnHand },
+      metadata: { stockAdjustedTo: input.stockOnHand, variantId: input.variantId },
     });
 
     return updated;
+  }
+
+  /** The "logistics" side of stock management — a delta-with-reason entry (supplier delivery,
+   *  breakage, a signed correction), always recorded as a StockMovement, never a silent counter
+   *  mutation. Applied atomically via the same $inc-based repository methods InventoryService
+   *  uses for order-driven changes, so a manual entry and a concurrent sale can never race into
+   *  a lost update. Subtractive types (damaged, or a negative correction) are guarded against
+   *  taking stock below 0, same as an order reservation would be. */
+  async recordStockMovement(
+    organizationId: string,
+    userId: string,
+    offerId: string,
+    input: RecordStockMovementInput,
+  ): Promise<StockMovementDocument> {
+    const offer = await this.getById(organizationId, offerId);
+    if (!offer.trackStock) {
+      throw new BadRequestException({
+        code: 'STOCK_TRACKING_NOT_ENABLED',
+        message: 'Enable trackStock on this offer before recording stock movements',
+      });
+    }
+    if (input.variantId && !offer.variants.some(
+      (v) => (v as unknown as { _id: Types.ObjectId })._id.toString() === input.variantId,
+    )) {
+      throw new NotFoundException({
+        code: 'OFFER_VARIANT_NOT_FOUND',
+        message: 'Variant not found on this offer',
+      });
+    }
+
+    // Direction is determined by TYPE, not by the input quantity's own sign: the schema requires
+    // a positive quantity for received/returned/damaged (a physical count is never negative),
+    // but "damaged" still removes stock — only "correction" carries an already-signed delta.
+    // Using input.quantity's sign directly here would silently treat every damaged/received/
+    // returned entry as an addition, which is exactly wrong for "damaged".
+    const delta =
+      input.type === 'damaged'
+        ? -Math.abs(input.quantity)
+        : input.type === 'correction'
+          ? input.quantity
+          : Math.abs(input.quantity);
+
+    const result =
+      delta > 0
+        ? await this.offersRepository.incrementStock(
+            organizationId,
+            offerId,
+            delta,
+            input.variantId,
+          )
+        : await this.offersRepository.decrementStockIfAvailable(
+            organizationId,
+            offerId,
+            -delta,
+            input.variantId,
+          );
+    if (!result) {
+      throw new BadRequestException({
+        code: 'INSUFFICIENT_STOCK',
+        message: 'Not enough stock available for this movement',
+      });
+    }
+
+    const movement = await this.stockMovementsRepository.create({
+      organizationId: new Types.ObjectId(organizationId),
+      offerId: new Types.ObjectId(offerId),
+      variantId: input.variantId ? new Types.ObjectId(input.variantId) : undefined,
+      type: input.type,
+      quantity: delta,
+      stockAfter: result.stockAfter,
+      reason: input.reason,
+      userId: new Types.ObjectId(userId),
+    });
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'UPDATE',
+      entity: 'offer',
+      entityId: offerId,
+      metadata: { stockMovementType: input.type, quantity: input.quantity, variantId: input.variantId },
+    });
+
+    return movement;
+  }
+
+  async listStockMovements(
+    organizationId: string,
+    offerId: string,
+    query: ListStockMovementsQuery,
+  ): Promise<{ data: StockMovementDocument[]; pagination: Pagination }> {
+    const { data, total } = await this.stockMovementsRepository.findAll(
+      organizationId,
+      offerId,
+      query,
+    );
+    return {
+      data,
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / query.limit)),
+      },
+    };
   }
 
   async delete(

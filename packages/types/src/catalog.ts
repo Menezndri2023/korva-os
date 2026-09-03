@@ -24,6 +24,10 @@ export interface OfferVariant {
   name: string;
   sku?: string;
   priceOverride?: number;
+  /** Only meaningful when the parent Offer.trackStock is true. Independent from the parent
+   *  offer's own stockOnHand — a variant-tracked offer's stock lives entirely here, per variant
+   *  (e.g. size M and size L of the same shirt sell out independently), not on the offer. */
+  stockOnHand?: number;
 }
 
 export interface Category {
@@ -52,8 +56,43 @@ export interface Offer {
    *  order creation, matching every existing offer's behavior today. */
   trackStock: boolean;
   /** Only meaningful when trackStock is true. Reserved (decremented) at order-creation time,
-   *  not at fulfillment — see InventoryService for the concurrency reasoning. */
+   *  not at fulfillment — see InventoryService for the concurrency reasoning. Ignored (stock
+   *  lives on each entry of `variants` instead) once this offer actually has variants. */
   stockOnHand?: number;
+  /** Reorder point — an alert-worthy "getting low" level, distinct from stockOnHand hitting
+   *  exactly 0 (which always alerts regardless of this field). Unset means no low-stock alert
+   *  beyond the zero case. Applies per-variant when the offer has variants. */
+  lowStockThreshold?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export const STOCK_MOVEMENT_TYPES = [
+  "received",
+  "sold",
+  "returned",
+  "damaged",
+  "correction",
+] as const;
+export type StockMovementType = (typeof STOCK_MOVEMENT_TYPES)[number];
+
+export interface StockMovement {
+  id: string;
+  organizationId: string;
+  offerId: string;
+  variantId?: string;
+  type: StockMovementType;
+  /** Signed — positive adds to stock, negative removes. */
+  quantity: number;
+  /** stockOnHand (offer- or variant-level, whichever this movement applies to) immediately
+   *  after this movement was applied — lets the ledger be read without replaying every prior
+   *  movement to know the running total at any point in time. */
+  stockAfter: number;
+  reason?: string;
+  /** Set for automatic movements (sold/returned) tied to a real order; unset for manual entries
+   *  (received/damaged/correction). */
+  referenceType?: "order";
+  referenceId?: string;
+  userId?: string;
+  createdAt: string;
 }

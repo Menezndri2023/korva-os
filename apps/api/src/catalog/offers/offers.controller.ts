@@ -13,10 +13,14 @@ import {
   adjustStockSchema,
   createOfferSchema,
   listOffersQuerySchema,
+  listStockMovementsQuerySchema,
+  recordStockMovementSchema,
   updateOfferSchema,
   type AdjustStockInput,
   type CreateOfferInput,
   type ListOffersQuery,
+  type ListStockMovementsQuery,
+  type RecordStockMovementInput,
   type UpdateOfferInput,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
@@ -88,6 +92,38 @@ export class OffersController {
       user.userId,
       id,
       body,
+    );
+  }
+
+  @RequirePermissions('offers.update')
+  @Post(':id/stock/movements')
+  recordStockMovement(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(recordStockMovementSchema))
+    body: RecordStockMovementInput,
+  ) {
+    return this.offersService.recordStockMovement(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body,
+    );
+  }
+
+  @RequirePermissions('offers.read')
+  @Get(':id/stock/movements')
+  listStockMovements(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Query(new ZodValidationPipe(listStockMovementsQuerySchema))
+    query: ListStockMovementsQuery,
+  ) {
+    return this.offersService.listStockMovements(
+      tenant.organizationId,
+      id,
+      query,
     );
   }
 
