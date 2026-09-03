@@ -50,6 +50,7 @@ const offer = {
 
 function mockGetByPath(path: string) {
   if (path === "/offers/offer-1") return Promise.resolve(offer);
+  if (path.startsWith("/custom-fields")) return Promise.resolve([]);
   throw new Error(`unexpected GET ${path}`);
 }
 
@@ -167,7 +168,52 @@ describe("OfferDetailPage", () => {
         pricing: { amount: 50, currency: "EUR" },
         status: "active",
         trackStock: false,
+        customFields: {},
       }),
+    );
+  });
+
+  it("renders a defined custom field's value on the detail page", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/offers/offer-1") {
+        return Promise.resolve({ ...offer, customFields: { warranty_months: 24 } });
+      }
+      if (path === "/custom-fields?entity=offers") {
+        return Promise.resolve([
+          { id: "field-1", entity: "offers", key: "warranty_months", label: "Garantie (mois)", type: "number", required: false },
+        ]);
+      }
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<OfferDetailPage />);
+
+    expect(await screen.findByText("Garantie (mois)")).toBeInTheDocument();
+    expect(screen.getByText("24")).toBeInTheDocument();
+  });
+
+  it("includes an edited custom field's value in the PATCH payload", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/custom-fields?entity=offers") {
+        return Promise.resolve([
+          { id: "field-1", entity: "offers", key: "warranty_months", label: "Garantie (mois)", type: "number", required: false },
+        ]);
+      }
+      return mockGetByPath(path);
+    });
+    patchMock.mockResolvedValue(offer);
+    const user = userEvent.setup();
+    renderWithProviders(<OfferDetailPage />);
+    await screen.findByRole("heading", { name: "Chaise" });
+
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    await user.type(await screen.findByLabelText("Garantie (mois)"), "24");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith(
+        "/offers/offer-1",
+        expect.objectContaining({ customFields: { warranty_months: 24 } }),
+      ),
     );
   });
 

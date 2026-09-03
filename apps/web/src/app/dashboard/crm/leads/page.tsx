@@ -13,11 +13,12 @@ import {
   type UpdateLeadInput,
 } from "@korva/validation";
 import { LEAD_STATUSES } from "@korva/types";
-import type { Contact, Lead, Pipeline } from "@korva/types";
+import type { Contact, CustomFieldValues, Lead, Pipeline } from "@korva/types";
 import { Button, Card, Input, Pagination, Select, cn } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { LEAD_STATUS_LABELS } from "@/lib/analytics-format";
+import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
 function usePipelines(enabled: boolean) {
   return useQuery({
@@ -77,11 +78,13 @@ export default function LeadsPage() {
     formState: { errors },
   } = useForm<CreateLeadInput>({ resolver: zodResolver(createLeadSchema) });
 
+  const [createCustomFields, setCreateCustomFields] = useState<CustomFieldValues>({});
   const createLeadMutation = useMutation({
     mutationFn: (input: CreateLeadInput) => apiClient.post<Lead>("/leads", input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["leads"] });
       reset();
+      setCreateCustomFields({});
       setShowForm(false);
     },
   });
@@ -153,7 +156,9 @@ export default function LeadsPage() {
 
       {showForm && selectedPipeline && (
         <form
-          onSubmit={handleSubmit((values) => createLeadMutation.mutate(values))}
+          onSubmit={handleSubmit((values) =>
+            createLeadMutation.mutate({ ...values, customFields: createCustomFields }),
+          )}
           // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
           // onSubmit), and Card renders a <div> — same exclusion already documented in
           // dashboard/crm/page.tsx (F2-B.7).
@@ -189,6 +194,13 @@ export default function LeadsPage() {
             {...register("estimatedValue", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
             })}
+          />
+
+          <CustomFieldsFieldset
+            entity="leads"
+            values={createCustomFields}
+            onChange={setCreateCustomFields}
+            idPrefix="lead-create"
           />
 
           {createLeadMutation.isError && (

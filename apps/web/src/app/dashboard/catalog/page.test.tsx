@@ -7,11 +7,15 @@ import { apiClient } from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, getList: vi.fn(), post: vi.fn() } };
+  return {
+    ...actual,
+    apiClient: { ...actual.apiClient, get: vi.fn(), getList: vi.fn(), post: vi.fn() },
+  };
 });
 
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
+const getMock = vi.mocked(apiClient.get);
 const getListMock = vi.mocked(apiClient.getList);
 const postMock = vi.mocked(apiClient.post);
 
@@ -39,6 +43,8 @@ function mockOffersPage(
 
 describe("CatalogPage — pagination", () => {
   beforeEach(() => {
+    getMock.mockReset();
+    getMock.mockResolvedValue([]);
     getListMock.mockReset();
     postMock.mockReset();
     mockOffersPage([]);
@@ -94,6 +100,27 @@ describe("CatalogPage — pagination", () => {
 
     await waitFor(() =>
       expect(getListMock).toHaveBeenCalledWith("/offers?page=1&type=service"),
+    );
+  });
+
+  it("includes a defined custom field's typed value in the create payload", async () => {
+    getMock.mockResolvedValue([
+      { id: "field-1", entity: "offers", key: "warranty_months", label: "Garantie (mois)", type: "number", required: false },
+    ]);
+    postMock.mockResolvedValue({ ...offer, id: "offer-2" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Table");
+    await user.type(await screen.findByLabelText("Garantie (mois)"), "24");
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({ customFields: { warranty_months: 24 } }),
+      ),
     );
   });
 });

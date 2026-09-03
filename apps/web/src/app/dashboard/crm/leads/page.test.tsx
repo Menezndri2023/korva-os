@@ -53,6 +53,7 @@ const contact = { id: "contact-1", firstName: "Ada", lastName: "Lovelace", tags:
 function mockGetByPath(path: string) {
   if (path.startsWith("/pipelines")) return Promise.resolve([pipeline]);
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
+  if (path.startsWith("/custom-fields")) return Promise.resolve([]);
   throw new Error(`unexpected GET ${path}`);
 }
 
@@ -124,7 +125,34 @@ describe("LeadsPage (migrated to @korva/ui Button/Input/Card in F2-B.8)", () => 
         pipelineId: "pipe-1",
         stageId: "stage-2",
         estimatedValue: 42,
+        customFields: {},
       }),
+    );
+  });
+
+  it("includes a defined custom field's typed value in the create payload", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/custom-fields?entity=leads") {
+        return Promise.resolve([
+          { id: "field-1", entity: "leads", key: "budget", label: "Budget", type: "text", required: false },
+        ]);
+      }
+      return mockGetByPath(path);
+    });
+    postMock.mockResolvedValue({ id: "lead-1" });
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Nouveau prospect" }));
+    await user.selectOptions(screen.getByDisplayValue("Choisir un contact"), "contact-1");
+    await user.type(await screen.findByLabelText("Budget"), "10k");
+    await user.click(screen.getByRole("button", { name: "Créer le prospect" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/leads",
+        expect.objectContaining({ customFields: { budget: "10k" } }),
+      ),
     );
   });
 

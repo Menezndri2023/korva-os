@@ -22,6 +22,7 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { LEAD_STATUS_LABELS } from "@/lib/analytics-format";
 import { RelationSection } from "@/components/relation-section";
+import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -154,7 +155,6 @@ export default function LeadDetailPage() {
   const lead = leadQuery.data;
   const pipeline = pipelinesQuery.data?.find((p) => p.id === lead.pipelineId);
   const isUpdating = updateLeadMutation.isPending;
-  const customFieldEntries = Object.entries(lead.customFields ?? {});
 
   return (
     <div className="space-y-4">
@@ -232,21 +232,8 @@ export default function LeadDetailPage() {
             <dt className="text-text-muted">Probabilité</dt>
             <dd className="mt-0.5">{lead.probability != null ? `${lead.probability}%` : "—"}</dd>
           </div>
+          <CustomFieldsDisplay entity="leads" values={lead.customFields} />
         </dl>
-
-        {customFieldEntries.length > 0 && (
-          <div className="mt-4">
-            <dt className="text-sm text-text-muted">Champs personnalisés</dt>
-            <dd className="mt-1 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-              {customFieldEntries.map(([key, value]) => (
-                <div key={key}>
-                  <span className="text-text-muted">{key}: </span>
-                  <span>{String(value)}</span>
-                </div>
-              ))}
-            </dd>
-          </div>
-        )}
       </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

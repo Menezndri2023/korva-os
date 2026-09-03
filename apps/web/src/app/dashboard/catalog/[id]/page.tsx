@@ -16,6 +16,7 @@ import {
   OFFER_STATUSES,
   OFFER_TYPES,
   STOCK_MOVEMENT_TYPES,
+  type CustomFieldValues,
   type Offer,
   type OfferType,
   type StockMovement,
@@ -25,6 +26,8 @@ import { Badge, Button, Card, Dialog, Input, Pagination, Select } from "@korva/u
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
+import { CustomFieldsDisplay } from "@/components/custom-fields-display";
+import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
 const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
   received: "Réception",
@@ -85,9 +88,11 @@ export default function OfferDetailPage() {
     formState: { errors },
   } = useForm<UpdateOfferInput>({ resolver: zodResolver(updateOfferSchema) });
   const trackStock = watch("trackStock");
+  const [editCustomFields, setEditCustomFields] = useState<CustomFieldValues>({});
 
   function startEdit(offer: Offer) {
     setIsEditing(true);
+    setEditCustomFields(offer.customFields ?? {});
     reset({
       type: offer.type,
       sku: offer.sku,
@@ -256,6 +261,7 @@ export default function OfferDetailPage() {
                   <dd className="mt-0.5">{offer.lowStockThreshold}</dd>
                 </div>
               )}
+              <CustomFieldsDisplay entity="offers" values={offer.customFields} />
             </dl>
 
             {/* Offer-level adjust — only meaningful when there are no variants: with variants,
@@ -315,7 +321,9 @@ export default function OfferDetailPage() {
           </>
         ) : (
           <form
-            onSubmit={handleSubmit((values) => updateMutation.mutate(values))}
+            onSubmit={handleSubmit((values) =>
+              updateMutation.mutate({ ...values, customFields: editCustomFields }),
+            )}
             className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
           >
             <Select aria-label="Type" {...register("type")}>
@@ -382,6 +390,13 @@ export default function OfferDetailPage() {
                 })}
               />
             )}
+
+            <CustomFieldsFieldset
+              entity="offers"
+              values={editCustomFields}
+              onChange={setEditCustomFields}
+              idPrefix="offer-edit"
+            />
 
             {updateMutation.isError && (
               <p className="col-span-2 text-sm text-destructive">

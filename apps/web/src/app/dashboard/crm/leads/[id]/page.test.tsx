@@ -59,6 +59,7 @@ function mockGetByPath(path: string) {
   if (path.startsWith("/notes")) return Promise.resolve([]);
   if (path.startsWith("/tasks")) return Promise.resolve([]);
   if (path.startsWith("/activities")) return Promise.resolve([]);
+  if (path.startsWith("/custom-fields")) return Promise.resolve([]);
   throw new Error(`unexpected GET ${path}`);
 }
 
@@ -140,11 +141,16 @@ describe("LeadDetailPage", () => {
       if (path === "/leads/lead-1") {
         return Promise.resolve({ ...lead, customFields: { budget: "10k" } });
       }
+      if (path === "/custom-fields?entity=leads") {
+        return Promise.resolve([
+          { id: "field-1", entity: "leads", key: "budget", label: "Budget", type: "text", required: false },
+        ]);
+      }
       return mockGetByPath(path);
     });
     renderWithProviders(<LeadDetailPage />);
 
-    expect(await screen.findByText("budget:")).toBeInTheDocument();
+    expect(await screen.findByText("Budget")).toBeInTheDocument();
     expect(screen.getByText("10k")).toBeInTheDocument();
   });
 

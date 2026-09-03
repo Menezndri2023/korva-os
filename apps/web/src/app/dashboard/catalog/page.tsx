@@ -6,10 +6,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createOfferSchema, type CreateOfferInput } from "@korva/validation";
-import { OFFER_TYPES, type Offer, type OfferType } from "@korva/types";
+import { OFFER_TYPES, type CustomFieldValues, type Offer, type OfferType } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
 const TYPE_LABELS: Record<OfferType, string> = {
   product: "Produit",
@@ -63,11 +64,13 @@ export default function CatalogPage() {
   });
   const trackStock = watch("trackStock");
 
+  const [createCustomFields, setCreateCustomFields] = useState<CustomFieldValues>({});
   const createMutation = useMutation({
     mutationFn: (input: CreateOfferInput) => apiClient.post<Offer>("/offers", input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["offers"] });
       reset();
+      setCreateCustomFields({});
       setShowForm(false);
     },
   });
@@ -99,7 +102,9 @@ export default function CatalogPage() {
 
       {showForm && (
         <form
-          onSubmit={handleSubmit((values) => createMutation.mutate(values))}
+          onSubmit={handleSubmit((values) =>
+            createMutation.mutate({ ...values, customFields: createCustomFields }),
+          )}
           // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
           // onSubmit), and Card renders a <div> — same exclusion already documented on the
           // other migrated create-forms (dashboard/crm, dashboard/bookings).
@@ -149,6 +154,13 @@ export default function CatalogPage() {
               })}
             />
           )}
+
+          <CustomFieldsFieldset
+            entity="offers"
+            values={createCustomFields}
+            onChange={setCreateCustomFields}
+            idPrefix="offer-create"
+          />
 
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
