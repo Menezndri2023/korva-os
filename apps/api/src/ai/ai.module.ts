@@ -52,6 +52,7 @@ import { SendWhatsappTool } from './tools/send-whatsapp.tool';
 import { ListRecommendationsTool } from './tools/list-recommendations.tool';
 import { DismissRecommendationTool } from './tools/dismiss-recommendation.tool';
 import { ResolveRecommendationTool } from './tools/resolve-recommendation.tool';
+import { ProposeRecommendationTool } from './tools/propose-recommendation.tool';
 
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -117,6 +118,7 @@ import { DecisionEngineModule } from '../decision-engine/decision-engine.module'
     ListRecommendationsTool,
     DismissRecommendationTool,
     ResolveRecommendationTool,
+    ProposeRecommendationTool,
 
     {
       provide: AI_PROVIDER,

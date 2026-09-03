@@ -110,6 +110,26 @@ class ScriptedAIProvider implements AIProvider {
           ],
         });
       }
+      const proposeMatch = /PROPOSE:(contact|invoice|offer):(\S+)/.exec(
+        last.content,
+      );
+      if (proposeMatch) {
+        return Promise.resolve({
+          type: 'tool_calls',
+          toolCalls: [
+            {
+              id: 'call_1',
+              name: 'propose_recommendation',
+              input: {
+                title: 'Relancer ce contact',
+                description: "Ce contact n'a pas été recontacté récemment.",
+                entityType: proposeMatch[1],
+                entityId: proposeMatch[2],
+              },
+            },
+          ],
+        });
+      }
     }
 
     return Promise.resolve({
@@ -284,6 +304,44 @@ describe('AI ↔ Decision Engine tools (e2e)', () => {
       .expect(200);
     expect(asSuccess<RecommendationPayload>(afterResolveRes.body).status).toBe(
       'resolved',
+    );
+  });
+
+  it('propose_recommendation lets the assistant draft a suggestion from real data, once per entity', async () => {
+    const contactId = new Types.ObjectId().toString();
+
+    const res = await request(server)
+      .post('/api/v1/ai/chat')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ agent: 'sales_agent', message: `PROPOSE:contact:${contactId}` })
+      .expect(201);
+    const reply = asSuccess<AiChatResponsePayload>(res.body).reply;
+    expect(reply).toContain('"status":"open"');
+
+    const recommendationId = /"id":"([0-9a-f]{24})"/.exec(reply)?.[1];
+    expect(recommendationId).toBeDefined();
+
+    const getRes = await request(server)
+      .get(`/api/v1/recommendations/${recommendationId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .expect(200);
+    const recommendation = asSuccess<
+      RecommendationPayload & { ruleKey: string; entityId: string }
+    >(getRes.body);
+    expect(recommendation.ruleKey).toBe('ai_suggestion');
+    expect(recommendation.entityId).toBe(contactId);
+
+    // Same entity again — the AI cannot spam duplicate suggestions about the same contact.
+    const dupRes = await request(server)
+      .post('/api/v1/ai/chat')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ agent: 'sales_agent', message: `PROPOSE:contact:${contactId}` })
+      .expect(201);
+    expect(asSuccess<AiChatResponsePayload>(dupRes.body).reply).toContain(
+      'A recommendation already exists',
     );
   });
 });

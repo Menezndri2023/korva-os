@@ -24,6 +24,7 @@ import { SendWhatsappTool } from './tools/send-whatsapp.tool';
 import { ListRecommendationsTool } from './tools/list-recommendations.tool';
 import { DismissRecommendationTool } from './tools/dismiss-recommendation.tool';
 import { ResolveRecommendationTool } from './tools/resolve-recommendation.tool';
+import { ProposeRecommendationTool } from './tools/propose-recommendation.tool';
 
 const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
   sales_agent: [
@@ -42,6 +43,7 @@ const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
     'list_recommendations',
     'dismiss_recommendation',
     'resolve_recommendation',
+    'propose_recommendation',
   ],
   booking_agent: [
     'search_contacts',
@@ -61,6 +63,7 @@ const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
     'get_quote',
     'get_invoice',
     'list_recommendations',
+    'propose_recommendation',
   ],
   general_assistant: [], // filled below with every tool
 };
@@ -92,6 +95,7 @@ export class AiToolsRegistryService {
     listRecommendations: ListRecommendationsTool,
     dismissRecommendation: DismissRecommendationTool,
     resolveRecommendation: ResolveRecommendationTool,
+    proposeRecommendation: ProposeRecommendationTool,
   ) {
     this.tools = [
       searchContacts,
@@ -116,6 +120,7 @@ export class AiToolsRegistryService {
       listRecommendations,
       dismissRecommendation,
       resolveRecommendation,
+      proposeRecommendation,
     ];
     AGENT_TOOL_NAMES.general_assistant = this.tools.map(
       (tool) => tool.definition.name,

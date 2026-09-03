@@ -38,7 +38,9 @@ function asError(body: unknown): ApiError['error'] {
 // Only the PNG magic-number header (8 bytes) — LocalDiskStorageEngine/S3StorageEngine's
 // signature check only ever inspects the first bytes, never decodes a full image (see
 // file-signature-checks.ts), so nothing here needs to be a real, renderable PNG.
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00,
+]);
 
 describe('Uploads (e2e) — local storage provider', () => {
   let app: INestApplication<App>;
@@ -117,12 +119,17 @@ describe('Uploads (e2e) — local storage provider', () => {
       .post('/api/v1/uploads')
       .set('Authorization', `Bearer ${ownerAccessToken}`)
       .set('X-Organization-Id', organizationId)
-      .attach('file', PNG_SIGNATURE, { filename: 'logo.png', contentType: 'image/png' })
+      .attach('file', PNG_SIGNATURE, {
+        filename: 'logo.png',
+        contentType: 'image/png',
+      })
       .expect(201);
     const upload = asSuccess<UploadPayload>(uploadRes.body);
     expect(upload.mimeType).toBe('image/png');
     expect(upload.size).toBe(PNG_SIGNATURE.length);
-    expect(upload.url).toContain(`/api/v1/uploads/${organizationId}/${upload.filename}`);
+    expect(upload.url).toContain(
+      `/api/v1/uploads/${organizationId}/${upload.filename}`,
+    );
 
     // GET is public — no Authorization header, matching how a storefront <img src> would fetch it.
     const getRes = await request(server)
@@ -148,7 +155,10 @@ describe('Uploads (e2e) — local storage provider', () => {
       .post('/api/v1/uploads')
       .set('Authorization', `Bearer ${ownerAccessToken}`)
       .set('X-Organization-Id', organizationId)
-      .attach('file', Buffer.from('hello'), { filename: 'notes.txt', contentType: 'text/plain' })
+      .attach('file', Buffer.from('hello'), {
+        filename: 'notes.txt',
+        contentType: 'text/plain',
+      })
       .expect(400);
     expect(asError(res.body).code).toBe('UNSUPPORTED_FILE_TYPE');
   });
@@ -171,7 +181,10 @@ describe('Uploads (e2e) — local storage provider', () => {
       .post('/api/v1/uploads')
       .set('Authorization', `Bearer ${ownerAccessToken}`)
       .set('X-Organization-Id', organizationId)
-      .attach('file', PNG_SIGNATURE, { filename: 'logo.png', contentType: 'image/png' })
+      .attach('file', PNG_SIGNATURE, {
+        filename: 'logo.png',
+        contentType: 'image/png',
+      })
       .expect(201);
     const upload = asSuccess<UploadPayload>(uploadRes.body);
 
