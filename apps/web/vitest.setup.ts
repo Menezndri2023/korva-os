@@ -10,3 +10,22 @@ import "@testing-library/jest-dom/vitest";
 afterEach(() => {
   cleanup();
 });
+
+// jsdom doesn't implement matchMedia at all (a well-known gap, not a KORVA-specific one) —
+// ThemeProvider's system-preference fallback (@/lib/theme-provider.ts) calls it on every
+// mount, so any test rendering a dashboard page would otherwise crash before this existed.
+// Always reports "no dark preference" — deterministic and irrelevant to what these tests
+// actually assert on, since none of them test dark-mode rendering itself (packages/ui's own
+// ThemeToggle.test.tsx covers the toggle in isolation).
+if (typeof window !== "undefined" && !window.matchMedia) {
+  window.matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  });
+}

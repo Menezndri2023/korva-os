@@ -47,6 +47,12 @@ export default function LeadsPage() {
   const leads = leadsPage?.data;
 
   const defaultPipeline = pipelines?.find((p) => p.isDefault) ?? pipelines?.[0];
+  // Which pipeline's board is currently shown — defaults to the default pipeline, but an
+  // organization with several pipelines (e.g. one per product line, or per sales team) can
+  // switch between them instead of only ever seeing the default one's stages as columns.
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>(undefined);
+  const selectedPipeline =
+    pipelines?.find((p) => p.id === selectedPipelineId) ?? defaultPipeline;
 
   const seedPipelineMutation = useMutation({
     mutationFn: () =>
@@ -128,7 +134,7 @@ export default function LeadsPage() {
 
   if (!pipelinesLoading && pipelines?.length === 0) {
     return (
-      <Card className="p-6 text-sm text-zinc-600">
+      <Card className="p-6 text-sm text-text-muted">
         <p className="mb-3">Aucun pipeline n&apos;a encore été créé pour gérer vos prospects.</p>
         <Button onClick={() => seedPipelineMutation.mutate()} loading={seedPipelineMutation.isPending}>
           {seedPipelineMutation.isPending ? "Création..." : "Créer un pipeline par défaut"}
@@ -145,13 +151,13 @@ export default function LeadsPage() {
         </Button>
       </div>
 
-      {showForm && defaultPipeline && (
+      {showForm && selectedPipeline && (
         <form
           onSubmit={handleSubmit((values) => createLeadMutation.mutate(values))}
           // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
           // onSubmit), and Card renders a <div> — same exclusion already documented in
           // dashboard/crm/page.tsx (F2-B.7).
-          className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
+          className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
         >
           <Select className="col-span-2" defaultValue="" {...register("contactId")}>
             <option value="" disabled>
@@ -164,12 +170,14 @@ export default function LeadsPage() {
             ))}
           </Select>
           {errors.contactId && (
-            <p className="col-span-2 text-xs text-red-600">{errors.contactId.message}</p>
+            <p className="col-span-2 text-xs text-destructive">{errors.contactId.message}</p>
           )}
 
-          <input type="hidden" value={defaultPipeline.id} {...register("pipelineId")} />
-          <Select defaultValue={defaultPipeline.stages[0]?.id} {...register("stageId")}>
-            {defaultPipeline.stages.map((stage) => (
+          {/* New leads are created directly in whichever pipeline the board is currently
+              showing, not always the default one. */}
+          <input type="hidden" value={selectedPipeline.id} {...register("pipelineId")} />
+          <Select defaultValue={selectedPipeline.stages[0]?.id} {...register("stageId")}>
+            {selectedPipeline.stages.map((stage) => (
               <option key={stage.id} value={stage.id}>
                 {stage.name}
               </option>
@@ -184,7 +192,7 @@ export default function LeadsPage() {
           />
 
           {createLeadMutation.isError && (
-            <p className="col-span-2 text-sm text-red-600">
+            <p className="col-span-2 text-sm text-destructive">
               {createLeadMutation.error instanceof ApiError ? createLeadMutation.error.message : "Erreur"}
             </p>
           )}
@@ -194,42 +202,59 @@ export default function LeadsPage() {
         </form>
       )}
 
-      {leadsLoading && <p className="text-sm text-zinc-500">Chargement...</p>}
-      {!leadsLoading && leads?.length === 0 && (
-        <p className="text-sm text-zinc-500">Aucun prospect.</p>
+      {pipelines && pipelines.length > 1 && (
+        <label className="flex items-center gap-2 text-sm text-text-muted">
+          Pipeline
+          <Select
+            value={selectedPipeline?.id ?? ""}
+            onChange={(e) => setSelectedPipelineId(e.target.value)}
+            className="w-56"
+          >
+            {pipelines.map((pipeline) => (
+              <option key={pipeline.id} value={pipeline.id}>
+                {pipeline.name}
+              </option>
+            ))}
+          </Select>
+        </label>
       )}
 
-      {/* Kanban board: one column per stage of the default pipeline, cards draggable between
-          columns (F2 audit — plain <select> for stage changes, no board). Each card keeps the
-          same per-lead stage/status <select> as before (same aria-label, same disabled-while-
+      {leadsLoading && <p className="text-sm text-text-muted">Chargement...</p>}
+      {!leadsLoading && leads?.length === 0 && (
+        <p className="text-sm text-text-muted">Aucun prospect.</p>
+      )}
+
+      {/* Kanban board: one column per stage of the currently-selected pipeline (see the
+          pipeline picker above — not always the default one), cards draggable between columns
+          (F2 audit — plain <select> for stage changes, no board). Each card keeps the same
+          per-lead stage/status <select> as before (same aria-label, same disabled-while-
           pending, same rowError message) as a non-drag, keyboard-reachable fallback — native
           HTML5 drag-and-drop has no keyboard equivalent on its own, so removing the select
           entirely would regress accessibility even though the board makes it redundant for a
-          mouse/touch user. Only leads in the *default* pipeline are shown as columns (a board's
-          columns are one pipeline's stages); a lead belonging to a different pipeline is out of
-          scope for this board, same limitation as Pagination above only ever paging through the
-          flat /leads list, not a per-pipeline one. */}
+          mouse/touch user. Only leads in the *selected* pipeline are shown as columns (a
+          board's columns are one pipeline's stages); a lead belonging to a different pipeline
+          shows up once that pipeline is selected instead. */}
       <div className="overflow-x-auto pb-2">
         <div className="flex gap-4">
-          {[...(defaultPipeline?.stages ?? [])]
+          {[...(selectedPipeline?.stages ?? [])]
             .sort((a, b) => a.order - b.order)
             .map((stage) => {
               const stageLeads = leads?.filter(
-                (lead) => lead.pipelineId === defaultPipeline?.id && lead.stageId === stage.id,
+                (lead) => lead.pipelineId === selectedPipeline?.id && lead.stageId === stage.id,
               );
               return (
                 <div
                   key={stage.id}
                   onDragOver={handleColumnDragOver}
                   onDrop={handleColumnDrop(stage.id)}
-                  className="w-72 shrink-0 rounded-lg border border-zinc-200 bg-zinc-50 p-3"
+                  className="w-72 shrink-0 rounded-lg border border-border bg-surface-muted p-3"
                 >
                   <h3
                     aria-label={`${stage.name} — ${stageLeads?.length ?? 0} prospect(s)`}
-                    className="mb-3 flex items-center justify-between text-xs font-medium uppercase text-zinc-500"
+                    className="mb-3 flex items-center justify-between text-xs font-medium uppercase text-text-muted"
                   >
                     <span aria-hidden="true">{stage.name}</span>
-                    <span aria-hidden="true" className="rounded-full bg-zinc-200 px-2 py-0.5 text-zinc-600">
+                    <span aria-hidden="true" className="rounded-full bg-surface px-2 py-0.5 text-text-muted">
                       {stageLeads?.length ?? 0}
                     </span>
                   </h3>
@@ -249,17 +274,17 @@ export default function LeadsPage() {
                           draggable={!isRowPending}
                           onDragStart={handleCardDragStart(lead.id)}
                           className={cn(
-                            "space-y-2 rounded-md border border-zinc-200 bg-white p-2 text-sm shadow-sm",
+                            "space-y-2 rounded-md border border-border bg-surface p-2 text-sm shadow-sm",
                             isRowPending ? "cursor-wait opacity-60" : "cursor-grab",
                           )}
                         >
                           <Link
                             href={`/dashboard/crm/leads/${lead.id}`}
-                            className="block font-medium text-zinc-900 underline-offset-2 hover:underline"
+                            className="block font-medium text-text underline-offset-2 hover:underline"
                           >
                             {contactName(lead)}
                           </Link>
-                          <p className="text-zinc-600">{lead.estimatedValue ?? "—"}</p>
+                          <p className="text-text-muted">{lead.estimatedValue ?? "—"}</p>
                           <select
                             aria-label={`Étape de ${contactName(lead)}`}
                             value={lead.stageId}
@@ -267,7 +292,7 @@ export default function LeadsPage() {
                             onChange={(e) =>
                               updateLeadMutation.mutate({ id: lead.id, stageId: e.target.value })
                             }
-                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-md border border-border-input px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {pipeline?.stages.map((s) => (
                               <option key={s.id} value={s.id}>
@@ -285,7 +310,7 @@ export default function LeadsPage() {
                                 status: e.target.value as Lead["status"],
                               })
                             }
-                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full rounded-md border border-border-input px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {LEAD_STATUSES.map((status) => (
                               <option key={status} value={status}>
@@ -294,7 +319,7 @@ export default function LeadsPage() {
                             ))}
                           </select>
                           {rowError && (
-                            <p className="text-xs text-red-600">
+                            <p className="text-xs text-destructive">
                               {rowError instanceof ApiError
                                 ? rowError.message
                                 : "Impossible de mettre à jour le prospect."}

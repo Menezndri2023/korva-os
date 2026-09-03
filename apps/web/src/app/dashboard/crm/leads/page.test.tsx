@@ -393,3 +393,93 @@ describe("LeadsPage — kanban board (WAVE 2 AGENT E)", () => {
     expect(patchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("LeadsPage — multiple pipelines", () => {
+  const salesPipeline = pipeline;
+  const supportPipeline = {
+    id: "pipe-2",
+    name: "Support",
+    isDefault: false,
+    stages: [
+      { id: "stage-3", name: "Ouvert", order: 0 },
+      { id: "stage-4", name: "Résolu", order: 1 },
+    ],
+  };
+  const salesLead = {
+    id: "lead-1",
+    contactId: "contact-1",
+    pipelineId: "pipe-1",
+    stageId: "stage-1",
+    status: "open",
+    estimatedValue: 100,
+  };
+  const supportLead = {
+    id: "lead-2",
+    contactId: "contact-1",
+    pipelineId: "pipe-2",
+    stageId: "stage-3",
+    status: "open",
+    estimatedValue: 50,
+  };
+
+  beforeEach(() => {
+    getMock.mockReset();
+    getListMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path.startsWith("/pipelines")) {
+        return Promise.resolve([salesPipeline, supportPipeline]);
+      }
+      if (path.startsWith("/contacts")) return Promise.resolve([contact]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+    mockLeadsPage([salesLead, supportLead]);
+  });
+
+  it("shows a pipeline picker only when more than one pipeline exists, defaulting to the default pipeline's board", async () => {
+    renderWithProviders(<LeadsPage />);
+
+    expect(await screen.findByText("Pipeline")).toBeInTheDocument();
+    const picker = screen.getByRole("combobox", { name: "Pipeline" });
+    expect(picker).toHaveValue("pipe-1");
+    // Sales board showing: its own lead's column is visible, the support pipeline's stage
+    // names are not (they only exist as columns once Support is selected).
+    expect(screen.getByRole("heading", { name: /^Nouveau/ })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Ouvert/ })).not.toBeInTheDocument();
+  });
+
+  it("switching the picker swaps the board to the other pipeline's stages/leads", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+    await screen.findByRole("heading", { name: /^Nouveau/ });
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pipeline" }), "pipe-2");
+
+    expect(await screen.findByRole("heading", { name: /^Ouvert/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Résolu/ })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^Nouveau/ })).not.toBeInTheDocument();
+  });
+
+  it("creating a lead while Support is selected submits that pipeline's id, not the default", async () => {
+    postMock.mockResolvedValue(supportLead);
+    const user = userEvent.setup();
+    renderWithProviders(<LeadsPage />);
+    await screen.findByRole("heading", { name: /^Nouveau/ });
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Pipeline" }), "pipe-2");
+    await screen.findByRole("heading", { name: /^Ouvert/ });
+
+    await user.click(screen.getByRole("button", { name: "Nouveau prospect" }));
+    await user.selectOptions(screen.getByDisplayValue("Choisir un contact"), "contact-1");
+    await user.click(screen.getByRole("button", { name: "Créer le prospect" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/leads",
+        expect.objectContaining({ pipelineId: "pipe-2" }),
+      ),
+    );
+  });
+});
