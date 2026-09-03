@@ -174,10 +174,10 @@ export default function ContactsPage() {
           // element itself (it carries onSubmit) — swapping it would either drop form
           // semantics or require nesting an extra <div> inside the form that isn't there
           // today. Left as a native element with its existing classes (F2-B.7).
-          className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
+          className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
         >
           <select
-            className="col-span-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+            className="col-span-2 rounded-md border border-border-input bg-surface px-3 py-2 text-sm"
             {...register("type")}
           >
             {CONTACT_TYPES.map((type) => (
@@ -199,13 +199,13 @@ export default function ContactsPage() {
             </>
           )}
           <Input placeholder="Email" type="email" error={!!errors.email} {...register("email")} />
-          {errors.email && <p className="col-span-2 text-xs text-red-600">{errors.email.message}</p>}
+          {errors.email && <p className="col-span-2 text-xs text-destructive">{errors.email.message}</p>}
           <Input placeholder="Téléphone" {...register("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
           {createType !== "company" && (
             <Input placeholder="Entreprise" className="col-span-2" {...register("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
           )}
           {createMutation.isError && (
-            <p className="col-span-2 text-sm text-red-600">
+            <p className="col-span-2 text-sm text-destructive">
               {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
             </p>
           )}
@@ -218,7 +218,7 @@ export default function ContactsPage() {
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
                 <th className="px-4 py-2">Nom</th>
                 <th className="px-4 py-2">Email</th>
@@ -227,17 +227,17 @@ export default function ContactsPage() {
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
                     Chargement...
                   </td>
                 </tr>
               )}
               {!isLoading && data?.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
                     Aucun contact.
                   </td>
                 </tr>
@@ -277,17 +277,12 @@ export default function ContactsPage() {
                           {contact.type === "company" && <Badge>Entreprise</Badge>}
                         </div>
                       </td>
-                      <td className="px-4 py-2 text-zinc-600">{contact.email ?? "—"}</td>
-                      <td className="px-4 py-2 text-zinc-600">{contact.phone ?? "—"}</td>
+                      <td className="px-4 py-2 text-text-muted">{contact.email ?? "—"}</td>
+                      <td className="px-4 py-2 text-text-muted">{contact.phone ?? "—"}</td>
                       <td className="px-4 py-2">
                         <div className="flex flex-wrap gap-1">
                           {contact.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700"
-                            >
-                              {tag}
-                            </span>
+                            <Badge key={tag}>{tag}</Badge>
                           ))}
                         </div>
                       </td>
@@ -337,7 +332,7 @@ export default function ContactsPage() {
                     </tr>
                     {deleteError && (
                       <tr>
-                        <td colSpan={5} className="px-4 pb-2 text-xs text-red-600">
+                        <td colSpan={5} className="px-4 pb-2 text-xs text-destructive">
                           {deleteErrorMessage(deleteError)}
                         </td>
                       </tr>
@@ -356,18 +351,18 @@ export default function ContactsPage() {
                                   .filter(Boolean),
                               }),
                             )}
-                            className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
+                            className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
                           >
                             <div className="col-span-2">
                               <label
-                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                className="mb-1 block text-xs font-medium text-text"
                                 htmlFor={`edit-type-${contact.id}`}
                               >
                                 Type
                               </label>
                               <select
                                 id={`edit-type-${contact.id}`}
-                                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                                className="w-full rounded-md border border-border-input bg-surface px-3 py-2 text-sm"
                                 {...registerEdit("type")}
                               >
                                 {CONTACT_TYPES.map((type) => (
@@ -380,7 +375,7 @@ export default function ContactsPage() {
                             {editType === "company" ? (
                               <div className="col-span-2">
                                 <label
-                                  className="mb-1 block text-xs font-medium text-zinc-700"
+                                  className="mb-1 block text-xs font-medium text-text"
                                   htmlFor={`edit-company-name-${contact.id}`}
                                 >
                                   Nom de l&apos;entreprise
@@ -395,7 +390,7 @@ export default function ContactsPage() {
                               <>
                                 <div>
                                   <label
-                                    className="mb-1 block text-xs font-medium text-zinc-700"
+                                    className="mb-1 block text-xs font-medium text-text"
                                     htmlFor={`edit-firstName-${contact.id}`}
                                   >
                                     Prénom
@@ -404,7 +399,7 @@ export default function ContactsPage() {
                                 </div>
                                 <div>
                                   <label
-                                    className="mb-1 block text-xs font-medium text-zinc-700"
+                                    className="mb-1 block text-xs font-medium text-text"
                                     htmlFor={`edit-lastName-${contact.id}`}
                                   >
                                     Nom
@@ -415,7 +410,7 @@ export default function ContactsPage() {
                             )}
                             <div>
                               <label
-                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                className="mb-1 block text-xs font-medium text-text"
                                 htmlFor={`edit-email-${contact.id}`}
                               >
                                 Email
@@ -427,12 +422,12 @@ export default function ContactsPage() {
                                 {...registerEdit("email")}
                               />
                               {editErrors.email && (
-                                <p className="mt-1 text-xs text-red-600">{editErrors.email.message}</p>
+                                <p className="mt-1 text-xs text-destructive">{editErrors.email.message}</p>
                               )}
                             </div>
                             <div>
                               <label
-                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                className="mb-1 block text-xs font-medium text-text"
                                 htmlFor={`edit-phone-${contact.id}`}
                               >
                                 Téléphone
@@ -442,7 +437,7 @@ export default function ContactsPage() {
                             {editType !== "company" && (
                               <div className="col-span-2">
                                 <label
-                                  className="mb-1 block text-xs font-medium text-zinc-700"
+                                  className="mb-1 block text-xs font-medium text-text"
                                   htmlFor={`edit-company-${contact.id}`}
                                 >
                                   Entreprise
@@ -456,7 +451,7 @@ export default function ContactsPage() {
                             )}
                             <div className="col-span-2">
                               <label
-                                className="mb-1 block text-xs font-medium text-zinc-700"
+                                className="mb-1 block text-xs font-medium text-text"
                                 htmlFor={`edit-tags-${contact.id}`}
                               >
                                 Tags (séparés par des virgules)
@@ -470,7 +465,7 @@ export default function ContactsPage() {
                             </div>
 
                             {editError && (
-                              <p className="col-span-2 text-sm text-red-600">
+                              <p className="col-span-2 text-sm text-destructive">
                                 {editError instanceof ApiError
                                   ? editError.message
                                   : "Impossible d'enregistrer le contact."}

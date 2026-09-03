@@ -5,10 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { KorvaModule, Organization } from "@korva/types";
-import { Button } from "@korva/ui";
+import { Button, ThemeToggle } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { useTheme } from "@/lib/theme-provider";
 
 const MODULE_NAV: { module: KorvaModule; label: string; href: string }[] = [
   { module: "crm", label: "CRM", href: "/dashboard/crm" },
@@ -33,6 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const setActiveOrganization = useAuthStore((state) => state.setActiveOrganization);
   const clear = useAuthStore((state) => state.clear);
   const { data: organization } = useActiveOrganization();
+  const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { data: organizations } = useQuery({
@@ -207,6 +209,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           <div className="flex items-center gap-2">
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             {organization?.slug && <StorefrontLinkMenu slug={organization.slug} />}
             <UserMenu
               name={[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || ""}

@@ -85,8 +85,14 @@
  * so contrast relationships (surface vs surface-muted vs border, text vs text-muted) are
  * preserved rather than inverted 1:1 into disproportionate contrast.
  */
+/*
+ * `:not([data-theme="light"])` guards this media query so an explicit "light" choice (see
+ * ThemeProvider in apps/web/src/lib/theme-provider.tsx) overrides a dark system preference —
+ * without it, a user on a dark OS who explicitly picks "light" in the app would still get dark
+ * tokens here, since prefers-color-scheme only reflects the OS, never the in-app toggle.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     /* Page background — was zinc-50 (near-white); dark equivalent is the darkest neutral so
        cards (surface) still read as a visibly lighter layer above it. */
     --color-app-background: var(--color-zinc-950);
@@ -142,4 +148,28 @@
        zinc-100 (near-white), so the ring stays visible against the dark surface it outlines. */
     --color-focus: var(--color-zinc-100);
   }
+}
+
+/*
+ * Explicit dark choice — wins over prefers-color-scheme in either direction (a dark-OS user who
+ * picks "light" gets the light tokens above via the :not() guard; a light-OS user who picks
+ * "dark" gets these). Identical values to the media-query block above, kept as a literal
+ * duplicate rather than a shared @media+selector construct — CSS has no way to factor out a
+ * declaration block across two different at-rules without a preprocessor, and this file
+ * deliberately has none (Tailwind v4 CSS-first, see the top-of-file comment).
+ */
+:root[data-theme="dark"] {
+  --color-app-background: var(--color-zinc-950);
+  --color-surface: var(--color-zinc-900);
+  --color-surface-muted: var(--color-zinc-800);
+  --color-border: var(--color-zinc-800);
+  --color-border-input: var(--color-zinc-700);
+  --color-text: var(--color-zinc-100);
+  --color-text-muted: var(--color-zinc-400);
+  --color-badge-text: var(--color-zinc-300);
+  --color-text-primary: var(--color-white);
+  --color-destructive: var(--color-red-400);
+  --color-success: var(--color-green-400);
+  --color-warning: var(--color-amber-400);
+  --color-focus: var(--color-zinc-100);
 }

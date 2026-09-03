@@ -6,3 +6,4 @@ export * from "./badge/badge.tsx";
 export * from "./pagination/pagination.tsx";
 export * from "./dialog/dialog.tsx";
 export * from "./select/select.tsx";
+export * from "./theme-toggle/theme-toggle.tsx";
