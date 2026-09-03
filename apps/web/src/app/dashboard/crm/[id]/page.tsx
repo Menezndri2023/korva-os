@@ -26,6 +26,7 @@ import type {
   Conversation,
   ContactTimeline,
   CreditBalance,
+  CustomFieldValues,
   Invoice,
   Lead,
   Note,
@@ -39,6 +40,8 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
 import { RelationSection } from "@/components/relation-section";
+import { CustomFieldsDisplay } from "@/components/custom-fields-display";
+import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
 const TIMELINE_TYPE_LABELS: Record<BusinessGraphTimelineEntry["type"], string> = {
   lead: "Prospect",
@@ -256,6 +259,7 @@ export default function ContactDetailPage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editTagsInput, setEditTagsInput] = useState("");
+  const [editCustomFields, setEditCustomFields] = useState<CustomFieldValues>({});
   const {
     register: registerEdit,
     handleSubmit: handleEditSubmit,
@@ -279,6 +283,7 @@ export default function ContactDetailPage() {
   function startEdit(contact: Contact) {
     setIsEditing(true);
     setEditTagsInput(contact.tags.join(", "));
+    setEditCustomFields(contact.customFields ?? {});
     resetEditForm({
       type: contact.type,
       firstName: contact.firstName,
@@ -428,6 +433,7 @@ export default function ContactDetailPage() {
                 {contact.defaultHourlyRate != null ? `${contact.defaultHourlyRate}/h` : "—"}
               </dd>
             </div>
+            <CustomFieldsDisplay entity="contacts" values={contact.customFields} />
           </dl>
         ) : (
           <form
@@ -438,6 +444,7 @@ export default function ContactDetailPage() {
                   .split(",")
                   .map((tag) => tag.trim())
                   .filter(Boolean),
+                customFields: editCustomFields,
               }),
             )}
             className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
@@ -540,6 +547,13 @@ export default function ContactDetailPage() {
                 onChange={(e) => setEditTagsInput(e.target.value)}
               />
             </div>
+
+            <CustomFieldsFieldset
+              entity="contacts"
+              values={editCustomFields}
+              onChange={setEditCustomFields}
+              idPrefix="contact-edit"
+            />
 
             {updateContactMutation.isError && (
               <p className="col-span-2 text-sm text-red-600">

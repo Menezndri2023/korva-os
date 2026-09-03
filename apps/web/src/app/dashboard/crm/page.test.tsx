@@ -41,6 +41,7 @@ function mockContactsPage(
 describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () => {
   beforeEach(() => {
     getMock.mockReset();
+    getMock.mockResolvedValue([]);
     getListMock.mockReset();
     postMock.mockReset();
     mockContactsPage([]);
@@ -103,6 +104,7 @@ describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () 
         email: "ada@example.com",
         phone: "0102030405",
         company: "Analytical Engines",
+        customFields: {},
       }),
     );
   });
@@ -133,6 +135,7 @@ describe("ContactsPage (migrated to @korva/ui Button/Input/Card in F2-B.7)", () 
         company: "Analytical Engines Ltd",
         email: "contact@analytical-engines.example",
         phone: "0102030405",
+        customFields: {},
       }),
     );
   });
@@ -237,6 +240,7 @@ describe("ContactsPage — edit contact (LOT F4)", () => {
 
   beforeEach(() => {
     getMock.mockReset();
+    getMock.mockResolvedValue([]);
     getListMock.mockReset();
     postMock.mockReset();
     patchMock.mockReset();
@@ -310,6 +314,7 @@ describe("ContactsPage — edit contact (LOT F4)", () => {
         phone: "0102030405",
         company: "Analytical Engines",
         tags: ["vip"],
+        customFields: {},
       }),
     );
   });
@@ -399,6 +404,7 @@ describe("ContactsPage — delete contact (LOT F6)", () => {
 
   beforeEach(() => {
     getMock.mockReset();
+    getMock.mockResolvedValue([]);
     getListMock.mockReset();
     postMock.mockReset();
     patchMock.mockReset();

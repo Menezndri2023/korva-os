@@ -198,6 +198,7 @@ describe("ContactDetailPage (LOT F7)", () => {
         phone: "0102030405",
         company: "Analytical Engines",
         tags: ["vip"],
+        customFields: {},
       }),
     );
   });

@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CORE_PERMISSIONS,
+  CUSTOM_FIELD_ENTITIES,
+  CUSTOM_FIELD_TYPES,
   KORVA_MODULES,
   STOREFRONT_SECTIONS,
   STOREFRONT_TEMPLATES,
@@ -22,6 +24,8 @@ import type {
   AuditLogEntry,
   ConnectMessagingAccountInput,
   ConnectPaymentPayoutInput,
+  CustomField,
+  CustomFieldEntity,
   IntegrationAccountStatus,
   IntegrationDomain,
   IntegrationSummary,
@@ -36,10 +40,12 @@ import type {
 } from "@korva/types";
 import {
   addMemberSchema,
+  createCustomFieldSchema,
   createRoleSchema,
   createWebhookSubscriptionSchema,
   updateOrganizationSchema,
   type AddMemberInput,
+  type CreateCustomFieldInput,
   type CreateRoleInput,
   type CreateWebhookSubscriptionInput,
   type UpdateOrganizationInput,
@@ -1799,6 +1805,7 @@ export default function SettingsPage() {
       {organization && <ExternalWebsiteSection slug={organization.slug} />}
       <WebhookSubscriptionsSection />
       <RolesManagementSection />
+      <CustomFieldsSection />
       <AuditLogSection />
     </div>
   );
@@ -1931,6 +1938,239 @@ function RolesManagementSection() {
           {deleteMutation.error instanceof ApiError
             ? deleteMutation.error.message
             : "Impossible de supprimer ce rôle."}
+        </p>
+      )}
+    </section>
+  );
+}
+
+const CUSTOM_FIELD_ENTITY_LABELS: Record<CustomFieldEntity, string> = {
+  contacts: "Contacts",
+  leads: "Prospects",
+  offers: "Produits & services",
+  bookings: "Réservations",
+  orders: "Commandes",
+};
+
+const CUSTOM_FIELD_TYPE_LABELS: Record<CreateCustomFieldInput["type"], string> = {
+  text: "Texte",
+  number: "Nombre",
+  boolean: "Case à cocher",
+  date: "Date",
+  datetime: "Date et heure",
+  select: "Liste déroulante",
+  multiselect: "Choix multiples",
+  email: "Email",
+  phone: "Téléphone",
+  url: "URL",
+};
+
+const CUSTOM_FIELD_TYPES_WITH_OPTIONS = new Set<CreateCustomFieldInput["type"]>([
+  "select",
+  "multiselect",
+]);
+
+/**
+ * Lets an org owner adapt KORVA's core entities (contacts, leads, offers, bookings, orders) to
+ * their own sector — e.g. a real-estate agency adding "surface (m²)" to contacts, a workshop
+ * adding "warranty months" to offers. The backend (`apps/api/src/custom-fields`) already
+ * validates every write against these definitions (unknown keys rejected, required enforced,
+ * type-checked) — this section is what makes that existing, previously invisible capability
+ * actually usable. Create + delete only, matching RolesManagementSection's exact v1 scope above:
+ * fix a mistake by deleting and recreating rather than editing in place.
+ */
+function CustomFieldsSection() {
+  const queryClient = useQueryClient();
+  const [entity, setEntity] = useState<CustomFieldEntity>("contacts");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [optionsInput, setOptionsInput] = useState("");
+
+  const { data: fields, isLoading } = useQuery({
+    queryKey: ["custom-fields", entity],
+    queryFn: () => apiClient.get<CustomField[]>(`/custom-fields?entity=${entity}`),
+  });
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<CreateCustomFieldInput>({
+    resolver: zodResolver(createCustomFieldSchema),
+    defaultValues: { entity, key: "", label: "", type: "text", required: false },
+  });
+  const selectedType = watch("type");
+
+  const createMutation = useMutation({
+    mutationFn: (input: CreateCustomFieldInput) =>
+      apiClient.post<CustomField>("/custom-fields", input),
+    onSuccess: () => {
+      reset({ entity, key: "", label: "", type: "text", required: false });
+      setOptionsInput("");
+      setCreateOpen(false);
+      return queryClient.invalidateQueries({ queryKey: ["custom-fields", entity] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/custom-fields/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["custom-fields", entity] }),
+  });
+
+  return (
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-text">Champs personnalisés</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            Ajoutez des champs propres à votre activité sur les contacts, prospects, produits,
+            réservations et commandes.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setCreateOpen((v) => !v)}
+        >
+          {createOpen ? "Annuler" : "Ajouter un champ"}
+        </Button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {CUSTOM_FIELD_ENTITIES.map((option) => (
+          <Button
+            key={option}
+            type="button"
+            variant={entity === option ? "primary" : "ghost"}
+            size="sm"
+            onClick={() => setEntity(option)}
+          >
+            {CUSTOM_FIELD_ENTITY_LABELS[option]}
+          </Button>
+        ))}
+      </div>
+
+      {createOpen && (
+        <form
+          onSubmit={handleSubmit((values) =>
+            createMutation.mutate({
+              ...values,
+              entity,
+              options: CUSTOM_FIELD_TYPES_WITH_OPTIONS.has(values.type)
+                ? optionsInput
+                    .split(",")
+                    .map((option) => option.trim())
+                    .filter(Boolean)
+                : undefined,
+            }),
+          )}
+          className="mt-4 grid grid-cols-2 gap-3 rounded-md border border-border p-4"
+        >
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text" htmlFor="custom-field-key">
+              Clé (identifiant technique)
+            </label>
+            <Input
+              id="custom-field-key"
+              placeholder="ex. surface_m2"
+              error={!!errors.key}
+              {...register("key")}
+            />
+            {errors.key && <p className="mt-1 text-xs text-destructive">{errors.key.message}</p>}
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text" htmlFor="custom-field-label">
+              Libellé affiché
+            </label>
+            <Input
+              id="custom-field-label"
+              placeholder="ex. Surface (m²)"
+              error={!!errors.label}
+              {...register("label")}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-text" htmlFor="custom-field-type">
+              Type
+            </label>
+            <Select id="custom-field-type" className="w-full" {...register("type")}>
+              {CUSTOM_FIELD_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {CUSTOM_FIELD_TYPE_LABELS[type]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <label className="flex items-center gap-2 self-end text-sm text-text">
+            <input type="checkbox" {...register("required")} />
+            Obligatoire
+          </label>
+          {CUSTOM_FIELD_TYPES_WITH_OPTIONS.has(selectedType) && (
+            <div className="col-span-2">
+              <label
+                className="mb-1 block text-xs font-medium text-text"
+                htmlFor="custom-field-options"
+              >
+                Options (séparées par des virgules)
+              </label>
+              <Input
+                id="custom-field-options"
+                className="w-full"
+                placeholder="ex. Petit, Moyen, Grand"
+                value={optionsInput}
+                onChange={(e) => setOptionsInput(e.target.value)}
+              />
+            </div>
+          )}
+          {createMutation.isError && (
+            <p className="col-span-2 text-sm text-destructive">
+              {createMutation.error instanceof ApiError
+                ? createMutation.error.message
+                : "Impossible de créer ce champ."}
+            </p>
+          )}
+          <Button type="submit" loading={createMutation.isPending} className="col-span-2">
+            {createMutation.isPending ? "Création..." : "Créer le champ"}
+          </Button>
+        </form>
+      )}
+
+      {isLoading ? (
+        <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+      ) : fields?.length === 0 ? (
+        <p className="mt-4 text-sm text-text-muted">
+          Aucun champ personnalisé pour {CUSTOM_FIELD_ENTITY_LABELS[entity].toLowerCase()}.
+        </p>
+      ) : (
+        <ul className="mt-4 divide-y divide-border">
+          {fields?.map((field) => (
+            <li key={field.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-text">{field.label}</span>
+                <Badge>{CUSTOM_FIELD_TYPE_LABELS[field.type]}</Badge>
+                {field.required && <Badge>Obligatoire</Badge>}
+                <span className="text-xs text-text-muted">{field.key}</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                loading={deleteMutation.isPending && deleteMutation.variables === field.id}
+                onClick={() => deleteMutation.mutate(field.id)}
+              >
+                Supprimer
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {deleteMutation.isError && (
+        <p className="mt-2 text-sm text-destructive">
+          {deleteMutation.error instanceof ApiError
+            ? deleteMutation.error.message
+            : "Impossible de supprimer ce champ."}
         </p>
       )}
     </section>

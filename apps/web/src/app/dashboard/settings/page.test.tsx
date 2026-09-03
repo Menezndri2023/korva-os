@@ -1578,3 +1578,163 @@ describe("SettingsPage — outbound webhook subscriptions (docs/BUSINESS_OS_AUDI
     );
   });
 });
+
+describe("SettingsPage — custom fields", () => {
+  let organization: ReturnType<typeof makeOrganization>;
+  let contactFields: Array<{
+    id: string;
+    entity: string;
+    key: string;
+    label: string;
+    type: string;
+    options?: string[];
+    required: boolean;
+  }>;
+
+  beforeEach(() => {
+    organization = makeOrganization(["crm"]);
+    contactFields = [];
+    getMock.mockReset();
+    postMock.mockReset();
+    deleteMock.mockReset();
+    uploadFileMock.mockReset();
+
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") return Promise.resolve(subscription);
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      if (path === "/webhook-subscriptions") return Promise.resolve([]);
+      if (path === "/custom-fields?entity=contacts") return Promise.resolve(contactFields);
+      if (path.startsWith("/custom-fields?entity=")) return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+
+    postMock.mockImplementation((path: string, body: unknown) => {
+      if (path === "/custom-fields") {
+        const input = body as {
+          entity: string;
+          key: string;
+          label: string;
+          type: string;
+          options?: string[];
+          required: boolean;
+        };
+        const created = { id: "field-1", ...input };
+        contactFields = [...contactFields, created];
+        return Promise.resolve(created);
+      }
+      throw new Error(`unexpected POST ${path}`);
+    });
+
+    deleteMock.mockImplementation((path: string) => {
+      if (path === "/custom-fields/field-1") {
+        contactFields = [];
+        return Promise.resolve({ deleted: true });
+      }
+      throw new Error(`unexpected DELETE ${path}`);
+    });
+  });
+
+  it("shows an empty state for the default (Contacts) entity", async () => {
+    renderWithProviders(<SettingsPage />);
+    expect(await screen.findByText("Champs personnalisés")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Aucun champ personnalisé pour contacts."),
+    ).toBeInTheDocument();
+  });
+
+  it("creates a custom field on Contacts and lists it", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Champs personnalisés");
+    await user.click(screen.getByRole("button", { name: "Ajouter un champ" }));
+    await user.type(screen.getByLabelText("Clé (identifiant technique)"), "surface_m2");
+    await user.type(screen.getByLabelText("Libellé affiché"), "Surface (m²)");
+    await user.click(screen.getByRole("button", { name: "Créer le champ" }));
+
+    expect(await screen.findByText("Surface (m²)")).toBeInTheDocument();
+    expect(postMock).toHaveBeenCalledWith("/custom-fields", {
+      entity: "contacts",
+      key: "surface_m2",
+      label: "Surface (m²)",
+      type: "text",
+      required: false,
+      options: undefined,
+    });
+  });
+
+  it("shows the options input only for select/multiselect types and sends them as an array", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Champs personnalisés");
+    await user.click(screen.getByRole("button", { name: "Ajouter un champ" }));
+    expect(screen.queryByLabelText("Options (séparées par des virgules)")).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Type"), "select");
+    await user.type(screen.getByLabelText("Clé (identifiant technique)"), "taille");
+    await user.type(screen.getByLabelText("Libellé affiché"), "Taille");
+    await user.type(
+      screen.getByLabelText("Options (séparées par des virgules)"),
+      "Petit, Moyen, Grand",
+    );
+    await user.click(screen.getByRole("button", { name: "Créer le champ" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/custom-fields", {
+        entity: "contacts",
+        key: "taille",
+        label: "Taille",
+        type: "select",
+        required: false,
+        options: ["Petit", "Moyen", "Grand"],
+      }),
+    );
+  });
+
+  it("switches entity tabs and only shows fields for the active one", async () => {
+    contactFields = [
+      { id: "field-1", entity: "contacts", key: "surface_m2", label: "Surface (m²)", type: "text", required: false },
+    ];
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("Surface (m²)")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Prospects" }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("Surface (m²)")).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByText("Aucun champ personnalisé pour prospects."),
+    ).toBeInTheDocument();
+  });
+
+  it("deletes a custom field", async () => {
+    contactFields = [
+      { id: "field-1", entity: "contacts", key: "surface_m2", label: "Surface (m²)", type: "text", required: false },
+    ];
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Surface (m²)");
+    await user.click(screen.getByRole("button", { name: "Supprimer" }));
+
+    await waitFor(() => expect(screen.queryByText("Surface (m²)")).not.toBeInTheDocument());
+  });
+});

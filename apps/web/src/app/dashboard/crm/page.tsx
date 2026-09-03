@@ -12,10 +12,11 @@ import {
   type UpdateContactInput,
 } from "@korva/validation";
 import { CONTACT_TYPES } from "@korva/types";
-import type { Contact } from "@korva/types";
+import type { Contact, CustomFieldValues } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
 export default function ContactsPage() {
   const [search, setSearch] = useState("");
@@ -60,17 +61,20 @@ export default function ContactsPage() {
     }
   }, [createType, setValue]);
 
+  const [createCustomFields, setCreateCustomFields] = useState<CustomFieldValues>({});
   const createMutation = useMutation({
     mutationFn: (input: CreateContactInput) => apiClient.post<Contact>("/contacts", input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["contacts"] });
       reset();
+      setCreateCustomFields({});
       setShowForm(false);
     },
   });
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTagsInput, setEditTagsInput] = useState("");
+  const [editCustomFields, setEditCustomFields] = useState<CustomFieldValues>({});
   const {
     register: registerEdit,
     handleSubmit: handleEditSubmit,
@@ -93,6 +97,7 @@ export default function ContactsPage() {
   function startEdit(contact: Contact) {
     setEditingId(contact.id);
     setEditTagsInput(contact.tags.join(", "));
+    setEditCustomFields(contact.customFields ?? {});
     resetEditForm({
       type: contact.type,
       firstName: contact.firstName,
@@ -169,7 +174,9 @@ export default function ContactsPage() {
 
       {showForm && (
         <form
-          onSubmit={handleSubmit((values) => createMutation.mutate(values))}
+          onSubmit={handleSubmit((values) =>
+            createMutation.mutate({ ...values, customFields: createCustomFields }),
+          )}
           // Not migrated to <Card>: Card renders a <div>, and this wrapper is the <form>
           // element itself (it carries onSubmit) — swapping it would either drop form
           // semantics or require nesting an extra <div> inside the form that isn't there
@@ -204,6 +211,12 @@ export default function ContactsPage() {
           {createType !== "company" && (
             <Input placeholder="Entreprise" className="col-span-2" {...register("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
           )}
+          <CustomFieldsFieldset
+            entity="contacts"
+            values={createCustomFields}
+            onChange={setCreateCustomFields}
+            idPrefix="contact-create"
+          />
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
               {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
@@ -349,6 +362,7 @@ export default function ContactsPage() {
                                   .split(",")
                                   .map((tag) => tag.trim())
                                   .filter(Boolean),
+                                customFields: editCustomFields,
                               }),
                             )}
                             className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
@@ -463,6 +477,13 @@ export default function ContactsPage() {
                                 onChange={(e) => setEditTagsInput(e.target.value)}
                               />
                             </div>
+
+                            <CustomFieldsFieldset
+                              entity="contacts"
+                              values={editCustomFields}
+                              onChange={setEditCustomFields}
+                              idPrefix={`contact-edit-${contact.id}`}
+                            />
 
                             {editError && (
                               <p className="col-span-2 text-sm text-destructive">
