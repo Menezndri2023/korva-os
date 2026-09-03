@@ -12,9 +12,11 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   createContactSchema,
   listContactsQuerySchema,
+  mergeContactsSchema,
   updateContactSchema,
   type CreateContactInput,
   type ListContactsQuery,
+  type MergeContactsInput,
   type UpdateContactInput,
 } from '@korva/validation';
 import type { AuthenticatedUser } from '../../core/tenant/request-context.types';
@@ -40,6 +42,15 @@ export class ContactsController {
     query: ListContactsQuery,
   ) {
     return this.contactsService.list(tenant.organizationId, query);
+  }
+
+  // Registered before ':id' below — Express/Nest match routes in declaration order, so this
+  // literal 'duplicates' segment must come first or it would be swallowed as an ':id' value of
+  // "duplicates".
+  @RequirePermissions('contacts.read')
+  @Get('duplicates')
+  findDuplicates(@CurrentTenant() tenant: TenantContext) {
+    return this.contactsService.findDuplicates(tenant.organizationId);
   }
 
   @RequirePermissions('contacts.read')
@@ -75,6 +86,25 @@ export class ContactsController {
       user.userId,
       id,
       body,
+    );
+  }
+
+  // contacts.update (not .delete): the caller isn't deleting anything themselves — the
+  // duplicate's removal is a side effect of the merge, gated the same way updating the primary
+  // contact's own fields already is.
+  @RequirePermissions('contacts.update')
+  @Post(':id/merge')
+  merge(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(mergeContactsSchema)) body: MergeContactsInput,
+  ) {
+    return this.contactsService.merge(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body.duplicateContactId,
     );
   }
 

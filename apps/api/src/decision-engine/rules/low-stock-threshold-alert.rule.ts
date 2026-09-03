@@ -21,9 +21,12 @@ export class LowStockThresholdAlertRule implements DecisionRule {
     const offerId = payload.offerId;
     if (typeof offerId !== 'string') return Promise.resolve(null);
 
-    const stockOnHand = typeof payload.stockOnHand === 'number' ? payload.stockOnHand : '?';
+    const stockOnHand =
+      typeof payload.stockOnHand === 'number' ? payload.stockOnHand : '?';
     const threshold =
-      typeof payload.lowStockThreshold === 'number' ? payload.lowStockThreshold : '?';
+      typeof payload.lowStockThreshold === 'number'
+        ? payload.lowStockThreshold
+        : '?';
 
     return Promise.resolve({
       entityType: 'offer',

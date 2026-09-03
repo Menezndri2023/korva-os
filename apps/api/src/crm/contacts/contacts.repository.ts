@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, Model, Types } from 'mongoose';
+import { ClientSession, FilterQuery, Model, Types } from 'mongoose';
 import { Contact, ContactDocument } from './schemas/contact.schema';
 
 export interface FindContactsOptions {
@@ -86,6 +86,7 @@ export class ContactsRepository {
     organizationId: string,
     id: string,
     data: Partial<Contact>,
+    session?: ClientSession,
   ): Promise<ContactDocument | null> {
     if (!Types.ObjectId.isValid(id)) return null;
     return this.contactModel
@@ -95,20 +96,86 @@ export class ContactsRepository {
           organizationId: new Types.ObjectId(organizationId),
         },
         data,
-        { new: true },
+        { new: true, session },
       )
       .exec();
   }
 
-  async delete(organizationId: string, id: string): Promise<boolean> {
+  async delete(
+    organizationId: string,
+    id: string,
+    session?: ClientSession,
+  ): Promise<boolean> {
     if (!Types.ObjectId.isValid(id)) return false;
     const res = await this.contactModel
-      .deleteOne({
-        _id: new Types.ObjectId(id),
-        organizationId: new Types.ObjectId(organizationId),
-      })
+      .deleteOne(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+        },
+        { session },
+      )
       .exec();
     return res.deletedCount > 0;
+  }
+
+  /**
+   * Groups contacts sharing the same email or the same phone within the organization — the
+   * two identifiers a real duplicate ("customer called in twice, staff typed it in fresh both
+   * times") is actually likely to share. Contacts with neither set never group (an empty
+   * string/undefined would otherwise "match" every other contact missing that field too).
+   * Backs the merge feature's "find candidates" step — this only ever suggests, the actual
+   * merge decision (and which side is primary) stays a human call.
+   */
+  async findDuplicateGroups(
+    organizationId: string,
+  ): Promise<
+    { field: 'email' | 'phone'; value: string; contacts: ContactDocument[] }[]
+  > {
+    const orgObjectId = new Types.ObjectId(organizationId);
+
+    async function groupsFor(
+      model: Model<ContactDocument>,
+      field: 'email' | 'phone',
+    ): Promise<
+      { field: 'email' | 'phone'; value: string; ids: Types.ObjectId[] }[]
+    > {
+      const rows = await model.aggregate<{
+        _id: string;
+        ids: Types.ObjectId[];
+      }>([
+        {
+          $match: {
+            organizationId: orgObjectId,
+            [field]: { $exists: true, $nin: [null, ''] },
+          },
+        },
+        { $group: { _id: `$${field}`, ids: { $push: '$_id' } } },
+        { $match: { $expr: { $gt: [{ $size: '$ids' }, 1] } } },
+      ]);
+      return rows.map((row) => ({ field, value: row._id, ids: row.ids }));
+    }
+
+    const [emailGroups, phoneGroups] = await Promise.all([
+      groupsFor(this.contactModel, 'email'),
+      groupsFor(this.contactModel, 'phone'),
+    ]);
+
+    const allIds = [...emailGroups, ...phoneGroups].flatMap((g) => g.ids);
+    const contacts = await this.contactModel
+      .find({ _id: { $in: allIds } })
+      .exec();
+    const contactById = new Map<string, ContactDocument>(
+      contacts.map((c) => [c.id as string, c]),
+    );
+
+    return [...emailGroups, ...phoneGroups].map((group) => ({
+      field: group.field,
+      value: group.value,
+      contacts: group.ids
+        .map((id) => contactById.get(id.toString()))
+        .filter((c): c is ContactDocument => c != null),
+    }));
   }
 
   /**

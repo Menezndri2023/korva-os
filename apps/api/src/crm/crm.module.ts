@@ -36,9 +36,47 @@ import {
   TimeEntry,
   TimeEntrySchema,
 } from '../finance/time-entries/schemas/time-entry.schema';
+// The rest of Contact's referencing collections, needed by ContactMergeRepository (merging two
+// duplicate contacts must re-point every one of them, not just the seven ContactReferencesRepository
+// already knew about for delete-protection) — same circular-dependency rationale as above.
+import {
+  CustomerAccount,
+  CustomerAccountSchema,
+} from '../customer-auth/schemas/customer-account.schema';
+import {
+  ReturnRequest,
+  ReturnRequestSchema,
+} from '../commerce/returns/schemas/return-request.schema';
+import {
+  WishlistItem,
+  WishlistItemSchema,
+} from '../commerce/wishlist/schemas/wishlist-item.schema';
+import {
+  WaitlistEntry,
+  WaitlistEntrySchema,
+} from '../booking/waitlist/schemas/waitlist-entry.schema';
+import {
+  CreditBalance,
+  CreditBalanceSchema,
+} from '../booking/credit-balances/schemas/credit-balance.schema';
+import {
+  QuizAttempt,
+  QuizAttemptSchema,
+} from '../booking/courses/schemas/quiz.schema';
+import { Cohort, CohortSchema } from '../booking/courses/schemas/cohort.schema';
+import {
+  RecurringBilling,
+  RecurringBillingSchema,
+} from '../finance/recurring-billing/schemas/recurring-billing.schema';
+import {
+  Expense,
+  ExpenseSchema,
+} from '../finance/expenses/schemas/expense.schema';
+import { Review, ReviewSchema } from '../reviews/schemas/review.schema';
 
 import { ContactsRepository } from './contacts/contacts.repository';
 import { ContactReferencesRepository } from './contacts/contact-references.repository';
+import { ContactMergeRepository } from './contacts/contact-merge.repository';
 import { ContactsService } from './contacts/contacts.service';
 import { ContactsController } from './contacts/contacts.controller';
 import { CustomerInactivitySchedulerService } from './contacts/customer-inactivity-scheduler.service';
@@ -93,6 +131,16 @@ import { AuditModule } from '../audit/audit.module';
       { name: Conversation.name, schema: ConversationSchema },
       { name: TimeEntry.name, schema: TimeEntrySchema },
       { name: Project.name, schema: ProjectSchema },
+      { name: CustomerAccount.name, schema: CustomerAccountSchema },
+      { name: ReturnRequest.name, schema: ReturnRequestSchema },
+      { name: WishlistItem.name, schema: WishlistItemSchema },
+      { name: WaitlistEntry.name, schema: WaitlistEntrySchema },
+      { name: CreditBalance.name, schema: CreditBalanceSchema },
+      { name: QuizAttempt.name, schema: QuizAttemptSchema },
+      { name: Cohort.name, schema: CohortSchema },
+      { name: RecurringBilling.name, schema: RecurringBillingSchema },
+      { name: Expense.name, schema: ExpenseSchema },
+      { name: Review.name, schema: ReviewSchema },
     ]),
     CustomFieldsModule,
     AuditModule,
@@ -110,6 +158,7 @@ import { AuditModule } from '../audit/audit.module';
   providers: [
     ContactsRepository,
     ContactReferencesRepository,
+    ContactMergeRepository,
     ContactsService,
     CustomerInactivitySchedulerService,
     LeadsRepository,

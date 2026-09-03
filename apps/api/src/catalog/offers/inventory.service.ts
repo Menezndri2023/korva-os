@@ -53,7 +53,9 @@ export class InventoryService {
       session,
     );
     const trackedOffersById = new Map(
-      offers.filter((offer) => offer.trackStock).map((o) => [o.id as string, o]),
+      offers
+        .filter((offer) => offer.trackStock)
+        .map((o) => [o.id as string, o]),
     );
 
     for (const { offerId, variantId, quantity } of lines.values()) {
@@ -85,7 +87,13 @@ export class InventoryService {
         referenceId: referenceId ? new Types.ObjectId(referenceId) : undefined,
       });
 
-      await this.maybeAlertLowStock(organizationId, offerId, variantId, offer, result.stockAfter);
+      await this.maybeAlertLowStock(
+        organizationId,
+        offerId,
+        variantId,
+        offer,
+        result.stockAfter,
+      );
     }
   }
 

@@ -42,7 +42,12 @@ interface StockMovementPayload {
 interface ApiPaginatedSuccess<T> {
   success: true;
   data: T[];
-  pagination: { page: number; limit: number; total: number; totalPages: number };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 interface OrderPayload {
   id: string;
@@ -793,7 +798,11 @@ describe('Inventory / stock ledger (e2e)', () => {
         .post(`/api/v1/offers/${offer.id}/stock/movements`)
         .set('Authorization', `Bearer ${ctx.accessToken}`)
         .set('X-Organization-Id', ctx.organizationId)
-        .send({ type: 'received', quantity: 5, reason: 'Livraison fournisseur' })
+        .send({
+          type: 'received',
+          quantity: 5,
+          reason: 'Livraison fournisseur',
+        })
         .expect(201);
       const received = asSuccess<StockMovementPayload>(receivedRes.body);
       expect(received.type).toBe('received');

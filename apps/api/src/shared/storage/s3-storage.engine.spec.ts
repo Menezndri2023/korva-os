@@ -39,13 +39,13 @@ function makeFile(mimetype: string, body: Buffer): MulterFileLike {
 }
 
 describe('S3StorageEngine', () => {
-  function makeClient(send: jest.Mock) {
+  function makeClient(send: jest.Mock<Promise<unknown>, [unknown]>) {
     return { send } as unknown as S3Client;
   }
 
   describe('_handleFile', () => {
     it('errors when the request has no tenant context', (done) => {
-      const send = jest.fn();
+      const send = jest.fn<Promise<unknown>, [unknown]>();
       const engine = new S3StorageEngine(makeClient(send), BUCKET);
       const file = makeFile('image/png', PNG_SIGNATURE);
 
@@ -57,7 +57,7 @@ describe('S3StorageEngine', () => {
     });
 
     it('rejects a mimetype outside the allowlist before touching S3', (done) => {
-      const send = jest.fn();
+      const send = jest.fn<Promise<unknown>, [unknown]>();
       const engine = new S3StorageEngine(makeClient(send), BUCKET);
       const file = makeFile('application/pdf', Buffer.from('%PDF-1.4'));
 
@@ -69,7 +69,7 @@ describe('S3StorageEngine', () => {
     });
 
     it('rejects content whose real bytes do not match the declared mimetype', (done) => {
-      const send = jest.fn();
+      const send = jest.fn<Promise<unknown>, [unknown]>();
       const engine = new S3StorageEngine(makeClient(send), BUCKET);
       // Declares PNG but the body is plain text — magic-byte check must catch this.
       const file = makeFile('image/png', Buffer.from('not a real png'));
@@ -82,7 +82,7 @@ describe('S3StorageEngine', () => {
     });
 
     it('uploads a valid PNG via PutObjectCommand under `<organizationId>/<uuid>.png`', (done) => {
-      const send = jest.fn().mockResolvedValue({});
+      const send = jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({});
       const engine = new S3StorageEngine(makeClient(send), BUCKET);
       const file = makeFile('image/png', PNG_SIGNATURE);
 
@@ -93,7 +93,7 @@ describe('S3StorageEngine', () => {
         expect(info?.path).toBe(`${ORG_ID}/${info?.filename}`);
         expect(info?.size).toBe(PNG_SIGNATURE.length);
 
-        const command = send.mock.calls[0][0] as PutObjectCommand;
+        const command = send.mock.calls[0]![0] as PutObjectCommand;
         expect(command).toBeInstanceOf(PutObjectCommand);
         expect(command.input.Bucket).toBe(BUCKET);
         expect(command.input.Key).toBe(info?.path);
@@ -103,7 +103,9 @@ describe('S3StorageEngine', () => {
     });
 
     it('surfaces an S3 error through the callback', (done) => {
-      const send = jest.fn().mockRejectedValue(new Error('AccessDenied'));
+      const send = jest
+        .fn<Promise<unknown>, [unknown]>()
+        .mockRejectedValue(new Error('AccessDenied'));
       const engine = new S3StorageEngine(makeClient(send), BUCKET);
       const file = makeFile('image/png', PNG_SIGNATURE);
 
@@ -123,7 +125,7 @@ describe('S3StorageEngine', () => {
     };
 
     it('calls back with no error on success', (done) => {
-      const send = jest.fn().mockResolvedValue({});
+      const send = jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({});
       const engine = new S3StorageEngine(makeClient(send), BUCKET);
       engine._removeFile({} as Request, info, (error) => {
         expect(error).toBeNull();
@@ -132,7 +134,9 @@ describe('S3StorageEngine', () => {
     });
 
     it('is best-effort — a failed delete still calls back with no error', (done) => {
-      const send = jest.fn().mockRejectedValue(new Error('NoSuchKey'));
+      const send = jest
+        .fn<Promise<unknown>, [unknown]>()
+        .mockRejectedValue(new Error('NoSuchKey'));
       const engine = new S3StorageEngine(makeClient(send), BUCKET);
       engine._removeFile({} as Request, info, (error) => {
         expect(error).toBeNull();

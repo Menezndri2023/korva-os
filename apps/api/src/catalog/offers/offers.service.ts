@@ -217,7 +217,9 @@ export class OffersService {
 
     const before = input.variantId
       ? offer.variants.find(
-          (v) => (v as unknown as { _id: Types.ObjectId })._id.toString() === input.variantId,
+          (v) =>
+            (v as unknown as { _id: Types.ObjectId })._id.toString() ===
+            input.variantId,
         )?.stockOnHand
       : offer.stockOnHand;
     if (input.variantId && before === undefined) {
@@ -249,7 +251,9 @@ export class OffersService {
       await this.stockMovementsRepository.create({
         organizationId: new Types.ObjectId(organizationId),
         offerId: new Types.ObjectId(id),
-        variantId: input.variantId ? new Types.ObjectId(input.variantId) : undefined,
+        variantId: input.variantId
+          ? new Types.ObjectId(input.variantId)
+          : undefined,
         type: 'correction',
         quantity: delta,
         stockAfter: input.stockOnHand,
@@ -263,7 +267,10 @@ export class OffersService {
       action: 'UPDATE',
       entity: 'offer',
       entityId: id,
-      metadata: { stockAdjustedTo: input.stockOnHand, variantId: input.variantId },
+      metadata: {
+        stockAdjustedTo: input.stockOnHand,
+        variantId: input.variantId,
+      },
     });
 
     return updated;
@@ -285,12 +292,18 @@ export class OffersService {
     if (!offer.trackStock) {
       throw new BadRequestException({
         code: 'STOCK_TRACKING_NOT_ENABLED',
-        message: 'Enable trackStock on this offer before recording stock movements',
+        message:
+          'Enable trackStock on this offer before recording stock movements',
       });
     }
-    if (input.variantId && !offer.variants.some(
-      (v) => (v as unknown as { _id: Types.ObjectId })._id.toString() === input.variantId,
-    )) {
+    if (
+      input.variantId &&
+      !offer.variants.some(
+        (v) =>
+          (v as unknown as { _id: Types.ObjectId })._id.toString() ===
+          input.variantId,
+      )
+    ) {
       throw new NotFoundException({
         code: 'OFFER_VARIANT_NOT_FOUND',
         message: 'Variant not found on this offer',
@@ -333,7 +346,9 @@ export class OffersService {
     const movement = await this.stockMovementsRepository.create({
       organizationId: new Types.ObjectId(organizationId),
       offerId: new Types.ObjectId(offerId),
-      variantId: input.variantId ? new Types.ObjectId(input.variantId) : undefined,
+      variantId: input.variantId
+        ? new Types.ObjectId(input.variantId)
+        : undefined,
       type: input.type,
       quantity: delta,
       stockAfter: result.stockAfter,
@@ -347,7 +362,11 @@ export class OffersService {
       action: 'UPDATE',
       entity: 'offer',
       entityId: offerId,
-      metadata: { stockMovementType: input.type, quantity: input.quantity, variantId: input.variantId },
+      metadata: {
+        stockMovementType: input.type,
+        quantity: input.quantity,
+        variantId: input.variantId,
+      },
     });
 
     return movement;

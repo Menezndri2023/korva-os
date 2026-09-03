@@ -45,6 +45,7 @@ const contact = {
 
 function mockGetByPath(path: string) {
   if (path === "/contacts/contact-1") return Promise.resolve(contact);
+  if (path === "/contacts/duplicates") return Promise.resolve([]);
   if (path.startsWith("/leads")) return Promise.resolve([]);
   if (path.startsWith("/orders")) return Promise.resolve([]);
   if (path.startsWith("/carts")) return Promise.resolve([]);
@@ -354,5 +355,86 @@ describe("ContactDetailPage (LOT F7)", () => {
         content: "Appel de suivi",
       }),
     );
+  });
+
+  describe("duplicate detection and merge", () => {
+    const duplicate = {
+      id: "contact-2",
+      type: "person",
+      firstName: "Ada",
+      lastName: "L.",
+      email: "ada@example.com",
+      phone: "0102030405",
+      tags: [],
+    };
+
+    function mockWithDuplicate() {
+      getMock.mockImplementation((path: string) => {
+        if (path === "/contacts/duplicates") {
+          return Promise.resolve([
+            { field: "email", value: "ada@example.com", contacts: [contact, duplicate] },
+          ]);
+        }
+        return mockGetByPath(path);
+      });
+    }
+
+    it("shows no duplicates section when there are no candidates", async () => {
+      renderWithProviders(<ContactDetailPage />);
+      await screen.findByRole("heading", { name: "Ada Lovelace" });
+      expect(screen.queryByText("Doublons potentiels")).not.toBeInTheDocument();
+    });
+
+    it("lists a duplicate candidate found via a shared email/phone group", async () => {
+      mockWithDuplicate();
+      renderWithProviders(<ContactDetailPage />);
+      await screen.findByRole("heading", { name: "Ada Lovelace" });
+
+      expect(await screen.findByText("Doublons potentiels")).toBeInTheDocument();
+      expect(screen.getByText("Ada L.")).toBeInTheDocument();
+      expect(screen.getByText("ada@example.com · 0102030405")).toBeInTheDocument();
+    });
+
+    it("merges the duplicate into this contact after confirmation", async () => {
+      mockWithDuplicate();
+      postMock.mockResolvedValue(contact);
+      const user = userEvent.setup();
+      renderWithProviders(<ContactDetailPage />);
+      await screen.findByRole("heading", { name: "Ada Lovelace" });
+      await screen.findByText("Ada L.");
+
+      await user.click(screen.getByRole("button", { name: "Fusionner" }));
+      expect(postMock).not.toHaveBeenCalled();
+      await user.click(screen.getByRole("button", { name: "Confirmer la fusion" }));
+
+      await waitFor(() =>
+        expect(postMock).toHaveBeenCalledWith("/contacts/contact-1/merge", {
+          duplicateContactId: "contact-2",
+        }),
+      );
+    });
+
+    it("shows a clear error when both contacts have their own customer account", async () => {
+      mockWithDuplicate();
+      postMock.mockRejectedValue(
+        new ApiError(
+          "CONTACT_MERGE_BOTH_HAVE_CUSTOMER_ACCOUNTS",
+          "Both contacts have a customer account",
+        ),
+      );
+      const user = userEvent.setup();
+      renderWithProviders(<ContactDetailPage />);
+      await screen.findByRole("heading", { name: "Ada Lovelace" });
+      await screen.findByText("Ada L.");
+
+      await user.click(screen.getByRole("button", { name: "Fusionner" }));
+      await user.click(screen.getByRole("button", { name: "Confirmer la fusion" }));
+
+      expect(
+        await screen.findByText(
+          "Fusion impossible : ces deux contacts ont chacun leur propre compte client. Supprimez ou transférez l'un des deux comptes avant de réessayer.",
+        ),
+      ).toBeInTheDocument();
+    });
   });
 });

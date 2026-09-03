@@ -55,7 +55,9 @@ describe('InventoryService.reserveStock', () => {
 
   it('skips offers with trackStock: false entirely', async () => {
     const { service, findByIds, decrementStockIfAvailable } = buildService();
-    findByIds.mockResolvedValue([{ id: '507f1f77bcf86cd799439022', trackStock: false }]);
+    findByIds.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439022', trackStock: false },
+    ]);
 
     await service.reserveStock(
       '507f1f77bcf86cd799439011',
@@ -68,7 +70,9 @@ describe('InventoryService.reserveStock', () => {
 
   it('sums quantities for the same (offerId, variantId) pair across multiple line items before reserving once', async () => {
     const { service, findByIds, decrementStockIfAvailable } = buildService();
-    findByIds.mockResolvedValue([{ id: '507f1f77bcf86cd799439022', trackStock: true }]);
+    findByIds.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439022', trackStock: true },
+    ]);
     decrementStockIfAvailable.mockResolvedValue({
       offer: { id: '507f1f77bcf86cd799439022' },
       stockAfter: 5,
@@ -95,7 +99,9 @@ describe('InventoryService.reserveStock', () => {
 
   it('keeps two different variants of the same offer as separate lines, never summed together', async () => {
     const { service, findByIds, decrementStockIfAvailable } = buildService();
-    findByIds.mockResolvedValue([{ id: '507f1f77bcf86cd799439022', trackStock: true }]);
+    findByIds.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439022', trackStock: true },
+    ]);
     decrementStockIfAvailable.mockResolvedValue({
       offer: { id: '507f1f77bcf86cd799439022' },
       stockAfter: 1,
@@ -104,8 +110,16 @@ describe('InventoryService.reserveStock', () => {
     await service.reserveStock(
       '507f1f77bcf86cd799439011',
       [
-        { offerId: '507f1f77bcf86cd799439022', variantId: '507f1f77bcf86cd799439033', quantity: 1 },
-        { offerId: '507f1f77bcf86cd799439022', variantId: '507f1f77bcf86cd799439044', quantity: 1 },
+        {
+          offerId: '507f1f77bcf86cd799439022',
+          variantId: '507f1f77bcf86cd799439033',
+          quantity: 1,
+        },
+        {
+          offerId: '507f1f77bcf86cd799439022',
+          variantId: '507f1f77bcf86cd799439044',
+          quantity: 1,
+        },
       ],
       fakeSession,
     );
@@ -130,7 +144,9 @@ describe('InventoryService.reserveStock', () => {
   it('throws INSUFFICIENT_STOCK when the repository reports no match, and never publishes an event', async () => {
     const { service, findByIds, decrementStockIfAvailable, publish } =
       buildService();
-    findByIds.mockResolvedValue([{ id: '507f1f77bcf86cd799439022', trackStock: true }]);
+    findByIds.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439022', trackStock: true },
+    ]);
     decrementStockIfAvailable.mockResolvedValue(null);
 
     await expect(
@@ -146,7 +162,9 @@ describe('InventoryService.reserveStock', () => {
   it('records a "sold" StockMovement with the signed (negative) quantity and resulting stockAfter', async () => {
     const { service, findByIds, decrementStockIfAvailable, createMovement } =
       buildService();
-    findByIds.mockResolvedValue([{ id: '507f1f77bcf86cd799439022', trackStock: true }]);
+    findByIds.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439022', trackStock: true },
+    ]);
     decrementStockIfAvailable.mockResolvedValue({
       offer: { id: '507f1f77bcf86cd799439022' },
       stockAfter: 5,
@@ -166,7 +184,9 @@ describe('InventoryService.reserveStock', () => {
   it('publishes offer.stock_depleted only when the decrement brings stock to exactly 0', async () => {
     const { service, findByIds, decrementStockIfAvailable, publish } =
       buildService();
-    findByIds.mockResolvedValue([{ id: '507f1f77bcf86cd799439022', trackStock: true }]);
+    findByIds.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439022', trackStock: true },
+    ]);
     decrementStockIfAvailable.mockResolvedValue({
       offer: { id: '507f1f77bcf86cd799439022' },
       stockAfter: 0,
@@ -178,16 +198,22 @@ describe('InventoryService.reserveStock', () => {
       fakeSession,
     );
 
-    expect(publish).toHaveBeenCalledWith('507f1f77bcf86cd799439011', 'offer.stock_depleted', {
-      offerId: '507f1f77bcf86cd799439022',
-      variantId: undefined,
-    });
+    expect(publish).toHaveBeenCalledWith(
+      '507f1f77bcf86cd799439011',
+      'offer.stock_depleted',
+      {
+        offerId: '507f1f77bcf86cd799439022',
+        variantId: undefined,
+      },
+    );
   });
 
   it('does not publish anything when stock remains above 0 and no lowStockThreshold is configured', async () => {
     const { service, findByIds, decrementStockIfAvailable, publish } =
       buildService();
-    findByIds.mockResolvedValue([{ id: '507f1f77bcf86cd799439022', trackStock: true }]);
+    findByIds.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439022', trackStock: true },
+    ]);
     decrementStockIfAvailable.mockResolvedValue({
       offer: { id: '507f1f77bcf86cd799439022' },
       stockAfter: 3,
@@ -206,7 +232,11 @@ describe('InventoryService.reserveStock', () => {
     const { service, findByIds, decrementStockIfAvailable, publish } =
       buildService();
     findByIds.mockResolvedValue([
-      { id: '507f1f77bcf86cd799439022', trackStock: true, lowStockThreshold: 5 },
+      {
+        id: '507f1f77bcf86cd799439022',
+        trackStock: true,
+        lowStockThreshold: 5,
+      },
     ]);
     decrementStockIfAvailable.mockResolvedValue({
       offer: { id: '507f1f77bcf86cd799439022', lowStockThreshold: 5 },
@@ -219,18 +249,24 @@ describe('InventoryService.reserveStock', () => {
       fakeSession,
     );
 
-    expect(publish).toHaveBeenCalledWith('507f1f77bcf86cd799439011', 'offer.low_stock', {
-      offerId: '507f1f77bcf86cd799439022',
-      variantId: undefined,
-      stockOnHand: 5,
-      lowStockThreshold: 5,
-    });
+    expect(publish).toHaveBeenCalledWith(
+      '507f1f77bcf86cd799439011',
+      'offer.low_stock',
+      {
+        offerId: '507f1f77bcf86cd799439022',
+        variantId: undefined,
+        stockOnHand: 5,
+        lowStockThreshold: 5,
+      },
+    );
   });
 
   it('never publishes offer.low_stock when lowStockThreshold is unset (0 stays covered by stock_depleted alone)', async () => {
     const { service, findByIds, decrementStockIfAvailable, publish } =
       buildService();
-    findByIds.mockResolvedValue([{ id: '507f1f77bcf86cd799439022', trackStock: true }]);
+    findByIds.mockResolvedValue([
+      { id: '507f1f77bcf86cd799439022', trackStock: true },
+    ]);
     decrementStockIfAvailable.mockResolvedValue({
       offer: { id: '507f1f77bcf86cd799439022' },
       stockAfter: 0,
@@ -255,7 +291,9 @@ describe('InventoryService.restockItems', () => {
   it('is a no-op when no line item references an offer', async () => {
     const { service, incrementStock } = buildService();
 
-    await service.restockItems('507f1f77bcf86cd799439011', [{ offerId: undefined, quantity: 2 }]);
+    await service.restockItems('507f1f77bcf86cd799439011', [
+      { offerId: undefined, quantity: 2 },
+    ]);
 
     expect(incrementStock).not.toHaveBeenCalled();
   });
@@ -283,7 +321,9 @@ describe('InventoryService.restockItems', () => {
     const { service, incrementStock, createMovement } = buildService();
     incrementStock.mockResolvedValue({ offer: {}, stockAfter: 8 });
 
-    await service.restockItems('507f1f77bcf86cd799439011', [{ offerId: '507f1f77bcf86cd799439022', quantity: 3 }]);
+    await service.restockItems('507f1f77bcf86cd799439011', [
+      { offerId: '507f1f77bcf86cd799439022', quantity: 3 },
+    ]);
 
     expect(createMovement).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'returned', quantity: 3, stockAfter: 8 }),
@@ -294,7 +334,9 @@ describe('InventoryService.restockItems', () => {
     const { service, incrementStock, createMovement } = buildService();
     incrementStock.mockResolvedValue(null);
 
-    await service.restockItems('507f1f77bcf86cd799439011', [{ offerId: '507f1f77bcf86cd799439022', quantity: 3 }]);
+    await service.restockItems('507f1f77bcf86cd799439011', [
+      { offerId: '507f1f77bcf86cd799439022', quantity: 3 },
+    ]);
 
     expect(createMovement).not.toHaveBeenCalled();
   });

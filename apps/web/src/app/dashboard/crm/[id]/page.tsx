@@ -69,6 +69,22 @@ function deleteErrorMessage(error: unknown): string {
   return "Impossible de supprimer le contact.";
 }
 
+interface DuplicateContactGroup {
+  field: "email" | "phone";
+  value: string;
+  contacts: Contact[];
+}
+
+function mergeErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === "CONTACT_MERGE_BOTH_HAVE_CUSTOMER_ACCOUNTS") {
+      return "Fusion impossible : ces deux contacts ont chacun leur propre compte client. Supprimez ou transférez l'un des deux comptes avant de réessayer.";
+    }
+    return error.message;
+  }
+  return "Impossible de fusionner ces contacts.";
+}
+
 export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -150,6 +166,36 @@ export default function ContactDetailPage() {
       apiClient.get<ContactTimeline>(`/business-graph/contacts/${id}/timeline`),
     select: (timeline) => timeline.entries,
     enabled: authReady,
+  });
+
+  const duplicatesQuery = useQuery({
+    queryKey: ["contacts", "duplicates"],
+    queryFn: () => apiClient.get<DuplicateContactGroup[]>("/contacts/duplicates"),
+    select: (groups) => {
+      const candidates = new Map<string, Contact>();
+      for (const group of groups) {
+        if (!group.contacts.some((c) => c.id === id)) continue;
+        for (const candidate of group.contacts) {
+          if (candidate.id !== id) candidates.set(candidate.id, candidate);
+        }
+      }
+      return Array.from(candidates.values());
+    },
+    enabled: authReady,
+  });
+
+  const [confirmMergeId, setConfirmMergeId] = useState<string | null>(null);
+  const mergeContactMutation = useMutation({
+    mutationFn: (duplicateContactId: string) =>
+      apiClient.post<Contact>(`/contacts/${id}/merge`, { duplicateContactId }),
+    onSuccess: async () => {
+      setConfirmMergeId(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["contacts"] }),
+        queryClient.invalidateQueries({ queryKey: ["contacts", "duplicates"] }),
+      ]);
+    },
+    onError: () => setConfirmMergeId(null),
   });
 
   const {
@@ -514,6 +560,66 @@ export default function ContactDetailPage() {
           </form>
         )}
       </Card>
+
+      {duplicatesQuery.data && duplicatesQuery.data.length > 0 && (
+        <Card className="p-6">
+          <h2 className="text-sm font-semibold">Doublons potentiels</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            Ces contacts partagent le même email ou téléphone. Fusionner conserve ce contact-ci
+            comme fiche principale et reporte l&apos;historique de l&apos;autre dessus ; l&apos;autre
+            fiche est ensuite supprimée. Cette action est irréversible.
+          </p>
+          <ul className="mt-4 space-y-3">
+            {duplicatesQuery.data.map((candidate) => (
+              <li
+                key={candidate.id}
+                className="flex items-center justify-between gap-4 rounded-md border border-border p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">{contactDisplayName(candidate)}</p>
+                  <p className="text-sm text-text-muted">
+                    {[candidate.email, candidate.phone].filter(Boolean).join(" · ") || "—"}
+                  </p>
+                </div>
+                {confirmMergeId === candidate.id ? (
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={mergeContactMutation.isPending}
+                      onClick={() => mergeContactMutation.mutate(candidate.id)}
+                    >
+                      {mergeContactMutation.isPending ? "Fusion..." : "Confirmer la fusion"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={mergeContactMutation.isPending}
+                      onClick={() => setConfirmMergeId(null)}
+                    >
+                      Annuler
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => setConfirmMergeId(candidate.id)}
+                  >
+                    Fusionner
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {mergeContactMutation.isError && (
+            <p className="mt-3 text-sm text-destructive">
+              {mergeErrorMessage(mergeContactMutation.error)}
+            </p>
+          )}
+        </Card>
+      )}
 
       <RelationSection<BusinessGraphTimelineEntry>
         title="Chronologie"

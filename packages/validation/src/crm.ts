@@ -19,6 +19,11 @@ export type CreateContactInput = z.infer<typeof createContactSchema>;
 export const updateContactSchema = createContactSchema.partial();
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
 
+export const mergeContactsSchema = z.object({
+  duplicateContactId: z.string().min(1),
+});
+export type MergeContactsInput = z.infer<typeof mergeContactsSchema>;
+
 export const listContactsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

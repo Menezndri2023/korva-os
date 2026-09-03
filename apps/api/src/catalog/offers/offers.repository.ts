@@ -234,7 +234,10 @@ export class OffersRepository {
           'variants._id': new Types.ObjectId(variantId),
         },
         { $set: { 'variants.$[v].stockOnHand': stockOnHand } },
-        { new: true, arrayFilters: [{ 'v._id': new Types.ObjectId(variantId) }] },
+        {
+          new: true,
+          arrayFilters: [{ 'v._id': new Types.ObjectId(variantId) }],
+        },
       )
       .exec();
   }
@@ -276,7 +279,8 @@ export class OffersRepository {
 function extractStock(offer: OfferDocument, variantId?: string): number {
   if (!variantId) return offer.stockOnHand ?? 0;
   const variant = offer.variants.find(
-    (v) => (v as unknown as { _id: Types.ObjectId })._id.toString() === variantId,
+    (v) =>
+      (v as unknown as { _id: Types.ObjectId })._id.toString() === variantId,
   );
   return variant?.stockOnHand ?? 0;
 }

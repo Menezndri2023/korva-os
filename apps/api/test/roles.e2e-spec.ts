@@ -177,7 +177,7 @@ describe('Custom roles (e2e)', () => {
         permissions: ['not.a.real.permission'],
       })
       .expect(400);
-    expect(res.body.success).toBe(false);
+    expect((res.body as ApiError).success).toBe(false);
   });
 
   it('OWNER can assign a custom role to a member; refuses to delete a role currently in use', async () => {
