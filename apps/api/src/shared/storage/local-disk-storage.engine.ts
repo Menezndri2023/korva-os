@@ -6,39 +6,10 @@ import { randomUUID } from 'node:crypto';
 import type { Request } from 'express';
 import type { RequestWithContext } from '../../core/tenant/request-context.types';
 import { ALLOWED_UPLOAD_MIME_TYPES } from './storage.constants';
-
-/**
- * File-signature ("magic number") checks for every mimetype in ALLOWED_UPLOAD_MIME_TYPES.
- * `fileFilter` (uploads.controller.ts) and the mimetype check below only ever look at
- * `file.mimetype`, which is a client-supplied multipart header — trivially spoofable (e.g. a
- * `.png`-labeled upload whose Content-Type field says `image/png` but whose actual bytes are an
- * HTML/script payload). Without inspecting the real bytes, a spoofed upload would be written to
- * disk under a `.png` extension and later served back with `Content-Type: image/png` (see
- * UploadsController.read) — a content-type-confusion risk on a publicly-reachable URL. Checking
- * the first few bytes against each format's well-known signature closes that gap without adding
- * a new dependency for four fixed, simple formats.
- */
-const SIGNATURE_CHECK_BYTES = 12; // longest signature below (WEBP) needs bytes 0-11
-
-const FILE_SIGNATURE_CHECKS: Record<string, (head: Buffer) => boolean> = {
-  'image/jpeg': (head) =>
-    head.length >= 3 &&
-    head[0] === 0xff &&
-    head[1] === 0xd8 &&
-    head[2] === 0xff,
-  'image/png': (head) =>
-    head.length >= 8 &&
-    head
-      .subarray(0, 8)
-      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
-  'image/gif': (head) =>
-    head.length >= 6 &&
-    ['GIF87a', 'GIF89a'].includes(head.subarray(0, 6).toString('ascii')),
-  'image/webp': (head) =>
-    head.length >= 12 &&
-    head.subarray(0, 4).toString('ascii') === 'RIFF' &&
-    head.subarray(8, 12).toString('ascii') === 'WEBP',
-};
+import {
+  FILE_SIGNATURE_CHECKS,
+  SIGNATURE_CHECK_BYTES,
+} from './file-signature-checks';
 
 /** Shape multer actually passes to a StorageEngine — matches busboy's parsed file, not
  * @types/multer (not installed; see the class doc below for why). */

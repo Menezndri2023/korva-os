@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
+import { S3Client } from '@aws-sdk/client-s3';
 import type { Response } from 'express';
 import type { TenantContext } from '@korva/types';
 import { Public } from '../../common/decorators/public.decorator';
@@ -20,10 +21,12 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { RequireModule } from '../../common/decorators/require-module.decorator';
 import { StorageService } from './storage.service';
 import { LocalDiskStorageEngine } from './local-disk-storage.engine';
+import { S3StorageEngine } from './s3-storage.engine';
 import {
   ALLOWED_UPLOAD_MIME_TYPES,
   LOCAL_STORAGE_ROOT_DIR,
   MAX_UPLOAD_BYTES,
+  S3_STORAGE_CONFIG,
 } from './storage.constants';
 
 /** What multer actually attaches to the request as req.file — see local-disk-storage.engine.ts
@@ -37,9 +40,24 @@ interface UploadedFileLike {
 }
 
 // Constructed once at module-load time (not per-request, not through Nest DI) since it's passed
-// as a plain FileInterceptor option — see storage.constants.ts for why LOCAL_STORAGE_ROOT_DIR
-// itself can't depend on Nest's config layer at this point in the module graph's evaluation.
-const localDiskEngine = new LocalDiskStorageEngine(LOCAL_STORAGE_ROOT_DIR);
+// as a plain FileInterceptor option — see storage.constants.ts for why this reads `process.env`
+// directly (via S3_STORAGE_CONFIG) rather than through Nest's config layer, which doesn't exist
+// yet at this point in the module graph's evaluation.
+const storageEngine =
+  process.env.STORAGE_PROVIDER === 's3'
+    ? new S3StorageEngine(
+        new S3Client({
+          region: S3_STORAGE_CONFIG.region,
+          endpoint: S3_STORAGE_CONFIG.endpoint,
+          forcePathStyle: S3_STORAGE_CONFIG.forcePathStyle,
+          credentials: {
+            accessKeyId: S3_STORAGE_CONFIG.accessKeyId,
+            secretAccessKey: S3_STORAGE_CONFIG.secretAccessKey,
+          },
+        }),
+        S3_STORAGE_CONFIG.bucket,
+      )
+    : new LocalDiskStorageEngine(LOCAL_STORAGE_ROOT_DIR);
 
 /**
  * Generic file/image upload — closes the gap the audit found: Offer.images was a string[] of
@@ -69,7 +87,7 @@ export class UploadsController {
   @Post()
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: localDiskEngine,
+      storage: storageEngine,
       limits: { fileSize: MAX_UPLOAD_BYTES },
       fileFilter: (
         _req: unknown,

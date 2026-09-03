@@ -1,49 +1,47 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createReadStream, type ReadStream } from 'node:fs';
+import { S3Client } from '@aws-sdk/client-s3';
+import { createReadStream } from 'node:fs';
 import { stat, unlink } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import {
   ALLOWED_UPLOAD_MIME_TYPES,
   LOCAL_STORAGE_ROOT_DIR,
+  S3_STORAGE_CONFIG,
+  SAFE_FILENAME,
+  SAFE_ORGANIZATION_ID,
 } from './storage.constants';
-
-const SAFE_ORGANIZATION_ID = /^[a-f0-9]{24}$/i;
-const SAFE_FILENAME =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|jpeg|png|gif|webp)$/i;
+import { S3StorageBackend } from './s3-storage.backend';
 
 const MIME_TYPE_BY_EXTENSION: Record<string, string> = Object.fromEntries(
   Object.entries(ALLOWED_UPLOAD_MIME_TYPES).map(([mime, ext]) => [ext, mime]),
 );
 
 export interface ReadableStoredFile {
-  stream: ReadStream;
+  stream: NodeJS.ReadableStream;
   size: number;
   mimeType: string;
 }
 
+/** Provider-agnostic shape both LocalStorageBackend and S3StorageBackend implement — see
+ *  StorageService below for why publicUrl() itself isn't part of this (it never varies by
+ *  backend: reads are always proxied through our own GET route, on both providers). */
+export interface StorageBackend {
+  readStream(
+    organizationId: string,
+    filename: string,
+  ): Promise<ReadableStoredFile | null>;
+  remove(organizationId: string, filename: string): Promise<boolean>;
+}
+
 /**
- * Local-filesystem implementation of the storage abstraction — the default/fallback per
- * STORAGE_PROVIDER=local in .env.example (the only value that env var has ever held there; no
- * cloud provider is implemented). Deliberately kept provider-agnostic in its public shape
+ * Local-filesystem implementation of the storage abstraction — the default per
+ * STORAGE_PROVIDER=local in .env.example. Kept provider-agnostic in its public shape
  * (organizationId + filename in, a stream or a public URL out — no filesystem-specific detail
- * leaks to callers) so a future S3-compatible provider (matching the already-declared but
- * previously-unused STORAGE_BUCKET/STORAGE_ACCESS_KEY/STORAGE_SECRET_KEY env vars) could
- * implement the same shape and be swapped in behind UploadsController without changing it.
+ * leaks to callers) so S3StorageBackend below can implement the same shape and be swapped in
+ * behind UploadsController without changing it.
  */
-@Injectable()
-export class StorageService {
-  constructor(private readonly configService: ConfigService) {}
-
-  // Offer.images validates each entry as an absolute URL (Zod .url()), so this must never
-  // return a bare path — same API_URL-based pattern already used for absolute link-building in
-  // password-reset.service.ts / email-verification.service.ts.
-  publicUrl(organizationId: string, filename: string): string {
-    const apiUrl =
-      this.configService.get<string>('API_URL') ?? 'http://localhost:4000';
-    return `${apiUrl}/api/v1/uploads/${organizationId}/${filename}`;
-  }
-
+class LocalStorageBackend implements StorageBackend {
   async readStream(
     organizationId: string,
     filename: string,
@@ -79,12 +77,58 @@ export class StorageService {
 }
 
 /**
- * Rejects anything that isn't exactly `<24-hex-char ObjectId>/<uuid>.<allowed-ext>` under the
- * storage root. organizationId and filename both come straight from the URL path (GET is public,
- * see uploads.controller.ts) — this format check, plus the final startsWith guard against the
- * resolved root, is the only thing standing between a crafted request and a `../../` traversal
- * read/delete.
+ * Picks LocalStorageBackend or S3StorageBackend per STORAGE_PROVIDER (env, read via
+ * ConfigService — this class is a normal Nest provider, unlike LocalDiskStorageEngine/
+ * S3StorageEngine in uploads.controller.ts, which are built at decorator-evaluation time before
+ * Nest's config layer exists). publicUrl() always points at our own `/api/v1/uploads/:orgId/
+ * :filename` route regardless of backend — files are proxied through the API on both providers
+ * (avoids requiring public bucket ACLs/CORS just to serve an image), so read/remove are the only
+ * operations that actually differ per provider.
  */
+@Injectable()
+export class StorageService {
+  private readonly backend: StorageBackend;
+
+  constructor(private readonly configService: ConfigService) {
+    const provider = this.configService.get<string>('STORAGE_PROVIDER');
+    this.backend =
+      provider === 's3'
+        ? new S3StorageBackend(
+            new S3Client({
+              region: S3_STORAGE_CONFIG.region,
+              endpoint: S3_STORAGE_CONFIG.endpoint,
+              forcePathStyle: S3_STORAGE_CONFIG.forcePathStyle,
+              credentials: {
+                accessKeyId: S3_STORAGE_CONFIG.accessKeyId,
+                secretAccessKey: S3_STORAGE_CONFIG.secretAccessKey,
+              },
+            }),
+            S3_STORAGE_CONFIG.bucket,
+          )
+        : new LocalStorageBackend();
+  }
+
+  // Offer.images validates each entry as an absolute URL (Zod .url()), so this must never
+  // return a bare path — same API_URL-based pattern already used for absolute link-building in
+  // password-reset.service.ts / email-verification.service.ts.
+  publicUrl(organizationId: string, filename: string): string {
+    const apiUrl =
+      this.configService.get<string>('API_URL') ?? 'http://localhost:4000';
+    return `${apiUrl}/api/v1/uploads/${organizationId}/${filename}`;
+  }
+
+  readStream(
+    organizationId: string,
+    filename: string,
+  ): Promise<ReadableStoredFile | null> {
+    return this.backend.readStream(organizationId, filename);
+  }
+
+  remove(organizationId: string, filename: string): Promise<boolean> {
+    return this.backend.remove(organizationId, filename);
+  }
+}
+
 function resolveSafePath(
   organizationId: string,
   filename: string,
