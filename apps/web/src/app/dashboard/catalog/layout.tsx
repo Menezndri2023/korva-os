@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/dashboard/catalog", label: "Offres" },
   { href: "/dashboard/catalog/categories", label: "Catégories" },
+  { href: "/dashboard/catalog/suppliers", label: "Fournisseurs" },
+  { href: "/dashboard/catalog/purchase-orders", label: "Commandes fournisseurs" },
 ];
 
 export default function CatalogLayout({ children }: { children: React.ReactNode }) {

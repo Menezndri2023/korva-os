@@ -30,6 +30,20 @@ import { Quote, QuoteSchema } from '../finance/quotes/schemas/quote.schema';
 import { CustomFieldsModule } from '../custom-fields/custom-fields.module';
 import { AuditModule } from '../audit/audit.module';
 import { StorageModule } from '../shared/storage/storage.module';
+import {
+  Supplier,
+  SupplierSchema,
+} from './purchase-orders/schemas/supplier.schema';
+import {
+  PurchaseOrder,
+  PurchaseOrderSchema,
+} from './purchase-orders/schemas/purchase-order.schema';
+import { SuppliersRepository } from './purchase-orders/suppliers.repository';
+import { SuppliersService } from './purchase-orders/suppliers.service';
+import { SuppliersController } from './purchase-orders/suppliers.controller';
+import { PurchaseOrdersRepository } from './purchase-orders/purchase-orders.repository';
+import { PurchaseOrdersService } from './purchase-orders/purchase-orders.service';
+import { PurchaseOrdersController } from './purchase-orders/purchase-orders.controller';
 
 @Module({
   imports: [
@@ -47,6 +61,8 @@ import { StorageModule } from '../shared/storage/storage.module';
       { name: Booking.name, schema: BookingSchema },
       { name: Invoice.name, schema: InvoiceSchema },
       { name: Quote.name, schema: QuoteSchema },
+      { name: Supplier.name, schema: SupplierSchema },
+      { name: PurchaseOrder.name, schema: PurchaseOrderSchema },
     ]),
     CustomFieldsModule,
     AuditModule,
@@ -54,7 +70,12 @@ import { StorageModule } from '../shared/storage/storage.module';
     // it's imported here rather than directly in app.module.ts.
     StorageModule,
   ],
-  controllers: [OffersController, CategoriesController],
+  controllers: [
+    OffersController,
+    CategoriesController,
+    SuppliersController,
+    PurchaseOrdersController,
+  ],
   providers: [
     OffersRepository,
     StockMovementsRepository,
@@ -64,6 +85,10 @@ import { StorageModule } from '../shared/storage/storage.module';
     CategoriesRepository,
     CategoriesService,
     CategoryReferencesRepository,
+    SuppliersRepository,
+    SuppliersService,
+    PurchaseOrdersRepository,
+    PurchaseOrdersService,
   ],
   exports: [OffersService, InventoryService, CategoriesService],
 })
