@@ -187,7 +187,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col md:pl-0">
-        <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 md:px-8">
+        <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 shadow-sm md:px-8">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -240,8 +240,8 @@ function NavLink({
     <Link
       href={href}
       onClick={onClick}
-      className={`block rounded-md px-3 py-2 text-sm font-medium ${
-        active ? "bg-zinc-900 text-text-primary" : "text-text hover:bg-surface-muted"
+      className={`block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        active ? "bg-zinc-900 text-text-primary shadow-sm" : "text-text hover:bg-surface-muted"
       }`}
     >
       {label}

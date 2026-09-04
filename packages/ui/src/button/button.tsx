@@ -15,7 +15,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // "border border-zinc-300" pattern (16 occurrences), ghost the discreet "text-only" pattern
 // used for e.g. the dashboard logout button.
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: "bg-zinc-900 text-text-primary hover:bg-zinc-800",
+  primary: "bg-zinc-900 text-text-primary shadow-sm hover:bg-zinc-800 hover:shadow",
   secondary: "border border-border-input text-text hover:bg-surface-muted",
   ghost: "text-text-muted hover:bg-surface-muted",
 };
@@ -43,7 +43,7 @@ export function Button({
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       className={cn(
-        "inline-flex items-center justify-center rounded-md font-medium disabled:opacity-60",
+        "inline-flex items-center justify-center rounded-md font-medium transition-colors disabled:opacity-60",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2",
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],

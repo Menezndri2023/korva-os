@@ -24,7 +24,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         // Same base style as every hand-rolled <select> in apps/web today (rounded-md border
         // px-3 py-2 text-sm) plus Input's focus/border token wiring, so migrating a page from a
         // raw <select> to this component is a drop-in visual no-op.
-        "rounded-md border px-3 py-2 text-sm focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+        "rounded-md border px-3 py-2 text-sm transition-colors focus:border-focus focus:outline-none focus:ring-2 focus:ring-focus/15 disabled:cursor-not-allowed disabled:opacity-60",
         error ? "border-destructive" : "border-border-input",
         className,
       )}

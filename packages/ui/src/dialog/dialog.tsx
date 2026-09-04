@@ -42,7 +42,7 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="fixed inset-0 bg-zinc-900/40"
+        className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm"
         aria-hidden="true"
         onClick={onClose}
       />
@@ -51,7 +51,7 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         className={cn(
-          "relative w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-lg",
+          "relative w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl",
           className,
         )}
       >
