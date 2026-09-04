@@ -24,6 +24,11 @@ export class PurchaseOrderLineItem {
 
   @Prop({ required: true, min: 0 })
   unitCost!: number;
+
+  /** How much of `quantity` has arrived so far — see PurchaseOrdersService.receive for the
+   *  partial-delivery flow this backs. */
+  @Prop({ required: true, min: 0, default: 0 })
+  receivedQuantity!: number;
 }
 export const PurchaseOrderLineItemSchema = SchemaFactory.createForClass(
   PurchaseOrderLineItem,

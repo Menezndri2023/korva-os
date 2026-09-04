@@ -7,6 +7,7 @@ import { Types } from 'mongoose';
 import type {
   CreatePurchaseOrderInput,
   ListPurchaseOrdersQuery,
+  ReceivePurchaseOrderInput,
 } from '@korva/validation';
 import type { Pagination } from '@korva/types';
 import { PurchaseOrdersRepository } from './purchase-orders.repository';
@@ -81,6 +82,7 @@ export class PurchaseOrdersService {
         name: variantName(offer, item.variantId),
         quantity: item.quantity,
         unitCost: item.unitCost,
+        receivedQuantity: 0,
       };
     });
 
@@ -201,19 +203,28 @@ export class PurchaseOrdersService {
   }
 
   /**
-   * Receiving is the only transition that touches stock: one `recordStockMovement('received')`
-   * call per line, each an independent atomic single-document write (see InventoryService's own
-   * per-line reasoning) — NOT wrapped in a single cross-line transaction. To keep the common
-   * failure mode (an offer's trackStock got disabled after the PO was created) from applying half
-   * a delivery, every line is pre-checked with trackStock still enabled before any stock is
-   * touched; a genuine failure mid-loop (e.g. a concurrent delete) would still leave a partial
-   * application — an accepted v1 gap, documented rather than solved with a bigger transactional
-   * rewrite, matching this codebase's precedent (CohortsService.scheduleSession).
+   * Receiving is the only transition that touches stock. Supports **partial** receipt — a real
+   * delivery often arrives in more than one shipment — via an optional `items` list; omitting it
+   * receives every line's full remaining quantity in one shot (the common case). A PO only moves
+   * to `received` once every line's `receivedQuantity` reaches its `quantity`; a partial receipt
+   * leaves it `ordered` so it can be received again later.
+   *
+   * One `recordStockMovement('received')` call per line, each an independent atomic
+   * single-document write (see InventoryService's own per-line reasoning) — NOT wrapped in a
+   * single cross-line transaction. Every requested line is validated (exists on the PO, doesn't
+   * exceed its remaining quantity, offer still has trackStock enabled) BEFORE any stock is
+   * touched, so a bad request never applies half a receipt; a genuine failure mid-loop (e.g. a
+   * concurrent delete) would still leave a partial application — an accepted v1 gap, matching
+   * this codebase's precedent (CohortsService.scheduleSession) rather than a bigger transactional
+   * rewrite. The final `.save()` is a plain read-modify-write, not `$inc`-guarded — the realistic
+   * contention profile is one staff member receiving one delivery at a time, the same reasoning
+   * `OrdersService`'s open-tab add/remove-item already uses.
    */
   async receive(
     organizationId: string,
     userId: string,
     id: string,
+    input: ReceivePurchaseOrderInput,
   ): Promise<PurchaseOrderDocument> {
     const purchaseOrder = await this.getById(organizationId, id);
     if (purchaseOrder.status !== 'ordered') {
@@ -223,9 +234,48 @@ export class PurchaseOrdersService {
       });
     }
 
-    const offerIds = [
-      ...new Set(purchaseOrder.items.map((item) => item.offerId.toString())),
-    ];
+    const findLine = (offerId: string, variantId?: string) =>
+      purchaseOrder.items.find(
+        (item) =>
+          item.offerId.toString() === offerId &&
+          (item.variantId?.toString() ?? undefined) ===
+            (variantId ?? undefined),
+      );
+
+    const toReceive = (
+      input.items ??
+      purchaseOrder.items.map((item) => ({
+        offerId: item.offerId.toString(),
+        variantId: item.variantId?.toString(),
+        quantity: item.quantity - item.receivedQuantity,
+      }))
+    ).filter((line) => line.quantity > 0);
+
+    if (toReceive.length === 0) {
+      throw new BadRequestException({
+        code: 'PURCHASE_ORDER_NOTHING_TO_RECEIVE',
+        message: 'There is nothing left to receive on this purchase order',
+      });
+    }
+
+    for (const line of toReceive) {
+      const item = findLine(line.offerId, line.variantId);
+      if (!item) {
+        throw new NotFoundException({
+          code: 'PURCHASE_ORDER_LINE_NOT_FOUND',
+          message: 'This offer/variant is not on this purchase order',
+        });
+      }
+      const remaining = item.quantity - item.receivedQuantity;
+      if (line.quantity > remaining) {
+        throw new BadRequestException({
+          code: 'PURCHASE_ORDER_OVERRECEIVE',
+          message: `Cannot receive ${line.quantity}; only ${remaining} remain on this line`,
+        });
+      }
+    }
+
+    const offerIds = [...new Set(toReceive.map((line) => line.offerId))];
     const offersById = await this.offersService.getManyByIds(
       organizationId,
       offerIds,
@@ -236,38 +286,33 @@ export class PurchaseOrdersService {
     if (untracked) {
       throw new BadRequestException({
         code: 'STOCK_TRACKING_NOT_ENABLED',
-        message:
-          'Every offer on this purchase order must have stock tracking enabled to be received',
+        message: 'Every offer being received must have stock tracking enabled',
       });
     }
 
-    for (const item of purchaseOrder.items) {
+    for (const line of toReceive) {
       await this.offersService.recordStockMovement(
         organizationId,
         userId,
-        item.offerId.toString(),
+        line.offerId,
         {
           type: 'received',
-          quantity: item.quantity,
-          variantId: item.variantId?.toString(),
+          quantity: line.quantity,
+          variantId: line.variantId,
           reason: `Purchase order ${id}`,
         },
       );
+      findLine(line.offerId, line.variantId)!.receivedQuantity += line.quantity;
     }
 
-    const updated = await this.purchaseOrdersRepository.transition(
-      organizationId,
-      id,
-      ['ordered'],
-      'received',
-      { receivedAt: new Date() },
+    const fullyReceived = purchaseOrder.items.every(
+      (item) => item.receivedQuantity >= item.quantity,
     );
-    if (!updated) {
-      throw new BadRequestException({
-        code: 'PURCHASE_ORDER_NOT_ORDERED',
-        message: 'Only an ordered purchase order can be received',
-      });
+    if (fullyReceived) {
+      purchaseOrder.status = 'received';
+      purchaseOrder.receivedAt = new Date();
     }
+    await purchaseOrder.save();
 
     await this.auditService.record({
       organizationId,
@@ -275,9 +320,12 @@ export class PurchaseOrdersService {
       action: 'UPDATE',
       entity: 'purchase_order',
       entityId: id,
-      metadata: { status: 'received' },
+      metadata: {
+        status: purchaseOrder.status,
+        linesReceived: toReceive.length,
+      },
     });
-    return updated;
+    return purchaseOrder;
   }
 
   private async assertExistsForConflict(

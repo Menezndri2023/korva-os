@@ -322,6 +322,156 @@ describe('Suppliers & purchase orders (e2e)', () => {
       ).toBe(true);
     });
 
+    it('receives a PO across two partial deliveries, staying "ordered" until the second one completes it', async () => {
+      const supplier = await createSupplier();
+      const offer = await createOffer(true, 0);
+
+      const createRes = await request(server)
+        .post('/api/v1/purchase-orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 10, unitCost: 2 }],
+        })
+        .expect(201);
+      const po = asSuccess<PurchaseOrderPayload>(createRes.body);
+      await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/mark-ordered`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const firstReceiveRes = await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/receive`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ items: [{ offerId: offer.id, quantity: 4 }] })
+        .expect(201);
+      const afterFirst = asSuccess<PurchaseOrderPayload>(firstReceiveRes.body);
+      expect(afterFirst.status).toBe('ordered');
+      expect(afterFirst.receivedAt).toBeUndefined();
+
+      const offerAfterFirstRes = await request(server)
+        .get(`/api/v1/offers/${offer.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<OfferPayload>(offerAfterFirstRes.body).stockOnHand).toBe(
+        4,
+      );
+
+      const secondReceiveRes = await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/receive`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ items: [{ offerId: offer.id, quantity: 6 }] })
+        .expect(201);
+      const afterSecond = asSuccess<PurchaseOrderPayload>(
+        secondReceiveRes.body,
+      );
+      expect(afterSecond.status).toBe('received');
+      expect(afterSecond.receivedAt).toBeDefined();
+
+      const offerAfterSecondRes = await request(server)
+        .get(`/api/v1/offers/${offer.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(
+        asSuccess<OfferPayload>(offerAfterSecondRes.body).stockOnHand,
+      ).toBe(10);
+    });
+
+    it('rejects receiving more than the remaining quantity on a line', async () => {
+      const supplier = await createSupplier();
+      const offer = await createOffer(true, 0);
+      const createRes = await request(server)
+        .post('/api/v1/purchase-orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 5, unitCost: 2 }],
+        })
+        .expect(201);
+      const po = asSuccess<PurchaseOrderPayload>(createRes.body);
+      await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/mark-ordered`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const res = await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/receive`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ items: [{ offerId: offer.id, quantity: 6 }] })
+        .expect(400);
+      expect(asError(res.body).code).toBe('PURCHASE_ORDER_OVERRECEIVE');
+    });
+
+    it('rejects a second receive call once every line is already fully received', async () => {
+      const supplier = await createSupplier();
+      const offer = await createOffer(true, 0);
+      const createRes = await request(server)
+        .post('/api/v1/purchase-orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 3, unitCost: 2 }],
+        })
+        .expect(201);
+      const po = asSuccess<PurchaseOrderPayload>(createRes.body);
+      await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/mark-ordered`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/receive`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const res = await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/receive`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(400);
+      expect(asError(res.body).code).toBe('PURCHASE_ORDER_NOT_ORDERED');
+    });
+
+    it('rejects receiving a line item that is not on the purchase order', async () => {
+      const supplier = await createSupplier();
+      const offer = await createOffer(true, 0);
+      const otherOffer = await createOffer(true, 0);
+      const createRes = await request(server)
+        .post('/api/v1/purchase-orders')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 3, unitCost: 2 }],
+        })
+        .expect(201);
+      const po = asSuccess<PurchaseOrderPayload>(createRes.body);
+      await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/mark-ordered`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+
+      const res = await request(server)
+        .post(`/api/v1/purchase-orders/${po.id}/receive`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ items: [{ offerId: otherOffer.id, quantity: 1 }] })
+        .expect(404);
+      expect(asError(res.body).code).toBe('PURCHASE_ORDER_LINE_NOT_FOUND');
+    });
+
     it('rejects receiving a PO that is still a draft', async () => {
       const supplier = await createSupplier();
       const offer = await createOffer(true, 0);

@@ -27,6 +27,10 @@ export interface PurchaseOrderLineItem {
   name: string;
   quantity: number;
   unitCost: number;
+  /** How much of `quantity` has actually arrived so far — a delivery can come in more than one
+   *  shipment. A PO only moves to `received` once every line's `receivedQuantity` reaches its
+   *  `quantity`; until then it stays `ordered` even after one or more partial receipts. */
+  receivedQuantity: number;
 }
 
 export interface PurchaseOrder {

@@ -3,8 +3,10 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   createPurchaseOrderSchema,
   listPurchaseOrdersQuerySchema,
+  receivePurchaseOrderSchema,
   type CreatePurchaseOrderInput,
   type ListPurchaseOrdersQuery,
+  type ReceivePurchaseOrderInput,
 } from '@korva/validation';
 import type { AuthenticatedUser } from '../../core/tenant/request-context.types';
 import type { TenantContext } from '@korva/types';
@@ -72,11 +74,14 @@ export class PurchaseOrdersController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
+    @Body(new ZodValidationPipe(receivePurchaseOrderSchema))
+    body: ReceivePurchaseOrderInput,
   ) {
     return this.purchaseOrdersService.receive(
       tenant.organizationId,
       user.userId,
       id,
+      body,
     );
   }
 

@@ -10,7 +10,7 @@ import {
 } from "@korva/validation";
 import { PURCHASE_ORDER_STATUSES } from "@korva/types";
 import type { Offer, PurchaseOrder, PurchaseOrderStatus, Supplier } from "@korva/types";
-import { Badge, Button, Card, Pagination } from "@korva/ui";
+import { Badge, Button, Card, Dialog, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
@@ -96,8 +96,34 @@ export default function PurchaseOrdersPage() {
     };
   }
   const markOrdered = runAction((id) => apiClient.post(`/purchase-orders/${id}/mark-ordered`));
-  const receive = runAction((id) => apiClient.post(`/purchase-orders/${id}/receive`));
   const cancel = runAction((id) => apiClient.post(`/purchase-orders/${id}/cancel`));
+
+  // Receiving is keyed by offerId alone (not offerId+variantId) — safe because the create form
+  // above never lets staff pick a variant, so no PO built through this UI can have two lines
+  // sharing one offerId. A PO created directly via the API with variant-level lines would need
+  // the dialog extended before this UI could receive it correctly.
+  const [receivingPo, setReceivingPo] = useState<PurchaseOrder | null>(null);
+  const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({});
+  const [receiveError, setReceiveError] = useState<string | null>(null);
+  const receiveMutation = useMutation({
+    mutationFn: ({ id, items }: { id: string; items: { offerId: string; quantity: number }[] }) =>
+      apiClient.post(`/purchase-orders/${id}/receive`, { items }),
+    onSuccess: () => {
+      invalidate();
+      setReceivingPo(null);
+    },
+    onError: (error: unknown) => setReceiveError(actionErrorMessage(error)),
+  });
+
+  function openReceiveDialog(po: PurchaseOrder) {
+    setReceiveError(null);
+    setReceiveQuantities(
+      Object.fromEntries(
+        po.items.map((item) => [item.offerId, item.quantity - item.receivedQuantity]),
+      ),
+    );
+    setReceivingPo(po);
+  }
 
   return (
     <div className="space-y-6">
@@ -247,7 +273,13 @@ export default function PurchaseOrdersPage() {
                 <tr key={po.id}>
                   <td className="px-4 py-2 font-medium">{supplierName(po.supplierId)}</td>
                   <td className="px-4 py-2 text-text-muted">
-                    {po.items.map((item) => item.name).join(", ")}
+                    {po.items
+                      .map((item) =>
+                        po.status === "ordered" && item.receivedQuantity > 0
+                          ? `${item.name} (${item.receivedQuantity}/${item.quantity} reçus)`
+                          : item.name,
+                      )
+                      .join(", ")}
                   </td>
                   <td className="px-4 py-2 text-text-muted">
                     {formatCurrency(poTotal(po), po.currency)}
@@ -266,7 +298,7 @@ export default function PurchaseOrdersPage() {
                     )}
                     {po.status === "ordered" && (
                       <button
-                        onClick={() => receive(po.id)}
+                        onClick={() => openReceiveDialog(po)}
                         className="text-xs text-text-muted hover:underline"
                       >
                         Réceptionner
@@ -297,6 +329,69 @@ export default function PurchaseOrdersPage() {
         onPageChange={setPage}
         disabled={isLoading}
       />
+
+      <Dialog
+        open={receivingPo !== null}
+        onClose={() => setReceivingPo(null)}
+        title="Réceptionner la commande"
+      >
+        {receivingPo && (
+          <div className="space-y-3">
+            <p className="text-sm text-text-muted">
+              Indiquez la quantité effectivement reçue pour chaque article — une livraison
+              partielle laisse la commande au statut « Commandée » jusqu&apos;à réception
+              complète.
+            </p>
+            {receivingPo.items.map((item) => {
+              const remaining = item.quantity - item.receivedQuantity;
+              if (remaining <= 0) return null;
+              return (
+                <div key={item.offerId} className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-text">
+                    {item.name}
+                    <span className="text-text-muted"> — {remaining} restant(s)</span>
+                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={remaining}
+                    className="w-24"
+                    value={receiveQuantities[item.offerId] ?? 0}
+                    onChange={(e) =>
+                      setReceiveQuantities((prev) => ({
+                        ...prev,
+                        [item.offerId]: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              );
+            })}
+            {receiveError && <p className="text-sm text-destructive">{receiveError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setReceivingPo(null)}>
+                Annuler
+              </Button>
+              <Button
+                loading={receiveMutation.isPending}
+                onClick={() => {
+                  setReceiveError(null);
+                  const items = Object.entries(receiveQuantities)
+                    .filter(([, quantity]) => quantity > 0)
+                    .map(([offerId, quantity]) => ({ offerId, quantity }));
+                  if (items.length === 0) {
+                    setReceiveError("Indiquez au moins une quantité à réceptionner.");
+                    return;
+                  }
+                  receiveMutation.mutate({ id: receivingPo.id, items });
+                }}
+              >
+                {receiveMutation.isPending ? "Réception..." : "Confirmer la réception"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

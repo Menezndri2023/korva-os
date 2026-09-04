@@ -35,6 +35,24 @@ export const createPurchaseOrderSchema = z.object({
 });
 export type CreatePurchaseOrderInput = z.infer<typeof createPurchaseOrderSchema>;
 
+const receivePurchaseOrderLineSchema = z.object({
+  offerId: z.string().min(1),
+  variantId: z.string().optional(),
+  quantity: z.number().int().positive(),
+});
+
+/** Omitting `items` (or the whole request body) receives every line in full — the original
+ *  one-shot behavior; passing `items` receives only those lines, by the given quantity — a
+ *  partial delivery. The `.optional()` at the top level (not just on `items`) matters: a
+ *  no-body POST request can arrive with `req.body` itself `undefined`, not `{}`. */
+export const receivePurchaseOrderSchema = z
+  .object({
+    items: z.array(receivePurchaseOrderLineSchema).min(1).optional(),
+  })
+  .optional()
+  .transform((value) => value ?? {});
+export type ReceivePurchaseOrderInput = z.infer<typeof receivePurchaseOrderSchema>;
+
 export const listPurchaseOrdersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),

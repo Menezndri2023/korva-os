@@ -44,7 +44,9 @@ const purchaseOrder = {
   supplierId: "supplier-1",
   status: "draft" as const,
   currency: "EUR",
-  items: [{ offerId: "offer-1", name: "Widget", quantity: 5, unitCost: 2 }],
+  items: [
+    { offerId: "offer-1", name: "Widget", quantity: 5, unitCost: 2, receivedQuantity: 0 },
+  ],
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
@@ -131,7 +133,46 @@ describe("PurchaseOrdersPage", () => {
     );
   });
 
-  it("receives an ordered PO and shows an error if the API rejects it", async () => {
+  it("opens the receive dialog prefilled with the remaining quantity and submits it", async () => {
+    mockPurchaseOrdersPage([{ ...purchaseOrder, status: "ordered" }]);
+    postMock.mockResolvedValue({ ...purchaseOrder, status: "received" });
+    const user = userEvent.setup();
+    renderWithProviders(<PurchaseOrdersPage />);
+
+    await screen.findByText("Acme Supplies");
+    await user.click(screen.getByRole("button", { name: "Réceptionner" }));
+
+    expect(await screen.findByText(/5 restant/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirmer la réception" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/purchase-orders/po-1/receive", {
+        items: [{ offerId: "offer-1", quantity: 5 }],
+      }),
+    );
+  });
+
+  it("submits a partial receive quantity edited in the dialog", async () => {
+    mockPurchaseOrdersPage([{ ...purchaseOrder, status: "ordered" }]);
+    postMock.mockResolvedValue({ ...purchaseOrder, status: "ordered" });
+    const user = userEvent.setup();
+    renderWithProviders(<PurchaseOrdersPage />);
+
+    await screen.findByText("Acme Supplies");
+    await user.click(screen.getByRole("button", { name: "Réceptionner" }));
+    const quantityInput = await screen.findByDisplayValue("5");
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "2");
+    await user.click(screen.getByRole("button", { name: "Confirmer la réception" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/purchase-orders/po-1/receive", {
+        items: [{ offerId: "offer-1", quantity: 2 }],
+      }),
+    );
+  });
+
+  it("shows an error in the dialog if the API rejects the receive", async () => {
     mockPurchaseOrdersPage([{ ...purchaseOrder, status: "ordered" }]);
     postMock.mockRejectedValue(
       new ApiError("STOCK_TRACKING_NOT_ENABLED", "Stock tracking is not enabled"),
@@ -141,6 +182,7 @@ describe("PurchaseOrdersPage", () => {
 
     await screen.findByText("Acme Supplies");
     await user.click(screen.getByRole("button", { name: "Réceptionner" }));
+    await user.click(screen.getByRole("button", { name: "Confirmer la réception" }));
 
     expect(await screen.findByText("Stock tracking is not enabled")).toBeInTheDocument();
   });
