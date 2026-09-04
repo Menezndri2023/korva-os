@@ -43,19 +43,21 @@ export function TableTemplate({
 
   return (
     <div className={`min-h-screen ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
-      <div className="relative flex h-64 flex-col items-center justify-center overflow-hidden text-center sm:h-80">
+      <div className="relative flex h-72 flex-col items-center justify-center overflow-hidden text-center sm:h-96">
         {organization.heroImage ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={organization.heroImage} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-black/55" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
           </>
         ) : (
           <div className={`absolute inset-0 ${KT.surface}`} />
         )}
         <div className="relative z-10 px-6">
-          <h1 className={`text-3xl font-semibold sm:text-4xl ${KT.headingFont} ${heroTextClass}`}>{organization.name}</h1>
-          {organization.tagline && <p className={`mt-2 text-sm ${heroSubtextClass}`}>{organization.tagline}</p>}
+          <h1 className={`text-4xl font-semibold sm:text-5xl ${KT.headingFont} ${heroTextClass}`}>{organization.name}</h1>
+          {organization.tagline && (
+            <p className={`mt-3 text-base sm:text-lg ${heroSubtextClass}`}>{organization.tagline}</p>
+          )}
         </div>
       </div>
 
@@ -109,7 +111,9 @@ export function TableTemplate({
         {catalogVisible &&
           groups.map(([category, items]) => (
             <section key={category}>
-              <h2 className={`border-b pb-2 text-lg font-semibold uppercase tracking-wide ${KT.borderAccent} ${KT.text} ${KT.headingFont}`}>
+              <h2
+                className={`border-b-2 pb-3 text-xl font-semibold uppercase tracking-wide ${KT.borderAccent} ${KT.text} ${KT.headingFont}`}
+              >
                 {category}
               </h2>
               <ul className={`mt-3 divide-y ${KT.border}`}>
@@ -174,7 +178,7 @@ function MenuRow({
           )}
         </div>
       </div>
-      <span className={`whitespace-nowrap font-medium ${KT.accentText}`}>
+      <span className={`whitespace-nowrap text-base font-semibold ${KT.accentText}`}>
         {formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}
       </span>
     </li>

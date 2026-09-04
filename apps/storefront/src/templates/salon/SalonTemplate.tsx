@@ -13,6 +13,7 @@ import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
+import { SectionHeading } from "../sections/SectionHeading";
 
 /** Beauty & wellness, non-medical health, fitness, hospitality, personal services — booking is
  *  the primary call to action everywhere, well above cart/commerce. */
@@ -42,24 +43,28 @@ export function SalonTemplate({
 
   return (
     <div className={`min-h-screen ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
-      <div className="relative flex h-72 flex-col items-center justify-center overflow-hidden text-center sm:h-96">
+      <div className="relative flex h-80 flex-col items-center justify-center overflow-hidden text-center sm:h-[28rem]">
         {organization.heroImage ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={organization.heroImage} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-black/40" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
           </>
         ) : (
           <div className={`absolute inset-0 ${KT.surface}`} />
         )}
         <div className="relative z-10 flex flex-col items-center gap-4 px-6">
           <Logo organization={organization} />
-          <h1 className={`text-3xl font-semibold sm:text-4xl ${KT.headingFont} ${heroTextClass}`}>{organization.name}</h1>
-          {organization.tagline && <p className={`max-w-md text-sm ${heroSubtextClass}`}>{organization.tagline}</p>}
+          <h1 className={`text-4xl font-semibold sm:text-5xl ${KT.headingFont} ${heroTextClass}`}>{organization.name}</h1>
+          {organization.tagline && (
+            <p className={`max-w-md text-base leading-relaxed sm:text-lg ${heroSubtextClass}`}>
+              {organization.tagline}
+            </p>
+          )}
           {bookingEnabled && bookableOffers.length > 0 && (
             <a
               href="#services"
-              className={`mt-2 inline-flex rounded-full px-5 py-2 text-sm font-semibold ${KT.accentBg} ${KT.accentContrastText}`}
+              className={`mt-3 inline-flex rounded-full px-7 py-3 text-sm font-semibold shadow-lg transition-shadow hover:shadow-xl ${KT.accentBg} ${KT.accentContrastText}`}
             >
               Réserver maintenant
             </a>
@@ -116,8 +121,8 @@ export function SalonTemplate({
 
         {catalogVisible && bookableOffers.length > 0 && (
           <section>
-            <h2 className={`text-lg font-semibold ${KT.headingFont}`}>Nos prestations</h2>
-            <ul className="mt-3 space-y-3">
+            <SectionHeading eyebrow="Réservation" title="Nos prestations" />
+            <ul className="space-y-3">
               {bookableOffers.map((offer) => (
                 <ServiceCard key={offer.id} slug={slug} offer={offer} primary onBook={() => onBook(offer)} />
               ))}
@@ -127,8 +132,8 @@ export function SalonTemplate({
 
         {catalogVisible && commerceEnabled && otherOffers.length > 0 && (
           <section>
-            <h2 className={`text-lg font-semibold ${KT.headingFont}`}>Nos produits</h2>
-            <ul className="mt-3 space-y-3">
+            <SectionHeading eyebrow="Boutique" title="Nos produits" />
+            <ul className="space-y-3">
               {otherOffers.map((offer) => (
                 <ServiceCard key={offer.id} slug={slug} offer={offer} onAddToCart={() => onAddToCart(offer)} />
               ))}
@@ -160,7 +165,9 @@ function ServiceCard({
   onAddToCart?: () => void;
 }) {
   return (
-    <li className={`flex items-center justify-between gap-4 rounded-lg border p-4 ${KT.border} ${KT.surface}`}>
+    <li
+      className={`flex items-center justify-between gap-4 rounded-xl border p-5 shadow-sm transition-shadow duration-200 hover:shadow-md ${KT.border} ${KT.surface}`}
+    >
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <Link href={`/${slug}/offers/${offer.id}`} className="font-medium hover:underline">{offer.name}</Link>

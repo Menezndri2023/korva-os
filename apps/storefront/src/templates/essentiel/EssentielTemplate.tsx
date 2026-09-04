@@ -143,7 +143,9 @@ function OfferCard({
   const thumbnail = offer.images[0];
 
   return (
-    <Card className={`p-4 ${KT.surface} ${KT.border}`}>
+    <Card
+      className={`overflow-hidden rounded-xl p-4 shadow-sm transition-shadow duration-200 hover:shadow-lg ${KT.surface} ${KT.border}`}
+    >
       {thumbnail && !imageFailed && (
         // Arbitrary tenant-supplied host, not one of Next's configured image domains (see
         // middleware.ts img-src comment).
@@ -154,7 +156,7 @@ function OfferCard({
           loading="lazy"
           referrerPolicy="no-referrer"
           onError={() => setImageFailed(true)}
-          className="mb-3 h-32 w-full rounded-md object-cover"
+          className="-mx-4 -mt-4 mb-3 h-40 w-[calc(100%+2rem)] object-cover"
         />
       )}
       <div className="flex items-start justify-between gap-2">
@@ -206,12 +208,14 @@ function HeroSection({ organization }: { organization: PublicOrganization }) {
           alt=""
           referrerPolicy="no-referrer"
           onError={() => setImageFailed(true)}
-          className="h-48 w-full object-cover sm:h-64"
+          className="h-56 w-full object-cover sm:h-80"
         />
       )}
       {organization.tagline && (
-        <div className="mx-auto max-w-4xl px-6 py-4">
-          <p className={`text-sm sm:text-base ${KT.textMuted}`}>{organization.tagline}</p>
+        <div className="mx-auto max-w-4xl px-6 py-6">
+          <p className={`max-w-xl text-base leading-relaxed sm:text-lg ${KT.textMuted}`}>
+            {organization.tagline}
+          </p>
         </div>
       )}
     </div>

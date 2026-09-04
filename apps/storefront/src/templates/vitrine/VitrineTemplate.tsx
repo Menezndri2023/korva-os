@@ -13,6 +13,7 @@ import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
+import { SectionHeading } from "../sections/SectionHeading";
 
 /**
  * Services vitrine — professional services, trades/construction, real estate, digital
@@ -67,18 +68,21 @@ export function VitrineTemplate({
         </div>
       </header>
 
-      <section className={`px-6 py-16 ${KT.surface}`}>
-        <div className="mx-auto grid max-w-5xl gap-8 sm:grid-cols-[1.2fr_1fr] sm:items-center">
+      <section className={`px-6 py-20 ${KT.surface}`}>
+        <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-[1.2fr_1fr] sm:items-center">
           <div>
-            <h1 className={`text-3xl font-semibold leading-tight sm:text-4xl ${KT.headingFont}`}>
+            <p className={`text-xs font-semibold uppercase tracking-widest ${KT.accentText}`}>
+              {organization.name}
+            </p>
+            <h1 className={`mt-3 text-4xl font-semibold leading-tight sm:text-5xl ${KT.headingFont}`}>
               {organization.tagline || organization.name}
             </h1>
-            <p className={`mt-4 text-sm ${KT.textMuted}`}>
+            <p className={`mt-5 max-w-md text-base leading-relaxed ${KT.textMuted}`}>
               {organization.name} accompagne ses clients avec des prestations sur mesure.
             </p>
             <a
               href="#services"
-              className={`mt-6 inline-flex rounded-md px-4 py-2 text-sm font-medium ${KT.accentBg} ${KT.accentContrastText}`}
+              className={`mt-8 inline-flex rounded-full px-6 py-3 text-sm font-semibold shadow-md transition-shadow hover:shadow-lg ${KT.accentBg} ${KT.accentContrastText}`}
             >
               Découvrir nos services
             </a>
@@ -87,8 +91,8 @@ export function VitrineTemplate({
         </div>
       </section>
 
-      <main id="services" className="mx-auto max-w-5xl space-y-4 px-6 py-14">
-        <h2 className={`text-xl font-semibold ${KT.headingFont}`}>Nos services</h2>
+      <main id="services" className="mx-auto max-w-5xl space-y-4 px-6 py-16">
+        <SectionHeading eyebrow="Notre offre" title="Nos services" />
 
         {confirmation && (
           <div className="rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">
@@ -165,7 +169,7 @@ function ServiceRow({
   return (
     <li className={`flex flex-col gap-3 py-6 sm:flex-row sm:items-start sm:gap-6 ${KT.border}`}>
       <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${KT.accentBg} ${KT.accentContrastText}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold shadow-sm ${KT.accentBg} ${KT.accentContrastText}`}
       >
         {String(index).padStart(2, "0")}
       </span>
@@ -202,7 +206,7 @@ function HeroImage({ src }: { src: string }) {
       alt=""
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
-      className={`h-56 w-full rounded-lg border object-cover ${KT.border}`}
+      className={`h-64 w-full rounded-2xl border object-cover shadow-lg ${KT.border}`}
     />
   );
 }

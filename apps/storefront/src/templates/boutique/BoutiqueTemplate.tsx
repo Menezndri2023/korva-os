@@ -102,8 +102,8 @@ export function BoutiqueTemplate({
                 onClick={() => setActiveCategory(category)}
                 className={
                   activeCategory === category
-                    ? `rounded-full border px-3 py-1 text-xs font-medium ${KT.accentBg} ${KT.accentContrastText} ${KT.borderAccent}`
-                    : `rounded-full border px-3 py-1 text-xs font-medium ${KT.border} ${KT.textMuted}`
+                    ? `rounded-full border px-4 py-1.5 text-xs font-semibold shadow-sm ${KT.accentBg} ${KT.accentContrastText} ${KT.borderAccent}`
+                    : `rounded-full border px-4 py-1.5 text-xs font-medium transition-colors hover:${KT.surface} ${KT.border} ${KT.textMuted}`
                 }
               >
                 {category}
@@ -176,8 +176,10 @@ function ProductCard({
   const thumbnail = offer.images[0];
 
   return (
-    <div className={`overflow-hidden rounded-lg border ${KT.border} ${KT.surface}`}>
-      <div className={`relative aspect-square ${KT.bg}`}>
+    <div
+      className={`group overflow-hidden rounded-xl border shadow-sm transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}
+    >
+      <div className={`relative aspect-square overflow-hidden ${KT.bg}`}>
         {thumbnail && !imageFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -186,7 +188,7 @@ function ProductCard({
             loading="lazy"
             referrerPolicy="no-referrer"
             onError={() => setImageFailed(true)}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <div className={`flex h-full items-center justify-center text-xs ${KT.textMuted}`}>Pas d&apos;image</div>
@@ -195,11 +197,11 @@ function ProductCard({
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>
       </div>
-      <div className="p-3">
+      <div className="p-4">
         <Link href={`/${slug}/offers/${offer.id}`} className="text-sm font-medium hover:underline">
           {offer.name}
         </Link>
-        <p className={`mt-1 text-sm font-semibold ${KT.accentText}`}>
+        <p className={`mt-1 text-base font-semibold ${KT.accentText}`}>
           {formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}
         </p>
         <div className="mt-2">
@@ -222,7 +224,13 @@ function HeroBanner({ src }: { src: string }) {
   if (failed) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="h-40 w-full rounded-lg object-cover sm:h-56" />
+    <img
+      src={src}
+      alt=""
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className="h-48 w-full rounded-2xl object-cover shadow-lg sm:h-72"
+    />
   );
 }
 

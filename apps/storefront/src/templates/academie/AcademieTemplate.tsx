@@ -37,7 +37,7 @@ export function AcademieTemplate({
 }: StorefrontTemplateProps) {
   return (
     <div className={`min-h-screen ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
-      <header className={`px-6 py-5 ${KT.accentBg} ${KT.accentContrastText}`}>
+      <header className={`px-6 py-8 ${KT.accentBg} ${KT.accentContrastText}`}>
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div className="flex items-center gap-3">
             <Logo organization={organization} />
@@ -60,8 +60,8 @@ export function AcademieTemplate({
             )}
           </div>
         </div>
-        <div className="mx-auto mt-8 max-w-5xl">
-          <h1 className={`text-2xl font-semibold sm:text-3xl ${KT.headingFont}`}>
+        <div className="mx-auto mt-10 max-w-5xl">
+          <h1 className={`text-3xl font-semibold leading-tight sm:text-4xl ${KT.headingFont}`}>
             {organization.tagline || `Les formations ${organization.name}`}
           </h1>
         </div>
@@ -135,9 +135,11 @@ function CourseCard({
   onAddToCart: () => void;
 }) {
   return (
-    <div className={`overflow-hidden rounded-lg border ${KT.border} ${KT.surface}`}>
-      <div className={`h-1.5 ${KT.accentBg}`} />
-      <div className="p-4">
+    <div
+      className={`overflow-hidden rounded-xl border shadow-sm transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}
+    >
+      <div className={`h-2 ${KT.accentBg}`} />
+      <div className="p-5">
         <div className="flex items-start justify-between gap-2">
           <Link href={`/${slug}/offers/${offer.id}`} className={`font-medium hover:underline ${KT.headingFont}`}>
             {offer.name}
