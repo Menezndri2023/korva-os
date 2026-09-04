@@ -236,8 +236,13 @@ describe('Booking module (e2e)', () => {
           resourceId,
           offerId,
           contactId,
-          startAt: `${monday}T07:00:00.000Z`,
-          endAt: `${monday}T08:00:00.000Z`,
+          // 03:00-04:00 UTC is safely before the 09:00-18:00 Europe/Paris window regardless of
+          // DST (03:00 UTC is 04:00 CET or 05:00 CEST, both well before opening) — 07:00-08:00
+          // UTC used to be "outside" only by coincidence of comparing raw UTC against a window
+          // meant to be Paris local time (ADR-004); in CEST (UTC+2) it's exactly 09:00-10:00
+          // Paris, i.e. genuinely inside the window once converted correctly.
+          startAt: `${monday}T03:00:00.000Z`,
+          endAt: `${monday}T04:00:00.000Z`,
         })
         .expect(400);
       expect(asError(res.body).code).toBe('OUTSIDE_AVAILABILITY_WINDOW');

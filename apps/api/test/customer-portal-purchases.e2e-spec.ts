@@ -35,6 +35,22 @@ function asError(body: unknown): ApiError['error'] {
 }
 
 /**
+ * 08:00-20:00 Europe/Paris every day; 10:00-11:00 UTC is 11:00-12:00 CET or 12:00-13:00 CEST —
+ * safely inside that window year-round. A `Date.now()`-relative offset (`now+1h`) intermittently
+ * failed here: `isWithinWeeklyWindows` compares in the organization's own timezone (ADR-004), so
+ * "now" falling in the Paris evening/night made the very next hour genuinely outside business
+ * hours, not a flake — same "switch to a fixed future date+safe-hour" fix already applied
+ * elsewhere in this codebase for the identical class of problem.
+ */
+function nextSafeBookingSlot(): { startAt: string; endAt: string } {
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() + 7);
+  start.setUTCHours(10, 0, 0, 0);
+  const end = new Date(start.getTime() + 3_600_000);
+  return { startAt: start.toISOString(), endAt: end.toISOString() };
+}
+
+/**
  * Split out of customer-auth.e2e-spec.ts (not just organized separately) specifically to give
  * these describe blocks their own NestTestingModule instance and therefore their own in-memory
  * ThrottlerStorage — CUSTOMER_AUTH_THROTTLE caps /account/register at 10/min per file-shared app
@@ -217,8 +233,7 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
           resourceId,
           offerId: bookingOfferId,
           contactId,
-          startAt: new Date(Date.now() + 3_600_000).toISOString(),
-          endAt: new Date(Date.now() + 7_200_000).toISOString(),
+          ...nextSafeBookingSlot(),
         })
         .expect(201);
       bookingId = asSuccess<{ id: string }>(bookingRes.body).id;

@@ -7,6 +7,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { ClientSession, Model } from 'mongoose';
 import { ResourcesRepository } from '../resources/resources.repository';
 import { BookingsRepository } from '../bookings/bookings.repository';
+import { OrganizationsService } from '../../organizations/organizations.service';
 import {
   Resource,
   ResourceDocument,
@@ -17,35 +18,96 @@ function timeToMinutes(time: string): number {
   return (hours ?? 0) * 60 + (minutes ?? 0);
 }
 
-function isSameUtcDay(a: Date, b: Date): boolean {
-  return (
-    a.getUTCFullYear() === b.getUTCFullYear() &&
-    a.getUTCMonth() === b.getUTCMonth() &&
-    a.getUTCDate() === b.getUTCDate()
-  );
+const WEEKDAY_TO_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+/**
+ * Resolves `date`'s wall-clock day-of-week (0=Sunday, matching Date#getUTCDay's own convention)
+ * and minutes-since-midnight AS OBSERVED IN `timeZone` — never in UTC. Fixes ADR-004: `Resource
+ * .weeklyAvailability`'s `startTime`/`endTime` ("09:00") are business hours in the organization's
+ * own local time, not UTC, so comparing them against a UTC clock silently shifted every
+ * organization's hours by its own UTC offset (and, worse, rejected any slot that happened to
+ * straddle UTC midnight even when it was nowhere near the organization's actual midnight).
+ * `Intl.DateTimeFormat`'s IANA timezone database support is sufficient for this — no
+ * date-fns-tz/luxon dependency needed for this direction of the conversion (UTC instant -> local
+ * wall-clock parts); DST is handled correctly because the conversion is computed for the specific
+ * `date`, not a fixed offset.
+ */
+function localDateParts(
+  date: Date,
+  timeZone: string,
+): { dayOfWeek: number; minutesOfDay: number; dayKey: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: 'numeric',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+
+  return {
+    dayOfWeek: WEEKDAY_TO_INDEX[get('weekday')] ?? date.getUTCDay(),
+    minutesOfDay: Number(get('hour')) * 60 + Number(get('minute')),
+    dayKey: `${get('year')}-${get('month')}-${get('day')}`,
+  };
 }
 
-/** Times are compared in UTC (see docs/architecture-decisions.md for the known limitation). */
+/**
+ * Interprets `${dateStr}T${timeStr}` as wall-clock time IN `timeZone` and returns the matching
+ * UTC instant — the reverse direction of `localDateParts`, needed by `getDayAvailability` to turn
+ * a plain "YYYY-MM-DD" (a calendar day in the organization's own timezone, e.g. what a staff
+ * member picks on a date picker) into the correct UTC day-boundary instants. `Intl` has no
+ * built-in "local wall-clock -> UTC instant" conversion, so this uses the standard
+ * `toLocaleString` round-trip trick: format the same instant in both `timeZone` and UTC, the
+ * difference between those two readings IS the UTC offset for that specific date (DST-correct,
+ * since it's computed for this exact date rather than a fixed offset).
+ */
+function zonedTimeToUtc(
+  dateStr: string,
+  timeStr: string,
+  timeZone: string,
+): Date {
+  const naiveUtc = new Date(`${dateStr}T${timeStr}:00.000Z`);
+  const asZoned = new Date(naiveUtc.toLocaleString('en-US', { timeZone }));
+  const asUtc = new Date(naiveUtc.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const offsetMs = asUtc.getTime() - asZoned.getTime();
+  return new Date(naiveUtc.getTime() + offsetMs);
+}
+
+/** Times are compared in the organization's own timezone — see ADR-004 and localDateParts above. */
 function isWithinWeeklyWindows(
   resource: ResourceDocument,
   startAt: Date,
   endAt: Date,
+  timeZone: string,
 ): boolean {
   if (resource.weeklyAvailability.length === 0) return true;
-  if (!isSameUtcDay(startAt, endAt)) return false;
 
-  const dayOfWeek = startAt.getUTCDay();
-  const startMinutes = startAt.getUTCHours() * 60 + startAt.getUTCMinutes();
-  const endMinutes = endAt.getUTCHours() * 60 + endAt.getUTCMinutes();
+  const start = localDateParts(startAt, timeZone);
+  const end = localDateParts(endAt, timeZone);
+  if (start.dayKey !== end.dayKey) return false;
 
   return resource.weeklyAvailability.some(
     (window) =>
-      window.dayOfWeek === dayOfWeek &&
-      timeToMinutes(window.startTime) <= startMinutes &&
-      endMinutes <= timeToMinutes(window.endTime),
+      window.dayOfWeek === start.dayOfWeek &&
+      timeToMinutes(window.startTime) <= start.minutesOfDay &&
+      end.minutesOfDay <= timeToMinutes(window.endTime),
   );
 }
 
+/** Blocked slots are absolute instants (not wall-clock hours), so plain Date comparison is
+ *  already timezone-correct here — no conversion needed, unlike isWithinWeeklyWindows above. */
 function overlapsBlockedSlot(
   resource: ResourceDocument,
   startAt: Date,
@@ -61,6 +123,7 @@ export class AvailabilityService {
   constructor(
     private readonly resourcesRepository: ResourcesRepository,
     private readonly bookingsRepository: BookingsRepository,
+    private readonly organizationsService: OrganizationsService,
     @InjectModel(Resource.name)
     private readonly resourceModel: Model<ResourceDocument>,
   ) {}
@@ -97,7 +160,11 @@ export class AvailabilityService {
         message: 'This resource is not active',
       });
     }
-    if (!isWithinWeeklyWindows(resource, startAt, endAt)) {
+    const organization =
+      await this.organizationsService.getById(organizationId);
+    if (
+      !isWithinWeeklyWindows(resource, startAt, endAt, organization.timezone)
+    ) {
       throw new BadRequestException({
         code: 'OUTSIDE_AVAILABILITY_WINDOW',
         message:
@@ -160,10 +227,15 @@ export class AvailabilityService {
         message: 'Resource not found',
       });
     }
+    const organization =
+      await this.organizationsService.getById(organizationId);
 
-    const dayStart = new Date(`${date}T00:00:00.000Z`);
-    const dayEnd = new Date(`${date}T23:59:59.999Z`);
-    const dayOfWeek = dayStart.getUTCDay();
+    // `date` is a calendar day in the ORGANIZATION's own timezone (what a staff member picks on
+    // a date field), so its UTC boundary instants and its day-of-week must be derived from that
+    // timezone — not from treating "T00:00:00.000Z" as if the organization were in UTC.
+    const dayStart = zonedTimeToUtc(date, '00:00', organization.timezone);
+    const dayEnd = zonedTimeToUtc(date, '23:59', organization.timezone);
+    const dayOfWeek = localDateParts(dayStart, organization.timezone).dayOfWeek;
 
     const windows = resource.weeklyAvailability
       .filter((w) => w.dayOfWeek === dayOfWeek)

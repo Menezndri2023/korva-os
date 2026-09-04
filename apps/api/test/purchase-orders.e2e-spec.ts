@@ -35,7 +35,12 @@ interface PurchaseOrderPayload {
   supplierId: string;
   status: string;
   currency: string;
-  items: { offerId: string; name: string; quantity: number; unitCost: number }[];
+  items: {
+    offerId: string;
+    name: string;
+    quantity: number;
+    unitCost: number;
+  }[];
   receivedAt?: string;
 }
 
@@ -103,7 +108,10 @@ describe('Suppliers & purchase orders (e2e)', () => {
     await app.close();
   });
 
-  async function createOffer(trackStock: boolean, stockOnHand = 0): Promise<OfferPayload> {
+  async function createOffer(
+    trackStock: boolean,
+    stockOnHand = 0,
+  ): Promise<OfferPayload> {
     const res = await request(server)
       .post('/api/v1/offers')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -119,7 +127,9 @@ describe('Suppliers & purchase orders (e2e)', () => {
     return asSuccess<OfferPayload>(res.body);
   }
 
-  async function createSupplier(name = 'Acme Supplies'): Promise<SupplierPayload> {
+  async function createSupplier(
+    name = 'Acme Supplies',
+  ): Promise<SupplierPayload> {
     const res = await request(server)
       .post('/api/v1/suppliers')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -140,7 +150,9 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .expect(200);
       expect(
-        asSuccess<SupplierPayload[]>(listRes.body).some((s) => s.id === supplier.id),
+        asSuccess<SupplierPayload[]>(listRes.body).some(
+          (s) => s.id === supplier.id,
+        ),
       ).toBe(true);
 
       const updateRes = await request(server)
@@ -149,7 +161,9 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ phone: '0102030405' })
         .expect(200);
-      expect(asSuccess<{ phone?: string }>(updateRes.body).phone).toBe('0102030405');
+      expect(asSuccess<{ phone?: string }>(updateRes.body).phone).toBe(
+        '0102030405',
+      );
 
       await request(server)
         .delete(`/api/v1/suppliers/${supplier.id}`)
@@ -242,7 +256,9 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({
           supplierId: supplier.id,
-          items: [{ offerId: '507f1f77bcf86cd799439011', quantity: 1, unitCost: 1 }],
+          items: [
+            { offerId: '507f1f77bcf86cd799439011', quantity: 1, unitCost: 1 },
+          ],
         })
         .expect(404);
       expect(asError(res.body).code).toBe('OFFER_NOT_FOUND');
@@ -268,7 +284,9 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(201);
-      expect(asSuccess<PurchaseOrderPayload>(orderedRes.body).status).toBe('ordered');
+      expect(asSuccess<PurchaseOrderPayload>(orderedRes.body).status).toBe(
+        'ordered',
+      );
 
       const receiveRes = await request(server)
         .post(`/api/v1/purchase-orders/${po.id}/receive`)
@@ -291,11 +309,16 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      const movements = asSuccess<{ type: string; quantity: number; reason?: string }[]>(
-        movementsRes.body,
-      );
+      const movements = asSuccess<
+        { type: string; quantity: number; reason?: string }[]
+      >(movementsRes.body);
       expect(
-        movements.some((m) => m.type === 'received' && m.quantity === 8 && m.reason?.includes(po.id)),
+        movements.some(
+          (m) =>
+            m.type === 'received' &&
+            m.quantity === 8 &&
+            m.reason?.includes(po.id),
+        ),
       ).toBe(true);
     });
 
@@ -306,7 +329,10 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .post('/api/v1/purchase-orders')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ supplierId: supplier.id, items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }] })
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }],
+        })
         .expect(201);
       const po = asSuccess<PurchaseOrderPayload>(createRes.body);
 
@@ -325,7 +351,10 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .post('/api/v1/purchase-orders')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ supplierId: supplier.id, items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }] })
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }],
+        })
         .expect(201);
       const po = asSuccess<PurchaseOrderPayload>(createRes.body);
       await request(server)
@@ -357,7 +386,10 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .post('/api/v1/purchase-orders')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ supplierId: supplier.id, items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }] })
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }],
+        })
         .expect(201);
       const draftPo = asSuccess<PurchaseOrderPayload>(draftRes.body);
       const cancelledRes = await request(server)
@@ -365,13 +397,18 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(201);
-      expect(asSuccess<PurchaseOrderPayload>(cancelledRes.body).status).toBe('cancelled');
+      expect(asSuccess<PurchaseOrderPayload>(cancelledRes.body).status).toBe(
+        'cancelled',
+      );
 
       const secondRes = await request(server)
         .post('/api/v1/purchase-orders')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ supplierId: supplier.id, items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }] })
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }],
+        })
         .expect(201);
       const secondPo = asSuccess<PurchaseOrderPayload>(secondRes.body);
       await request(server)
@@ -390,7 +427,9 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(400);
-      expect(asError(notCancellableRes.body).code).toBe('PURCHASE_ORDER_NOT_CANCELLABLE');
+      expect(asError(notCancellableRes.body).code).toBe(
+        'PURCHASE_ORDER_NOT_CANCELLABLE',
+      );
     });
   });
 
@@ -400,16 +439,18 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .post('/api/v1/auth/register')
         .send({ email: 'po-staff@korva.test', password: 'password123' })
         .expect(201);
-      const memberAccessToken = asSuccess<AuthPayload>(memberAuthRes.body).accessToken;
+      const memberAccessToken = asSuccess<AuthPayload>(
+        memberAuthRes.body,
+      ).accessToken;
 
       const rolesRes = await request(server)
         .get('/api/v1/roles')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      const staffRole = asSuccess<{ id: string; systemKey?: string }[]>(rolesRes.body).find(
-        (r) => r.systemKey === 'STAFF',
-      )!;
+      const staffRole = asSuccess<{ id: string; systemKey?: string }[]>(
+        rolesRes.body,
+      ).find((r) => r.systemKey === 'STAFF')!;
 
       await request(server)
         .post('/api/v1/organizations/me/members')
@@ -430,7 +471,10 @@ describe('Suppliers & purchase orders (e2e)', () => {
         .post('/api/v1/purchase-orders')
         .set('Authorization', `Bearer ${memberAccessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ supplierId: supplier.id, items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }] })
+        .send({
+          supplierId: supplier.id,
+          items: [{ offerId: offer.id, quantity: 1, unitCost: 1 }],
+        })
         .expect(403);
       expect(asError(forbiddenRes.body).code).toBe('PERMISSION_DENIED');
     });

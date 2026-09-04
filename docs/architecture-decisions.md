@@ -52,6 +52,8 @@ Journal des décisions techniques importantes, au fil de l'implémentation (voir
 
 **À corriger avant un usage production réel** : convertir `weeklyAvailability`/`blockedSlots`/`startAt`/`endAt` via le fuseau de l'organisation avant comparaison, dans `AvailabilityService` uniquement (le stockage MongoDB en UTC natif ne change pas).
 
+**Corrigé (2026-09-04)** : `isWithinWeeklyWindows`/`getDayAvailability` convertissent désormais l'instant UTC stocké vers l'heure murale de `Organization.timezone` via `Intl.DateTimeFormat` (nouvelle fonction `localDateParts`) avant toute comparaison — DST géré correctement puisque la conversion est calculée pour la date réelle, pas un offset fixe. `blockedSlots` reste comparé en instants absolus (correct indépendamment du fuseau, aucun changement nécessaire). Le rejet "même jour UTC" est devenu "même jour local" : un créneau qui traverse minuit UTC sans traverser minuit local (le cas concret qui déclenchait ce bug) est maintenant accepté à juste titre. Zéro nouvelle dépendance (`date-fns-tz`/`luxon` jugés inutiles pour cette direction de conversion — `Intl` suffit). Voir `apps/api/src/booking/availability/availability.service.ts` et son nouveau `availability.service.spec.ts`.
+
 ## ADR-005 — `EventsProcessor` (worker BullMQ du Workflow Engine) colocalisé dans `apps/api`, pas dans `apps/worker`
 
 **Contexte** : le Event Bus (Phase 7) publie les événements métier (`lead.created`, `quote.accepted`, `order.created`, ...) sur une queue BullMQ (`events`, Redis). Un consommateur doit exister pour traiter ces jobs de façon asynchrone et déclencher le Workflow Engine. Le monorepo prévoit `apps/worker` comme processus dédié aux jobs asynchrones (voir `docs/architecture.md`).
