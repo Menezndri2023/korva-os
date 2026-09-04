@@ -201,6 +201,14 @@ export class OrganizationsService {
         fontPairing: input.storefrontFontPairing,
       });
     }
+    if (
+      input.testimonials !== undefined ||
+      input.teamMembers !== undefined ||
+      input.galleryImages !== undefined ||
+      input.aboutText !== undefined
+    ) {
+      await this.entitlementsService.assertContentSectionsAllowed(id);
+    }
     if (input.name) {
       const existing = await this.organizationsRepository.findBySlug(
         slugify(input.name),

@@ -8,6 +8,10 @@ import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
 import type { StorefrontTemplateProps } from "../types";
+import { AboutSection } from "../sections/AboutSection";
+import { TeamSection } from "../sections/TeamSection";
+import { GallerySection } from "../sections/GallerySection";
+import { TestimonialsSection } from "../sections/TestimonialsSection";
 
 /** Beauty & wellness, non-medical health, fitness, hospitality, personal services — booking is
  *  the primary call to action everywhere, well above cart/commerce. */
@@ -131,6 +135,11 @@ export function SalonTemplate({
           </section>
         )}
       </main>
+
+      <AboutSection organization={organization} />
+      <TeamSection organization={organization} />
+      <GallerySection organization={organization} />
+      <TestimonialsSection organization={organization} />
     </div>
   );
 }

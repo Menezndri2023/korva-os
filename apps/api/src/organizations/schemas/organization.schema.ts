@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import type {
+  GalleryImage,
   KorvaModule,
   OrganizationSettings,
   PaymentMethod,
@@ -8,6 +9,8 @@ import type {
   StorefrontPaletteKey,
   StorefrontSection,
   StorefrontTemplateKey,
+  TeamMember,
+  Testimonial,
 } from '@korva/types';
 import { idToJson } from '../../core/mongoose/schema-options';
 
@@ -97,6 +100,24 @@ export class Organization {
    *  "never configured" and silently accept no payment method at all. */
   @Prop({ type: [String], default: undefined })
   acceptedPaymentMethods?: PaymentMethod[];
+
+  /** Long-form "about us" text for the public storefront — Pro plan and above, see
+   *  EntitlementsService.assertContentSectionsAllowed. */
+  @Prop()
+  aboutText?: string;
+
+  /** `default: undefined` — same reasoning as `storefrontSections` above: an unset array must
+   *  stay distinguishable from "explicitly cleared to empty" is not a concern here (there's no
+   *  meaningful difference for content sections), but the auto-`[]`-init would still make every
+   *  organization "have" an (empty) array, which is harmless but pointless to store. */
+  @Prop({ type: [Object], default: undefined })
+  testimonials?: Testimonial[];
+
+  @Prop({ type: [Object], default: undefined })
+  teamMembers?: TeamMember[];
+
+  @Prop({ type: [Object], default: undefined })
+  galleryImages?: GalleryImage[];
 
   @Prop({ type: Object, default: { onboardingCompleted: false } })
   settings!: OrganizationSettings;

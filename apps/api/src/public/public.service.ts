@@ -136,6 +136,11 @@ export class PublicService {
     const plan = await this.subscriptionsService.getActivePlan(
       organization.id as string,
     );
+    // Defense-in-depth, same reasoning as resolveStorefrontTheme's own plan clamp below: an
+    // organization downgraded after saving testimonials/team/gallery/about must stop showing
+    // them on the public page even though the fields are still stored — enforced at save-time
+    // by EntitlementsService.assertContentSectionsAllowed, re-checked here at read-time.
+    const contentSectionsAllowed = planMeetsMinimum(plan.key, 'pro');
     return {
       name: organization.name,
       slug: organization.slug,
@@ -152,6 +157,16 @@ export class PublicService {
       storefrontTheme: this.resolveStorefrontTheme(organization, plan.key),
       acceptedPaymentMethods:
         await this.resolveAvailablePaymentMethods(organization),
+      aboutText: contentSectionsAllowed ? organization.aboutText : undefined,
+      testimonials: contentSectionsAllowed
+        ? organization.testimonials
+        : undefined,
+      teamMembers: contentSectionsAllowed
+        ? organization.teamMembers
+        : undefined,
+      galleryImages: contentSectionsAllowed
+        ? organization.galleryImages
+        : undefined,
     };
   }
 

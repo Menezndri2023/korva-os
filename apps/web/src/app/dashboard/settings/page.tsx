@@ -26,6 +26,7 @@ import type {
   ConnectPaymentPayoutInput,
   CustomField,
   CustomFieldEntity,
+  GalleryImage,
   IntegrationAccountStatus,
   IntegrationDomain,
   IntegrationSummary,
@@ -33,6 +34,8 @@ import type {
   Organization,
   Plan,
   SubscriptionSummary,
+  TeamMember,
+  Testimonial,
   TestConnectionResult,
   WebhookDelivery,
   WebhookSubscription,
@@ -50,7 +53,7 @@ import {
   type CreateWebhookSubscriptionInput,
   type UpdateOrganizationInput,
 } from "@korva/validation";
-import { Badge, Button, Input, Select } from "@korva/ui";
+import { Badge, Button, Dialog, Input, Select } from "@korva/ui";
 import type { BadgeVariant } from "@korva/ui";
 import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
@@ -1806,6 +1809,7 @@ export default function SettingsPage() {
       <WebhookSubscriptionsSection />
       <RolesManagementSection />
       <CustomFieldsSection />
+      <StorefrontContentSection />
       <AuditLogSection />
     </div>
   );
@@ -2267,6 +2271,418 @@ function StorefrontPreviewSection({
         />
       )}
     </section>
+  );
+}
+
+/**
+ * Storefront "content" sections (testimonials/team/gallery/about) — Pro plan and above, see
+ * EntitlementsService.assertContentSectionsAllowed. Each sub-editor mutates immediately (no
+ * unsaved-draft concept) via a whole-array-replace PATCH /organizations/me, matching this
+ * codebase's established non-optimistic-but-immediate-action pattern for list-like settings
+ * (e.g. the Categories page). Renders nothing to seed local state from until `organization` has
+ * actually loaded — the inner components' `useState(organization.field ?? ...)` initializers
+ * then correctly capture real data on their first (and only) mount, with no sync effect needed.
+ */
+function StorefrontContentSection() {
+  const { data: organization, isLoading } = useActiveOrganization();
+  const { data: subscription } = useQuery({
+    queryKey: ["subscriptions", "me"],
+    queryFn: () => apiClient.get<SubscriptionSummary>("/subscriptions/me"),
+  });
+  const planKey = subscription?.plan.key;
+  const allowed = !planKey || planMeetsMinimum(planKey, "pro");
+
+  return (
+    <section className="rounded-lg border border-border bg-surface p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-text">Contenu de la page publique</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            Présentez votre entreprise comme un vrai site professionnel : à propos, équipe,
+            galerie et avis clients.
+          </p>
+        </div>
+        {!allowed && <Badge>🔒 Passer au plan Pro</Badge>}
+      </div>
+      {!isLoading && organization && (
+        <fieldset disabled={!allowed} className="mt-4 space-y-6 disabled:opacity-60">
+          <AboutTextEditor organization={organization} />
+          <TestimonialsEditor organization={organization} />
+          <TeamMembersEditor organization={organization} />
+          <GalleryEditor organization={organization} />
+        </fieldset>
+      )}
+    </section>
+  );
+}
+
+function AboutTextEditor({ organization }: { organization: Organization }) {
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(organization.aboutText ?? "");
+  const mutation = useMutation({
+    mutationFn: (aboutText: string) =>
+      apiClient.patch<Organization>("/organizations/me", { aboutText }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organizations", "me"] }),
+  });
+
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-text">À propos</p>
+      <textarea
+        className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+        rows={4}
+        maxLength={4000}
+        placeholder="Racontez l'histoire de votre entreprise..."
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <div className="mt-2 flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          loading={mutation.isPending}
+          onClick={() => mutation.mutate(value)}
+        >
+          {mutation.isPending ? "Enregistrement..." : "Enregistrer le texte"}
+        </Button>
+        {mutation.isError && (
+          <p className="text-xs text-destructive">
+            {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface TestimonialFormValues {
+  authorName: string;
+  role?: string;
+  quote: string;
+  rating?: number;
+}
+
+function TestimonialsEditor({ organization }: { organization: Organization }) {
+  const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const testimonials = organization.testimonials ?? [];
+
+  const { register, handleSubmit, reset } = useForm<TestimonialFormValues>({
+    defaultValues: { authorName: "", quote: "" },
+  });
+
+  const mutation = useMutation({
+    mutationFn: (next: Testimonial[]) =>
+      apiClient.patch<Organization>("/organizations/me", { testimonials: next }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["organizations", "me"] });
+      setAddOpen(false);
+      reset({ authorName: "", quote: "" });
+    },
+  });
+
+  function addTestimonial(values: TestimonialFormValues) {
+    mutation.mutate([...testimonials, { id: crypto.randomUUID(), ...values }]);
+  }
+  function removeTestimonial(id: string) {
+    mutation.mutate(testimonials.filter((t) => t.id !== id));
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-text">Témoignages clients</p>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+          Ajouter un témoignage
+        </Button>
+      </div>
+      {testimonials.length === 0 ? (
+        <p className="mt-2 text-sm text-text-muted">Aucun témoignage.</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {testimonials.map((testimonial) => (
+            <li
+              key={testimonial.id}
+              className="flex items-start justify-between gap-3 rounded-md border border-border p-3 text-sm"
+            >
+              <div>
+                <p className="font-medium text-text">
+                  {testimonial.authorName}
+                  {testimonial.role ? ` — ${testimonial.role}` : ""}
+                </p>
+                <p className="mt-0.5 text-text-muted">{testimonial.quote}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeTestimonial(testimonial.id)}
+                className="shrink-0 text-xs text-destructive hover:underline"
+              >
+                Supprimer
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter un témoignage">
+        <form onSubmit={handleSubmit(addTestimonial)} className="space-y-3">
+          <Input placeholder="Nom du client" {...register("authorName", { required: true })} />
+          <Input placeholder="Rôle / entreprise (optionnel)" {...register("role")} />
+          <textarea
+            placeholder="Témoignage"
+            className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            rows={3}
+            {...register("quote", { required: true })}
+          />
+          <Input
+            type="number"
+            min={1}
+            max={5}
+            placeholder="Note sur 5 (optionnel)"
+            {...register("rating", {
+              setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+            })}
+          />
+          {mutation.isError && (
+            <p className="text-xs text-destructive">
+              {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" loading={mutation.isPending}>
+              {mutation.isPending ? "Ajout..." : "Ajouter"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </div>
+  );
+}
+
+interface TeamMemberFormValues {
+  name: string;
+  role: string;
+  bio?: string;
+}
+
+function TeamMembersEditor({ organization }: { organization: Organization }) {
+  const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const teamMembers = organization.teamMembers ?? [];
+
+  const { register, handleSubmit, reset } = useForm<TeamMemberFormValues>({
+    defaultValues: { name: "", role: "" },
+  });
+
+  const mutation = useMutation({
+    mutationFn: (next: TeamMember[]) =>
+      apiClient.patch<Organization>("/organizations/me", { teamMembers: next }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["organizations", "me"] });
+      setAddOpen(false);
+      setPhotoUrl(undefined);
+      reset({ name: "", role: "" });
+    },
+  });
+
+  async function handlePhotoUpload(file: File | undefined) {
+    if (!file) return;
+    setUploadError(null);
+    setPhotoUploading(true);
+    try {
+      const result = await uploadFile(file);
+      setPhotoUrl(result.url);
+    } catch (error) {
+      setUploadError(error instanceof ApiError ? error.message : "Échec de l'envoi du fichier.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  function addTeamMember(values: TeamMemberFormValues) {
+    mutation.mutate([
+      ...teamMembers,
+      { id: crypto.randomUUID(), photo: photoUrl, ...values },
+    ]);
+  }
+  function removeTeamMember(id: string) {
+    mutation.mutate(teamMembers.filter((m) => m.id !== id));
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-text">Équipe</p>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+          Ajouter un membre
+        </Button>
+      </div>
+      {teamMembers.length === 0 ? (
+        <p className="mt-2 text-sm text-text-muted">Aucun membre.</p>
+      ) : (
+        <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+          {teamMembers.map((member) => (
+            <li
+              key={member.id}
+              className="flex items-start justify-between gap-3 rounded-md border border-border p-3 text-sm"
+            >
+              <div>
+                <p className="font-medium text-text">{member.name}</p>
+                <p className="text-xs uppercase tracking-wide text-text-muted">{member.role}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeTeamMember(member.id)}
+                className="shrink-0 text-xs text-destructive hover:underline"
+              >
+                Supprimer
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Dialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Ajouter un membre de l'équipe"
+      >
+        <form onSubmit={handleSubmit(addTeamMember)} className="space-y-3">
+          <Input placeholder="Nom" {...register("name", { required: true })} />
+          <Input placeholder="Rôle" {...register("role", { required: true })} />
+          <textarea
+            placeholder="Bio (optionnel)"
+            className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            rows={2}
+            {...register("bio")}
+          />
+          <div className="flex items-center gap-2">
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => void handlePhotoUpload(event.target.files?.[0])}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={photoUploading}
+              onClick={() => photoInputRef.current?.click()}
+            >
+              {photoUrl ? "Changer la photo" : "Ajouter une photo"}
+            </Button>
+            {photoUrl && <span className="text-xs text-text-muted">Photo ajoutée</span>}
+          </div>
+          {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
+          {mutation.isError && (
+            <p className="text-xs text-destructive">
+              {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" loading={mutation.isPending}>
+              {mutation.isPending ? "Ajout..." : "Ajouter"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </div>
+  );
+}
+
+function GalleryEditor({ organization }: { organization: Organization }) {
+  const queryClient = useQueryClient();
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryImages = organization.galleryImages ?? [];
+
+  const mutation = useMutation({
+    mutationFn: (next: GalleryImage[]) =>
+      apiClient.patch<Organization>("/organizations/me", { galleryImages: next }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organizations", "me"] }),
+  });
+
+  async function handleUpload(file: File | undefined) {
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const result = await uploadFile(file);
+      mutation.mutate([...galleryImages, { id: crypto.randomUUID(), url: result.url }]);
+    } catch (error) {
+      setUploadError(error instanceof ApiError ? error.message : "Échec de l'envoi du fichier.");
+    } finally {
+      setUploading(false);
+    }
+  }
+  function removeImage(id: string) {
+    mutation.mutate(galleryImages.filter((image) => image.id !== id));
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-text">Galerie photo</p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => void handleUpload(event.target.files?.[0])}
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          loading={uploading}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          Ajouter une image
+        </Button>
+      </div>
+      {uploadError && <p className="mt-2 text-xs text-destructive">{uploadError}</p>}
+      {mutation.isError && (
+        <p className="mt-2 text-xs text-destructive">
+          {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+        </p>
+      )}
+      {galleryImages.length === 0 ? (
+        <p className="mt-2 text-sm text-text-muted">Aucune image.</p>
+      ) : (
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {galleryImages.map((image) => (
+            <div key={image.id} className="group relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={image.url}
+                alt={image.caption ?? ""}
+                className="h-20 w-full rounded-md border border-border object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => removeImage(image.id)}
+                className="absolute right-1 top-1 rounded bg-surface px-1.5 py-0.5 text-xs text-destructive shadow"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

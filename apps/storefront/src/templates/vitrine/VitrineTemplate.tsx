@@ -8,6 +8,10 @@ import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
 import type { StorefrontTemplateProps } from "../types";
+import { AboutSection } from "../sections/AboutSection";
+import { TeamSection } from "../sections/TeamSection";
+import { GallerySection } from "../sections/GallerySection";
+import { TestimonialsSection } from "../sections/TestimonialsSection";
 
 /**
  * Services vitrine — professional services, trades/construction, real estate, digital
@@ -123,6 +127,11 @@ export function VitrineTemplate({
           </ul>
         )}
       </main>
+
+      <AboutSection organization={organization} />
+      <TeamSection organization={organization} />
+      <GallerySection organization={organization} />
+      <TestimonialsSection organization={organization} />
 
       <footer className={`border-t ${KT.border} px-6 py-8 text-sm ${KT.textMuted}`}>
         <div className="mx-auto max-w-5xl">

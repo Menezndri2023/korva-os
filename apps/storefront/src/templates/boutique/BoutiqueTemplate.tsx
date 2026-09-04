@@ -8,6 +8,10 @@ import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
 import type { StorefrontTemplateProps } from "../types";
+import { AboutSection } from "../sections/AboutSection";
+import { TeamSection } from "../sections/TeamSection";
+import { GallerySection } from "../sections/GallerySection";
+import { TestimonialsSection } from "../sections/TestimonialsSection";
 
 const ALL_CATEGORY = "Tout";
 
@@ -142,6 +146,11 @@ export function BoutiqueTemplate({
           </div>
         )}
       </main>
+
+      <AboutSection organization={organization} />
+      <TeamSection organization={organization} />
+      <GallerySection organization={organization} />
+      <TestimonialsSection organization={organization} />
     </div>
   );
 }

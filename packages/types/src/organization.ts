@@ -55,6 +55,35 @@ export interface OrganizationSettings {
   [key: string]: unknown;
 }
 
+/**
+ * Storefront "content" sections — testimonials/team/gallery/about — gated behind the Pro plan
+ * (see EntitlementsService.assertContentSectionsAllowed) and rendered by every storefront
+ * template (apps/storefront/src/templates/sections/). These are free-form content an org owner
+ * fills in themselves, distinct from the structural template/palette/font choice.
+ */
+export interface Testimonial {
+  id: string;
+  authorName: string;
+  role?: string;
+  quote: string;
+  /** 1-5, optional — a testimonial doesn't have to carry a star rating. */
+  rating?: number;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  photo?: string;
+  bio?: string;
+}
+
+export interface GalleryImage {
+  id: string;
+  url: string;
+  caption?: string;
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -86,6 +115,12 @@ export interface Organization {
   /** Never empty in practice — the schema defaults new organizations to `["cash"]`. See
    *  PAYMENT_METHODS' own doc comment. */
   acceptedPaymentMethods?: PaymentMethod[];
+  /** Long-form "about us" text for the public storefront — Pro plan and above, see
+   *  EntitlementsService.assertContentSectionsAllowed. Distinct from the short `tagline`. */
+  aboutText?: string;
+  testimonials?: Testimonial[];
+  teamMembers?: TeamMember[];
+  galleryImages?: GalleryImage[];
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
   createdAt: string;

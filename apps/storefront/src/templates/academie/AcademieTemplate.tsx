@@ -8,6 +8,10 @@ import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
 import type { StorefrontTemplateProps } from "../types";
+import { AboutSection } from "../sections/AboutSection";
+import { TeamSection } from "../sections/TeamSection";
+import { GallerySection } from "../sections/GallerySection";
+import { TestimonialsSection } from "../sections/TestimonialsSection";
 
 /** Training/coaching — offers presented as course cards (accent top bar, type badge, price,
  *  enrolment CTA) in a catalog grid, closer to an academy/course-platform look. */
@@ -104,6 +108,11 @@ export function AcademieTemplate({
           </div>
         )}
       </main>
+
+      <AboutSection organization={organization} />
+      <TeamSection organization={organization} />
+      <GallerySection organization={organization} />
+      <TestimonialsSection organization={organization} />
     </div>
   );
 }

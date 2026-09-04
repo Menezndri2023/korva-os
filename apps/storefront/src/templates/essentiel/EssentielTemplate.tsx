@@ -8,6 +8,10 @@ import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
 import type { StorefrontTemplateProps } from "../types";
+import { AboutSection } from "../sections/AboutSection";
+import { TeamSection } from "../sections/TeamSection";
+import { GallerySection } from "../sections/GallerySection";
+import { TestimonialsSection } from "../sections/TestimonialsSection";
 
 /** The original, sector-agnostic storefront layout — always available regardless of plan, and
  *  the fallback whenever a plan no longer covers the org's chosen template (see
@@ -109,6 +113,11 @@ export function EssentielTemplate({
           </div>
         )}
       </main>
+
+      <AboutSection organization={organization} />
+      <TeamSection organization={organization} />
+      <GallerySection organization={organization} />
+      <TestimonialsSection organization={organization} />
     </div>
   );
 }

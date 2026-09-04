@@ -33,6 +33,31 @@ const hexColorSchema = z
   .string()
   .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Must be a hex color, e.g. #1a73e8');
 
+/** Storefront content sections (Pro plan and above) — see
+ *  EntitlementsService.assertContentSectionsAllowed. Whole-array-replace, not per-item CRUD:
+ *  the frontend generates `id` client-side (e.g. crypto.randomUUID()) when adding a new item. */
+const testimonialSchema = z.object({
+  id: z.string().min(1),
+  authorName: z.string().min(1).max(120),
+  role: z.string().max(120).optional(),
+  quote: z.string().min(1).max(1000),
+  rating: z.number().min(1).max(5).optional(),
+});
+
+const teamMemberSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(120),
+  role: z.string().min(1).max(120),
+  photo: z.string().url().optional(),
+  bio: z.string().max(1000).optional(),
+});
+
+const galleryImageSchema = z.object({
+  id: z.string().min(1),
+  url: z.string().url(),
+  caption: z.string().max(200).optional(),
+});
+
 export const updateOrganizationSchema = createOrganizationSchema.partial().extend({
   legalName: z.string().max(200).optional(),
   logo: z.string().url().optional(),
@@ -53,6 +78,11 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
    *  offering no payment method at all isn't a valid checkout configuration. */
   acceptedPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).min(1).optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
+  /** Long-form "about us" text for the public storefront — Pro plan and above. */
+  aboutText: z.string().max(4000).optional(),
+  testimonials: z.array(testimonialSchema).max(20).optional(),
+  teamMembers: z.array(teamMemberSchema).max(30).optional(),
+  galleryImages: z.array(galleryImageSchema).max(40).optional(),
 });
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 

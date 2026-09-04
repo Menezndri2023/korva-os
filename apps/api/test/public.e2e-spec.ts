@@ -102,6 +102,10 @@ interface PublicOrganizationPayload {
     fontPairing: string;
     customAccentApplied: boolean;
   };
+  aboutText?: string;
+  testimonials?: { id: string; authorName: string; quote: string }[];
+  teamMembers?: { id: string; name: string; role: string }[];
+  galleryImages?: { id: string; url: string }[];
 }
 interface TrackedOrderPayload {
   number: string;
@@ -813,6 +817,99 @@ describe('Public storefront API (e2e)', () => {
         asSuccess<PublicOrganizationPayload>(onFree.body).storefrontTheme
           .template,
       ).toBe('essentiel');
+    });
+  });
+
+  describe('storefront content sections (testimonials/team/gallery/about)', () => {
+    it('is undefined on a free-plan organization by default', async () => {
+      const { slug } = await setupStorefrontOrg(
+        'content-sections-default@korva.test',
+        'Content Default Org',
+      );
+
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const info = asSuccess<PublicOrganizationPayload>(res.body);
+      expect(info.aboutText).toBeUndefined();
+      expect(info.testimonials).toBeUndefined();
+      expect(info.teamMembers).toBeUndefined();
+      expect(info.galleryImages).toBeUndefined();
+    });
+
+    it('rejects saving content sections below the Pro plan', async () => {
+      const { accessToken, organizationId } = await setupStorefrontOrg(
+        'content-sections-reject@korva.test',
+        'Content Reject Org',
+      );
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'starter' })
+        .expect(201);
+
+      const res = await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ aboutText: 'Notre histoire' })
+        .expect(403);
+      expect(asError(res.body).code).toBe(
+        'STOREFRONT_CONTENT_SECTIONS_NOT_IN_PLAN',
+      );
+    });
+
+    it('saves and publicly exposes content sections on a Pro plan, then clamps them after a downgrade', async () => {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        'content-sections-clamp@korva.test',
+        'Content Clamp Org',
+      );
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'pro' })
+        .expect(201);
+
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          aboutText: 'Notre histoire',
+          testimonials: [
+            { id: 't1', authorName: 'Ada Lovelace', quote: 'Excellent !' },
+          ],
+          teamMembers: [{ id: 'm1', name: 'Grace Hopper', role: 'Fondatrice' }],
+          galleryImages: [{ id: 'g1', url: 'https://cdn.korva.test/1.jpg' }],
+        })
+        .expect(200);
+
+      const onPro = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const infoOnPro = asSuccess<PublicOrganizationPayload>(onPro.body);
+      expect(infoOnPro.aboutText).toBe('Notre histoire');
+      expect(infoOnPro.testimonials).toHaveLength(1);
+      expect(infoOnPro.teamMembers).toHaveLength(1);
+      expect(infoOnPro.galleryImages).toHaveLength(1);
+
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'free' })
+        .expect(201);
+
+      const onFree = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const infoOnFree = asSuccess<PublicOrganizationPayload>(onFree.body);
+      expect(infoOnFree.aboutText).toBeUndefined();
+      expect(infoOnFree.testimonials).toBeUndefined();
+      expect(infoOnFree.teamMembers).toBeUndefined();
+      expect(infoOnFree.galleryImages).toBeUndefined();
     });
   });
 

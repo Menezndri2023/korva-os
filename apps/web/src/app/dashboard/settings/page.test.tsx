@@ -1738,3 +1738,130 @@ describe("SettingsPage — custom fields", () => {
     await waitFor(() => expect(screen.queryByText("Surface (m²)")).not.toBeInTheDocument());
   });
 });
+
+describe("SettingsPage — storefront content sections", () => {
+  let organization: ReturnType<typeof makeOrganization>;
+
+  function mockDefaultGets(planKey: string) {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/organizations/me") return Promise.resolve(organization);
+      if (path === "/organizations/me/members") return Promise.resolve([]);
+      if (path === "/organizations/me/invitations") return Promise.resolve([]);
+      if (path === "/organizations/me/roles") return Promise.resolve([]);
+      if (path === "/roles") return Promise.resolve([]);
+      if (path === "/subscriptions/me") {
+        return Promise.resolve({ ...subscription, plan: { ...subscription.plan, key: planKey } });
+      }
+      if (path === "/ai/usage-summary") {
+        return Promise.resolve({
+          period: "2026-08",
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          unpricedCalls: 0,
+        });
+      }
+      if (path === "/plans") return Promise.resolve([]);
+      if (path === "/organizations/me/integrations") return Promise.resolve([]);
+      if (path === "/webhook-subscriptions") return Promise.resolve([]);
+      if (path.startsWith("/custom-fields")) return Promise.resolve([]);
+      throw new Error(`unexpected GET ${path}`);
+    });
+  }
+
+  beforeEach(() => {
+    organization = makeOrganization(["crm"]);
+    getMock.mockReset();
+    postMock.mockReset();
+    patchMock.mockReset();
+    uploadFileMock.mockReset();
+    mockDefaultGets("pro");
+  });
+
+  it("shows a lock badge and disables the fieldset when the plan is below Pro", async () => {
+    mockDefaultGets("starter");
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("🔒 Passer au plan Pro")).toBeInTheDocument();
+    const fieldset = (await screen.findByText("À propos")).closest("fieldset");
+    expect(fieldset).toBeDisabled();
+  });
+
+  it("saves the about text on a Pro plan", async () => {
+    patchMock.mockResolvedValue({ ...organization, aboutText: "Notre histoire" });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    const textarea = await screen.findByPlaceholderText(
+      "Racontez l'histoire de votre entreprise...",
+    );
+    expect(screen.queryByText("🔒 Passer au plan Pro")).not.toBeInTheDocument();
+    await user.type(textarea, "Notre histoire");
+    await user.click(screen.getByRole("button", { name: "Enregistrer le texte" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me", {
+        aboutText: "Notre histoire",
+      }),
+    );
+  });
+
+  it("adds and removes a testimonial", async () => {
+    patchMock.mockImplementation((_path: string, body: unknown) => {
+      organization = { ...organization, ...(body as object) };
+      return Promise.resolve(organization);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Ajouter un témoignage" }));
+    await user.type(screen.getByPlaceholderText("Nom du client"), "Ada Lovelace");
+    await user.type(screen.getByPlaceholderText("Témoignage"), "Excellent service !");
+    await user.click(screen.getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me", {
+        testimonials: [
+          expect.objectContaining({
+            authorName: "Ada Lovelace",
+            quote: "Excellent service !",
+          }),
+        ],
+      }),
+    );
+
+    expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Supprimer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me", { testimonials: [] }),
+    );
+  });
+
+  it("uploads and adds a gallery image", async () => {
+    uploadFileMock.mockResolvedValue({
+      url: "https://cdn.korva.test/gallery-1.jpg",
+      filename: "gallery-1.jpg",
+      mimeType: "image/jpeg",
+      size: 1024,
+    });
+    patchMock.mockImplementation((_path: string, body: unknown) =>
+      Promise.resolve({ ...organization, ...(body as object) }),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Galerie photo");
+    const file = new File(["fake"], "photo.jpg", { type: "image/jpeg" });
+    const input = document.querySelector('input[type="file"][accept="image/*"]')!;
+    await user.upload(input as HTMLInputElement, file);
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me", {
+        galleryImages: [
+          expect.objectContaining({ url: "https://cdn.korva.test/gallery-1.jpg" }),
+        ],
+      }),
+    );
+  });
+});

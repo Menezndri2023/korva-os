@@ -151,6 +151,23 @@ export class EntitlementsService {
     }
   }
 
+  /**
+   * Gates the storefront "content" sections (testimonials/team/gallery/about) behind the Pro
+   * plan — a flat gate, unlike assertStorefrontThemeAllowed's per-template minimum, since the
+   * user explicitly chose "Pro unlocks everything" for these rather than a graduated rollout.
+   */
+  async assertContentSectionsAllowed(organizationId: string): Promise<void> {
+    await this.assertSubscriptionActive(organizationId);
+    const plan = await this.subscriptionsService.getActivePlan(organizationId);
+    if (!planMeetsMinimum(plan.key, 'pro')) {
+      throw new ForbiddenException({
+        code: 'STOREFRONT_CONTENT_SECTIONS_NOT_IN_PLAN',
+        message: `Your plan ("${plan.name}") does not include storefront content sections (testimonials, team, gallery, about) — upgrade to Pro or higher`,
+        details: { plan: plan.key },
+      });
+    }
+  }
+
   async assertSeatAvailable(organizationId: string): Promise<void> {
     await this.assertSubscriptionActive(organizationId);
     const plan = await this.subscriptionsService.getActivePlan(organizationId);

@@ -1,5 +1,6 @@
 import type {
   BookingStatus,
+  GalleryImage,
   LineItem,
   OfferPricing,
   OfferType,
@@ -9,6 +10,8 @@ import type {
   QuoteStatus,
   ReturnRequestStatus,
   StorefrontTheme,
+  TeamMember,
+  Testimonial,
 } from "@korva/types";
 
 /** Mirrors PublicService#getOrganization (apps/api/src/public/public.service.ts) exactly. */
@@ -36,6 +39,13 @@ export interface PublicOrganization {
   /** Already resolved to what's actually usable — "online" is only ever present when a real PSP
    *  is connected. Never empty. */
   acceptedPaymentMethods: PaymentMethod[];
+  /** Content sections (Pro plan and above) — already clamped to the org's current plan
+   *  server-side, so undefined/empty here always means "don't render," never "check the plan
+   *  yourself." See apps/storefront/src/templates/sections/. */
+  aboutText?: string;
+  testimonials?: Testimonial[];
+  teamMembers?: TeamMember[];
+  galleryImages?: GalleryImage[];
 }
 
 /**
