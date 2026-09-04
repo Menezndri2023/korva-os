@@ -205,6 +205,7 @@ export class OrganizationsService {
       input.testimonials !== undefined ||
       input.teamMembers !== undefined ||
       input.galleryImages !== undefined ||
+      input.faqItems !== undefined ||
       input.aboutText !== undefined
     ) {
       await this.entitlementsService.assertContentSectionsAllowed(id);

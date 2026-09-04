@@ -26,6 +26,7 @@ import type {
   ConnectPaymentPayoutInput,
   CustomField,
   CustomFieldEntity,
+  FaqItem,
   GalleryImage,
   IntegrationAccountStatus,
   IntegrationDomain,
@@ -2310,6 +2311,7 @@ function StorefrontContentSection() {
           <TestimonialsEditor organization={organization} />
           <TeamMembersEditor organization={organization} />
           <GalleryEditor organization={organization} />
+          <FaqEditor organization={organization} />
         </fieldset>
       )}
     </section>
@@ -2682,6 +2684,98 @@ function GalleryEditor({ organization }: { organization: Organization }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+interface FaqItemFormValues {
+  question: string;
+  answer: string;
+}
+
+function FaqEditor({ organization }: { organization: Organization }) {
+  const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const faqItems = organization.faqItems ?? [];
+
+  const { register, handleSubmit, reset } = useForm<FaqItemFormValues>({
+    defaultValues: { question: "", answer: "" },
+  });
+
+  const mutation = useMutation({
+    mutationFn: (next: FaqItem[]) =>
+      apiClient.patch<Organization>("/organizations/me", { faqItems: next }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["organizations", "me"] });
+      setAddOpen(false);
+      reset({ question: "", answer: "" });
+    },
+  });
+
+  function addFaqItem(values: FaqItemFormValues) {
+    mutation.mutate([...faqItems, { id: crypto.randomUUID(), ...values }]);
+  }
+  function removeFaqItem(id: string) {
+    mutation.mutate(faqItems.filter((item) => item.id !== id));
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium text-text">Questions fréquentes</p>
+        <Button type="button" variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+          Ajouter une question
+        </Button>
+      </div>
+      {faqItems.length === 0 ? (
+        <p className="mt-2 text-sm text-text-muted">Aucune question.</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {faqItems.map((item) => (
+            <li
+              key={item.id}
+              className="flex items-start justify-between gap-3 rounded-md border border-border p-3 text-sm"
+            >
+              <div>
+                <p className="font-medium text-text">{item.question}</p>
+                <p className="mt-0.5 text-text-muted">{item.answer}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeFaqItem(item.id)}
+                className="shrink-0 text-xs text-destructive hover:underline"
+              >
+                Supprimer
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter une question">
+        <form onSubmit={handleSubmit(addFaqItem)} className="space-y-3">
+          <Input placeholder="Question" {...register("question", { required: true })} />
+          <textarea
+            placeholder="Réponse"
+            className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            rows={3}
+            {...register("answer", { required: true })}
+          />
+          {mutation.isError && (
+            <p className="text-xs text-destructive">
+              {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" loading={mutation.isPending}>
+              {mutation.isPending ? "Ajout..." : "Ajouter"}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

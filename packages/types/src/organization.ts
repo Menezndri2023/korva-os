@@ -84,6 +84,12 @@ export interface GalleryImage {
   caption?: string;
 }
 
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -121,6 +127,7 @@ export interface Organization {
   testimonials?: Testimonial[];
   teamMembers?: TeamMember[];
   galleryImages?: GalleryImage[];
+  faqItems?: FaqItem[];
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
   createdAt: string;

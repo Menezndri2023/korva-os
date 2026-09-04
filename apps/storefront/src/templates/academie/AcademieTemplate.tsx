@@ -12,6 +12,7 @@ import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
+import { FaqSection } from "../sections/FaqSection";
 
 /** Training/coaching — offers presented as course cards (accent top bar, type badge, price,
  *  enrolment CTA) in a catalog grid, closer to an academy/course-platform look. */
@@ -113,6 +114,7 @@ export function AcademieTemplate({
       <TeamSection organization={organization} />
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
+      <FaqSection organization={organization} />
     </div>
   );
 }

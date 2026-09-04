@@ -12,6 +12,7 @@ import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
+import { FaqSection } from "../sections/FaqSection";
 
 /** Beauty & wellness, non-medical health, fitness, hospitality, personal services — booking is
  *  the primary call to action everywhere, well above cart/commerce. */
@@ -140,6 +141,7 @@ export function SalonTemplate({
       <TeamSection organization={organization} />
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
+      <FaqSection organization={organization} />
     </div>
   );
 }

@@ -1864,4 +1864,36 @@ describe("SettingsPage — storefront content sections", () => {
       }),
     );
   });
+
+  it("adds and removes a FAQ item", async () => {
+    patchMock.mockImplementation((_path: string, body: unknown) => {
+      organization = { ...organization, ...(body as object) };
+      return Promise.resolve(organization);
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Ajouter une question" }));
+    await user.type(screen.getByPlaceholderText("Question"), "Livrez-vous partout en France ?");
+    await user.type(screen.getByPlaceholderText("Réponse"), "Oui, sous 3 à 5 jours ouvrés.");
+    await user.click(screen.getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me", {
+        faqItems: [
+          expect.objectContaining({
+            question: "Livrez-vous partout en France ?",
+            answer: "Oui, sous 3 à 5 jours ouvrés.",
+          }),
+        ],
+      }),
+    );
+
+    expect(await screen.findByText("Livrez-vous partout en France ?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Supprimer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me", { faqItems: [] }),
+    );
+  });
 });

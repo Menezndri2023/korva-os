@@ -58,6 +58,12 @@ const galleryImageSchema = z.object({
   caption: z.string().max(200).optional(),
 });
 
+const faqItemSchema = z.object({
+  id: z.string().min(1),
+  question: z.string().min(1).max(300),
+  answer: z.string().min(1).max(2000),
+});
+
 export const updateOrganizationSchema = createOrganizationSchema.partial().extend({
   legalName: z.string().max(200).optional(),
   logo: z.string().url().optional(),
@@ -83,6 +89,7 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   testimonials: z.array(testimonialSchema).max(20).optional(),
   teamMembers: z.array(teamMemberSchema).max(30).optional(),
   galleryImages: z.array(galleryImageSchema).max(40).optional(),
+  faqItems: z.array(faqItemSchema).max(30).optional(),
 });
 export type UpdateOrganizationInput = z.infer<typeof updateOrganizationSchema>;
 

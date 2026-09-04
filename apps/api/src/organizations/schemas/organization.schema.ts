@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import type {
+  FaqItem,
   GalleryImage,
   KorvaModule,
   OrganizationSettings,
@@ -118,6 +119,9 @@ export class Organization {
 
   @Prop({ type: [Object], default: undefined })
   galleryImages?: GalleryImage[];
+
+  @Prop({ type: [Object], default: undefined })
+  faqItems?: FaqItem[];
 
   @Prop({ type: Object, default: { onboardingCompleted: false } })
   settings!: OrganizationSettings;

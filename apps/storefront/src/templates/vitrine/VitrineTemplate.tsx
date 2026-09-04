@@ -12,6 +12,7 @@ import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
+import { FaqSection } from "../sections/FaqSection";
 
 /**
  * Services vitrine — professional services, trades/construction, real estate, digital
@@ -132,6 +133,7 @@ export function VitrineTemplate({
       <TeamSection organization={organization} />
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
+      <FaqSection organization={organization} />
 
       <footer className={`border-t ${KT.border} px-6 py-8 text-sm ${KT.textMuted}`}>
         <div className="mx-auto max-w-5xl">

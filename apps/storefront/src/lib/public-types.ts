@@ -1,5 +1,6 @@
 import type {
   BookingStatus,
+  FaqItem,
   GalleryImage,
   LineItem,
   OfferPricing,
@@ -46,6 +47,7 @@ export interface PublicOrganization {
   testimonials?: Testimonial[];
   teamMembers?: TeamMember[];
   galleryImages?: GalleryImage[];
+  faqItems?: FaqItem[];
 }
 
 /**

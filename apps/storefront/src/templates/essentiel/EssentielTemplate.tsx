@@ -12,6 +12,7 @@ import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
+import { FaqSection } from "../sections/FaqSection";
 
 /** The original, sector-agnostic storefront layout — always available regardless of plan, and
  *  the fallback whenever a plan no longer covers the org's chosen template (see
@@ -118,6 +119,7 @@ export function EssentielTemplate({
       <TeamSection organization={organization} />
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
+      <FaqSection organization={organization} />
     </div>
   );
 }

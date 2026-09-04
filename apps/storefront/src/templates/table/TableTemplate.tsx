@@ -12,6 +12,7 @@ import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
+import { FaqSection } from "../sections/FaqSection";
 
 const UNCATEGORIZED = "Autres";
 
@@ -132,6 +133,7 @@ export function TableTemplate({
       <TeamSection organization={organization} />
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
+      <FaqSection organization={organization} />
     </div>
   );
 }

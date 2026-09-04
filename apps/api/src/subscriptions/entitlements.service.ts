@@ -162,7 +162,7 @@ export class EntitlementsService {
     if (!planMeetsMinimum(plan.key, 'pro')) {
       throw new ForbiddenException({
         code: 'STOREFRONT_CONTENT_SECTIONS_NOT_IN_PLAN',
-        message: `Your plan ("${plan.name}") does not include storefront content sections (testimonials, team, gallery, about) — upgrade to Pro or higher`,
+        message: `Your plan ("${plan.name}") does not include storefront content sections (testimonials, team, gallery, about, FAQ) — upgrade to Pro or higher`,
         details: { plan: plan.key },
       });
     }

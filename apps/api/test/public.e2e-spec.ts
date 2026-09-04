@@ -106,6 +106,7 @@ interface PublicOrganizationPayload {
   testimonials?: { id: string; authorName: string; quote: string }[];
   teamMembers?: { id: string; name: string; role: string }[];
   galleryImages?: { id: string; url: string }[];
+  faqItems?: { id: string; question: string; answer: string }[];
 }
 interface TrackedOrderPayload {
   number: string;
@@ -835,6 +836,7 @@ describe('Public storefront API (e2e)', () => {
       expect(info.testimonials).toBeUndefined();
       expect(info.teamMembers).toBeUndefined();
       expect(info.galleryImages).toBeUndefined();
+      expect(info.faqItems).toBeUndefined();
     });
 
     it('rejects saving content sections below the Pro plan', async () => {
@@ -883,6 +885,9 @@ describe('Public storefront API (e2e)', () => {
           ],
           teamMembers: [{ id: 'm1', name: 'Grace Hopper', role: 'Fondatrice' }],
           galleryImages: [{ id: 'g1', url: 'https://cdn.korva.test/1.jpg' }],
+          faqItems: [
+            { id: 'f1', question: 'Livrez-vous partout ?', answer: 'Oui.' },
+          ],
         })
         .expect(200);
 
@@ -894,6 +899,7 @@ describe('Public storefront API (e2e)', () => {
       expect(infoOnPro.testimonials).toHaveLength(1);
       expect(infoOnPro.teamMembers).toHaveLength(1);
       expect(infoOnPro.galleryImages).toHaveLength(1);
+      expect(infoOnPro.faqItems).toHaveLength(1);
 
       await request(server)
         .post('/api/v1/subscriptions/change-plan')
@@ -910,6 +916,7 @@ describe('Public storefront API (e2e)', () => {
       expect(infoOnFree.testimonials).toBeUndefined();
       expect(infoOnFree.teamMembers).toBeUndefined();
       expect(infoOnFree.galleryImages).toBeUndefined();
+      expect(infoOnFree.faqItems).toBeUndefined();
     });
   });
 
