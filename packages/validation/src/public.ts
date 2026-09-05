@@ -89,6 +89,20 @@ export const createPublicLeadSchema = z.object({
   source: z.string().min(1).max(100).optional(),
   contact: publicContactSchema,
 });
+
+/**
+ * Fired once an email is known during checkout (see the storefront's CheckoutPanel), before the
+ * real order exists — the only point at which an otherwise-anonymous, localStorage-only
+ * storefront cart becomes attributable to a real contact, which is what makes abandoned-cart
+ * recovery possible at all. Best-effort/fire-and-forget on the frontend; never blocks checkout.
+ */
+export const trackCartCheckoutStartedSchema = z.object({
+  contact: publicContactSchema,
+  items: z.array(publicOrderLineItemSchema.omit({ variantId: true })).min(1),
+});
+export type TrackCartCheckoutStartedInput = z.infer<
+  typeof trackCartCheckoutStartedSchema
+>;
 export type CreatePublicLeadInput = z.infer<typeof createPublicLeadSchema>;
 
 /**

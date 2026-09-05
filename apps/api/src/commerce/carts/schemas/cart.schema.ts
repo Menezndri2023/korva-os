@@ -53,6 +53,12 @@ export class Cart {
 
   @Prop({ type: [CartItemSchema], default: [] })
   items!: CartItem[];
+
+  /** Set by AbandonedCartReminderSchedulerService when it sends a recovery message and
+   *  transitions status to 'abandoned' — dedup marker for that episode, mirroring
+   *  Booking.reminderSentAt's role exactly. */
+  @Prop({ type: Date })
+  notifiedAt?: Date;
 }
 
 export const CartSchema = SchemaFactory.createForClass(Cart);

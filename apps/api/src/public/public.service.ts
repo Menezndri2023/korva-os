@@ -24,6 +24,7 @@ import type {
   CreatePublicOrderInput,
   ListPublicOffersQuery,
   SearchPublicOffersQuery,
+  TrackCartCheckoutStartedInput,
 } from '@korva/validation';
 import type { OfferDocument } from '../catalog/offers/schemas/offer.schema';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -34,6 +35,7 @@ import { AvailabilityService } from '../booking/availability/availability.servic
 import { BookingsService } from '../booking/bookings/bookings.service';
 import { ResourcesService } from '../booking/resources/resources.service';
 import { OrdersService } from '../commerce/orders/orders.service';
+import { CartsService } from '../commerce/carts/carts.service';
 import { InvoicesService } from '../finance/invoices/invoices.service';
 import { PaymentsService } from '../finance/payments/payments.service';
 import { PaymentProviderResolverService } from '../finance/payments/providers/payment-provider-resolver.service';
@@ -113,6 +115,7 @@ export class PublicService {
     @InjectModel(Contact.name)
     private readonly contactModel: Model<ContactDocument>,
     private readonly reviewsService: ReviewsService,
+    private readonly cartsService: CartsService,
   ) {}
 
   private async resolveOrganization(
@@ -486,6 +489,34 @@ export class PublicService {
     };
   }
 
+  /**
+   * Fired by the storefront's CheckoutPanel once an email becomes known (on the email field's
+   * blur), before the real order exists — the only point at which an otherwise anonymous,
+   * localStorage-only cart (apps/storefront/src/lib/use-cart.ts) becomes attributable to a real
+   * contact. Fire-and-forget on the frontend; a failure here never blocks checkout. Powers
+   * AbandonedCartReminderSchedulerService, which finds carts left untouched past a threshold
+   * and sends a recovery message — see CartsService.syncItemsForContact/markConvertedForContact.
+   */
+  async trackCheckoutStarted(
+    slug: string,
+    input: TrackCartCheckoutStartedInput,
+  ): Promise<{ tracked: true }> {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'commerce');
+    const organizationId = organization.id as string;
+
+    const contact = await this.contactsService.findOrCreateByEmail(
+      organizationId,
+      input.contact,
+    );
+    await this.cartsService.syncItemsForContact(
+      organizationId,
+      contact.id as string,
+      input.items,
+    );
+    return { tracked: true };
+  }
+
   async createOrder(slug: string, input: CreatePublicOrderInput) {
     const organization = await this.resolveOrganization(slug);
     this.assertModuleEnabled(organization, 'commerce');
@@ -582,6 +613,21 @@ export class PublicService {
           error,
         );
       }
+    }
+
+    // Best-effort — closes out any cart-abandonment episode tracked for this contact (see
+    // trackCheckoutStarted below) now that a real order exists. Never fails order creation: the
+    // order is already real either way, this is bookkeeping for a scheduler that hasn't run yet.
+    try {
+      await this.cartsService.markConvertedForContact(
+        organizationId,
+        contact.id as string,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to mark abandoned-cart tracking converted for order ${order.number}`,
+        error,
+      );
     }
 
     return {

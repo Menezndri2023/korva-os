@@ -15,6 +15,9 @@ export interface Cart {
   contactId: string;
   status: CartStatus;
   items: CartItem[];
+  /** Set when AbandonedCartReminderSchedulerService sends a recovery message and transitions
+   *  status to 'abandoned' — the dedup marker preventing a second reminder for the same episode. */
+  notifiedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

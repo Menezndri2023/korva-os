@@ -12,8 +12,10 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import {
   addCartItemSchema,
+  listAbandonedCartsQuerySchema,
   updateCartItemSchema,
   type AddCartItemInput,
+  type ListAbandonedCartsQuery,
   type UpdateCartItemInput,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
@@ -50,6 +52,24 @@ export class CartsController {
     return this.cartsService.getOrCreateForContact(
       tenant.organizationId,
       contactId,
+    );
+  }
+
+  /** Registered before `:id` below — same literal-segment-first ordering as
+   *  `offers/search`/`offers/categories` before `offers/:offerId` in PublicController. Read-only
+   *  (`orders.read`, not `orders.create`) — this is admin visibility into recovery attempts, not
+   *  a cart mutation. */
+  @RequirePermissions('orders.read')
+  @Get('abandoned')
+  listAbandoned(
+    @CurrentTenant() tenant: TenantContext,
+    @Query(new ZodValidationPipe(listAbandonedCartsQuerySchema))
+    query: ListAbandonedCartsQuery,
+  ) {
+    return this.cartsService.listAbandoned(
+      tenant.organizationId,
+      query.page,
+      query.limit,
     );
   }
 

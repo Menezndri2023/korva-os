@@ -10,6 +10,7 @@ import {
   publicOfferReviewsQuerySchema,
   searchPublicOffersQuerySchema,
   trackByEmailQuerySchema,
+  trackCartCheckoutStartedSchema,
   type CreatePublicBookingInput,
   type CreatePublicLeadInput,
   type CreatePublicOrderInput,
@@ -18,6 +19,7 @@ import {
   type PublicOfferReviewsQuery,
   type SearchPublicOffersQuery,
   type TrackByEmailQuery,
+  type TrackCartCheckoutStartedInput,
 } from '@korva/validation';
 import { PublicService } from './public.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -136,6 +138,17 @@ export class PublicController {
     body: CreatePublicOrderInput,
   ) {
     return this.publicService.createOrder(slug, body);
+  }
+
+  /** Fire-and-forget hook from the storefront's checkout form — see
+   *  PublicService#trackCheckoutStarted for the full rationale. */
+  @Post('cart-checkout-started')
+  trackCheckoutStarted(
+    @Param('organizationSlug') slug: string,
+    @Body(new ZodValidationPipe(trackCartCheckoutStartedSchema))
+    body: TrackCartCheckoutStartedInput,
+  ) {
+    return this.publicService.trackCheckoutStarted(slug, body);
   }
 
   /** Backs the embeddable widget's lead-capture form — see PublicService#createLead. */

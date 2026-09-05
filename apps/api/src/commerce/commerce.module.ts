@@ -45,6 +45,7 @@ import { KitchenTicketsRepository } from './kitchen/kitchen-tickets.repository';
 import { KitchenTicketsService } from './kitchen/kitchen-tickets.service';
 import { KitchenTicketsController } from './kitchen/kitchen-tickets.controller';
 import { KitchenGateway } from './kitchen/kitchen.gateway';
+import { AbandonedCartReminderSchedulerService } from './carts/abandoned-cart-reminder-scheduler.service';
 
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -52,6 +53,11 @@ import { BookingModule } from '../booking/booking.module';
 import { FinanceModule } from '../finance/finance.module';
 import { CountersModule } from '../core/counters/counters.module';
 import { AuditModule } from '../audit/audit.module';
+// Both imported solely for AbandonedCartReminderSchedulerService (org name in the recovery
+// message, WhatsApp/email send) — verified no reverse edge back to CommerceModule from either,
+// same discipline as the IdentityModule edge above.
+import { OrganizationsModule } from '../organizations/organizations.module';
+import { CommunicationModule } from '../communication/communication.module';
 // For MembershipsService (KitchenGateway's WebSocket handshake auth — see its own doc comment)
 // — safe: IdentityModule has no import path back to CommerceModule, verified by grepping every
 // `import { CommerceModule }` site before adding this edge.
@@ -74,6 +80,8 @@ import { IdentityModule } from '../identity/identity.module';
     CountersModule,
     AuditModule,
     IdentityModule,
+    OrganizationsModule,
+    CommunicationModule,
     // A second, module-local JwtModule registration for KitchenGateway's own JwtService
     // injection — deliberately NOT exported (see this module's own `exports` array below), so
     // it can never collide with CustomerAuthModule's separately-registered JwtService (a
@@ -114,7 +122,13 @@ import { IdentityModule } from '../identity/identity.module';
     KitchenTicketsRepository,
     KitchenTicketsService,
     KitchenGateway,
+    AbandonedCartReminderSchedulerService,
   ],
-  exports: [OrdersService, ReturnRequestsService, WishlistService],
+  exports: [
+    OrdersService,
+    ReturnRequestsService,
+    WishlistService,
+    CartsService,
+  ],
 })
 export class CommerceModule {}

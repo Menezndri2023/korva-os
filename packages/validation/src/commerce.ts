@@ -18,6 +18,14 @@ export const updateCartItemSchema = z.object({
 });
 export type UpdateCartItemInput = z.infer<typeof updateCartItemSchema>;
 
+export const listAbandonedCartsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+export type ListAbandonedCartsQuery = z.infer<
+  typeof listAbandonedCartsQuerySchema
+>;
+
 export const createOrderSchema = z.object({
   contactId: z.string().min(1),
   items: z.array(lineItemInputSchema).min(1),

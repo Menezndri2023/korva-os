@@ -9,6 +9,7 @@ import {
   createPublicOrderSchema,
   type CreatePublicBookingInput,
   type CreatePublicOrderInput,
+  type TrackCartCheckoutStartedInput,
 } from "@korva/validation";
 import type { PaymentMethod } from "@korva/types";
 import { Button, Dialog, Input, Select } from "@korva/ui";
@@ -302,6 +303,16 @@ export function CheckoutPanel({
     },
   });
 
+  // Fire-and-forget: makes an otherwise backend-invisible, localStorage-only cart (use-cart.ts)
+  // attributable to a real contact as soon as an email is known, so AbandonedCartReminderScheduler
+  // can send a recovery message if checkout never completes. Never surfaced to the shopper —
+  // no loading/error UI reads this mutation's state.
+  const trackCheckoutMutation = useMutation({
+    mutationFn: (input: TrackCartCheckoutStartedInput) =>
+      publicApiClient.post(`/public/${slug}/cart-checkout-started`, input),
+  });
+  const emailField = register("contact.email");
+
   const orderMutation = useMutation({
     mutationFn: (values: CreatePublicOrderInput) =>
       publicApiClient.post<{ id: string; number: string }>(`/public/${slug}/orders`, {
@@ -367,7 +378,16 @@ export function CheckoutPanel({
             type="email"
             placeholder="E-mail"
             aria-label="Adresse e-mail"
-            {...register("contact.email")}
+            {...emailField}
+            onBlur={(event) => {
+              void emailField.onBlur(event);
+              const email = event.target.value.trim();
+              if (!email || !email.includes("@")) return;
+              trackCheckoutMutation.mutate({
+                contact: { email },
+                items: cart.map((line) => ({ offerId: line.offerId, quantity: line.quantity })),
+              });
+            }}
             error={!!errors.contact?.email}
           />
           {errors.contact?.email && (
