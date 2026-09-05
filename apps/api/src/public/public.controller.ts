@@ -7,6 +7,7 @@ import {
   createPublicOrderSchema,
   listPublicOffersQuerySchema,
   publicAvailabilityQuerySchema,
+  publicOfferReviewsQuerySchema,
   searchPublicOffersQuerySchema,
   trackByEmailQuerySchema,
   type CreatePublicBookingInput,
@@ -14,6 +15,7 @@ import {
   type CreatePublicOrderInput,
   type ListPublicOffersQuery,
   type PublicAvailabilityQuery,
+  type PublicOfferReviewsQuery,
   type SearchPublicOffersQuery,
   type TrackByEmailQuery,
 } from '@korva/validation';
@@ -82,6 +84,21 @@ export class PublicController {
     @Param('offerId') offerId: string,
   ) {
     return this.publicService.getOffer(slug, offerId);
+  }
+
+  @Get('offers/:offerId/reviews')
+  getOfferReviews(
+    @Param('organizationSlug') slug: string,
+    @Param('offerId') offerId: string,
+    @Query(new ZodValidationPipe(publicOfferReviewsQuerySchema))
+    query: PublicOfferReviewsQuery,
+  ) {
+    return this.publicService.getOfferReviews(
+      slug,
+      offerId,
+      query.page,
+      query.limit,
+    );
   }
 
   @Get('resources')

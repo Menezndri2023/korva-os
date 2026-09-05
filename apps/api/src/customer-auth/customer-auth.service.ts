@@ -704,6 +704,8 @@ export class CustomerAuthService {
     this.assertSameOrganization(customer, organization);
     const organizationId = organization.id as string;
 
+    let offerId: string | undefined;
+
     if (input.entity === 'order') {
       const order = await this.ordersService.getById(
         organizationId,
@@ -716,6 +718,7 @@ export class CustomerAuthService {
           message: 'Only a fulfilled order can be reviewed',
         });
       }
+      offerId = this.resolveSingleOfferId(order);
     } else {
       const booking = await this.bookingsService.getById(
         organizationId,
@@ -728,13 +731,27 @@ export class CustomerAuthService {
           message: 'Only a completed booking can be reviewed',
         });
       }
+      offerId = booking.offerId.toString();
     }
 
     return this.reviewsService.create(
       organizationId,
       customer.contactId,
       input,
+      offerId,
     );
+  }
+
+  /** An order review only attributes to a single offer when every line item shares the same
+   *  offerId — a mixed-cart order (or one with free-text lines lacking an offerId at all) has no
+   *  single product to attribute the review to, so it's left unset rather than guessed. */
+  private resolveSingleOfferId(order: OrderDocument): string | undefined {
+    const offerIds = new Set(
+      order.items
+        .map((item) => item.offerId?.toString())
+        .filter((id): id is string => Boolean(id)),
+    );
+    return offerIds.size === 1 ? [...offerIds][0] : undefined;
   }
 
   private assertOwnsReturnRequest(

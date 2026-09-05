@@ -19,6 +19,7 @@ export class ReviewsService {
     organizationId: string,
     contactId: string,
     input: CreateReviewInput,
+    offerId?: string,
   ): Promise<ReviewDocument> {
     try {
       return await this.reviewsRepository.create({
@@ -26,6 +27,7 @@ export class ReviewsService {
         contactId: new Types.ObjectId(contactId),
         entity: input.entity,
         entityId: new Types.ObjectId(input.entityId),
+        offerId: offerId ? new Types.ObjectId(offerId) : undefined,
         rating: input.rating,
         comment: input.comment,
       });
@@ -57,6 +59,32 @@ export class ReviewsService {
         totalPages: Math.max(1, Math.ceil(total / query.limit)),
       },
     };
+  }
+
+  /** Public, unauthenticated summary for a storefront offer page — average rating + a page of
+   *  anonymized comments. Returns a zero-state (`average: null, count: 0`) rather than throwing
+   *  when an offer has no reviews yet, so the storefront can render "no reviews yet" instead of
+   *  handling an error case. */
+  async getPublicSummary(
+    organizationId: string,
+    offerId: string,
+    page: number,
+    limit: number,
+  ): Promise<{
+    average: number | null;
+    count: number;
+    reviews: ReviewDocument[];
+  }> {
+    const [{ average, count }, reviews] = await Promise.all([
+      this.reviewsRepository.getRatingSummary(organizationId, offerId),
+      this.reviewsRepository.findPublicByOffer(
+        organizationId,
+        offerId,
+        page,
+        limit,
+      ),
+    ]);
+    return { average, count, reviews };
   }
 }
 

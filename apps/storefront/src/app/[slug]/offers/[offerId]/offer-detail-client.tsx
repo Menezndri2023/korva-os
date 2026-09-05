@@ -7,7 +7,7 @@ import { Badge, Button, Card } from "@korva/ui";
 import { PublicApiError, publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
 import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
-import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
+import type { PublicOffer, PublicOfferReviewSummary, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "../../commerce-panels";
 
 export default function OfferDetailClient({ slug, offerId }: { slug: string; offerId: string }) {
@@ -256,6 +256,8 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
             )}
           </div>
         </Card>
+
+        <OfferReviews slug={slug} offerId={offerId} />
       </main>
 
       {showBooking && (
@@ -288,6 +290,56 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Real customer reviews — distinct from the org-curated Testimonials content section (Pro plan,
+ * shown on the storefront homepage). These come from CreateReviewInput submissions on a genuinely
+ * completed order/booking and are anonymized ("Client vérifié", no reviewer name) since the
+ * customer never consented to public display of their identity the way a testimonial's typed-in
+ * author did. Renders nothing while there are zero reviews, matching every other optional
+ * storefront section's "absent means don't render" convention.
+ */
+function OfferReviews({ slug, offerId }: { slug: string; offerId: string }) {
+  const { data } = useQuery({
+    queryKey: ["public-offer-reviews", slug, offerId],
+    queryFn: () =>
+      publicApiClient.get<PublicOfferReviewSummary>(`/public/${slug}/offers/${offerId}/reviews`),
+    retry: false,
+  });
+
+  if (!data || data.count === 0) return null;
+
+  return (
+    <Card className="p-6">
+      <h3 className="text-sm font-medium text-text">Avis clients</h3>
+      <div className="mt-2 flex items-center gap-2">
+        {data.average != null && <Stars rating={Math.round(data.average)} />}
+        {data.average != null && (
+          <span className="text-sm font-medium text-text">{data.average.toFixed(1)}</span>
+        )}
+        <span className="text-sm text-text-muted">({data.count} avis)</span>
+      </div>
+      <ul className="mt-4 divide-y divide-border">
+        {data.reviews.map((review, index) => (
+          <li key={index} className="py-3 first:pt-0 last:pb-0">
+            <Stars rating={review.rating} />
+            {review.comment && <p className="mt-1 text-sm text-text-muted">{review.comment}</p>}
+            <p className="mt-1 text-xs text-text-muted">Client vérifié</p>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function Stars({ rating }: { rating: number }) {
+  return (
+    <span className="text-amber-500" aria-label={`${rating} sur 5 étoiles`}>
+      {"★".repeat(rating)}
+      <span className="text-border">{"★".repeat(5 - rating)}</span>
+    </span>
   );
 }
 

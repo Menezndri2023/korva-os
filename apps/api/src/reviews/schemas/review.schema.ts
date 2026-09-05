@@ -35,6 +35,15 @@ export class Review {
   @Prop({ type: Types.ObjectId, required: true })
   entityId!: Types.ObjectId;
 
+  /** Resolved server-side at creation time (CustomerAuthService#createReview) — a booking's own
+   *  `offerId` for a booking review; for an order review, the single distinct offerId across its
+   *  line items, or left unset if the order mixed offers/free-text lines (no single product to
+   *  attribute the review to). Powers the public "reviews for this offer" display; absent from
+   *  older reviews created before this field existed, which is expected and handled as "not
+   *  attributable to one offer" rather than backfilled. */
+  @Prop({ type: Types.ObjectId, ref: 'Offer' })
+  offerId?: Types.ObjectId;
+
   @Prop({ required: true, min: 1, max: 5 })
   rating!: number;
 
@@ -48,3 +57,4 @@ ReviewSchema.index(
   { unique: true },
 );
 ReviewSchema.index({ organizationId: 1, createdAt: -1 });
+ReviewSchema.index({ organizationId: 1, offerId: 1, createdAt: -1 });

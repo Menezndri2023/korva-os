@@ -11,6 +11,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { FinanceModule } from '../finance/finance.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { EmailModule } from '../shared/email/email.module';
+import { ReviewsModule } from '../reviews/reviews.module';
 import { Order, OrderSchema } from '../commerce/orders/schemas/order.schema';
 import {
   Booking,
@@ -29,6 +30,7 @@ import { Contact, ContactSchema } from '../crm/contacts/schemas/contact.schema';
     FinanceModule,
     IntegrationsModule,
     EmailModule,
+    ReviewsModule,
     // CommerceModule/BookingModule/CrmModule only export their *Service classes, not their
     // repositories, so the order/booking-tracking lookups below (a read-only, email-gated
     // lookup by number/id that has no equivalent method on OrdersService/BookingsService) need

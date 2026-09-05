@@ -95,6 +95,8 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
     let otherCustomerToken: string;
     let orderId: string;
     let bookingId: string;
+    let offerId: string;
+    let bookingOfferId: string;
 
     beforeAll(async () => {
       const authRes = await request(server)
@@ -151,7 +153,7 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
           pricing: { amount: 30, currency: 'EUR' },
         })
         .expect(201);
-      const offerId = asSuccess<{ id: string }>(offerRes.body).id;
+      offerId = asSuccess<{ id: string }>(offerRes.body).id;
 
       const bookingOfferRes = await request(server)
         .post('/api/v1/offers')
@@ -164,7 +166,7 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
           pricing: { amount: 50, currency: 'EUR' },
         })
         .expect(201);
-      const bookingOfferId = asSuccess<{ id: string }>(bookingOfferRes.body).id;
+      bookingOfferId = asSuccess<{ id: string }>(bookingOfferRes.body).id;
 
       const resourceRes = await request(server)
         .post('/api/v1/resources')
@@ -370,6 +372,41 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
       expect(
         reviews.some((r) => r.rating === 5 && r.comment === 'Great!'),
       ).toBe(true);
+    });
+
+    it('the public offer-reviews endpoint surfaces the review, anonymized', async () => {
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}/offers/${offerId}/reviews`)
+        .expect(200);
+      const summary = asSuccess<{
+        average: number | null;
+        count: number;
+        reviews: { rating: number; comment?: string }[];
+      }>(res.body);
+      expect(summary.average).toBe(5);
+      expect(summary.count).toBe(1);
+      expect(summary.reviews).toHaveLength(1);
+      expect(summary.reviews[0]?.rating).toBe(5);
+      expect(summary.reviews[0]?.comment).toBe('Great!');
+      // Anonymized: no reviewer name/contactId ever leaks into the public payload.
+      expect(JSON.stringify(summary)).not.toContain('Detail');
+    });
+
+    it('returns a zero-state for an offer with no reviews', async () => {
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}/offers/${bookingOfferId}/reviews`)
+        .expect(200);
+      const summary = asSuccess<{ average: number | null; count: number }>(
+        res.body,
+      );
+      expect(summary.average).toBeNull();
+      expect(summary.count).toBe(0);
+    });
+
+    it('404s the reviews endpoint for a nonexistent offer', async () => {
+      await request(server)
+        .get(`/api/v1/public/${slug}/offers/000000000000000000000000/reviews`)
+        .expect(404);
     });
   });
 

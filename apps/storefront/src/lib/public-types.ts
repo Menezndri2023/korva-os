@@ -66,6 +66,13 @@ export interface PublicOffer {
   variants: OfferVariant[];
 }
 
+/** Mirrors PublicService#getOfferReviews exactly. */
+export interface PublicOfferReviewSummary {
+  average: number | null;
+  count: number;
+  reviews: { rating: number; comment?: string; createdAt: string }[];
+}
+
 /** Mirrors PublicService#listResources exactly. */
 export interface PublicResource {
   id: string;

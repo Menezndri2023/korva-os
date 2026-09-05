@@ -29,6 +29,7 @@ import type { OfferDocument } from '../catalog/offers/schemas/offer.schema';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { OffersService } from '../catalog/offers/offers.service';
+import { ReviewsService } from '../reviews/reviews.service';
 import { AvailabilityService } from '../booking/availability/availability.service';
 import { BookingsService } from '../booking/bookings/bookings.service';
 import { ResourcesService } from '../booking/resources/resources.service';
@@ -111,6 +112,7 @@ export class PublicService {
     private readonly bookingModel: Model<BookingDocument>,
     @InjectModel(Contact.name)
     private readonly contactModel: Model<ContactDocument>,
+    private readonly reviewsService: ReviewsService,
   ) {}
 
   private async resolveOrganization(
@@ -382,6 +384,36 @@ export class PublicService {
       });
     }
     return this.toPublicOffer(offer);
+  }
+
+  /** Reuses getOffer's own existence/active/module checks so a review summary can never leak
+   *  whether an inactive or nonexistent offer id has ever received reviews. */
+  async getOfferReviews(
+    slug: string,
+    offerId: string,
+    page: number,
+    limit: number,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    await this.getOffer(slug, offerId);
+    const { average, count, reviews } =
+      await this.reviewsService.getPublicSummary(
+        organization.id as string,
+        offerId,
+        page,
+        limit,
+      );
+    return {
+      average,
+      count,
+      reviews: reviews.map((review) => ({
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: (
+          review as unknown as { createdAt: Date }
+        ).createdAt.toISOString(),
+      })),
+    };
   }
 
   async listResources(slug: string) {

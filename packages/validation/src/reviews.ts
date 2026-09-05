@@ -17,3 +17,11 @@ export const listReviewsQuerySchema = z.object({
   entity: z.enum(REVIEW_ENTITIES).optional(),
 });
 export type ListReviewsQuery = z.infer<typeof listReviewsQuerySchema>;
+
+/** Public storefront offer-page pagination — no `entity` filter (a public review summary is
+ *  always scoped to one offer, already selected via the URL path, not by entity type). */
+export const publicOfferReviewsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+export type PublicOfferReviewsQuery = z.infer<typeof publicOfferReviewsQuerySchema>;

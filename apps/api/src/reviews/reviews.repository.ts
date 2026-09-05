@@ -59,4 +59,50 @@ export class ReviewsRepository {
     ]);
     return { data, total };
   }
+
+  async getRatingSummary(
+    organizationId: string,
+    offerId: string,
+  ): Promise<{ average: number | null; count: number }> {
+    const [result] = await this.reviewModel.aggregate<{
+      average: number;
+      count: number;
+    }>([
+      {
+        $match: {
+          organizationId: new Types.ObjectId(organizationId),
+          offerId: new Types.ObjectId(offerId),
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          average: { $avg: '$rating' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+    if (!result) return { average: null, count: 0 };
+    return {
+      average: Math.round(result.average * 10) / 10,
+      count: result.count,
+    };
+  }
+
+  findPublicByOffer(
+    organizationId: string,
+    offerId: string,
+    page: number,
+    limit: number,
+  ): Promise<ReviewDocument[]> {
+    return this.reviewModel
+      .find({
+        organizationId: new Types.ObjectId(organizationId),
+        offerId: new Types.ObjectId(offerId),
+      })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .exec();
+  }
 }
