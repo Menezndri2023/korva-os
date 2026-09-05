@@ -6,7 +6,11 @@ import type {
   StorefrontTemplateKey,
   UsageSummaryItem,
 } from '@korva/types';
-import { getStorefrontTemplate, planMeetsMinimum } from '@korva/types';
+import {
+  getStorefrontTemplate,
+  planMeetsMinimum,
+  resolveEffectiveModules,
+} from '@korva/types';
 import { SubscriptionsService } from './subscriptions.service';
 import { UsageRepository } from './usage.repository';
 import { MembershipsService } from '../identity/memberships/memberships.service';
@@ -83,9 +87,15 @@ export class EntitlementsService {
     requestedModules: KorvaModule[],
   ): Promise<void> {
     await this.assertSubscriptionActive(organizationId);
+    const subscription =
+      await this.subscriptionsService.getForOrganization(organizationId);
     const plan = await this.subscriptionsService.getActivePlan(organizationId);
+    const effectiveModules = resolveEffectiveModules(
+      plan.modules,
+      subscription.productOverrides,
+    );
     const notAllowed = requestedModules.filter(
-      (m) => !plan.modules.includes(m),
+      (m) => !effectiveModules.includes(m),
     );
     if (notAllowed.length > 0) {
       throw new ForbiddenException({

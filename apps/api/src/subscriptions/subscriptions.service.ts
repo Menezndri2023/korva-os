@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import type { KorvaProduct } from '@korva/types';
+import { resolveEffectiveModules } from '@korva/types';
 import { PlansService } from './plans.service';
 import { SubscriptionsRepository } from './subscriptions.repository';
 import { SubscriptionDocument } from './schemas/subscription.schema';
@@ -104,25 +106,29 @@ export class SubscriptionsService {
   ): Promise<SubscriptionDocument> {
     const plan = await this.plansService.getByKey(planKey);
 
-    // A downgrade must never leave enabledModules claiming access to a module the new plan no
-    // longer includes — drop exactly those, keep everything the new plan still allows. Never
-    // add modules the organization hadn't already chosen to enable, even if the new plan
-    // permits more than the old one.
+    const existing =
+      await this.subscriptionsRepository.findForOrganization(organizationId);
+
+    // A downgrade must never leave enabledModules claiming access to a module the new plan (plus
+    // any still-active product overrides) no longer grants — drop exactly those, keep everything
+    // still allowed. Never add modules the organization hadn't already chosen to enable, even if
+    // the new plan/overrides permit more than the old one.
     const organization = await this.organizationModel
       .findById(organizationId)
       .exec();
     if (organization) {
+      const effectiveModules = resolveEffectiveModules(
+        plan.modules,
+        existing?.productOverrides,
+      );
       const stillAllowed = organization.enabledModules.filter((module) =>
-        plan.modules.includes(module),
+        effectiveModules.includes(module),
       );
       if (stillAllowed.length !== organization.enabledModules.length) {
         organization.enabledModules = stillAllowed;
         await organization.save();
       }
     }
-
-    const existing =
-      await this.subscriptionsRepository.findForOrganization(organizationId);
 
     // Only worth computing against a genuinely still-running prior period — a subscription
     // already past its period end is about to be handled by the period scheduler anyway, and
@@ -264,6 +270,60 @@ export class SubscriptionsService {
       entity: 'subscription',
       entityId: updated.id as string,
       metadata: { reactivated: true },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Replaces the whole productOverrides map (same "full replacement, not a single-key patch"
+   * idiom as OrganizationsService.update's enabledModules). Also re-prunes the organization's
+   * live enabledModules exactly like changePlan does — without this, disabling a product here
+   * would leave stale access in enabledModules (the array ModuleGuard actually enforces per
+   * request), the same class of gap this whole feature exists to close.
+   */
+  async updateProductOverrides(
+    organizationId: string,
+    userId: string,
+    productOverrides: Partial<Record<KorvaProduct, boolean>>,
+  ): Promise<SubscriptionDocument> {
+    await this.getForOrganization(organizationId);
+
+    const updated = await this.subscriptionsRepository.update(organizationId, {
+      productOverrides,
+    });
+    if (!updated) {
+      throw new NotFoundException({
+        code: 'SUBSCRIPTION_NOT_FOUND',
+        message: 'No subscription found for this organization',
+      });
+    }
+
+    const plan = await this.plansService.getById(updated.planId.toString());
+    const organization = await this.organizationModel
+      .findById(organizationId)
+      .exec();
+    if (organization) {
+      const effectiveModules = resolveEffectiveModules(
+        plan.modules,
+        productOverrides,
+      );
+      const stillAllowed = organization.enabledModules.filter((module) =>
+        effectiveModules.includes(module),
+      );
+      if (stillAllowed.length !== organization.enabledModules.length) {
+        organization.enabledModules = stillAllowed;
+        await organization.save();
+      }
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'SETTINGS_CHANGE',
+      entity: 'subscription',
+      entityId: updated.id as string,
+      metadata: { productOverrides },
     });
 
     return updated;

@@ -38,6 +38,7 @@ interface SubscriptionPayload {
   id: string;
   planId: string;
   status: string;
+  productOverrides?: Record<string, boolean>;
 }
 interface SubscriptionSummaryPayload {
   subscription: SubscriptionPayload;
@@ -149,6 +150,23 @@ describe('Subscriptions module (e2e)', () => {
         'pro',
         'starter',
       ]);
+    });
+
+    it('every seeded plan grants the "website" module', async () => {
+      const authRes = await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: 'plans-website@korva.test', password: 'password123' })
+        .expect(201);
+      const accessToken = asSuccess<AuthPayload>(authRes.body).accessToken;
+
+      const res = await request(server)
+        .get('/api/v1/plans')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+      const plans = asSuccess<PlanPayload[]>(res.body);
+      for (const plan of plans) {
+        expect(plan.modules).toContain('website');
+      }
     });
 
     it('creates a default "free" subscription when an organization is created', async () => {

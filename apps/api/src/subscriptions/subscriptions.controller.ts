@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   changePlanSchema,
   type ChangePlanInput,
   cancelSubscriptionSchema,
   type CancelSubscriptionInput,
+  updateProductOverridesSchema,
+  type UpdateProductOverridesInput,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import type { AuthenticatedUser } from '../core/tenant/request-context.types';
@@ -75,6 +77,21 @@ export class SubscriptionsController {
     return this.subscriptionsService.reactivate(
       tenant.organizationId,
       user.userId,
+    );
+  }
+
+  @RequirePermissions('settings.manage')
+  @Patch('subscriptions/product-overrides')
+  updateProductOverrides(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(updateProductOverridesSchema))
+    body: UpdateProductOverridesInput,
+  ) {
+    return this.subscriptionsService.updateProductOverrides(
+      tenant.organizationId,
+      user.userId,
+      body.productOverrides,
     );
   }
 }

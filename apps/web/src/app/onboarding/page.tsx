@@ -31,6 +31,7 @@ const MODULE_LABELS: Record<KorvaModule, string> = {
   communication: "Communication",
   analytics: "Statistiques",
   ai: "Assistant IA",
+  website: "Site web",
 };
 
 const COUNTRIES = [

@@ -9,6 +9,9 @@ import {
   CUSTOM_FIELD_ENTITIES,
   CUSTOM_FIELD_TYPES,
   KORVA_MODULES,
+  KORVA_PRODUCTS,
+  PRODUCT_MODULES,
+  resolveEffectiveModules,
   STOREFRONT_SECTIONS,
   STOREFRONT_TEMPLATES,
   STOREFRONT_PALETTES,
@@ -32,6 +35,7 @@ import type {
   IntegrationDomain,
   IntegrationSummary,
   KorvaModule,
+  KorvaProduct,
   Organization,
   Plan,
   SubscriptionSummary,
@@ -100,6 +104,25 @@ const MODULE_LABELS: Record<KorvaModule, string> = {
   communication: "Communication",
   analytics: "Statistiques",
   ai: "Assistant IA",
+  website: "Site web",
+};
+
+const PRODUCT_LABELS: Record<KorvaProduct, string> = {
+  crm: "CRM",
+  inventory: "Inventaire",
+  website: "Site web",
+  ai: "Assistant IA",
+};
+
+// Deliberately worded to never contain a MODULE_LABELS value as a substring (e.g. "Assistant
+// IA", "Site web") — role+name queries (tests, screen readers) match by substring, so two
+// same-page checkboxes sharing that substring would be indistinguishable even though they
+// control different things (a product toggle here vs. a module toggle in the section below).
+const PRODUCT_ARIA_LABELS: Record<KorvaProduct, string> = {
+  crm: "Produit CRM",
+  inventory: "Produit Inventaire",
+  website: "Produit web (vitrine)",
+  ai: "Produit IA",
 };
 
 // Same list as apps/web/src/app/onboarding/page.tsx — kept local rather than shared, matching
@@ -418,6 +441,32 @@ export default function SettingsPage() {
       ? organization.enabledModules.filter((m) => m !== module)
       : [...organization.enabledModules, module];
     modulesMutation.mutate(next);
+  }
+
+  // Same non-optimistic idiom as modulesMutation. Invalidates both queries: the override can
+  // also prune organization.enabledModules server-side (see SubscriptionsService.
+  // updateProductOverrides), so the Modules section's checkboxes must refresh too, not just
+  // the Produits section itself.
+  const productOverridesMutation = useMutation({
+    mutationFn: (productOverrides: Partial<Record<KorvaProduct, boolean>>) =>
+      apiClient.patch<SubscriptionSummary["subscription"]>(
+        "/subscriptions/product-overrides",
+        { productOverrides },
+      ),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["subscriptions", "me"] }),
+        queryClient.invalidateQueries({ queryKey: ["organizations", "me"] }),
+      ]),
+  });
+
+  function toggleProduct(product: KorvaProduct, currentlyActive: boolean) {
+    if (!subscription) return;
+    const next = {
+      ...subscription.subscription.productOverrides,
+      [product]: !currentlyActive,
+    };
+    productOverridesMutation.mutate(next);
   }
 
   // --- Integrations (Wave 4 Stage 2) ------------------------------------------------------
@@ -1050,6 +1099,64 @@ export default function SettingsPage() {
 
       <section className="rounded-lg border border-border bg-surface p-6">
         <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-text">Produits</h2>
+          {productOverridesMutation.isPending && (
+            <span className="text-xs text-text-muted">Enregistrement...</span>
+          )}
+        </div>
+        <p className="mt-1 text-sm text-text-muted">
+          KORVA CRM, Inventaire, Site web et Assistant IA peuvent être activés ou désactivés
+          indépendamment. Une case cochée par défaut signifie que votre plan actuel inclut déjà
+          ce produit ; désactiver ou forcer l&apos;activation d&apos;un produit met à jour les
+          modules concernés ci-dessous.
+        </p>
+
+        {productOverridesMutation.isError && (
+          <p className="mt-3 text-xs text-destructive">
+            {productOverridesMutation.error instanceof ApiError
+              ? productOverridesMutation.error.message
+              : "Impossible de mettre à jour les produits. Réessayez."}
+          </p>
+        )}
+
+        {!subscription ? (
+          <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {KORVA_PRODUCTS.map((product) => {
+              const override = subscription.subscription.productOverrides?.[product];
+              const isActive =
+                override ??
+                PRODUCT_MODULES[product].some((m) => subscription.plan.modules.includes(m));
+              return (
+                <label
+                  key={product}
+                  htmlFor={`product-${product}`}
+                  className={`flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm ${
+                    productOverridesMutation.isPending ? "opacity-60" : ""
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <input
+                      id={`product-${product}`}
+                      type="checkbox"
+                      checked={isActive}
+                      disabled={productOverridesMutation.isPending}
+                      onChange={() => toggleProduct(product, isActive)}
+                      aria-label={PRODUCT_ARIA_LABELS[product]}
+                    />
+                    {PRODUCT_LABELS[product]}
+                  </span>
+                  {override === undefined && <Badge>Défaut du plan</Badge>}
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-lg border border-border bg-surface p-6">
+        <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-text">Modules</h2>
           {modulesMutation.isPending && (
             <span className="text-xs text-text-muted">Enregistrement...</span>
@@ -1074,7 +1181,10 @@ export default function SettingsPage() {
           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {KORVA_MODULES.map((module) => {
               const isEnabled = organization.enabledModules.includes(module);
-              const isAllowedByPlan = subscription.plan.modules.includes(module);
+              const isAllowedByPlan = resolveEffectiveModules(
+                subscription.plan.modules,
+                subscription.subscription.productOverrides,
+              ).includes(module);
               const disabled = !isAllowedByPlan || modulesMutation.isPending;
               return (
                 <label

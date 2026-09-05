@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import type { SubscriptionStatus } from '@korva/types';
+import type { KorvaProduct, SubscriptionStatus } from '@korva/types';
 import { idToJson } from '../../core/mongoose/schema-options';
 
 export type SubscriptionDocument = HydratedDocument<Subscription>;
@@ -52,6 +52,16 @@ export class Subscription {
 
   @Prop({ type: Date, default: null })
   prorationCalculatedAt!: Date | null;
+
+  /**
+   * Independent of the plan's own module list — see resolveEffectiveModules in @korva/types.
+   * No `default` on purpose: unlike an array Prop (which Mongoose auto-defaults to `[]` — see
+   * the Mongoose array-default gotcha this codebase has hit before), a plain Object/Mixed path
+   * genuinely stays `undefined` for a document that never sets it, which is what we want here
+   * (undefined means "zero overrides, pure plan-driven entitlement, today's exact behavior").
+   */
+  @Prop({ type: Object })
+  productOverrides?: Partial<Record<KorvaProduct, boolean>>;
 }
 
 export const SubscriptionSchema = SchemaFactory.createForClass(Subscription);

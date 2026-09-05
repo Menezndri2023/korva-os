@@ -182,8 +182,10 @@ describe('Public storefront API (e2e)', () => {
     // "crm" isn't part of what these tests are proving about the public storefront (that's
     // catalog/booking/commerce, checked below via assertModuleEnabled) — it's included here
     // only so the internal GET /contacts calls these tests use to verify a public order/booking
-    // created the expected contact are themselves allowed by ModuleGuard.
-    modules: string[] = ['catalog', 'booking', 'commerce', 'crm'],
+    // created the expected contact are themselves allowed by ModuleGuard. "website" gates
+    // GET /public/:slug itself (see "module gating and unknown organizations" below) — included
+    // by default so every other describe block's use of that endpoint keeps working unchanged.
+    modules: string[] = ['catalog', 'booking', 'commerce', 'crm', 'website'],
   ) {
     const authRes = await request(server)
       .post('/api/v1/auth/register')
@@ -521,7 +523,14 @@ describe('Public storefront API (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .send({
-          enabledModules: ['catalog', 'booking', 'commerce', 'crm', 'finance'],
+          enabledModules: [
+            'catalog',
+            'booking',
+            'commerce',
+            'crm',
+            'finance',
+            'website',
+          ],
         })
         .expect(200);
       await request(server)
@@ -960,7 +969,7 @@ describe('Public storefront API (e2e)', () => {
       const { accessToken, organizationId, slug } = await setupStorefrontOrg(
         'storefront-sections-module-off@korva.test',
         'Sections Module Off Org',
-        ['catalog', 'crm'],
+        ['catalog', 'crm', 'website'],
       );
 
       await request(server)
@@ -1551,6 +1560,50 @@ describe('Public storefront API (e2e)', () => {
         .get('/api/v1/public/does-not-exist/offers')
         .expect(404);
       expect(asError(res.body).code).toBe('ORGANIZATION_NOT_FOUND');
+    });
+
+    it('404s with MODULE_NOT_AVAILABLE for the storefront page itself when "website" is not enabled', async () => {
+      const { slug } = await setupStorefrontOrg(
+        'no-website-owner@korva.test',
+        'No Website Org',
+        ['catalog'],
+      );
+
+      const res = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(404);
+      expect(asError(res.body).code).toBe('MODULE_NOT_AVAILABLE');
+    });
+
+    it('the "website" module gates only the storefront page — sibling catalog/booking/commerce/leads routes stay reachable regardless', async () => {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        'website-off-catalog-on@korva.test',
+        'Website Off Catalog On Org',
+        ['catalog', 'crm'],
+      );
+
+      // The storefront page itself is blocked...
+      const pageRes = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(404);
+      expect(asError(pageRes.body).code).toBe('MODULE_NOT_AVAILABLE');
+
+      // ...but a route gated on its own module (catalog) works exactly as if "website" were
+      // never introduced — this is what keeps the embeddable widget usable on a business's own
+      // external site even when they don't want KORVA's own hosted page.
+      await request(server).get(`/api/v1/public/${slug}/offers`).expect(200);
+
+      // Enabling "website" makes the page itself reachable too, with no effect on the routes
+      // that were already independently working.
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['catalog', 'crm', 'website'] })
+        .expect(200);
+
+      await request(server).get(`/api/v1/public/${slug}`).expect(200);
+      await request(server).get(`/api/v1/public/${slug}/offers`).expect(200);
     });
   });
 });

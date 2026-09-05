@@ -138,6 +138,11 @@ export class PublicService {
 
   async getOrganization(slug: string) {
     const organization = await this.resolveOrganization(slug);
+    // Only this method is gated on 'website' — every other public route (catalog/booking/
+    // commerce/leads) is independently gated on its own module and stays reachable regardless,
+    // since those also power the embeddable widget on a business's own external site, a
+    // distinct capability from KORVA's own hosted storefront page.
+    this.assertModuleEnabled(organization, 'website');
     const plan = await this.subscriptionsService.getActivePlan(
       organization.id as string,
     );

@@ -1,4 +1,5 @@
 import type { KorvaModule } from "./organization.ts";
+import type { KorvaProduct } from "./products.ts";
 
 export const PLAN_INTERVALS = ["month", "year"] as const;
 export type PlanInterval = (typeof PLAN_INTERVALS)[number];
@@ -56,6 +57,9 @@ export interface Subscription {
   prorationAmount: number | null;
   prorationCurrency: string | null;
   prorationCalculatedAt: string | null;
+  /** Independent of planId.modules — see resolveEffectiveModules in products.ts. Absent/empty
+   *  means zero behavior change (today's pure plan-driven entitlement). */
+  productOverrides?: Partial<Record<KorvaProduct, boolean>>;
   createdAt: string;
   updatedAt: string;
 }
