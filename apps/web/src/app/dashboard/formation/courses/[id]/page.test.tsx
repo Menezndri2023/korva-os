@@ -119,6 +119,26 @@ describe("CourseDetailPage", () => {
     );
   });
 
+  it("shows the assigned instructor's name next to a scheduled session", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/cohorts/cohort-1/sessions") {
+        return Promise.resolve([
+          {
+            id: "session-1",
+            moduleIndex: 0,
+            startAt: "2026-09-10T10:00:00.000Z",
+            bookingIds: ["b1"],
+            instructorMembershipId: "member-1",
+          },
+        ]);
+      }
+      return defaultGet(path);
+    });
+    renderWithProviders(<CourseDetailPage />);
+
+    expect(await screen.findByText(/Module 0/)).toHaveTextContent("Sophie Martin");
+  });
+
   it("schedules a session for a cohort's module", async () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/resources") {

@@ -290,6 +290,7 @@ export default function CourseDetailPage() {
               cohort={cohort}
               course={course}
               contactName={contactName}
+              instructorName={instructorName}
               resources={resources}
               scheduling={schedulingCohortId === cohort.id}
               onToggleScheduling={() =>
@@ -422,6 +423,7 @@ function CohortCard({
   cohort,
   course,
   contactName,
+  instructorName,
   resources,
   scheduling,
   onToggleScheduling,
@@ -429,6 +431,7 @@ function CohortCard({
   cohort: Cohort;
   course: Course;
   contactName: (id: string) => string;
+  instructorName: (membershipId?: string) => string | null;
   resources: Resource[] | undefined;
   scheduling: boolean;
   onToggleScheduling: () => void;
@@ -511,6 +514,8 @@ function CohortCard({
               Module {session.moduleIndex} —{" "}
               {new Date(session.startAt).toLocaleString("fr-FR")} (
               {session.bookingIds.length} inscrit(s))
+              {instructorName(session.instructorMembershipId) &&
+                ` — ${instructorName(session.instructorMembershipId)}`}
             </li>
           ))}
         </ul>

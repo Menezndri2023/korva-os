@@ -213,6 +213,25 @@ describe('Courses / Cohorts / Quizzes (e2e)', () => {
     expect(asError(res.body).code).toBe('OFFER_NOT_FOUND');
   });
 
+  it('rejects a course module referencing a nonexistent instructor', async () => {
+    const res = await request(server)
+      .post('/api/v1/courses')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({
+        name: 'Ghost Instructor',
+        offerId,
+        modules: [
+          {
+            title: 'Intro',
+            instructorMembershipId: '000000000000000000000000',
+          },
+        ],
+      })
+      .expect(400);
+    expect(asError(res.body).code).toBe('INSTRUCTOR_NOT_FOUND');
+  });
+
   let cohortId: string;
 
   it('creates a cohort enrolling two learners', async () => {
@@ -304,6 +323,99 @@ describe('Courses / Cohorts / Quizzes (e2e)', () => {
       .set('X-Organization-Id', organizationId)
       .expect(200);
     expect(asSuccess<CohortSessionPayload[]>(res.body)).toHaveLength(1);
+  });
+
+  describe('multi-instructor scheduling: double-booking guard + calendar visibility', () => {
+    let secondCourseId: string;
+    let secondCohortId: string;
+    let secondResourceId: string;
+
+    beforeAll(async () => {
+      const courseRes = await request(server)
+        .post('/api/v1/courses')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Cours parallèle',
+          offerId,
+          // Same instructor as module 0 of the first course, already booked at fixedSlot(7, 10).
+          modules: [{ title: 'Module unique', instructorMembershipId }],
+        })
+        .expect(201);
+      secondCourseId = asSuccess<CoursePayload>(courseRes.body).id;
+
+      const cohortRes = await request(server)
+        .post('/api/v1/cohorts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          courseId: secondCourseId,
+          name: 'Promo parallèle',
+          startDate: new Date().toISOString(),
+          enrolledContactIds: [learnerAId],
+        })
+        .expect(201);
+      secondCohortId = asSuccess<CohortPayload>(cohortRes.body).id;
+
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Salle B',
+          type: 'room',
+          capacity: 10,
+          weeklyAvailability: [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+            dayOfWeek,
+            startTime: '00:00',
+            endTime: '23:59',
+          })),
+        })
+        .expect(201);
+      secondResourceId = asSuccess<{ id: string }>(resourceRes.body).id;
+    });
+
+    it('rejects scheduling the same instructor on an overlapping slot in a different cohort/course', async () => {
+      // Overlaps the first course's already-scheduled 10:00-11:00 session exactly.
+      const { startAt, endAt } = fixedSlot(7, 10);
+
+      const res = await request(server)
+        .post(`/api/v1/cohorts/${secondCohortId}/sessions`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ moduleIndex: 0, resourceId: secondResourceId, startAt, endAt })
+        .expect(400);
+      expect(asError(res.body).code).toBe('INSTRUCTOR_ALREADY_BOOKED');
+    });
+
+    it('allows the same instructor to teach a non-overlapping slot', async () => {
+      const { startAt, endAt } = fixedSlot(7, 14); // same day, no overlap with 10:00-11:00
+
+      const res = await request(server)
+        .post(`/api/v1/cohorts/${secondCohortId}/sessions`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ moduleIndex: 0, resourceId: secondResourceId, startAt, endAt })
+        .expect(201);
+      expect(
+        asSuccess<CohortSessionPayload>(res.body).instructorMembershipId,
+      ).toBe(instructorMembershipId);
+    });
+
+    it("lists this instructor's full teaching schedule across both courses", async () => {
+      const res = await request(server)
+        .get(`/api/v1/cohorts/instructors/${instructorMembershipId}/sessions`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const sessions = asSuccess<CohortSessionPayload[]>(res.body);
+      expect(sessions).toHaveLength(2);
+      expect(
+        sessions.every(
+          (s) => s.instructorMembershipId === instructorMembershipId,
+        ),
+      ).toBe(true);
+    });
   });
 
   it('creates a quiz for a module and never exposes correctOptionIndex on the public shape', async () => {

@@ -115,4 +115,25 @@ export class CohortsRepository {
       })
       .exec();
   }
+
+  /** Standard interval-overlap query (`existing.start < newEnd AND existing.end > newStart`) —
+   *  same shape as AvailabilityService's own booking-overlap check, just scoped to one
+   *  instructor across every cohort/course rather than one resource. Powers both
+   *  CohortsService.scheduleSession's double-booking guard and the instructor calendar
+   *  endpoint. */
+  findSessionsByInstructor(
+    organizationId: string,
+    instructorMembershipId: string,
+    range?: { startAt: Date; endAt: Date },
+  ): Promise<CohortSessionDocument[]> {
+    const filter: FilterQuery<CohortSession> = {
+      organizationId: new Types.ObjectId(organizationId),
+      instructorMembershipId: new Types.ObjectId(instructorMembershipId),
+    };
+    if (range) {
+      filter.startAt = { $lt: range.endAt };
+      filter.endAt = { $gt: range.startAt };
+    }
+    return this.cohortSessionModel.find(filter).sort({ startAt: 1 }).exec();
+  }
 }

@@ -203,6 +203,21 @@ export class CohortsService {
       });
     }
 
+    if (module.instructorMembershipId) {
+      const overlapping = await this.cohortsRepository.findSessionsByInstructor(
+        organizationId,
+        module.instructorMembershipId.toString(),
+        { startAt: new Date(input.startAt), endAt: new Date(input.endAt) },
+      );
+      if (overlapping.length > 0) {
+        throw new BadRequestException({
+          code: 'INSTRUCTOR_ALREADY_BOOKED',
+          message:
+            'This instructor is already teaching another session that overlaps this time slot',
+        });
+      }
+    }
+
     const bookingIds: string[] = [];
     for (const contactId of cohort.enrolledContactIds) {
       const booking = await this.bookingsService.create(
@@ -229,5 +244,17 @@ export class CohortsService {
       instructorMembershipId: module.instructorMembershipId,
       bookingIds: bookingIds.map((id) => new Types.ObjectId(id)),
     });
+  }
+
+  /** One instructor's full teaching schedule across every cohort/course — the visibility
+   *  counterpart to scheduleSession's own conflict guard above. */
+  async listInstructorSessions(
+    organizationId: string,
+    instructorMembershipId: string,
+  ): Promise<CohortSessionDocument[]> {
+    return this.cohortsRepository.findSessionsByInstructor(
+      organizationId,
+      instructorMembershipId,
+    );
   }
 }
