@@ -69,6 +69,9 @@ export class DecisionEngineService {
           description: draft.description,
           entityType: draft.entityType,
           entityId: new Types.ObjectId(draft.entityId),
+          severity: draft.severity,
+          impact: draft.impact,
+          confidence: draft.confidence,
         });
         if (!created) continue; // already recommended for this entity — not an error
 

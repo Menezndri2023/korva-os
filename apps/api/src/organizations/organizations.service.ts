@@ -231,6 +231,24 @@ export class OrganizationsService {
     return organization;
   }
 
+  /** Whole-list replace, not a merge — see AiOrchestratorService.updateAutoApprovedTools, which
+   *  validates every name against the currently-sensitive tool list before calling this. */
+  async updateAiAutoApprovedTools(
+    id: string,
+    toolNames: string[],
+  ): Promise<OrganizationDocument> {
+    const organization = await this.organizationsRepository.update(id, {
+      aiAutoApprovedTools: toolNames,
+    });
+    if (!organization) {
+      throw new NotFoundException({
+        code: 'ORGANIZATION_NOT_FOUND',
+        message: 'Organization not found',
+      });
+    }
+    return organization;
+  }
+
   listMembers(organizationId: string) {
     return this.membershipsService.listMembersForOrganization(organizationId);
   }

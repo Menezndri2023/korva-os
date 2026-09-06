@@ -1,3 +1,5 @@
+import type { ActionCenterSeverity } from "./action-center.ts";
+
 export const RECOMMENDATION_STATUSES = ["open", "dismissed", "resolved"] as const;
 export type RecommendationStatus = (typeof RECOMMENDATION_STATUSES)[number];
 
@@ -25,6 +27,11 @@ export interface Recommendation {
   entityType: RecommendationEntityType;
   entityId: string;
   status: RecommendationStatus;
+  /** See ActionCenterSeverity's doc — defaults to "recommendation" (the lowest tier) at the
+   *  schema level for any producer that doesn't set it explicitly. */
+  severity?: ActionCenterSeverity;
+  impact?: string;
+  confidence?: number;
   createdAt: string;
   updatedAt: string;
 }

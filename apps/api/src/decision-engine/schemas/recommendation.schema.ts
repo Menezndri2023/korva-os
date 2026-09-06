@@ -1,10 +1,14 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import type {
+  ActionCenterSeverity,
   RecommendationEntityType,
   RecommendationStatus,
 } from '@korva/types';
-import { RECOMMENDATION_STATUSES } from '@korva/types';
+import {
+  ACTION_CENTER_SEVERITIES,
+  RECOMMENDATION_STATUSES,
+} from '@korva/types';
 import { idToJson } from '../../core/mongoose/schema-options';
 
 export type RecommendationDocument = HydratedDocument<Recommendation>;
@@ -38,6 +42,19 @@ export class Recommendation {
 
   @Prop({ type: String, enum: RECOMMENDATION_STATUSES, default: 'open' })
   status!: RecommendationStatus;
+
+  @Prop({
+    type: String,
+    enum: ACTION_CENTER_SEVERITIES,
+    default: 'recommendation',
+  })
+  severity!: ActionCenterSeverity;
+
+  @Prop()
+  impact?: string;
+
+  @Prop()
+  confidence?: number;
 }
 
 export const RecommendationSchema =

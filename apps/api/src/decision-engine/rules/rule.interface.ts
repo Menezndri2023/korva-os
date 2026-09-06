@@ -1,10 +1,20 @@
-import type { RecommendationEntityType, SystemEvent } from '@korva/types';
+import type {
+  ActionCenterSeverity,
+  RecommendationEntityType,
+  SystemEvent,
+} from '@korva/types';
 
 export interface RecommendationDraft {
   entityType: RecommendationEntityType;
   entityId: string;
   title: string;
   description: string;
+  severity: ActionCenterSeverity;
+  /** Grounded in real data the rule already read from the event payload — never invented. */
+  impact?: string;
+  /** Deterministic rules (the condition either matched or it didn't) should normally leave this
+   *  unset rather than report a synthetic 100% — reserved for a future probabilistic rule. */
+  confidence?: number;
 }
 
 /**

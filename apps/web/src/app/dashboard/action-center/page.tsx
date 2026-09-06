@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ActionCenterItem, ActionCenterSummary, Recommendation } from "@korva/types";
+import { ACTION_CENTER_SEVERITIES } from "@korva/types";
+import type { ActionCenterItem, ActionCenterSeverity, ActionCenterSummary, Recommendation } from "@korva/types";
 import { Badge, Button, Card } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -20,6 +21,30 @@ const ITEM_TYPE_LINKS: Record<ActionCenterItem["type"], string> = {
   workflow_failure: "/dashboard/workflows",
   webhook_delivery_failure: "/dashboard/settings",
 };
+
+const SEVERITY_LABELS: Record<ActionCenterSeverity, string> = {
+  urgent: "Urgent",
+  attention: "À surveiller",
+  opportunity: "Opportunité",
+  recommendation: "Recommandation",
+};
+
+const SEVERITY_BADGE_VARIANTS: Record<
+  ActionCenterSeverity,
+  "default" | "success" | "warning" | "destructive"
+> = {
+  urgent: "destructive",
+  attention: "warning",
+  opportunity: "success",
+  recommendation: "default",
+};
+
+function groupBySeverity(items: ActionCenterItem[]): [ActionCenterSeverity, ActionCenterItem[]][] {
+  return ACTION_CENTER_SEVERITIES.map((severity) => [
+    severity,
+    items.filter((item) => item.severity === severity),
+  ]).filter(([, group]) => group.length > 0) as [ActionCenterSeverity, ActionCenterItem[]][];
+}
 
 export default function ActionCenterPage() {
   const queryClient = useQueryClient();
@@ -98,56 +123,77 @@ export default function ActionCenterPage() {
         </Card>
       )}
 
-      {!feedQuery.isError && (
-        <Card className="divide-y divide-border overflow-hidden">
-          {feedQuery.isLoading && (
-            <p className="px-4 py-6 text-center text-sm text-text-muted">Chargement...</p>
-          )}
-          {!feedQuery.isLoading && feedQuery.data?.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-text-muted">
-              Rien ne nécessite votre attention pour le moment.
-            </p>
-          )}
-          {feedQuery.data?.map((item) => (
-            <div key={`${item.type}-${item.id}`} className="flex items-start justify-between gap-3 px-4 py-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Badge>{ITEM_TYPE_LABELS[item.type]}</Badge>
-                  <Link href={ITEM_TYPE_LINKS[item.type]} className="text-sm font-medium text-text hover:underline">
-                    {item.title}
-                  </Link>
-                </div>
-                {item.description && (
-                  <p className="mt-0.5 text-sm text-text-muted">{item.description}</p>
-                )}
-                <p className="mt-1 text-xs text-text-muted">
-                  {new Date(item.occurredAt).toLocaleString("fr-FR")}
-                </p>
-              </div>
-              {item.type === "recommendation" && (
-                <div className="flex shrink-0 gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => resolveMutation.mutate(item.id)}
-                    loading={resolveMutation.isPending}
-                  >
-                    Résolue
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => dismissMutation.mutate(item.id)}
-                    loading={dismissMutation.isPending}
-                  >
-                    Ignorer
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))}
+      {feedQuery.isLoading && (
+        <Card>
+          <p className="px-4 py-6 text-center text-sm text-text-muted">Chargement...</p>
         </Card>
       )}
+      {!feedQuery.isError && !feedQuery.isLoading && feedQuery.data?.length === 0 && (
+        <Card>
+          <p className="px-4 py-6 text-center text-sm text-text-muted">
+            Rien ne nécessite votre attention pour le moment.
+          </p>
+        </Card>
+      )}
+
+      {!feedQuery.isError &&
+        !feedQuery.isLoading &&
+        feedQuery.data &&
+        groupBySeverity(feedQuery.data).map(([severity, items]) => (
+          <div key={severity}>
+            <div className="mb-2 flex items-center gap-2">
+              <Badge variant={SEVERITY_BADGE_VARIANTS[severity]}>{SEVERITY_LABELS[severity]}</Badge>
+              <span className="text-xs text-text-muted">{items.length}</span>
+            </div>
+            <Card className="divide-y divide-border overflow-hidden">
+              {items.map((item) => (
+                <div
+                  key={`${item.type}-${item.id}`}
+                  className="flex items-start justify-between gap-3 px-4 py-3"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Badge>{ITEM_TYPE_LABELS[item.type]}</Badge>
+                      <Link
+                        href={ITEM_TYPE_LINKS[item.type]}
+                        className="text-sm font-medium text-text hover:underline"
+                      >
+                        {item.title}
+                      </Link>
+                    </div>
+                    {item.description && (
+                      <p className="mt-0.5 text-sm text-text-muted">{item.description}</p>
+                    )}
+                    <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+                      <span>{new Date(item.occurredAt).toLocaleString("fr-FR")}</span>
+                      {item.impact && <span>· {item.impact}</span>}
+                    </div>
+                  </div>
+                  {item.type === "recommendation" && (
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => resolveMutation.mutate(item.id)}
+                        loading={resolveMutation.isPending}
+                      >
+                        Résolue
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => dismissMutation.mutate(item.id)}
+                        loading={dismissMutation.isPending}
+                      >
+                        Ignorer
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </Card>
+          </div>
+        ))}
     </div>
   );
 }

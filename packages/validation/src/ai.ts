@@ -15,3 +15,10 @@ export const listAiConversationsQuerySchema = z.object({
 export type ListAiConversationsQuery = z.infer<
   typeof listAiConversationsQuerySchema
 >;
+
+export const updateAiAutoApprovedToolsSchema = z.object({
+  toolNames: z.array(z.string().min(1)).max(50),
+});
+export type UpdateAiAutoApprovedToolsInput = z.infer<
+  typeof updateAiAutoApprovedToolsSchema
+>;

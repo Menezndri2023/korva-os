@@ -28,6 +28,8 @@ const recommendationItem = {
   occurredAt: "2026-01-03T00:00:00.000Z",
   entityType: "contact",
   entityId: "contact-1",
+  severity: "opportunity",
+  impact: "61 jours d'inactivité",
 };
 
 const pendingApprovalItem = {
@@ -35,6 +37,7 @@ const pendingApprovalItem = {
   id: "pa-1",
   title: "Confirmation requise : send_whatsapp",
   occurredAt: "2026-01-02T00:00:00.000Z",
+  severity: "urgent",
 };
 
 const failureItem = {
@@ -43,6 +46,7 @@ const failureItem = {
   title: 'Échec d\'automatisation pour l\'événement "lead.created"',
   description: "Webhook URL resolves to a disallowed address",
   occurredAt: "2026-01-01T00:00:00.000Z",
+  severity: "attention",
 };
 
 function mockResponses(feed: unknown[]) {
@@ -84,6 +88,17 @@ describe("ActionCenterPage", () => {
     expect(
       screen.getByText('Échec d\'automatisation pour l\'événement "lead.created"'),
     ).toBeInTheDocument();
+  });
+
+  it("groups items into severity sections (Phase B1)", async () => {
+    mockResponses([recommendationItem, pendingApprovalItem, failureItem]);
+    renderWithProviders(<ActionCenterPage />);
+
+    await screen.findByText("Client inactif à relancer");
+    expect(screen.getByText("Urgent")).toBeInTheDocument();
+    expect(screen.getByText("À surveiller")).toBeInTheDocument();
+    expect(screen.getByText("Opportunité")).toBeInTheDocument();
+    expect(screen.getByText("· 61 jours d'inactivité")).toBeInTheDocument();
   });
 
   it("only shows resolve/dismiss actions for recommendation items", async () => {

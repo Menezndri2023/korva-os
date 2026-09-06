@@ -611,6 +611,113 @@ describe('AI module (e2e)', () => {
       );
     });
 
+    it('lists cancel_booking among the currently-sensitive tools, and rejects auto-approving an unknown/non-sensitive name', async () => {
+      const listRes = await request(server)
+        .get('/api/v1/ai/sensitive-tools')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const names = asSuccess<{ name: string }[]>(listRes.body).map(
+        (t) => t.name,
+      );
+      expect(names).toContain('cancel_booking');
+      expect(names).toContain('win_deal');
+
+      const badRes = await request(server)
+        .patch('/api/v1/ai/auto-approved-tools')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ toolNames: ['search_contacts'] }) // real tool, but not sensitive
+        .expect(400);
+      expect(asError(badRes.body).code).toBe('AI_UNKNOWN_SENSITIVE_TOOL');
+    });
+
+    it('autonomy level 4: auto-approves cancel_booking for an org that opted it in, executing it inline with no pending action', async () => {
+      const resourceRes = await request(server)
+        .post('/api/v1/resources')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          name: 'Room 2',
+          type: 'room',
+          weeklyAvailability: [
+            { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+          ],
+        })
+        .expect(201);
+      const resourceId = asSuccess<ResourcePayload>(resourceRes.body).id;
+
+      const offerRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'booking',
+          name: 'Session 2',
+          pricing: { amount: 50, currency: 'EUR' },
+        })
+        .expect(201);
+      const offerId = asSuccess<OfferPayload>(offerRes.body).id;
+
+      const date = new Date();
+      date.setUTCDate(date.getUTCDate() + 7);
+      while (date.getUTCDay() !== 1) date.setUTCDate(date.getUTCDate() + 1);
+      const day = date.toISOString().slice(0, 10);
+
+      const bookingRes = await request(server)
+        .post('/api/v1/bookings')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          resourceId,
+          offerId,
+          contactId,
+          startAt: `${day}T13:00:00.000Z`,
+          endAt: `${day}T14:00:00.000Z`,
+        })
+        .expect(201);
+      const autoApprovedBookingId = asSuccess<BookingPayload>(
+        bookingRes.body,
+      ).id;
+
+      await request(server)
+        .patch('/api/v1/ai/auto-approved-tools')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ toolNames: ['cancel_booking'] })
+        .expect(200);
+
+      const res = await request(server)
+        .post('/api/v1/ai/chat')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          agent: 'booking_agent',
+          message: `CANCEL_BOOKING:${autoApprovedBookingId}`,
+        })
+        .expect(201);
+      const chat = asSuccess<AiChatResponsePayload>(res.body);
+      expect(chat.pendingActions).toHaveLength(0);
+
+      const afterChat = await request(server)
+        .get(`/api/v1/bookings/${autoApprovedBookingId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<BookingPayload>(afterChat.body).status).toBe(
+        'cancelled',
+      );
+
+      // Turning auto-approve back off restores the normal pending-confirmation behavior for a
+      // fresh sensitive call — this is a per-org setting, not a one-shot bypass.
+      await request(server)
+        .patch('/api/v1/ai/auto-approved-tools')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ toolNames: [] })
+        .expect(200);
+    });
+
     it('defers send_email as a pending action instead of executing it inline (docs/BUSINESS_OS_AUDIT.md roadmap item #6)', async () => {
       // Verified directly against Mongo rather than GET /conversations: that route is gated
       // behind the 'communication' module (@RequireModule), which registerFullOrg's org never

@@ -26,6 +26,7 @@ import {
 import type { AiTool } from './tools/tool.interface';
 import { AuditService } from '../audit/audit.service';
 import { EntitlementsService } from '../subscriptions/entitlements.service';
+import { OrganizationsService } from '../organizations/organizations.service';
 import { estimateCostUsd } from './ai-pricing.util';
 
 const MAX_TOOL_ITERATIONS = 5;
@@ -72,6 +73,7 @@ export class AiOrchestratorService {
     private readonly toolsRegistry: AiToolsRegistryService,
     private readonly auditService: AuditService,
     private readonly entitlementsService: EntitlementsService,
+    private readonly organizationsService: OrganizationsService,
     @Inject(AI_PROVIDER) private readonly aiProvider: AIProvider,
   ) {}
 
@@ -273,19 +275,32 @@ export class AiOrchestratorService {
       return `Permission refusée pour l'outil "${call.name}".`;
     }
 
+    let autoApproved = false;
     if (tool.sensitive) {
       if (!user.permissions.includes('ai.execute_sensitive_actions')) {
         return `L'outil "${call.name}" est une action sensible et nécessite une permission supplémentaire (ai.execute_sensitive_actions).`;
       }
-      const pending = await this.pendingActionsRepository.create({
-        organizationId: new Types.ObjectId(organizationId),
-        conversationId: conversation._id,
-        toolName: call.name,
-        input: call.input,
-        status: 'pending',
-      });
-      pendingActions.push(pending);
-      return `Action "${call.name}" en attente de confirmation humaine (id: ${pending.id as string}).`;
+
+      // AI autonomy level 4 (docs/KORVA_OS_V2_AUDIT.md §2.3): an org can explicitly opt a
+      // specific sensitive tool into running inline, skipping the pending-confirmation step
+      // below — but the permission check above still applies unconditionally, so this never
+      // lets a user without ai.execute_sensitive_actions trigger a sensitive effect.
+      const organization =
+        await this.organizationsService.getById(organizationId);
+      autoApproved =
+        organization.aiAutoApprovedTools?.includes(call.name) ?? false;
+
+      if (!autoApproved) {
+        const pending = await this.pendingActionsRepository.create({
+          organizationId: new Types.ObjectId(organizationId),
+          conversationId: conversation._id,
+          toolName: call.name,
+          input: call.input,
+          status: 'pending',
+        });
+        pendingActions.push(pending);
+        return `Action "${call.name}" en attente de confirmation humaine (id: ${pending.id as string}).`;
+      }
     }
 
     try {
@@ -300,7 +315,7 @@ export class AiOrchestratorService {
         userId: user.userId,
         action: 'AI_ACTION',
         entity: tool.auditEntity,
-        metadata: { tool: call.name, input: call.input },
+        metadata: { tool: call.name, input: call.input, autoApproved },
       });
       return JSON.stringify(output);
     } catch (error) {
@@ -326,6 +341,43 @@ export class AiOrchestratorService {
   getUsageSummary(organizationId: string) {
     const period = new Date().toISOString().slice(0, 7);
     return this.usageLogRepository.getMonthlySummary(organizationId, period);
+  }
+
+  /** Every tool eligible for the org to auto-approve (level 4) — backs the Settings UI's picker. */
+  listSensitiveTools() {
+    return this.toolsRegistry.listSensitiveTools().map((tool) => ({
+      name: tool.definition.name,
+      description: tool.definition.description,
+    }));
+  }
+
+  /**
+   * Replaces the org's whole auto-approved-tools list (PUT semantics, not a merge) — every name
+   * must be a real, currently-sensitive tool, so a stale/misspelled entry can never silently do
+   * nothing. Gated the same as manually confirming a sensitive action (ai.execute_sensitive_actions)
+   * — granting blanket auto-approval requires the same authority as approving one by hand.
+   */
+  async updateAutoApprovedTools(
+    organizationId: string,
+    toolNames: string[],
+  ): Promise<string[]> {
+    const sensitiveNames = new Set(
+      this.toolsRegistry
+        .listSensitiveTools()
+        .map((tool) => tool.definition.name),
+    );
+    const unknown = toolNames.filter((name) => !sensitiveNames.has(name));
+    if (unknown.length > 0) {
+      throw new BadRequestException({
+        code: 'AI_UNKNOWN_SENSITIVE_TOOL',
+        message: `Not a currently sensitive tool: ${unknown.join(', ')}`,
+      });
+    }
+    await this.organizationsService.updateAiAutoApprovedTools(
+      organizationId,
+      toolNames,
+    );
+    return toolNames;
   }
 
   async listMessages(

@@ -409,7 +409,12 @@ describe('CRM module (e2e)', () => {
         .post('/api/v1/deals')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ contactId, pipelineId, stageId: stageAId, estimatedValue: 1000 })
+        .send({
+          contactId,
+          pipelineId,
+          stageId: stageAId,
+          estimatedValue: 1000,
+        })
         .expect(201);
       const deal = asSuccess<DealPayload>(createRes.body);
       expect(deal.status).toBe('open');
@@ -496,9 +501,10 @@ describe('CRM module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ pipelineId, stageId: stageAId, estimatedValue: 500 })
         .expect(201);
-      const { lead, deal } = asSuccess<{ lead: LeadPayload; deal: DealPayload }>(
-        convertRes.body,
-      );
+      const { lead, deal } = asSuccess<{
+        lead: LeadPayload;
+        deal: DealPayload;
+      }>(convertRes.body);
       expect(lead.status).toBe('converted');
       expect(deal.leadId).toBe(leadId);
       expect(deal.status).toBe('open');

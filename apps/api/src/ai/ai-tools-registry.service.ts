@@ -155,4 +155,11 @@ export class AiToolsRegistryService {
     const names = new Set(AGENT_TOOL_NAMES[agent]);
     return this.tools.filter((tool) => names.has(tool.definition.name));
   }
+
+  /** Every tool eligible for AI autonomy level 4 (org-level auto-approve) — only ever the
+   *  `sensitive` ones, since a non-sensitive tool already runs without confirmation. Backs the
+   *  Settings UI's tool picker (see AiOrchestratorService.updateAutoApprovedTools). */
+  listSensitiveTools(): AiTool[] {
+    return this.tools.filter((tool) => tool.sensitive);
+  }
 }

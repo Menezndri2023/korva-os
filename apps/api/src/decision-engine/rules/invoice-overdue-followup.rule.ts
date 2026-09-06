@@ -30,6 +30,11 @@ export class InvoiceOverdueFollowupRule implements DecisionRule {
       entityId: invoiceId,
       title: 'Facture en retard de paiement',
       description: `Cette facture est en retard de paiement, avec ${outstanding} restant à encaisser. Nous recommandons une relance auprès du client.`,
+      severity: 'urgent',
+      impact:
+        outstanding > 0
+          ? `${outstanding} en attente d'encaissement`
+          : undefined,
     });
   }
 }

@@ -30,6 +30,13 @@ export class CustomerReactivationRule implements DecisionRule {
         inactiveDays !== null
           ? `Ce client n'a montré aucune activité depuis ${inactiveDays} jours. Nous recommandons une campagne de réactivation.`
           : "Ce client n'a montré aucune activité récente. Nous recommandons une campagne de réactivation.",
+      // No revenue is actively at risk (unlike an overdue invoice or a depleted product) — this
+      // is a growth opportunity, not something bleeding money right now.
+      severity: 'opportunity',
+      impact:
+        inactiveDays !== null
+          ? `${inactiveDays} jours d'inactivité`
+          : undefined,
     });
   }
 }

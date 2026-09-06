@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Recommendation, RecommendationStatus } from "@korva/types";
+import type { ActionCenterSeverity, Recommendation, RecommendationStatus } from "@korva/types";
 import { Badge, Button, Card, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -11,6 +11,23 @@ const STATUS_LABELS: Record<RecommendationStatus, string> = {
   open: "À traiter",
   dismissed: "Ignorée",
   resolved: "Résolue",
+};
+
+const SEVERITY_LABELS: Record<ActionCenterSeverity, string> = {
+  urgent: "Urgent",
+  attention: "À surveiller",
+  opportunity: "Opportunité",
+  recommendation: "Recommandation",
+};
+
+const SEVERITY_BADGE_VARIANTS: Record<
+  ActionCenterSeverity,
+  "default" | "success" | "warning" | "destructive"
+> = {
+  urgent: "destructive",
+  attention: "warning",
+  opportunity: "success",
+  recommendation: "default",
 };
 
 const STATUS_FILTERS: { value: RecommendationStatus | "all"; label: string }[] = [
@@ -116,12 +133,18 @@ export default function RecommendationsPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-text">{recommendation.title}</p>
+                  {recommendation.severity && (
+                    <Badge variant={SEVERITY_BADGE_VARIANTS[recommendation.severity]}>
+                      {SEVERITY_LABELS[recommendation.severity]}
+                    </Badge>
+                  )}
                   <Badge>{STATUS_LABELS[recommendation.status]}</Badge>
                 </div>
                 <p className="mt-0.5 text-sm text-text-muted">{recommendation.description}</p>
-                <p className="mt-1 text-xs text-text-muted">
-                  {new Date(recommendation.createdAt).toLocaleString("fr-FR")}
-                </p>
+                <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+                  <span>{new Date(recommendation.createdAt).toLocaleString("fr-FR")}</span>
+                  {recommendation.impact && <span>· {recommendation.impact}</span>}
+                </div>
               </div>
               {recommendation.status === "open" && (
                 <div className="flex shrink-0 gap-2">

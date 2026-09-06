@@ -33,6 +33,8 @@ interface RecommendationPayload {
   status: string;
   title: string;
   description: string;
+  severity: string;
+  impact?: string;
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -158,6 +160,10 @@ describe('Decision Engine (e2e)', () => {
     expect(recommendation.entityId).toBe(invoiceId);
     expect(recommendation.status).toBe('open');
     expect(recommendation.description).toContain('200');
+    // Phase B1 (docs/KORVA_OS_V2_AUDIT.md §2.2) — an overdue invoice is the highest-urgency
+    // Decision Engine rule, with a real (not invented) monetary impact figure.
+    expect(recommendation.severity).toBe('urgent');
+    expect(recommendation.impact).toContain('200');
 
     // Same organizationId/eventName/payload republished — simulates a producer retry. Must
     // never create a second Recommendation for the same invoice.
@@ -197,6 +203,8 @@ describe('Decision Engine (e2e)', () => {
     expect(recommendation.entityType).toBe('contact');
     expect(recommendation.status).toBe('open');
     expect(recommendation.description).toContain('61 jours');
+    expect(recommendation.severity).toBe('opportunity');
+    expect(recommendation.impact).toContain('61');
 
     await request(server)
       .post(`/api/v1/recommendations/${recommendation.id}/dismiss`)

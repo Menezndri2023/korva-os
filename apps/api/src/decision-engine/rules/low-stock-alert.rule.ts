@@ -26,6 +26,10 @@ export class LowStockAlertRule implements DecisionRule {
       title: 'Stock épuisé',
       description:
         'Cette offre est en rupture de stock. Nous recommandons un réapprovisionnement pour éviter de perdre des ventes.',
+      // Actively losing sales right now, unlike the threshold rule below (still some stock left)
+      // — the highest-urgency Inventory rule.
+      severity: 'urgent',
+      impact: '0 unité en stock',
     });
   }
 }

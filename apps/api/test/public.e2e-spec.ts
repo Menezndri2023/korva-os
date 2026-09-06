@@ -1423,9 +1423,7 @@ describe('Public storefront API (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      const leads = asSuccess<{ id: string; source?: string }[]>(
-        leadsRes.body,
-      );
+      const leads = asSuccess<{ id: string; source?: string }[]>(leadsRes.body);
       expect(leads.map((l) => l.id)).toContain(lead.id);
       const createdLead = leads.find((l) => l.id === lead.id)!;
       expect(createdLead.source).toBe('website_widget');

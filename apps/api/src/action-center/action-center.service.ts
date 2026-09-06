@@ -122,6 +122,9 @@ export class ActionCenterService {
         ).createdAt.toISOString(),
         entityType: 'conversation',
         entityId: action.conversationId.toString(),
+        // A stuck AI action is blocking on a human right now — same urgency tier as an actively
+        // depleted product or an overdue invoice.
+        severity: 'urgent' as const,
       })),
       ...recommendations.map((recommendation) => ({
         type: 'recommendation' as const,
@@ -133,6 +136,9 @@ export class ActionCenterService {
         ).createdAt.toISOString(),
         entityType: recommendation.entityType,
         entityId: recommendation.entityId.toString(),
+        severity: recommendation.severity,
+        impact: recommendation.impact,
+        confidence: recommendation.confidence,
       })),
       ...failures.map((execution) => ({
         type: 'workflow_failure' as const,
@@ -144,6 +150,9 @@ export class ActionCenterService {
         ).createdAt.toISOString(),
         entityType: 'workflow',
         entityId: execution.workflowId.toString(),
+        // A broken automation needs looking at, but (unlike a stuck approval or a stockout)
+        // nothing is actively blocked on a human right this moment.
+        severity: 'attention' as const,
       })),
       ...webhookFailures.map((delivery) => ({
         type: 'webhook_delivery_failure' as const,
@@ -155,6 +164,7 @@ export class ActionCenterService {
         ).createdAt.toISOString(),
         entityType: 'webhook_subscription',
         entityId: delivery.subscriptionId.toString(),
+        severity: 'attention' as const,
       })),
     ];
 

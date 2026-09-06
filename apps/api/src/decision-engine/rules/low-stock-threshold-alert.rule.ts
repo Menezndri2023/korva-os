@@ -33,6 +33,13 @@ export class LowStockThresholdAlertRule implements DecisionRule {
       entityId: offerId,
       title: 'Stock bas',
       description: `Il reste ${stockOnHand} unité(s) en stock, en dessous du seuil configuré (${threshold}). Pensez à réapprovisionner.`,
+      // A heads-up before the shelf is actually empty — one tier below LowStockAlertRule's
+      // 'urgent' (genuine stockout), since sales aren't lost yet.
+      severity: 'attention',
+      impact:
+        typeof stockOnHand === 'number'
+          ? `${stockOnHand} unité(s) restante(s)`
+          : undefined,
     });
   }
 }

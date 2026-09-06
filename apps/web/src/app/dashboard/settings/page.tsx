@@ -255,6 +255,36 @@ export default function SettingsPage() {
   const aiUsagePermissionDenied =
     aiUsageError instanceof ApiError && aiUsageError.code === "PERMISSION_DENIED";
 
+  // Autonomy level 4 (docs/KORVA_OS_V2_AUDIT.md §2.3) — gated by ai.execute_sensitive_actions,
+  // not settings.manage, since granting auto-approval requires the same authority as manually
+  // confirming a sensitive action, not general admin access.
+  const {
+    data: sensitiveTools,
+    error: sensitiveToolsError,
+  } = useQuery({
+    queryKey: ["ai", "sensitive-tools"],
+    queryFn: () =>
+      apiClient.get<{ name: string; description: string }[]>("/ai/sensitive-tools"),
+    enabled: authReady,
+  });
+  const sensitiveToolsPermissionDenied =
+    sensitiveToolsError instanceof ApiError &&
+    sensitiveToolsError.code === "PERMISSION_DENIED";
+
+  const autoApprovedToolsMutation = useMutation({
+    mutationFn: (toolNames: string[]) =>
+      apiClient.patch<{ toolNames: string[] }>("/ai/auto-approved-tools", { toolNames }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organizations", "me"] }),
+  });
+
+  function toggleAutoApprovedTool(toolName: string, currentlyApproved: boolean) {
+    const current = organization?.aiAutoApprovedTools ?? [];
+    const next = currentlyApproved
+      ? current.filter((name) => name !== toolName)
+      : [...current, toolName];
+    autoApprovedToolsMutation.mutate(next);
+  }
+
   const [inviteOpen, setInviteOpen] = useState(false);
   const {
     data: roles,
@@ -1097,6 +1127,57 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
+
+      {!sensitiveToolsPermissionDenied && sensitiveTools && sensitiveTools.length > 0 && (
+        <section className="rounded-lg border border-border bg-surface p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text">Autonomie de l&apos;IA</h2>
+            {autoApprovedToolsMutation.isPending && (
+              <span className="text-xs text-text-muted">Enregistrement...</span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-text-muted">
+            Ces actions nécessitent normalement une confirmation humaine avant d&apos;être
+            exécutées par l&apos;assistant IA. Cochez celles que vous autorisez à s&apos;exécuter
+            automatiquement, sans confirmation.
+          </p>
+
+          {autoApprovedToolsMutation.isError && (
+            <p className="mt-2 text-xs text-destructive">
+              {autoApprovedToolsMutation.error instanceof ApiError
+                ? autoApprovedToolsMutation.error.message
+                : "Erreur"}
+            </p>
+          )}
+
+          <div className="mt-4 space-y-2">
+            {sensitiveTools.map((tool) => {
+              const approved = organization?.aiAutoApprovedTools?.includes(tool.name) ?? false;
+              return (
+                <label
+                  key={tool.name}
+                  className={`flex items-start gap-2 text-sm ${
+                    autoApprovedToolsMutation.isPending ? "opacity-60" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={approved}
+                    disabled={autoApprovedToolsMutation.isPending}
+                    onChange={() => toggleAutoApprovedTool(tool.name, approved)}
+                    aria-label={`Auto-approuver ${tool.name}`}
+                  />
+                  <span>
+                    <span className="font-medium text-text">{tool.name}</span>
+                    <span className="block text-xs text-text-muted">{tool.description}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <section className="rounded-lg border border-border bg-surface p-6">
         <div className="flex items-center justify-between">

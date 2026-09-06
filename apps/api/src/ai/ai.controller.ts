@@ -1,10 +1,20 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   aiChatSchema,
   listAiConversationsQuerySchema,
+  updateAiAutoApprovedToolsSchema,
   type AiChatInput,
   type ListAiConversationsQuery,
+  type UpdateAiAutoApprovedToolsInput,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import type { AuthenticatedUser } from '../core/tenant/request-context.types';
@@ -109,5 +119,26 @@ export class AiController {
   @Get('usage-summary')
   getUsageSummary(@CurrentTenant() tenant: TenantContext) {
     return this.aiOrchestratorService.getUsageSummary(tenant.organizationId);
+  }
+
+  /** Autonomy level 4 (docs/KORVA_OS_V2_AUDIT.md §2.3) settings — which sensitive tools exist to
+   *  auto-approve, gated the same as confirming one by hand. */
+  @RequirePermissions('ai.execute_sensitive_actions')
+  @Get('sensitive-tools')
+  listSensitiveTools() {
+    return this.aiOrchestratorService.listSensitiveTools();
+  }
+
+  @RequirePermissions('ai.execute_sensitive_actions')
+  @Patch('auto-approved-tools')
+  updateAutoApprovedTools(
+    @CurrentTenant() tenant: TenantContext,
+    @Body(new ZodValidationPipe(updateAiAutoApprovedToolsSchema))
+    body: UpdateAiAutoApprovedToolsInput,
+  ) {
+    return this.aiOrchestratorService.updateAutoApprovedTools(
+      tenant.organizationId,
+      body.toolNames,
+    );
   }
 }

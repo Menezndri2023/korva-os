@@ -132,6 +132,9 @@ export interface Organization {
   faqItems?: FaqItem[];
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
+  /** AI autonomy level 4 — tool names allowed to run without the usual pending-confirmation
+   *  step. See Organization schema's own doc comment (apps/api) for the full design. */
+  aiAutoApprovedTools?: string[];
   createdAt: string;
   updatedAt: string;
 }

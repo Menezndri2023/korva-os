@@ -34,6 +34,8 @@ interface ActionCenterItemPayload {
   title: string;
   entityType?: string;
   entityId?: string;
+  severity: string;
+  impact?: string;
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -226,11 +228,15 @@ describe('Action Center (e2e)', () => {
       (item) => item.type === 'pending_approval',
     );
     expect(pendingApproval?.title).toBe('Confirmation requise : send_whatsapp');
+    // Phase B1 (docs/KORVA_OS_V2_AUDIT.md §2.2) — every feed source gets a severity, not just
+    // Decision Engine recommendations: a stuck AI approval blocks a human right now.
+    expect(pendingApproval?.severity).toBe('urgent');
 
     const failure = items.find((item) => item.type === 'workflow_failure');
     expect(failure?.title).toBe(
       'Échec d\'automatisation pour l\'événement "lead.created"',
     );
+    expect(failure?.severity).toBe('attention');
 
     const webhookFailure = items.find(
       (item) => item.type === 'webhook_delivery_failure',
@@ -239,9 +245,11 @@ describe('Action Center (e2e)', () => {
       'Échec de livraison webhook pour l\'événement "order.created"',
     );
     expect(webhookFailure?.entityType).toBe('webhook_subscription');
+    expect(webhookFailure?.severity).toBe('attention');
 
     const recommendation = items.find((item) => item.type === 'recommendation');
     expect(recommendation?.entityType).toBe('invoice');
+    expect(recommendation?.severity).toBe('urgent');
   });
 
   it('denies a user from another organization reading the action center via a foreign org id', async () => {

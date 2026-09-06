@@ -128,6 +128,18 @@ export class Organization {
 
   @Prop({ type: [String], default: [] })
   enabledModules!: KorvaModule[];
+
+  /**
+   * AI autonomy level 4 (docs/KORVA_OS_V2_AUDIT.md §2.3): tool names from this list skip the
+   * `AiPendingAction` human-confirmation step even though `AiTool.sensitive` is true for them —
+   * an explicit, per-org, per-tool opt-in layered over the existing binary gate, not a
+   * replacement for it. The calling user must still hold `ai.execute_sensitive_actions`; this
+   * only removes the separate confirm click, never the underlying permission requirement. See
+   * AiOrchestratorService.executeToolCall. `default: undefined`, same array-default reasoning as
+   * `storefrontSections` above.
+   */
+  @Prop({ type: [String], default: undefined })
+  aiAutoApprovedTools?: string[];
 }
 
 export const OrganizationSchema = SchemaFactory.createForClass(Organization);
