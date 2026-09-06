@@ -25,6 +25,7 @@ export const KORVA_MODULES = [
   "analytics",
   "ai",
   "website",
+  "marketing",
 ] as const;
 
 export type KorvaModule = (typeof KORVA_MODULES)[number];

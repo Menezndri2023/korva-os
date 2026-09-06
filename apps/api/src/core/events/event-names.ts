@@ -67,4 +67,6 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'return_request.created': 'returnRequestId',
   'return_request.approved': 'returnRequestId',
   'return_request.rejected': 'returnRequestId',
+  'campaign.launched': 'campaignId',
+  'campaign.completed': 'campaignId',
 };

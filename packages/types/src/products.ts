@@ -12,7 +12,15 @@ export type KorvaProduct = (typeof KORVA_PRODUCTS)[number];
  * override could never be un-strippable for it — see products.spec.ts.
  */
 export const PRODUCT_MODULES: Record<KorvaProduct, KorvaModule[]> = {
-  crm: ["crm", "communication", "workflow", "analytics", "finance", "booking"],
+  crm: [
+    "crm",
+    "communication",
+    "workflow",
+    "analytics",
+    "finance",
+    "booking",
+    "marketing",
+  ],
   inventory: ["catalog", "commerce", "finance"],
   website: ["website"],
   ai: ["ai"],

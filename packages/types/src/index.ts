@@ -28,3 +28,4 @@ export * from "./kitchen.ts";
 export * from "./audit.ts";
 export * from "./purchase-orders.ts";
 export * from "./products.ts";
+export * from "./marketing.ts";

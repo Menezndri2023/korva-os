@@ -105,6 +105,7 @@ const MODULE_LABELS: Record<KorvaModule, string> = {
   analytics: "Statistiques",
   ai: "Assistant IA",
   website: "Site web",
+  marketing: "Marketing",
 };
 
 const PRODUCT_LABELS: Record<KorvaProduct, string> = {

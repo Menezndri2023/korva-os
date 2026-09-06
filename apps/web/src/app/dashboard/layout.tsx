@@ -21,6 +21,7 @@ const MODULE_NAV: { module: KorvaModule; label: string; href: string }[] = [
   { module: "communication", label: "Communication", href: "/dashboard/communication" },
   { module: "analytics", label: "Statistiques", href: "/dashboard/analytics" },
   { module: "ai", label: "Assistant IA", href: "/dashboard/ai" },
+  { module: "marketing", label: "Marketing", href: "/dashboard/marketing" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

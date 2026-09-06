@@ -91,6 +91,14 @@ export const CORE_PERMISSIONS = [
   "recommendations.read",
   "recommendations.update",
   "recommendations.create",
+  "segments.read",
+  "segments.create",
+  "segments.update",
+  "segments.delete",
+  "campaigns.read",
+  "campaigns.create",
+  "campaigns.update",
+  "campaigns.send",
 ] as const satisfies readonly Permission[];
 
 export type CorePermission = (typeof CORE_PERMISSIONS)[number];
@@ -182,6 +190,14 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "recommendations.read",
     "recommendations.update",
     "recommendations.create",
+    "segments.read",
+    "segments.create",
+    "segments.update",
+    "segments.delete",
+    "campaigns.read",
+    "campaigns.create",
+    "campaigns.update",
+    "campaigns.send",
   ],
   SALES: [
     "contacts.read",
@@ -219,6 +235,15 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "recommendations.read",
     "recommendations.update",
     "recommendations.create",
+    // No campaigns.send: mirrors the quotes.approve-style separation — SALES can build/edit a
+    // campaign but a higher-trust role must pull the trigger on a bulk send to potentially
+    // thousands of contacts, a materially larger blast radius than a single quote.
+    "segments.read",
+    "segments.create",
+    "segments.update",
+    "campaigns.read",
+    "campaigns.create",
+    "campaigns.update",
   ],
   FINANCE: [
     "quotes.read",
