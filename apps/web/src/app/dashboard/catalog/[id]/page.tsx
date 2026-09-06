@@ -96,6 +96,7 @@ export default function OfferDetailPage() {
     reset({
       type: offer.type,
       sku: offer.sku,
+      barcode: offer.barcode,
       name: offer.name,
       description: offer.description,
       pricing: offer.pricing,
@@ -236,6 +237,10 @@ export default function OfferDetailPage() {
                 <dd className="mt-0.5">{offer.sku ?? "—"}</dd>
               </div>
               <div>
+                <dt className="text-text-muted">Code-barres</dt>
+                <dd className="mt-0.5">{offer.barcode ?? "—"}</dd>
+              </div>
+              <div>
                 <dt className="text-text-muted">Prix</dt>
                 <dd className="mt-0.5">
                   {formatCurrency(offer.pricing.amount, offer.pricing.currency)}
@@ -341,6 +346,7 @@ export default function OfferDetailPage() {
               ))}
             </Select>
             <Input placeholder="SKU" {...register("sku")} />
+            <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />
             <Input placeholder="Nom" className="col-span-2" {...register("name")} />
             {errors.name && (
               <p className="col-span-2 text-xs text-destructive">{errors.name.message}</p>

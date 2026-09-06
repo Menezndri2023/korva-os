@@ -163,11 +163,14 @@ describe("OfferDetailPage", () => {
       expect(patchMock).toHaveBeenCalledWith("/offers/offer-1", {
         type: "product",
         sku: "CH-1",
+        barcode: "",
         name: "Chaise longue",
         description: "Une belle chaise",
         pricing: { amount: 50, currency: "EUR" },
         status: "active",
         trackStock: false,
+        stockOnHand: undefined,
+        lowStockThreshold: undefined,
         customFields: {},
       }),
     );

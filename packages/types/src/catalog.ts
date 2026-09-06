@@ -23,6 +23,8 @@ export interface OfferVariant {
   id: string;
   name: string;
   sku?: string;
+  /** EAN/UPC — distinct from `sku` (an internal reference), a variant's own retail barcode. */
+  barcode?: string;
   priceOverride?: number;
   /** Only meaningful when the parent Offer.trackStock is true. Independent from the parent
    *  offer's own stockOnHand — a variant-tracked offer's stock lives entirely here, per variant
@@ -35,8 +37,16 @@ export interface Category {
   organizationId: string;
   name: string;
   description?: string;
+  /** Suggested attribute keys for offers filed under this category (e.g. ["couleur","taille"]
+   *  for "Vêtements") — a hint for the catalog UI, never enforced/validated against Offer.attributes. */
+  attributeKeys?: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BundleItem {
+  offerId: string;
+  quantity: number;
 }
 
 export interface Offer {
@@ -49,6 +59,17 @@ export interface Offer {
   categories: string[];
   pricing: OfferPricing;
   sku?: string;
+  /** EAN/UPC for offers with no variants — see OfferVariant.barcode for the per-variant version. */
+  barcode?: string;
+  /** Free-form key-value product attributes (e.g. {"couleur":"rouge","taille":"M"}) — distinct
+   *  from `customFields`, which is org-defined and validated; attributes are unvalidated, ad-hoc
+   *  descriptors an offer can carry without any setup. */
+  attributes?: Record<string, string>;
+  /** A bundle/kit is a real Offer in its own right that also lists the offers it's composed of —
+   *  purely descriptive today, no cascading stock deduction from a bundle sale onto its
+   *  component offers (see docs/KORVA_OS_V2_AUDIT.md §2.4). */
+  isBundle: boolean;
+  bundleItems?: BundleItem[];
   variants: OfferVariant[];
   status: OfferStatus;
   customFields: CustomFieldValues;

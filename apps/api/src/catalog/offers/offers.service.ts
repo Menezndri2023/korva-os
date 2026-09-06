@@ -54,6 +54,13 @@ export class OffersService {
       categories: input.categories,
       pricing: input.pricing,
       sku: input.sku,
+      barcode: input.barcode,
+      attributes: input.attributes,
+      isBundle: input.isBundle,
+      bundleItems: input.bundleItems?.map((item) => ({
+        offerId: new Types.ObjectId(item.offerId),
+        quantity: item.quantity,
+      })),
       variants: input.variants,
       status: input.status,
       customFields,
@@ -175,6 +182,10 @@ export class OffersService {
 
     const updated = await this.offersRepository.update(organizationId, id, {
       ...input,
+      bundleItems: input.bundleItems?.map((item) => ({
+        offerId: new Types.ObjectId(item.offerId),
+        quantity: item.quantity,
+      })),
       ...(customFields !== undefined ? { customFields } : {}),
     });
     if (!updated) {

@@ -11,6 +11,7 @@ const customFieldsSchema = z.record(z.string(), z.unknown()).optional();
 export const createCategorySchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional(),
+  attributeKeys: z.array(z.string().min(1).max(60)).max(50).optional(),
 });
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 
@@ -26,8 +27,14 @@ export const offerPricingSchema = z.object({
 export const offerVariantInputSchema = z.object({
   name: z.string().min(1).max(120),
   sku: z.string().max(80).optional(),
+  barcode: z.string().max(64).optional(),
   priceOverride: z.number().nonnegative().optional(),
   stockOnHand: z.number().int().min(0).optional(),
+});
+
+export const bundleItemInputSchema = z.object({
+  offerId: z.string().min(1),
+  quantity: z.number().int().min(1),
 });
 
 export const createOfferSchema = z.object({
@@ -38,6 +45,10 @@ export const createOfferSchema = z.object({
   categories: z.array(z.string().min(1).max(80)).default([]),
   pricing: offerPricingSchema,
   sku: z.string().max(80).optional(),
+  barcode: z.string().max(64).optional(),
+  attributes: z.record(z.string(), z.string()).optional(),
+  isBundle: z.boolean().default(false),
+  bundleItems: z.array(bundleItemInputSchema).max(50).optional(),
   variants: z.array(offerVariantInputSchema).default([]),
   status: z.enum(OFFER_STATUSES).default("draft"),
   customFields: customFieldsSchema,

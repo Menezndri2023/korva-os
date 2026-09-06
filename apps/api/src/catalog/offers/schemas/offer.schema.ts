@@ -26,6 +26,10 @@ export class OfferVariant {
   @Prop()
   sku?: string;
 
+  /** EAN/UPC — distinct from `sku` (an internal reference), a variant's own retail barcode. */
+  @Prop()
+  barcode?: string;
+
   @Prop()
   priceOverride?: number;
 
@@ -34,6 +38,16 @@ export class OfferVariant {
   stockOnHand?: number;
 }
 export const OfferVariantSchema = SchemaFactory.createForClass(OfferVariant);
+
+@Schema({ _id: false })
+export class BundleItem {
+  @Prop({ type: Types.ObjectId, ref: 'Offer', required: true })
+  offerId!: Types.ObjectId;
+
+  @Prop({ required: true, min: 1 })
+  quantity!: number;
+}
+export const BundleItemSchema = SchemaFactory.createForClass(BundleItem);
 
 @Schema({
   timestamps: true,
@@ -85,6 +99,26 @@ export class Offer {
 
   @Prop()
   sku?: string;
+
+  /** EAN/UPC for offers with no variants — see OfferVariant.barcode for the per-variant version. */
+  @Prop()
+  barcode?: string;
+
+  /** Free-form key-value product attributes (e.g. {"couleur":"rouge","taille":"M"}) — distinct
+   *  from `customFields`, which is org-defined and validated against a CustomField schema;
+   *  attributes are unvalidated, ad-hoc descriptors an offer can carry without any setup. */
+  @Prop({ type: Object, default: undefined })
+  attributes?: Record<string, string>;
+
+  /** A bundle/kit is a real Offer in its own right (it has its own price/status/images) that also
+   *  lists the offers it's composed of, purely descriptive — no cascading stock deduction from a
+   *  bundle sale onto its component offers exists yet (out of scope for this pass; see
+   *  docs/KORVA_OS_V2_AUDIT.md §2.4's own "additive fields" framing for C1). */
+  @Prop({ default: false })
+  isBundle!: boolean;
+
+  @Prop({ type: [BundleItemSchema], default: undefined })
+  bundleItems?: BundleItem[];
 
   @Prop({ type: [OfferVariantSchema], default: [] })
   variants!: OfferVariant[];

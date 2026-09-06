@@ -58,6 +58,7 @@ export class CategoriesService {
       organizationId: new Types.ObjectId(organizationId),
       name: input.name,
       description: input.description,
+      attributeKeys: input.attributeKeys,
     });
 
     await this.auditService.record({

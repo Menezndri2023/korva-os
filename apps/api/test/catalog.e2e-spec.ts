@@ -31,6 +31,10 @@ interface OfferPayload {
   status: string;
   variants: OfferVariantPayload[];
   customFields: Record<string, unknown>;
+  barcode?: string;
+  attributes?: Record<string, string>;
+  isBundle?: boolean;
+  bundleItems?: { offerId: string; quantity: number }[];
 }
 interface ContactPayload {
   id: string;
@@ -188,6 +192,42 @@ describe('Catalog module (e2e)', () => {
       expect(offer.variants).toHaveLength(2);
       expect(offer.variants[0]?.id).toBeTruthy();
       expect(offer.customFields.material).toBe('cotton');
+    });
+
+    it('creates a bundle offer referencing another offer, and stores a barcode + free-form attributes (Phase C1)', async () => {
+      const componentRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Component Widget',
+          pricing: { amount: 5, currency: 'EUR' },
+          barcode: '1234567890123',
+          attributes: { couleur: 'rouge', taille: 'M' },
+        })
+        .expect(201);
+      const component = asSuccess<OfferPayload>(componentRes.body);
+      expect(component.barcode).toBe('1234567890123');
+      expect(component.attributes).toEqual({ couleur: 'rouge', taille: 'M' });
+
+      const bundleRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Bundle Pack',
+          pricing: { amount: 9, currency: 'EUR' },
+          isBundle: true,
+          bundleItems: [{ offerId: component.id, quantity: 2 }],
+        })
+        .expect(201);
+      const bundle = asSuccess<OfferPayload>(bundleRes.body);
+      expect(bundle.isBundle).toBe(true);
+      expect(bundle.bundleItems).toEqual([
+        { offerId: component.id, quantity: 2 },
+      ]);
     });
 
     it('filters offers by type', async () => {
@@ -770,6 +810,7 @@ describe('Catalog module (e2e)', () => {
       id: string;
       name: string;
       description?: string;
+      attributeKeys?: string[];
     }
 
     it('creates, lists, fetches and updates a category', async () => {
@@ -782,10 +823,15 @@ describe('Catalog module (e2e)', () => {
         .post('/api/v1/categories')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ name: 'Clothing', description: 'Apparel and accessories' })
+        .send({
+          name: 'Clothing',
+          description: 'Apparel and accessories',
+          attributeKeys: ['couleur', 'taille'],
+        })
         .expect(201);
       const category = asSuccess<CategoryPayload>(createRes.body);
       expect(category.name).toBe('Clothing');
+      expect(category.attributeKeys).toEqual(['couleur', 'taille']);
 
       const listRes = await request(server)
         .get('/api/v1/categories')

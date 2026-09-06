@@ -121,6 +121,7 @@ export default function CatalogPage() {
             ))}
           </select>
           <Input placeholder="SKU" {...register("sku")} />
+          <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />
           <Input placeholder="Nom" className="col-span-2" {...register("name")} />
           {errors.name && <p className="col-span-2 text-xs text-destructive">{errors.name.message}</p>}
           <textarea

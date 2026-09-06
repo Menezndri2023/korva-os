@@ -272,6 +272,7 @@ async function seedSalon(services: Services, summaries: AccountSummary[]): Promi
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   await services.offers.create(organizationId, ownerUserId, {
@@ -283,6 +284,7 @@ async function seedSalon(services: Services, summaries: AccountSummary[]): Promi
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   const facial = await services.offers.create(organizationId, ownerUserId, {
@@ -294,6 +296,7 @@ async function seedSalon(services: Services, summaries: AccountSummary[]): Promi
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   const packageOffer = await services.offers.create(organizationId, ownerUserId, {
@@ -305,6 +308,7 @@ async function seedSalon(services: Services, summaries: AccountSummary[]): Promi
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   const shampoo = await services.offers.create(organizationId, ownerUserId, {
@@ -316,6 +320,7 @@ async function seedSalon(services: Services, summaries: AccountSummary[]): Promi
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: true,
     stockOnHand: 24,
   });
@@ -425,6 +430,7 @@ async function seedRestaurant(services: Services, summaries: AccountSummary[]): 
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   const mainCourse = await services.offers.create(organizationId, ownerUserId, {
@@ -436,6 +442,7 @@ async function seedRestaurant(services: Services, summaries: AccountSummary[]): 
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   await services.offers.create(organizationId, ownerUserId, {
@@ -447,6 +454,7 @@ async function seedRestaurant(services: Services, summaries: AccountSummary[]): 
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   const soldOut = await services.offers.create(organizationId, ownerUserId, {
@@ -458,6 +466,7 @@ async function seedRestaurant(services: Services, summaries: AccountSummary[]): 
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: true,
     stockOnHand: 5,
   });
@@ -564,6 +573,7 @@ async function seedServicesPro(services: Services, summaries: AccountSummary[]):
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   await services.offers.create(organizationId, ownerUserId, {
@@ -575,6 +585,7 @@ async function seedServicesPro(services: Services, summaries: AccountSummary[]):
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
 
@@ -667,6 +678,7 @@ async function seedFormation(services: Services, summaries: AccountSummary[]): P
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
   await services.offers.create(organizationId, ownerUserId, {
@@ -678,6 +690,7 @@ async function seedFormation(services: Services, summaries: AccountSummary[]): P
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: false,
   });
 
@@ -776,6 +789,7 @@ async function seedCommerce(services: Services, summaries: AccountSummary[]): Pr
     ],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: true,
     stockOnHand: 40,
   });
@@ -788,6 +802,7 @@ async function seedCommerce(services: Services, summaries: AccountSummary[]): Pr
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: true,
     stockOnHand: 15,
   });
@@ -800,6 +815,7 @@ async function seedCommerce(services: Services, summaries: AccountSummary[]): Pr
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: true,
     stockOnHand: 20,
   });
@@ -812,6 +828,7 @@ async function seedCommerce(services: Services, summaries: AccountSummary[]): Pr
     variants: [],
     status: 'active',
     customFields: {},
+      isBundle: false,
     trackStock: true,
     stockOnHand: 1,
   });

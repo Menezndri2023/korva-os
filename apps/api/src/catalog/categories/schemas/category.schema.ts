@@ -19,6 +19,12 @@ export class Category {
 
   @Prop()
   description?: string;
+
+  /** Suggested attribute keys for offers filed under this category — a catalog-UI hint, never
+   *  enforced/validated against Offer.attributes. `default: undefined`, same array-default
+   *  reasoning as Organization.storefrontSections. */
+  @Prop({ type: [String], default: undefined })
+  attributeKeys?: string[];
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);
