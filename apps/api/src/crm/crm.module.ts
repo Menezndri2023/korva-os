@@ -117,6 +117,7 @@ import { Project, ProjectSchema } from './projects/schemas/project.schema';
 
 import { CustomFieldsModule } from '../custom-fields/custom-fields.module';
 import { AuditModule } from '../audit/audit.module';
+import { IdentityModule } from '../identity/identity.module';
 
 @Module({
   imports: [
@@ -150,6 +151,7 @@ import { AuditModule } from '../audit/audit.module';
     ]),
     CustomFieldsModule,
     AuditModule,
+    IdentityModule,
   ],
   controllers: [
     ContactsController,

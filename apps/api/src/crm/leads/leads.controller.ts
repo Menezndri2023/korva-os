@@ -48,6 +48,12 @@ export class LeadsController {
     return this.leadsService.getById(tenant.organizationId, id);
   }
 
+  @RequirePermissions('leads.read')
+  @Get(':id/score')
+  getScore(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.leadsService.getScore(tenant.organizationId, id);
+  }
+
   @RequirePermissions('leads.create')
   @Post()
   create(

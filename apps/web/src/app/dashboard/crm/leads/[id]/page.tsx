@@ -38,6 +38,12 @@ export default function LeadDetailPage() {
     queryFn: () => apiClient.get<Lead>(`/leads/${id}`),
     enabled: authReady,
   });
+  // Phase D4 (docs/KORVA_OS_V2_AUDIT.md §2.5) — a deterministic 0-100 score, computed on read.
+  const scoreQuery = useQuery({
+    queryKey: ["leads", id, "score"],
+    queryFn: () => apiClient.get<{ score: number; factors: Record<string, number> }>(`/leads/${id}/score`),
+    enabled: authReady,
+  });
   const contactsQuery = useQuery({
     queryKey: ["contacts", ""],
     queryFn: () => apiClient.get<Contact[]>("/contacts"),
@@ -210,6 +216,11 @@ export default function LeadDetailPage() {
             <p className="text-sm text-text-muted">{lead.source ?? "—"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {scoreQuery.data && (
+              <Badge title="Score basé sur la complétude du contact, l'engagement et la fraîcheur du prospect">
+                Score : {scoreQuery.data.score}/100
+              </Badge>
+            )}
             <select
               aria-label="Statut"
               value={lead.status}

@@ -16,9 +16,12 @@ import { LeadDocument } from './schemas/lead.schema';
 import { ContactsService } from '../contacts/contacts.service';
 import { DealsService } from '../deals/deals.service';
 import { DealDocument } from '../deals/schemas/deal.schema';
+import { ActivitiesService } from '../activities/activities.service';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { MembershipsService } from '../../identity/memberships/memberships.service';
+import { RoleDocument } from '../../identity/schemas/role.schema';
 
 @Injectable()
 export class LeadsService {
@@ -26,10 +29,48 @@ export class LeadsService {
     private readonly leadsRepository: LeadsRepository,
     private readonly contactsService: ContactsService,
     private readonly dealsService: DealsService,
+    private readonly activitiesService: ActivitiesService,
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    private readonly membershipsService: MembershipsService,
   ) {}
+
+  /**
+   * Lead auto-routing (Phase D4, docs/KORVA_OS_V2_AUDIT.md §2.5): a lead created without an
+   * explicit owner is assigned to whichever active SALES-role member currently holds the fewest
+   * active (not-yet-converted) leads — a deterministic load-balancing rule, not an LLM guess,
+   * consistent with the Decision Engine's own "never an LLM standing in for a business decision"
+   * philosophy. Returns undefined (no auto-assignment) if the org has no SALES-role member yet —
+   * callers must not fall back to guessing an owner.
+   */
+  private async resolveAutoRoutedOwner(
+    organizationId: string,
+  ): Promise<Types.ObjectId | undefined> {
+    const members =
+      await this.membershipsService.listMembersForOrganization(organizationId);
+    const salesMembers = members.filter((member) => {
+      if (member.status !== 'active') return false;
+      const role = member.roleId as unknown as RoleDocument;
+      return role.systemKey === 'SALES';
+    });
+    if (salesMembers.length === 0) return undefined;
+
+    const activeCounts =
+      await this.leadsRepository.countActiveByOwner(organizationId);
+    let chosen = salesMembers[0]!;
+    let chosenCount =
+      activeCounts.get((chosen.userId as unknown as { id: string }).id) ?? 0;
+    for (const member of salesMembers.slice(1)) {
+      const count =
+        activeCounts.get((member.userId as unknown as { id: string }).id) ?? 0;
+      if (count < chosenCount) {
+        chosen = member;
+        chosenCount = count;
+      }
+    }
+    return new Types.ObjectId((chosen.userId as unknown as { id: string }).id);
+  }
 
   async create(
     organizationId: string,
@@ -52,11 +93,15 @@ export class LeadsService {
       input.customFields,
     );
 
+    const ownerId = input.ownerId
+      ? new Types.ObjectId(input.ownerId)
+      : await this.resolveAutoRoutedOwner(organizationId);
+
     const lead = await this.leadsRepository.create({
       organizationId: new Types.ObjectId(organizationId),
       contactId: new Types.ObjectId(input.contactId),
       source: input.source,
-      ownerId: input.ownerId ? new Types.ObjectId(input.ownerId) : undefined,
+      ownerId,
       customFields,
     });
 
@@ -211,5 +256,43 @@ export class LeadsService {
     });
 
     return { lead: updated, deal };
+  }
+
+  /**
+   * Lead scoring v1 (Phase D4, docs/KORVA_OS_V2_AUDIT.md §2.5): a deterministic 0-100 score from
+   * signals already available on this lead's own data — never an ML/LLM guess, same philosophy
+   * as the Decision Engine's rules. Computed on read rather than stored/cached, so it's never
+   * stale: contact completeness (up to 30), logged engagement/activity (up to 40, 10 per
+   * activity), and recency (up to 30, decaying after a week and gone after a month). This is a
+   * deliberately simple starting model, not a finished scoring system — an organization with
+   * real sales data should eventually be able to tune or replace these weights.
+   */
+  async getScore(
+    organizationId: string,
+    id: string,
+  ): Promise<{ score: number; factors: Record<string, number> }> {
+    const lead = await this.getById(organizationId, id);
+    const contact = await this.contactsService.getById(
+      organizationId,
+      lead.contactId.toString(),
+    );
+    const activities = await this.activitiesService.listForEntity(
+      organizationId,
+      'lead',
+      id,
+    );
+
+    const contactCompleteness =
+      (contact.email ? 15 : 0) + (contact.phone ? 15 : 0);
+    const engagement = Math.min(40, activities.length * 10);
+    const ageDays =
+      (Date.now() -
+        (lead as unknown as { createdAt: Date }).createdAt.getTime()) /
+      (1000 * 60 * 60 * 24);
+    const recency = ageDays <= 7 ? 30 : ageDays <= 30 ? 15 : 0;
+
+    const factors = { contactCompleteness, engagement, recency };
+    const score = Math.min(100, contactCompleteness + engagement + recency);
+    return { score, factors };
   }
 }

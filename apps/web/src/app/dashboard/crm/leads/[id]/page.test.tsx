@@ -52,6 +52,7 @@ const lead = {
 
 function mockGetByPath(path: string) {
   if (path === "/leads/lead-1") return Promise.resolve(lead);
+  if (path === "/leads/lead-1/score") return Promise.resolve({ score: 45, factors: {} });
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
   if (path.startsWith("/pipelines")) return Promise.resolve([pipeline]);
   if (path.startsWith("/deals")) return Promise.resolve([]);

@@ -41,6 +41,15 @@ interface LeadPayload {
   id: string;
   status: string;
   contactId: string;
+  ownerId?: string;
+}
+interface LeadScorePayload {
+  score: number;
+  factors: Record<string, number>;
+}
+interface MembershipPayload {
+  id: string;
+  userId: string | { id: string; email: string };
 }
 interface DealPayload {
   id: string;
@@ -338,6 +347,146 @@ describe('CRM module (e2e)', () => {
       expect(filtered.length).toBeGreaterThan(0);
       expect(filtered.every((lead) => lead.contactId === contactId)).toBe(true);
       expect(filtered.map((lead) => lead.id)).toContain(ownLeadId);
+    });
+  });
+
+  describe('lead auto-routing and scoring (Phase D4)', () => {
+    let ownerToken: string;
+    let organizationId: string;
+    let contactId: string;
+
+    async function addSalesMember(email: string): Promise<string> {
+      await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email, password: 'password123' })
+        .expect(201);
+
+      const role = await connection.collection('roles').findOne({
+        organizationId: new Types.ObjectId(organizationId),
+        systemKey: 'SALES',
+      });
+      expect(role).not.toBeNull();
+
+      await request(server)
+        .post('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ email, roleId: String(role?._id) })
+        .expect(201);
+
+      const membersRes = await request(server)
+        .get('/api/v1/organizations/me/members')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const members = asSuccess<MembershipPayload[]>(membersRes.body);
+      const match = members.find(
+        (m) => typeof m.userId !== 'string' && m.userId.email === email,
+      );
+      expect(match).toBeDefined();
+      return typeof match!.userId === 'string'
+        ? match!.userId
+        : match!.userId.id;
+    }
+
+    beforeAll(async () => {
+      ({ accessToken: ownerToken, organizationId } = await registerOrgAndToken(
+        'routing-owner@korva.test',
+        'Routing Org',
+      ));
+      const contactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName: 'Prospect' })
+        .expect(201);
+      contactId = asSuccess<ContactPayload>(contactRes.body).id;
+    });
+
+    it('auto-routes a lead with no explicit owner to the least-loaded SALES member', async () => {
+      const salesAId = await addSalesMember('routing-sales-a@korva.test');
+      const salesBId = await addSalesMember('routing-sales-b@korva.test');
+
+      const lead1Res = await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId })
+        .expect(201);
+      const lead1 = asSuccess<LeadPayload>(lead1Res.body);
+      expect([salesAId, salesBId]).toContain(lead1.ownerId);
+
+      // Both SALES members start with 0 active leads — after lead1 lands on one of them, the
+      // least-loaded rule must route lead2 to the OTHER one, not the same one again.
+      const lead2Res = await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId })
+        .expect(201);
+      const lead2 = asSuccess<LeadPayload>(lead2Res.body);
+      expect(lead2.ownerId).not.toBe(lead1.ownerId);
+      expect([salesAId, salesBId]).toContain(lead2.ownerId);
+
+      // An explicit ownerId always wins over auto-routing.
+      const lead3Res = await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, ownerId: salesAId })
+        .expect(201);
+      expect(asSuccess<LeadPayload>(lead3Res.body).ownerId).toBe(salesAId);
+    });
+
+    it('computes a lead score from contact completeness, engagement, and recency, both grounded in real data', async () => {
+      const richContactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          firstName: 'Rich',
+          email: 'rich@example.com',
+          phone: '+33600000000',
+        })
+        .expect(201);
+      const richContactId = asSuccess<ContactPayload>(richContactRes.body).id;
+
+      const leadRes = await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId: richContactId })
+        .expect(201);
+      const leadId = asSuccess<LeadPayload>(leadRes.body).id;
+
+      const scoreRes = await request(server)
+        .get(`/api/v1/leads/${leadId}/score`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const score = asSuccess<LeadScorePayload>(scoreRes.body);
+      // Fresh lead, contact has both email and phone: full completeness + full recency, no
+      // engagement yet.
+      expect(score.factors.contactCompleteness).toBe(30);
+      expect(score.factors.recency).toBe(30);
+      expect(score.factors.engagement).toBe(0);
+      expect(score.score).toBe(60);
+
+      await request(server)
+        .post('/api/v1/activities')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ entity: 'lead', entityId: leadId, type: 'call' })
+        .expect(201);
+
+      const scoreAfterRes = await request(server)
+        .get(`/api/v1/leads/${leadId}/score`)
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const scoreAfter = asSuccess<LeadScorePayload>(scoreAfterRes.body);
+      expect(scoreAfter.factors.engagement).toBe(10);
+      expect(scoreAfter.score).toBe(70);
     });
   });
 

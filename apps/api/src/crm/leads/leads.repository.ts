@@ -75,4 +75,29 @@ export class LeadsRepository {
       )
       .exec();
   }
+
+  /**
+   * One row per owner currently holding at least one active (not-yet-converted) lead — backs
+   * LeadsService's least-loaded auto-routing (Phase D4, docs/KORVA_OS_V2_AUDIT.md §2.5). A single
+   * aggregation rather than one count() per candidate owner, so routing a new lead never costs
+   * more than one extra query regardless of team size.
+   */
+  async countActiveByOwner(
+    organizationId: string,
+  ): Promise<Map<string, number>> {
+    const rows = await this.leadModel.aggregate<{
+      _id: Types.ObjectId;
+      count: number;
+    }>([
+      {
+        $match: {
+          organizationId: new Types.ObjectId(organizationId),
+          status: { $ne: 'converted' },
+          ownerId: { $exists: true },
+        },
+      },
+      { $group: { _id: '$ownerId', count: { $sum: 1 } } },
+    ]);
+    return new Map(rows.map((row) => [row._id.toString(), row.count]));
+  }
 }
