@@ -9,8 +9,8 @@ import {
   type CreatePurchaseOrderInput,
 } from "@korva/validation";
 import { PURCHASE_ORDER_STATUSES } from "@korva/types";
-import type { Offer, PurchaseOrder, PurchaseOrderStatus, Supplier } from "@korva/types";
-import { Badge, Button, Card, Dialog, Input, Pagination } from "@korva/ui";
+import type { Offer, PurchaseOrder, PurchaseOrderStatus, Supplier, Warehouse } from "@korva/types";
+import { Badge, Button, Card, Dialog, Input, Pagination, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
@@ -104,10 +104,23 @@ export default function PurchaseOrdersPage() {
   // the dialog extended before this UI could receive it correctly.
   const [receivingPo, setReceivingPo] = useState<PurchaseOrder | null>(null);
   const [receiveQuantities, setReceiveQuantities] = useState<Record<string, number>>({});
+  const [receiveWarehouseId, setReceiveWarehouseId] = useState("");
   const [receiveError, setReceiveError] = useState<string | null>(null);
+  const warehousesQuery = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: () => apiClient.get<Warehouse[]>("/warehouses"),
+    enabled: authReady,
+  });
   const receiveMutation = useMutation({
-    mutationFn: ({ id, items }: { id: string; items: { offerId: string; quantity: number }[] }) =>
-      apiClient.post(`/purchase-orders/${id}/receive`, { items }),
+    mutationFn: ({
+      id,
+      items,
+      warehouseId,
+    }: {
+      id: string;
+      items: { offerId: string; quantity: number }[];
+      warehouseId?: string;
+    }) => apiClient.post(`/purchase-orders/${id}/receive`, { items, warehouseId }),
     onSuccess: () => {
       invalidate();
       setReceivingPo(null);
@@ -117,6 +130,7 @@ export default function PurchaseOrdersPage() {
 
   function openReceiveDialog(po: PurchaseOrder) {
     setReceiveError(null);
+    setReceiveWarehouseId("");
     setReceiveQuantities(
       Object.fromEntries(
         po.items.map((item) => [item.offerId, item.quantity - item.receivedQuantity]),
@@ -367,6 +381,23 @@ export default function PurchaseOrdersPage() {
                 </div>
               );
             })}
+            {warehousesQuery.data && warehousesQuery.data.length > 0 && (
+              <label className="flex items-center gap-2 text-sm text-text-muted">
+                Entrepôt de réception
+                <Select
+                  value={receiveWarehouseId}
+                  onChange={(e) => setReceiveWarehouseId(e.target.value)}
+                  className="w-56"
+                >
+                  <option value="">Aucun entrepôt (global)</option>
+                  {warehousesQuery.data.map((warehouse) => (
+                    <option key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
             {receiveError && <p className="text-sm text-destructive">{receiveError}</p>}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setReceivingPo(null)}>
@@ -383,7 +414,11 @@ export default function PurchaseOrdersPage() {
                     setReceiveError("Indiquez au moins une quantité à réceptionner.");
                     return;
                   }
-                  receiveMutation.mutate({ id: receivingPo.id, items });
+                  receiveMutation.mutate({
+                    id: receivingPo.id,
+                    items,
+                    warehouseId: receiveWarehouseId || undefined,
+                  });
                 }}
               >
                 {receiveMutation.isPending ? "Réception..." : "Confirmer la réception"}

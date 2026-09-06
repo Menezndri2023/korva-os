@@ -44,10 +44,13 @@ const receivePurchaseOrderLineSchema = z.object({
 /** Omitting `items` (or the whole request body) receives every line in full — the original
  *  one-shot behavior; passing `items` receives only those lines, by the given quantity — a
  *  partial delivery. The `.optional()` at the top level (not just on `items`) matters: a
- *  no-body POST request can arrive with `req.body` itself `undefined`, not `{}`. */
+ *  no-body POST request can arrive with `req.body` itself `undefined`, not `{}`.
+ *  `warehouseId` (Phase C2) records this specific receipt against one warehouse's StockLevel —
+ *  omitted keeps today's exact behavior (aggregate-only, no per-location breakdown). */
 export const receivePurchaseOrderSchema = z
   .object({
     items: z.array(receivePurchaseOrderLineSchema).min(1).optional(),
+    warehouseId: z.string().optional(),
   })
   .optional()
   .transform((value) => value ?? {});

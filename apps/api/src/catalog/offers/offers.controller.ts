@@ -127,6 +127,16 @@ export class OffersController {
     );
   }
 
+  /** Per-warehouse stock breakdown (Phase C2, docs/KORVA_OS_V2_AUDIT.md §2.4). */
+  @RequirePermissions('offers.read')
+  @Get(':id/stock/levels')
+  getStockLevels(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+  ) {
+    return this.offersService.getStockLevels(tenant.organizationId, id);
+  }
+
   @RequirePermissions('offers.delete')
   @Delete(':id')
   async remove(

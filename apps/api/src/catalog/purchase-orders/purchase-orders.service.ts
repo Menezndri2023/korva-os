@@ -300,6 +300,7 @@ export class PurchaseOrdersService {
           quantity: line.quantity,
           variantId: line.variantId,
           reason: `Purchase order ${id}`,
+          warehouseId: input.warehouseId,
         },
       );
       findLine(line.offerId, line.variantId)!.receivedQuantity += line.quantity;

@@ -44,6 +44,19 @@ import { SuppliersController } from './purchase-orders/suppliers.controller';
 import { PurchaseOrdersRepository } from './purchase-orders/purchase-orders.repository';
 import { PurchaseOrdersService } from './purchase-orders/purchase-orders.service';
 import { PurchaseOrdersController } from './purchase-orders/purchase-orders.controller';
+import {
+  Warehouse,
+  WarehouseSchema,
+} from './warehouses/schemas/warehouse.schema';
+import {
+  StockLevel,
+  StockLevelSchema,
+} from './warehouses/schemas/stock-level.schema';
+import { WarehousesRepository } from './warehouses/warehouses.repository';
+import { WarehousesService } from './warehouses/warehouses.service';
+import { WarehousesController } from './warehouses/warehouses.controller';
+import { StockLevelsRepository } from './warehouses/stock-levels.repository';
+import { StockLevelsService } from './warehouses/stock-levels.service';
 
 @Module({
   imports: [
@@ -63,6 +76,8 @@ import { PurchaseOrdersController } from './purchase-orders/purchase-orders.cont
       { name: Quote.name, schema: QuoteSchema },
       { name: Supplier.name, schema: SupplierSchema },
       { name: PurchaseOrder.name, schema: PurchaseOrderSchema },
+      { name: Warehouse.name, schema: WarehouseSchema },
+      { name: StockLevel.name, schema: StockLevelSchema },
     ]),
     CustomFieldsModule,
     AuditModule,
@@ -75,6 +90,7 @@ import { PurchaseOrdersController } from './purchase-orders/purchase-orders.cont
     CategoriesController,
     SuppliersController,
     PurchaseOrdersController,
+    WarehousesController,
   ],
   providers: [
     OffersRepository,
@@ -89,6 +105,10 @@ import { PurchaseOrdersController } from './purchase-orders/purchase-orders.cont
     SuppliersService,
     PurchaseOrdersRepository,
     PurchaseOrdersService,
+    WarehousesRepository,
+    WarehousesService,
+    StockLevelsRepository,
+    StockLevelsService,
   ],
   exports: [OffersService, InventoryService, CategoriesService],
 })

@@ -64,6 +64,11 @@ export type UpdateOfferInput = z.infer<typeof updateOfferSchema>;
 export const adjustStockSchema = z.object({
   variantId: z.string().optional(),
   stockOnHand: z.number().int().min(0),
+  /** Phase C2 (KORVA_OS_V2_AUDIT.md §2.4) — when given, sets THIS warehouse's own count to
+   *  `stockOnHand` (not the offer's overall total) and adjusts the offer/variant aggregate by
+   *  the resulting delta. Omitted (the default) keeps today's exact behavior: an absolute set
+   *  of the aggregate itself, with no per-warehouse breakdown involved. */
+  warehouseId: z.string().optional(),
 });
 export type AdjustStockInput = z.infer<typeof adjustStockSchema>;
 
@@ -80,6 +85,9 @@ export const recordStockMovementSchema = z
       .int()
       .refine((v) => v !== 0, "quantity must not be zero"),
     reason: z.string().max(500).optional(),
+    /** Phase C2 — when given, this movement's delta also applies to this warehouse's own
+     *  StockLevel row (created on first use), in addition to the offer/variant aggregate. */
+    warehouseId: z.string().optional(),
   })
   .refine((data) => data.type === "correction" || data.quantity > 0, {
     message: "quantity must be positive for received/returned/damaged",

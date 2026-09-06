@@ -19,6 +19,8 @@ import { OfferReferencesRepository } from './offer-references.repository';
 import { StockMovementsRepository } from './stock-movements.repository';
 import { OfferDocument } from './schemas/offer.schema';
 import { StockMovementDocument } from './schemas/stock-movement.schema';
+import { StockLevelsRepository } from '../warehouses/stock-levels.repository';
+import { WarehousesService } from '../warehouses/warehouses.service';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
@@ -29,6 +31,8 @@ export class OffersService {
     private readonly offersRepository: OffersRepository,
     private readonly offerReferencesRepository: OfferReferencesRepository,
     private readonly stockMovementsRepository: StockMovementsRepository,
+    private readonly stockLevelsRepository: StockLevelsRepository,
+    private readonly warehousesService: WarehousesService,
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
@@ -211,7 +215,13 @@ export class OffersService {
    *  the offer to already have trackStock enabled (turn tracking on via update() first).
    *  Variant-aware: pass `variantId` to correct one variant's count instead of the offer's own —
    *  also records a `correction` StockMovement for the resulting delta, so this absolute-set
-   *  action still leaves a real audit trail rather than silently overwriting the counter. */
+   *  action still leaves a real audit trail rather than silently overwriting the counter.
+   *
+   *  Phase C2 (docs/KORVA_OS_V2_AUDIT.md §2.4): when `input.warehouseId` is given, `stockOnHand`
+   *  sets THAT warehouse's own count, not the offer's overall total — the aggregate is adjusted
+   *  by the resulting delta instead of being overwritten, so other warehouses' stock is never
+   *  touched. Omitting `warehouseId` keeps today's exact behavior unchanged: a direct absolute
+   *  set of the aggregate, with no StockLevel row involved at all. */
   async adjustStock(
     organizationId: string,
     userId: string,
@@ -240,15 +250,30 @@ export class OffersService {
       });
     }
 
+    let aggregateTarget = input.stockOnHand;
+    if (input.warehouseId) {
+      await this.warehousesService.getById(organizationId, input.warehouseId);
+      const { previousQuantity } = await this.stockLevelsRepository.setQuantity(
+        organizationId,
+        id,
+        input.variantId,
+        input.warehouseId,
+        input.stockOnHand,
+      );
+      // Preserve every OTHER warehouse's contribution to the aggregate — only this warehouse's
+      // own delta moves the total, never a blind overwrite.
+      aggregateTarget = (before ?? 0) - previousQuantity + input.stockOnHand;
+    }
+
     const updated = input.variantId
       ? await this.offersRepository.updateVariantStock(
           organizationId,
           id,
           input.variantId,
-          input.stockOnHand,
+          aggregateTarget,
         )
       : await this.offersRepository.update(organizationId, id, {
-          stockOnHand: input.stockOnHand,
+          stockOnHand: aggregateTarget,
         });
     if (!updated) {
       throw new NotFoundException({
@@ -257,7 +282,7 @@ export class OffersService {
       });
     }
 
-    const delta = input.stockOnHand - (before ?? 0);
+    const delta = aggregateTarget - (before ?? 0);
     if (delta !== 0) {
       await this.stockMovementsRepository.create({
         organizationId: new Types.ObjectId(organizationId),
@@ -267,7 +292,7 @@ export class OffersService {
           : undefined,
         type: 'correction',
         quantity: delta,
-        stockAfter: input.stockOnHand,
+        stockAfter: aggregateTarget,
         userId: new Types.ObjectId(userId),
       });
     }
@@ -279,8 +304,9 @@ export class OffersService {
       entity: 'offer',
       entityId: id,
       metadata: {
-        stockAdjustedTo: input.stockOnHand,
+        stockAdjustedTo: aggregateTarget,
         variantId: input.variantId,
+        warehouseId: input.warehouseId,
       },
     });
 
@@ -292,7 +318,15 @@ export class OffersService {
    *  mutation. Applied atomically via the same $inc-based repository methods InventoryService
    *  uses for order-driven changes, so a manual entry and a concurrent sale can never race into
    *  a lost update. Subtractive types (damaged, or a negative correction) are guarded against
-   *  taking stock below 0, same as an order reservation would be. */
+   *  taking stock below 0, same as an order reservation would be.
+   *
+   *  Phase C2: when `input.warehouseId` is given, the same delta also applies to that
+   *  warehouse's own StockLevel row. The two writes aren't in a Mongo transaction (matching this
+   *  codebase's own accepted precedent for PurchaseOrdersService.receive's per-line loop), so for
+   *  a decrement the AGGREGATE is adjusted first (it's the pre-existing, battle-tested guard);
+   *  if the warehouse-specific decrement then fails — this location alone doesn't have enough,
+   *  even though the org's total does — the aggregate decrement is explicitly rolled back
+   *  (re-incremented) before rejecting, so the two never drift out of sync. */
   async recordStockMovement(
     organizationId: string,
     userId: string,
@@ -319,6 +353,9 @@ export class OffersService {
         code: 'OFFER_VARIANT_NOT_FOUND',
         message: 'Variant not found on this offer',
       });
+    }
+    if (input.warehouseId) {
+      await this.warehousesService.getById(organizationId, input.warehouseId);
     }
 
     // Direction is determined by TYPE, not by the input quantity's own sign: the schema requires
@@ -354,6 +391,41 @@ export class OffersService {
       });
     }
 
+    if (input.warehouseId) {
+      if (delta > 0) {
+        await this.stockLevelsRepository.incrementQuantity(
+          organizationId,
+          offerId,
+          input.variantId,
+          input.warehouseId,
+          delta,
+        );
+      } else {
+        const stockLevel = await this.stockLevelsRepository.decrementQuantity(
+          organizationId,
+          offerId,
+          input.variantId,
+          input.warehouseId,
+          -delta,
+        );
+        if (!stockLevel) {
+          // Roll back the aggregate decrement already applied above — this specific warehouse
+          // doesn't have enough, even though the offer's total (spread across other warehouses)
+          // does. Never leaves the two counters out of sync.
+          await this.offersRepository.incrementStock(
+            organizationId,
+            offerId,
+            -delta,
+            input.variantId,
+          );
+          throw new BadRequestException({
+            code: 'INSUFFICIENT_STOCK_AT_WAREHOUSE',
+            message: 'Not enough stock at this warehouse for this movement',
+          });
+        }
+      }
+    }
+
     const movement = await this.stockMovementsRepository.create({
       organizationId: new Types.ObjectId(organizationId),
       offerId: new Types.ObjectId(offerId),
@@ -376,6 +448,7 @@ export class OffersService {
       metadata: {
         stockMovementType: input.type,
         quantity: input.quantity,
+        warehouseId: input.warehouseId,
         variantId: input.variantId,
       },
     });
@@ -402,6 +475,12 @@ export class OffersService {
         totalPages: Math.max(1, Math.ceil(total / query.limit)),
       },
     };
+  }
+
+  /** Per-warehouse breakdown for one offer (Phase C2) — empty for any offer that has never had a
+   *  warehouse-scoped stock operation applied to it. */
+  getStockLevels(organizationId: string, offerId: string) {
+    return this.stockLevelsRepository.listForOffer(organizationId, offerId);
   }
 
   async delete(

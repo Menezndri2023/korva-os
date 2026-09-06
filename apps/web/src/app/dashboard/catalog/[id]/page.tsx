@@ -19,8 +19,10 @@ import {
   type CustomFieldValues,
   type Offer,
   type OfferType,
+  type StockLevel,
   type StockMovement,
   type StockMovementType,
+  type Warehouse,
 } from "@korva/types";
 import { Badge, Button, Card, Dialog, Input, Pagination, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
@@ -467,8 +469,70 @@ export default function OfferDetailPage() {
         </Card>
       )}
 
+      {offer.trackStock && <StockLevelsSection offerId={id} variants={offer.variants} />}
       {offer.trackStock && <StockMovementsSection offerId={id} variants={offer.variants} />}
     </div>
+  );
+}
+
+/** Read-only per-warehouse breakdown (Phase C2) — empty for any offer that has never had a
+ *  warehouse-scoped stock operation applied to it (see OffersService.adjustStock/
+ *  recordStockMovement's `warehouseId` parameter). Hidden entirely once there's nothing to show,
+ *  so an org that never uses multiple warehouses never sees an empty section. */
+function StockLevelsSection({
+  offerId,
+  variants,
+}: {
+  offerId: string;
+  variants: Offer["variants"];
+}) {
+  const levelsQuery = useQuery({
+    queryKey: ["offers", offerId, "stock-levels"],
+    queryFn: () => apiClient.get<StockLevel[]>(`/offers/${offerId}/stock/levels`),
+  });
+  const warehousesQuery = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: () => apiClient.get<Warehouse[]>("/warehouses"),
+  });
+  const levels = levelsQuery.data;
+  const warehouses = warehousesQuery.data;
+
+  if (!levels || levels.length === 0) return null;
+
+  function warehouseName(warehouseId: string): string {
+    return warehouses?.find((w) => w.id === warehouseId)?.name ?? "—";
+  }
+  function variantName(variantId?: string | null): string {
+    if (!variantId) return "—";
+    return variants.find((v) => v.id === variantId)?.name ?? "—";
+  }
+
+  return (
+    <Card className="p-6">
+      <h2 className="text-sm font-semibold text-text">Stock par entrepôt</h2>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+            <tr>
+              <th className="px-3 py-2">Entrepôt</th>
+              {variants.length > 0 && <th className="px-3 py-2">Variante</th>}
+              <th className="px-3 py-2">Quantité</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {levels.map((level) => (
+              <tr key={level.id}>
+                <td className="px-3 py-2 font-medium">{warehouseName(level.warehouseId)}</td>
+                {variants.length > 0 && (
+                  <td className="px-3 py-2 text-text-muted">{variantName(level.variantId)}</td>
+                )}
+                <td className="px-3 py-2">{level.quantity}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 
@@ -567,6 +631,7 @@ function StockMovementsSection({
       return Promise.all([
         queryClient.invalidateQueries({ queryKey: ["offers", offerId] }),
         queryClient.invalidateQueries({ queryKey: ["stock-movements", offerId] }),
+        queryClient.invalidateQueries({ queryKey: ["offers", offerId, "stock-levels"] }),
       ]);
     },
   });
@@ -577,6 +642,14 @@ function StockMovementsSection({
       apiClient.getList<StockMovement>(`/offers/${offerId}/stock/movements?page=${page}`),
   });
   const movements = movementsQuery.data?.data;
+
+  // Phase C2 (docs/KORVA_OS_V2_AUDIT.md §2.4) — optional: recording a movement with no warehouse
+  // keeps today's exact aggregate-only behavior.
+  const warehousesQuery = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: () => apiClient.get<Warehouse[]>("/warehouses"),
+  });
+  const warehouses = warehousesQuery.data;
 
   return (
     <Card className="p-6">
@@ -598,6 +671,21 @@ function StockMovementsSection({
             {variants.map((variant) => (
               <option key={variant.id} value={variant.id}>
                 {variant.name}
+              </option>
+            ))}
+          </Select>
+        )}
+        {warehouses && warehouses.length > 0 && (
+          <Select
+            aria-label="Entrepôt"
+            {...register("warehouseId", {
+              setValueAs: (v: string) => (v === "" ? undefined : v),
+            })}
+          >
+            <option value="">Aucun entrepôt (global)</option>
+            {warehouses.map((warehouse) => (
+              <option key={warehouse.id} value={warehouse.id}>
+                {warehouse.name}
               </option>
             ))}
           </Select>
