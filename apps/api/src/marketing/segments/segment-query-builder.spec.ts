@@ -150,9 +150,7 @@ describe('buildContactFilter', () => {
     const criteria: SegmentCriteria = {
       version: 1,
       match: 'all',
-      rules: [
-        { field: 'not-a-real-field', operator: 'equals', value: 'x' },
-      ],
+      rules: [{ field: 'not-a-real-field', operator: 'equals', value: 'x' }],
     };
     expect(() => buildContactFilter(organizationId, criteria)).toThrow(
       /Unrecognized segment rule field/,

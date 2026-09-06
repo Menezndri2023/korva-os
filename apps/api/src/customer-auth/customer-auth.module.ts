@@ -37,6 +37,7 @@ import { FinanceModule } from '../finance/finance.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { ReviewsModule } from '../reviews/reviews.module';
+import { CustomerServiceModule } from '../customer-service/customer-service.module';
 
 /**
  * Top-level module (not nested under PublicModule) so it's independently testable/importable —
@@ -44,8 +45,8 @@ import { ReviewsModule } from '../reviews/reviews.module';
  * PublicController's existing guest-checkout/tracking endpoints. Registered a *second*,
  * separately-configured JwtModule instance here (own secret, own default expiresIn) — verified
  * no reverse edge exists before importing CrmModule/CommerceModule/BookingModule/IdentityModule/
- * FinanceModule/CatalogModule/DocumentsModule/ReviewsModule (this module is brand new, so
- * nothing could import it back — re-verified via grep before each addition).
+ * FinanceModule/CatalogModule/DocumentsModule/ReviewsModule/CustomerServiceModule (this module is
+ * brand new, so nothing could import it back — re-verified via grep before each addition).
  */
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { ReviewsModule } from '../reviews/reviews.module';
     CatalogModule,
     DocumentsModule,
     ReviewsModule,
+    CustomerServiceModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

@@ -99,6 +99,10 @@ export const CORE_PERMISSIONS = [
   "campaigns.create",
   "campaigns.update",
   "campaigns.send",
+  "tickets.read",
+  "tickets.create",
+  "tickets.update",
+  "tickets.assign",
 ] as const satisfies readonly Permission[];
 
 export type CorePermission = (typeof CORE_PERMISSIONS)[number];
@@ -198,6 +202,10 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "campaigns.create",
     "campaigns.update",
     "campaigns.send",
+    "tickets.read",
+    "tickets.create",
+    "tickets.update",
+    "tickets.assign",
   ],
   SALES: [
     "contacts.read",
@@ -294,5 +302,12 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> 
     "notifications.read",
     "notifications.update",
     "recommendations.read",
+    // Second deliberate STAFF write-capable resource: Customer Service's entire premise is
+    // front-line staff working their own ticket queue day-to-day, unlike quotes/invoices/orders
+    // which are genuinely sales/finance-owned. Reassigning ownership (tickets.assign) stays
+    // MANAGER+, mirroring bookings.cancel being narrower than bookings.update.
+    "tickets.read",
+    "tickets.create",
+    "tickets.update",
   ],
 };

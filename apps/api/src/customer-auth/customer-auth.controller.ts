@@ -27,6 +27,8 @@ import {
   createReturnRequestSchema,
   addWishlistItemSchema,
   submitQuizAttemptSchema,
+  createCustomerTicketSchema,
+  listCustomerTicketsQuerySchema,
   type CustomerRegisterInput,
   type CustomerLoginInput,
   type CustomerRefreshInput,
@@ -39,6 +41,8 @@ import {
   type CreateReturnRequestInput,
   type AddWishlistItemInput,
   type SubmitQuizAttemptInput,
+  type CreateCustomerTicketInput,
+  type ListCustomerTicketsQuery,
 } from '@korva/validation';
 import { CustomerAuthService } from './customer-auth.service';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
@@ -424,5 +428,37 @@ export class CustomerAuthController {
   ) {
     await this.customerAuthService.removeFromWishlist(slug, req.user!, offerId);
     return { removed: true };
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Post('tickets')
+  createTicket(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+    @Body(new ZodValidationPipe(createCustomerTicketSchema))
+    body: CreateCustomerTicketInput,
+  ) {
+    return this.customerAuthService.createTicket(slug, req.user!, body);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('tickets')
+  listTickets(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+    @Query(new ZodValidationPipe(listCustomerTicketsQuerySchema))
+    query: ListCustomerTicketsQuery,
+  ) {
+    return this.customerAuthService.listTickets(slug, req.user!, query);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('tickets/:id')
+  getTicket(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getTicket(slug, req.user!, id);
   }
 }

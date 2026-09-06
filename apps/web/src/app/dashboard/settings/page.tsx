@@ -2066,6 +2066,7 @@ const CUSTOM_FIELD_ENTITY_LABELS: Record<CustomFieldEntity, string> = {
   offers: "Produits & services",
   bookings: "Réservations",
   orders: "Commandes",
+  tickets: "Tickets",
 };
 
 const CUSTOM_FIELD_TYPE_LABELS: Record<CreateCustomFieldInput["type"], string> = {

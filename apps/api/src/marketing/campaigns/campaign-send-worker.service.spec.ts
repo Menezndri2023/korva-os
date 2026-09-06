@@ -40,7 +40,9 @@ function buildService(options?: {
   const recordOutcome = jest
     .fn()
     .mockResolvedValue(
-      options?.recordOutcomeReturnsNull ? null : { id: RECIPIENT_ID, status: 'sent' },
+      options?.recordOutcomeReturnsNull
+        ? null
+        : { id: RECIPIENT_ID, status: 'sent' },
     );
   const campaignRecipientsRepository = {
     findById,
@@ -103,14 +105,19 @@ function buildService(options?: {
   };
 }
 
-async function send(service: CampaignSendWorkerService, job: Job<CampaignSendJobData>) {
+async function send(
+  service: CampaignSendWorkerService,
+  job: Job<CampaignSendJobData>,
+) {
   await (
     service as unknown as { send(job: Job<CampaignSendJobData>): Promise<void> }
   ).send(job);
 }
 
 describe('CampaignSendWorkerService.send', () => {
-  let fallbackSpy: jest.SpiedFunction<typeof fallbackModule.sendWithChannelFallback>;
+  let fallbackSpy: jest.SpiedFunction<
+    typeof fallbackModule.sendWithChannelFallback
+  >;
 
   beforeEach(() => {
     fallbackSpy = jest.spyOn(fallbackModule, 'sendWithChannelFallback');
@@ -146,7 +153,11 @@ describe('CampaignSendWorkerService.send', () => {
       'Hello Ada',
       'Campaign send',
     );
-    expect(recordOutcome).toHaveBeenCalledWith(RECIPIENT_ID, 'sent', 'whatsapp');
+    expect(recordOutcome).toHaveBeenCalledWith(
+      RECIPIENT_ID,
+      'sent',
+      'whatsapp',
+    );
   });
 
   it('records a failed outcome when every channel fails', async () => {
@@ -155,7 +166,11 @@ describe('CampaignSendWorkerService.send', () => {
 
     await send(service, buildJob());
 
-    expect(recordOutcome).toHaveBeenCalledWith(RECIPIENT_ID, 'failed', undefined);
+    expect(recordOutcome).toHaveBeenCalledWith(
+      RECIPIENT_ID,
+      'failed',
+      undefined,
+    );
   });
 
   it('skips the campaign-level progress increment when recordOutcome no-ops (already processed by a prior attempt)', async () => {
@@ -207,6 +222,10 @@ describe('CampaignSendWorkerService.send', () => {
     await send(service, buildJob());
 
     expect(fallbackSpy).not.toHaveBeenCalled();
-    expect(recordOutcome).toHaveBeenCalledWith(RECIPIENT_ID, 'skipped', undefined);
+    expect(recordOutcome).toHaveBeenCalledWith(
+      RECIPIENT_ID,
+      'skipped',
+      undefined,
+    );
   });
 });

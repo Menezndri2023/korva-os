@@ -182,9 +182,7 @@ describe('Marketing module (e2e)', () => {
           criteria: {
             version: 1,
             match: 'all',
-            rules: [
-              { field: 'customField:not_defined', operator: 'is_set' },
-            ],
+            rules: [{ field: 'customField:not_defined', operator: 'is_set' }],
           },
         })
         .expect(400);
@@ -244,7 +242,7 @@ describe('Marketing module (e2e)', () => {
         .expect(404);
     });
 
-    it('never returns another organization\'s segment', async () => {
+    it("never returns another organization's segment", async () => {
       const createRes = await request(server)
         .post('/api/v1/segments')
         .set('Authorization', `Bearer ${accessToken}`)
@@ -273,7 +271,7 @@ describe('Marketing module (e2e)', () => {
       expect(asError(res.body).code).toBe('SEGMENT_NOT_FOUND');
     });
 
-    it('never matches another organization\'s contacts', () => {
+    it("never matches another organization's contacts", () => {
       // Sanity check on the fixtures above rather than a new request: vipContactId/
       // otherContactId only ever created under `organizationId` — buildContactFilter's own
       // unit tests (segment-query-builder.spec.ts) cover the tenant-isolation guarantee at the
@@ -434,7 +432,9 @@ describe('Marketing module (e2e)', () => {
           criteria: {
             version: 1,
             match: 'all',
-            rules: [{ field: 'tag', operator: 'has_tag', value: 'no-such-tag' }],
+            rules: [
+              { field: 'tag', operator: 'has_tag', value: 'no-such-tag' },
+            ],
           },
         })
         .expect(201);
@@ -493,7 +493,10 @@ describe('Marketing module (e2e)', () => {
       segmentId = asSuccess<SegmentPayload>(segmentRes.body).id;
     });
 
-    async function addMember(email: string, systemKey: string): Promise<string> {
+    async function addMember(
+      email: string,
+      systemKey: string,
+    ): Promise<string> {
       const authRes = await request(server)
         .post('/api/v1/auth/register')
         .send({ email, password: 'password123' })
@@ -517,7 +520,10 @@ describe('Marketing module (e2e)', () => {
     }
 
     it('lets SALES create and edit campaigns but not send them', async () => {
-      const salesToken = await addMember('marketing-rbac-sales@korva.test', 'SALES');
+      const salesToken = await addMember(
+        'marketing-rbac-sales@korva.test',
+        'SALES',
+      );
 
       const createRes = await request(server)
         .post('/api/v1/campaigns')
@@ -536,8 +542,14 @@ describe('Marketing module (e2e)', () => {
     });
 
     it('denies STAFF and FINANCE any access to segments/campaigns', async () => {
-      const staffToken = await addMember('marketing-rbac-staff@korva.test', 'STAFF');
-      const financeToken = await addMember('marketing-rbac-finance@korva.test', 'FINANCE');
+      const staffToken = await addMember(
+        'marketing-rbac-staff@korva.test',
+        'STAFF',
+      );
+      const financeToken = await addMember(
+        'marketing-rbac-finance@korva.test',
+        'FINANCE',
+      );
 
       for (const token of [staffToken, financeToken]) {
         const res = await request(server)
@@ -550,7 +562,10 @@ describe('Marketing module (e2e)', () => {
     });
 
     it('lets MANAGER send a campaign', async () => {
-      const managerToken = await addMember('marketing-rbac-manager@korva.test', 'MANAGER');
+      const managerToken = await addMember(
+        'marketing-rbac-manager@korva.test',
+        'MANAGER',
+      );
 
       const createRes = await request(server)
         .post('/api/v1/campaigns')

@@ -37,6 +37,7 @@ import { DecisionEngineModule } from './decision-engine/decision-engine.module';
 import { ActionCenterModule } from './action-center/action-center.module';
 import { WebhookSubscriptionsModule } from './webhook-subscriptions/webhook-subscriptions.module';
 import { MarketingModule } from './marketing/marketing.module';
+import { CustomerServiceModule } from './customer-service/customer-service.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { MarketingModule } from './marketing/marketing.module';
     ActionCenterModule,
     WebhookSubscriptionsModule,
     MarketingModule,
+    CustomerServiceModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

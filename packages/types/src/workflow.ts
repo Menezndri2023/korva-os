@@ -37,6 +37,11 @@ export const SYSTEM_EVENTS = [
   "return_request.rejected",
   "campaign.launched",
   "campaign.completed",
+  "ticket.created",
+  "ticket.assigned",
+  "ticket.resolved",
+  "ticket.closed",
+  "ticket.reopened",
 ] as const;
 export type SystemEvent = (typeof SYSTEM_EVENTS)[number];
 

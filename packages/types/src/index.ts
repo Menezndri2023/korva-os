@@ -29,3 +29,4 @@ export * from "./audit.ts";
 export * from "./purchase-orders.ts";
 export * from "./products.ts";
 export * from "./marketing.ts";
+export * from "./customer-service.ts";

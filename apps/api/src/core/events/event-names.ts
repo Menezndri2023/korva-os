@@ -69,4 +69,9 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'return_request.rejected': 'returnRequestId',
   'campaign.launched': 'campaignId',
   'campaign.completed': 'campaignId',
+  'ticket.created': 'ticketId',
+  'ticket.assigned': 'ticketId',
+  'ticket.resolved': 'ticketId',
+  'ticket.closed': 'ticketId',
+  'ticket.reopened': 'ticketId',
 };

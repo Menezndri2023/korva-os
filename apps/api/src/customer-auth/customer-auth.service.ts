@@ -21,6 +21,8 @@ import type {
   CreateReturnRequestInput,
   AddWishlistItemInput,
   SubmitQuizAttemptInput,
+  CreateCustomerTicketInput,
+  ListCustomerTicketsQuery,
 } from '@korva/validation';
 import {
   EMAIL_PROVIDER,
@@ -45,6 +47,8 @@ import { ReturnRequestDocument } from '../commerce/returns/schemas/return-reques
 import { WishlistService } from '../commerce/wishlist/wishlist.service';
 import { CohortsService } from '../booking/courses/cohorts.service';
 import { QuizzesService } from '../booking/courses/quizzes.service';
+import { TicketsService } from '../customer-service/tickets/tickets.service';
+import { TicketDocument } from '../customer-service/tickets/schemas/ticket.schema';
 import { CustomerAccountRepository } from './customer-account.repository';
 import { CustomerSessionRepository } from './customer-session.repository';
 import { CustomerPasswordResetRepository } from './customer-password-reset.repository';
@@ -113,6 +117,7 @@ export class CustomerAuthService {
     private readonly wishlistService: WishlistService,
     private readonly cohortsService: CohortsService,
     private readonly quizzesService: QuizzesService,
+    private readonly ticketsService: TicketsService,
     private readonly customerAccountRepository: CustomerAccountRepository,
     private readonly customerSessionRepository: CustomerSessionRepository,
     private readonly customerPasswordResetRepository: CustomerPasswordResetRepository,
@@ -431,6 +436,18 @@ export class CustomerAuthService {
       throw new NotFoundException({
         code: 'BOOKING_NOT_FOUND',
         message: 'Booking not found',
+      });
+    }
+  }
+
+  private assertOwnsTicket(
+    ticket: TicketDocument,
+    customer: AuthenticatedCustomer,
+  ): void {
+    if (ticket.contactId.toString() !== customer.contactId) {
+      throw new NotFoundException({
+        code: 'TICKET_NOT_FOUND',
+        message: 'Ticket not found',
       });
     }
   }
@@ -868,6 +885,52 @@ export class CustomerAuthService {
       customer.contactId,
       offerId,
     );
+  }
+
+  /** contactId always comes from the verified JWT (`customer.contactId`), never client input —
+   *  the same load-bearing ownership guarantee every other customer-portal write in this file
+   *  relies on. */
+  async createTicket(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    input: CreateCustomerTicketInput,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    return this.ticketsService.create(organization.id as string, undefined, {
+      subject: input.subject,
+      description: input.description,
+      priority: 'medium',
+      contactId: customer.contactId,
+    });
+  }
+
+  async listTickets(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    query: ListCustomerTicketsQuery,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    return this.ticketsService.list(organization.id as string, {
+      page: query.page,
+      limit: query.limit,
+      contactId: customer.contactId,
+    });
+  }
+
+  async getTicket(slug: string, customer: AuthenticatedCustomer, id: string) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const ticket = await this.ticketsService.getById(
+      organization.id as string,
+      id,
+    );
+    this.assertOwnsTicket(ticket, customer);
+    return ticket;
   }
 
   /** Cohorts the customer is enrolled in — never a staff-supplied contactId, always the
