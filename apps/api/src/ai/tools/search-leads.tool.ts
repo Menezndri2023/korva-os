@@ -47,8 +47,6 @@ export class SearchLeadsTool implements AiTool<z.infer<typeof inputSchema>> {
       id: lead.id as string,
       contactId: lead.contactId.toString(),
       status: lead.status,
-      estimatedValue: lead.estimatedValue,
-      probability: lead.probability,
     }));
   }
 }

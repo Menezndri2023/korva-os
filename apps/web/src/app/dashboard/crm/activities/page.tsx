@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Activity, Contact, Lead } from "@korva/types";
+import type { Activity, Contact, Deal, Lead } from "@korva/types";
 import { Badge, Card, Pagination } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -11,6 +11,7 @@ import { useAuthReady } from "@/lib/use-auth-ready";
 const ENTITY_LABELS: Record<Activity["entity"], string> = {
   contact: "Client",
   lead: "Prospect",
+  deal: "Affaire",
 };
 
 export default function ActivitiesPage() {
@@ -34,6 +35,11 @@ export default function ActivitiesPage() {
     queryFn: () => apiClient.get<Lead[]>("/leads"),
     enabled: authReady,
   });
+  const { data: deals } = useQuery({
+    queryKey: ["deals", ""],
+    queryFn: () => apiClient.get<Deal[]>("/deals"),
+    enabled: authReady,
+  });
 
   function contactName(contactId: string): string {
     const contact = contacts?.find((c) => c.id === contactId);
@@ -46,12 +52,19 @@ export default function ActivitiesPage() {
     );
   }
 
-  // A lead has no name of its own — resolve it back to the contact it's attached to.
+  // A lead or deal has no name of its own — resolve it back to the contact it's attached to.
   function entityLink(activity: Activity): { href: string; label: string } {
     if (activity.entity === "contact") {
       return {
         href: `/dashboard/crm/${activity.entityId}`,
         label: contactName(activity.entityId),
+      };
+    }
+    if (activity.entity === "deal") {
+      const deal = deals?.find((d) => d.id === activity.entityId);
+      return {
+        href: deal ? `/dashboard/crm/${deal.contactId}` : "#",
+        label: deal ? contactName(deal.contactId) : "—",
       };
     }
     const lead = leads?.find((l) => l.id === activity.entityId);

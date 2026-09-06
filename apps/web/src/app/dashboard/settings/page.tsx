@@ -2063,6 +2063,7 @@ function RolesManagementSection() {
 const CUSTOM_FIELD_ENTITY_LABELS: Record<CustomFieldEntity, string> = {
   contacts: "Contacts",
   leads: "Prospects",
+  deals: "Affaires",
   offers: "Produits & services",
   bookings: "Réservations",
   orders: "Commandes",

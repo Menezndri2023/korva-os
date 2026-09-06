@@ -38,7 +38,9 @@ export interface Contact {
   updatedAt: string;
 }
 
-export const LEAD_STATUSES = ["open", "won", "lost"] as const;
+// A lead is a qualification funnel only — it no longer carries pipeline/value/probability.
+// Those live on Deal (see below), created via LeadsService.convertToDeal once a lead qualifies.
+export const LEAD_STATUSES = ["new", "contacted", "qualified", "disqualified", "converted"] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
 export interface Lead {
@@ -46,12 +48,8 @@ export interface Lead {
   organizationId: string;
   contactId: string;
   source?: string;
-  pipelineId: string;
-  stageId: string;
   ownerId?: string;
   status: LeadStatus;
-  estimatedValue?: number;
-  probability?: number;
   customFields: CustomFieldValues;
   createdAt: string;
   updatedAt: string;
@@ -74,13 +72,35 @@ export interface Pipeline {
   updatedAt: string;
 }
 
+export const DEAL_STATUSES = ["open", "won", "lost"] as const;
+export type DealStatus = (typeof DEAL_STATUSES)[number];
+
+export interface Deal {
+  id: string;
+  organizationId: string;
+  contactId: string;
+  /** The lead this deal was converted from, when applicable. Absent for deals created directly. */
+  leadId?: string;
+  pipelineId: string;
+  stageId: string;
+  estimatedValue?: number;
+  probability?: number;
+  status: DealStatus;
+  ownerId?: string;
+  customFields: CustomFieldValues;
+  closedAt?: string;
+  lossReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const ACTIVITY_TYPES = ["call", "email", "meeting", "note", "status_change", "other"] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
 export interface Activity {
   id: string;
   organizationId: string;
-  entity: "contact" | "lead";
+  entity: "contact" | "lead" | "deal";
   entityId: string;
   type: ActivityType;
   content?: string;
@@ -91,11 +111,11 @@ export interface Activity {
 export const TASK_STATUSES = ["pending", "done", "cancelled"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-/** Wider than Note/Activity's own "contact" | "lead" — Task is the one CRM entity that also
- *  attaches to a Project (see @korva/types projects.ts), which has no Note/Activity equivalent
- *  today. Kept as its own union rather than widening Note/Activity too, since neither has a
- *  genuine "attach to a project" use case yet — don't widen them speculatively. */
-export const TASK_ENTITIES = ["contact", "lead", "project"] as const;
+/** Wider than Note/Activity's own "contact" | "lead" | "deal" — Task is the one CRM entity that
+ *  also attaches to a Project (see @korva/types projects.ts), which has no Note/Activity
+ *  equivalent today. Kept as its own union rather than widening Note/Activity too, since neither
+ *  has a genuine "attach to a project" use case yet — don't widen them speculatively. */
+export const TASK_ENTITIES = ["contact", "lead", "deal", "project"] as const;
 export type TaskEntity = (typeof TASK_ENTITIES)[number];
 
 export interface Task {
@@ -115,7 +135,7 @@ export interface Task {
 export interface Note {
   id: string;
   organizationId: string;
-  entity: "contact" | "lead";
+  entity: "contact" | "lead" | "deal";
   entityId: string;
   content: string;
   authorId?: string;

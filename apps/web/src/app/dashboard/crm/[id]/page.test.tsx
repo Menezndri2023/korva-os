@@ -47,6 +47,7 @@ function mockGetByPath(path: string) {
   if (path === "/contacts/contact-1") return Promise.resolve(contact);
   if (path === "/contacts/duplicates") return Promise.resolve([]);
   if (path.startsWith("/leads")) return Promise.resolve([]);
+  if (path.startsWith("/deals")) return Promise.resolve([]);
   if (path.startsWith("/orders")) return Promise.resolve([]);
   if (path.startsWith("/carts")) return Promise.resolve([]);
   if (path.startsWith("/bookings")) return Promise.resolve([]);
@@ -113,9 +114,7 @@ describe("ContactDetailPage (LOT F7)", () => {
           {
             id: "lead-1",
             contactId: "contact-1",
-            status: "open",
-            pipelineId: "p1",
-            stageId: "s1",
+            status: "new",
             customFields: {},
             createdAt: "",
             updatedAt: "",
@@ -127,7 +126,7 @@ describe("ContactDetailPage (LOT F7)", () => {
     renderWithProviders(<ContactDetailPage />);
     await screen.findByRole("heading", { name: "Ada Lovelace" });
 
-    expect(await screen.findByText("open")).toBeInTheDocument();
+    expect(await screen.findByText("Nouveaux")).toBeInTheDocument();
   });
 
   it("fetches and displays orders filtered by contactId", async () => {

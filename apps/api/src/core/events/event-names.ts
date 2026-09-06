@@ -74,4 +74,10 @@ export const EVENT_ENTITY_ID_FIELD: Record<SystemEvent, string> = {
   'ticket.resolved': 'ticketId',
   'ticket.closed': 'ticketId',
   'ticket.reopened': 'ticketId',
+  'deal.created': 'dealId',
+  'deal.stage_changed': 'dealId',
+  'deal.won': 'dealId',
+  'deal.lost': 'dealId',
+  'deal.reopened': 'dealId',
+  'lead.converted': 'leadId',
 };

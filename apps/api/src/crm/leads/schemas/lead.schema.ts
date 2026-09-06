@@ -22,23 +22,11 @@ export class Lead {
   @Prop()
   source?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Pipeline', required: true })
-  pipelineId!: Types.ObjectId;
-
-  @Prop({ type: Types.ObjectId, required: true })
-  stageId!: Types.ObjectId;
-
   @Prop({ type: Types.ObjectId, ref: 'User' })
   ownerId?: Types.ObjectId;
 
-  @Prop({ type: String, enum: LEAD_STATUSES, default: 'open' })
+  @Prop({ type: String, enum: LEAD_STATUSES, default: 'new' })
   status!: LeadStatus;
-
-  @Prop()
-  estimatedValue?: number;
-
-  @Prop()
-  probability?: number;
 
   @Prop({ type: Object, default: {} })
   customFields!: CustomFieldValues;
@@ -46,7 +34,6 @@ export class Lead {
 
 export const LeadSchema = SchemaFactory.createForClass(Lead);
 LeadSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
-LeadSchema.index({ organizationId: 1, pipelineId: 1, stageId: 1 });
 LeadSchema.index({ organizationId: 1, ownerId: 1 });
 // Supports LeadsRepository.findAll's `?contactId=` filter — hit on every CRM contact detail
 // page load (GET /leads?contactId=X) with no matching index until now (organizationId and

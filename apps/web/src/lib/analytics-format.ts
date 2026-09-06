@@ -1,7 +1,15 @@
 export const LEAD_STATUS_LABELS: Record<string, string> = {
-  open: "Ouverts",
-  won: "Gagnés",
-  lost: "Perdus",
+  new: "Nouveaux",
+  contacted: "Contactés",
+  qualified: "Qualifiés",
+  disqualified: "Disqualifiés",
+  converted: "Convertis",
+};
+
+export const DEAL_STATUS_LABELS: Record<string, string> = {
+  open: "Ouvertes",
+  won: "Gagnées",
+  lost: "Perdues",
 };
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {

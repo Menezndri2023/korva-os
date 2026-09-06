@@ -35,6 +35,11 @@ import { GetCustomerTool } from './tools/get-customer.tool';
 import { CreateCustomerTool } from './tools/create-customer.tool';
 import { SearchLeadsTool } from './tools/search-leads.tool';
 import { UpdateLeadTool } from './tools/update-lead.tool';
+import { CreateDealTool } from './tools/create-deal.tool';
+import { UpdateDealTool } from './tools/update-deal.tool';
+import { SearchDealsTool } from './tools/search-deals.tool';
+import { WinDealTool } from './tools/win-deal.tool';
+import { LoseDealTool } from './tools/lose-deal.tool';
 import { CreateTaskTool } from './tools/create-task.tool';
 import { SearchOffersTool } from './tools/search-offers.tool';
 import { GetOfferTool } from './tools/get-offer.tool';
@@ -101,6 +106,11 @@ import { DecisionEngineModule } from '../decision-engine/decision-engine.module'
     CreateCustomerTool,
     SearchLeadsTool,
     UpdateLeadTool,
+    CreateDealTool,
+    UpdateDealTool,
+    SearchDealsTool,
+    WinDealTool,
+    LoseDealTool,
     CreateTaskTool,
     SearchOffersTool,
     GetOfferTool,

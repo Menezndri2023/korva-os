@@ -1,23 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  convertLeadSchema,
   createActivitySchema,
   createNoteSchema,
   createTaskSchema,
+  type ConvertLeadInput,
   type CreateActivityInput,
   type CreateNoteInput,
   type CreateTaskInput,
   type UpdateLeadInput,
 } from "@korva/validation";
 import { ACTIVITY_TYPES, LEAD_STATUSES } from "@korva/types";
-import type { Activity, Contact, Lead, Note, Pipeline, Task } from "@korva/types";
-import { Badge, Button, Card, Input } from "@korva/ui";
+import type { Activity, Contact, Deal, Lead, Note, Pipeline, Task } from "@korva/types";
+import { Badge, Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { LEAD_STATUS_LABELS } from "@/lib/analytics-format";
@@ -26,8 +28,10 @@ import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 
 export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
+  const [showConvertForm, setShowConvertForm] = useState(false);
 
   const leadQuery = useQuery({
     queryKey: ["leads", id],
@@ -42,6 +46,11 @@ export default function LeadDetailPage() {
   const pipelinesQuery = useQuery({
     queryKey: ["pipelines"],
     queryFn: () => apiClient.get<Pipeline[]>("/pipelines"),
+    enabled: authReady,
+  });
+  const dealsQuery = useQuery({
+    queryKey: ["deals", "lead", id],
+    queryFn: () => apiClient.get<Deal[]>(`/deals?leadId=${id}`),
     enabled: authReady,
   });
   const notesQuery = useQuery({
@@ -63,6 +72,32 @@ export default function LeadDetailPage() {
   const updateLeadMutation = useMutation({
     mutationFn: (input: UpdateLeadInput) => apiClient.patch<Lead>(`/leads/${id}`, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["leads"] }),
+  });
+
+  const defaultPipeline = pipelinesQuery.data?.find((p) => p.isDefault) ?? pipelinesQuery.data?.[0];
+  const {
+    register: registerConvert,
+    handleSubmit: handleConvertSubmit,
+    watch: watchConvert,
+    formState: { errors: convertErrors },
+  } = useForm<ConvertLeadInput>({
+    resolver: zodResolver(convertLeadSchema),
+    defaultValues: {
+      pipelineId: defaultPipeline?.id,
+      stageId: defaultPipeline?.stages[0]?.id,
+    },
+  });
+  const convertPipelineId = watchConvert("pipelineId");
+  const convertPipeline = pipelinesQuery.data?.find((p) => p.id === convertPipelineId) ?? defaultPipeline;
+
+  const convertMutation = useMutation({
+    mutationFn: (input: ConvertLeadInput) =>
+      apiClient.post<{ lead: Lead; deal: Deal }>(`/leads/${id}/convert`, input),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["leads"] });
+      void queryClient.invalidateQueries({ queryKey: ["deals"] });
+      router.push(`/dashboard/crm/deals/${result.deal.id}`);
+    },
   });
 
   const {
@@ -153,7 +188,6 @@ export default function LeadDetailPage() {
   }
 
   const lead = leadQuery.data;
-  const pipeline = pipelinesQuery.data?.find((p) => p.id === lead.pipelineId);
   const isUpdating = updateLeadMutation.isPending;
 
   return (
@@ -173,22 +207,9 @@ export default function LeadDetailPage() {
                 {contactName(lead.contactId)}
               </Link>
             </h1>
-            <p className="text-sm text-text-muted">{pipeline?.name ?? "—"}</p>
+            <p className="text-sm text-text-muted">{lead.source ?? "—"}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              aria-label="Étape"
-              value={lead.stageId}
-              disabled={isUpdating || !pipeline}
-              onChange={(e) => updateLeadMutation.mutate({ stageId: e.target.value })}
-              className="rounded-md border border-border-input px-2 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {pipeline?.stages.map((stage) => (
-                <option key={stage.id} value={stage.id}>
-                  {stage.name}
-                </option>
-              ))}
-            </select>
             <select
               aria-label="Statut"
               value={lead.status}
@@ -204,6 +225,11 @@ export default function LeadDetailPage() {
                 </option>
               ))}
             </select>
+            {lead.status !== "converted" && (
+              <Button onClick={() => setShowConvertForm((v) => !v)}>
+                {showConvertForm ? "Annuler" : "Convertir en affaire"}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -215,6 +241,55 @@ export default function LeadDetailPage() {
           </p>
         )}
 
+        {showConvertForm && (
+          <form
+            onSubmit={handleConvertSubmit((values) => convertMutation.mutate(values))}
+            className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface-muted p-4"
+          >
+            <Select {...registerConvert("pipelineId")}>
+              {pipelinesQuery.data?.map((pipeline) => (
+                <option key={pipeline.id} value={pipeline.id}>
+                  {pipeline.name}
+                </option>
+              ))}
+            </Select>
+            <Select {...registerConvert("stageId")}>
+              {convertPipeline?.stages.map((stage) => (
+                <option key={stage.id} value={stage.id}>
+                  {stage.name}
+                </option>
+              ))}
+            </Select>
+            <Input
+              type="number"
+              placeholder="Valeur estimée"
+              {...registerConvert("estimatedValue", {
+                setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+              })}
+            />
+            <Input
+              type="number"
+              placeholder="Probabilité (%)"
+              {...registerConvert("probability", {
+                setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+              })}
+            />
+            {convertErrors.pipelineId && (
+              <p className="col-span-2 text-xs text-destructive">{convertErrors.pipelineId.message}</p>
+            )}
+            {convertMutation.isError && (
+              <p className="col-span-2 text-sm text-destructive">
+                {convertMutation.error instanceof ApiError
+                  ? convertMutation.error.message
+                  : "Impossible de convertir ce prospect."}
+              </p>
+            )}
+            <Button type="submit" loading={convertMutation.isPending} className="col-span-2">
+              {convertMutation.isPending ? "Conversion..." : "Convertir"}
+            </Button>
+          </form>
+        )}
+
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
           <div>
             <dt className="text-text-muted">Source</dt>
@@ -224,16 +299,24 @@ export default function LeadDetailPage() {
             <dt className="text-text-muted">Responsable</dt>
             <dd className="mt-0.5">{lead.ownerId ?? "—"}</dd>
           </div>
-          <div>
-            <dt className="text-text-muted">Valeur estimée</dt>
-            <dd className="mt-0.5">{lead.estimatedValue ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-text-muted">Probabilité</dt>
-            <dd className="mt-0.5">{lead.probability != null ? `${lead.probability}%` : "—"}</dd>
-          </div>
           <CustomFieldsDisplay entity="leads" values={lead.customFields} />
         </dl>
+
+        {dealsQuery.data && dealsQuery.data.length > 0 && (
+          <div className="mt-4 border-t border-border pt-3">
+            <p className="text-sm font-medium text-text">Affaires liées</p>
+            <ul className="mt-2 space-y-1">
+              {dealsQuery.data.map((deal) => (
+                <li key={deal.id} className="flex items-center justify-between text-sm">
+                  <Link href={`/dashboard/crm/deals/${deal.id}`} className="hover:underline">
+                    {deal.estimatedValue ?? "Affaire"}
+                  </Link>
+                  <Badge>{deal.status}</Badge>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

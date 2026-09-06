@@ -47,7 +47,6 @@ import { interpolate } from '../shared/template';
 import { ContactsService } from '../crm/contacts/contacts.service';
 import { LeadsService } from '../crm/leads/leads.service';
 import { NotesService } from '../crm/notes/notes.service';
-import { PipelinesService } from '../crm/pipelines/pipelines.service';
 import { OrganizationDocument } from '../organizations/schemas/organization.schema';
 import { Order, OrderDocument } from '../commerce/orders/schemas/order.schema';
 import {
@@ -108,7 +107,6 @@ export class PublicService {
     private readonly contactsService: ContactsService,
     private readonly leadsService: LeadsService,
     private readonly notesService: NotesService,
-    private readonly pipelinesService: PipelinesService,
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
     @InjectModel(Booking.name)
     private readonly bookingModel: Model<BookingDocument>,
@@ -762,12 +760,12 @@ export class PublicService {
   /**
    * Backs the embeddable widget (apps/storefront/public/korva-widget.js) — the "capturer des
    * leads" / "envoyer des demandes de contact" capability from the Business OS brief §9-11
-   * (docs/BUSINESS_OS_AUDIT.md roadmap item #8). Creates (or reuses, by email) a Contact, a
-   * Lead in the organization's default pipeline — created lazily if none exists yet, same
-   * template the dashboard's own CRM page seeds by hand — and a Note carrying the visitor's
-   * message, exactly mirroring how a staff member would capture the same inquiry manually.
-   * `lead.created` is published for free by LeadsService.create, so this is immediately visible
-   * to the Decision Engine/Workflow Engine like any other lead.
+   * (docs/BUSINESS_OS_AUDIT.md roadmap item #8). Creates (or reuses, by email) a Contact, a Lead
+   * (qualification-only — pipeline/value tracking now lives on Deal, created later via
+   * LeadsService.convertToDeal once a staff member qualifies this inquiry), and a Note carrying
+   * the visitor's message, exactly mirroring how a staff member would capture the same inquiry
+   * manually. `lead.created` is published for free by LeadsService.create, so this is
+   * immediately visible to the Decision Engine/Workflow Engine like any other lead.
    */
   async createLead(slug: string, input: CreatePublicLeadInput) {
     const organization = await this.resolveOrganization(slug);
@@ -778,16 +776,10 @@ export class PublicService {
       organizationId,
       input.contact,
     );
-    const pipeline =
-      await this.pipelinesService.getOrCreateDefault(organizationId);
-    const firstStage = pipeline.stages[0] as unknown as { _id: Types.ObjectId };
-    const stageId = firstStage._id.toString();
 
     const lead = await this.leadsService.create(organizationId, undefined, {
       contactId: contact.id as string,
       source: input.source ?? 'website_widget',
-      pipelineId: pipeline.id as string,
-      stageId,
       customFields: {},
     });
 

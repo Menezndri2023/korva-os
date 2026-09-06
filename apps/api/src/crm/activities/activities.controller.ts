@@ -52,10 +52,14 @@ export class ActivitiesController {
     @Query('entity') entity: string,
     @Query('entityId') entityId: string,
   ) {
-    if ((entity !== 'contact' && entity !== 'lead') || !entityId) {
+    if (
+      (entity !== 'contact' && entity !== 'lead' && entity !== 'deal') ||
+      !entityId
+    ) {
       throw new BadRequestException({
         code: 'INVALID_QUERY',
-        message: 'entity ("contact" or "lead") and entityId are required',
+        message:
+          'entity ("contact", "lead" or "deal") and entityId are required',
       });
     }
     return this.activitiesService.listForEntity(

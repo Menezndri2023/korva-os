@@ -24,7 +24,7 @@ export class NotesService {
 
   listForEntity(
     organizationId: string,
-    entity: 'contact' | 'lead',
+    entity: 'contact' | 'lead' | 'deal',
     entityId: string,
   ): Promise<NoteDocument[]> {
     return this.notesRepository.findForEntity(organizationId, entity, entityId);

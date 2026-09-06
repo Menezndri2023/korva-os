@@ -9,9 +9,11 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
+  convertLeadSchema,
   createLeadSchema,
   listLeadsQuerySchema,
   updateLeadSchema,
+  type ConvertLeadInput,
   type CreateLeadInput,
   type ListLeadsQuery,
   type UpdateLeadInput,
@@ -65,6 +67,22 @@ export class LeadsController {
     @Body(new ZodValidationPipe(updateLeadSchema)) body: UpdateLeadInput,
   ) {
     return this.leadsService.update(
+      tenant.organizationId,
+      user.userId,
+      id,
+      body,
+    );
+  }
+
+  @RequirePermissions('leads.update')
+  @Post(':id/convert')
+  convert(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(convertLeadSchema)) body: ConvertLeadInput,
+  ) {
+    return this.leadsService.convertToDeal(
       tenant.organizationId,
       user.userId,
       id,

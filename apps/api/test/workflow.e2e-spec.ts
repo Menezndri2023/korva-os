@@ -339,15 +339,17 @@ describe('Workflow module (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .send({
-          name: 'Notify on qualified lead',
-          trigger: 'lead.created',
+          name: 'Notify on qualified deal',
+          // estimatedValue lives on Deal (not Lead) since Phase D1 — triggered on deal.created,
+          // not lead.created, to actually exercise this condition against a real payload field.
+          trigger: 'deal.created',
           conditions: [
             { field: 'estimatedValue', operator: 'greater_than', value: 1000 },
           ],
           actions: [
             {
               type: 'create_task',
-              config: { title: 'Qualified lead {{leadId}}' },
+              config: { title: 'Qualified deal {{dealId}}' },
             },
           ],
         })
@@ -360,7 +362,7 @@ describe('Workflow module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({
           name: 'Should never match',
-          trigger: 'lead.created',
+          trigger: 'deal.created',
           conditions: [
             {
               field: 'estimatedValue',
@@ -378,14 +380,14 @@ describe('Workflow module (e2e)', () => {
         .expect(201);
     });
 
-    it('creates a task once the async workflow engine processes the lead.created event', async () => {
-      const leadRes = await request(server)
-        .post('/api/v1/leads')
+    it('creates a task once the async workflow engine processes the deal.created event', async () => {
+      const dealRes = await request(server)
+        .post('/api/v1/deals')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .send({ contactId, pipelineId, stageId, estimatedValue: 5000 })
         .expect(201);
-      const leadId = asSuccess<{ id: string }>(leadRes.body).id;
+      const dealId = asSuccess<{ id: string }>(dealRes.body).id;
 
       const createdTask = await waitFor(async () => {
         const tasksRes = await request(server)
@@ -394,7 +396,7 @@ describe('Workflow module (e2e)', () => {
           .set('X-Organization-Id', organizationId)
           .expect(200);
         const tasks = asSuccess<TaskPayload[]>(tasksRes.body);
-        return tasks.find((task) => task.title === `Qualified lead ${leadId}`);
+        return tasks.find((task) => task.title === `Qualified deal ${dealId}`);
       });
       expect(createdTask).toBeDefined();
 
@@ -418,7 +420,7 @@ describe('Workflow module (e2e)', () => {
         return data.length > 0 ? data : undefined;
       });
       expect(executions[0]!.status).toBe('success');
-      expect(executions[0]!.eventName).toBe('lead.created');
+      expect(executions[0]!.eventName).toBe('deal.created');
       // Must stay above the worst realistic case of two sequential waitFor calls (20000 each) —
       // the original 25000 didn't actually leave room for that even before the 429 fix, an
       // existing mismatch. In practice the second call (executions) resolves near-instantly once
@@ -426,14 +428,14 @@ describe('Workflow module (e2e)', () => {
       // failed on the second call specifically.
     }, 26000);
 
-    it('never creates a second Task when the identical lead.created event is published twice', async () => {
-      const leadRes = await request(server)
-        .post('/api/v1/leads')
+    it('never creates a second Task when the identical deal.created event is published twice', async () => {
+      const dealRes = await request(server)
+        .post('/api/v1/deals')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .send({ contactId, pipelineId, stageId, estimatedValue: 5000 })
         .expect(201);
-      const leadId = asSuccess<{ id: string }>(leadRes.body).id;
+      const dealId = asSuccess<{ id: string }>(dealRes.body).id;
 
       await waitFor(async () => {
         const tasksRes = await request(server)
@@ -442,15 +444,15 @@ describe('Workflow module (e2e)', () => {
           .set('X-Organization-Id', organizationId)
           .expect(200);
         const tasks = asSuccess<TaskPayload[]>(tasksRes.body);
-        return tasks.find((task) => task.title === `Qualified lead ${leadId}`);
+        return tasks.find((task) => task.title === `Qualified deal ${dealId}`);
       });
 
       // Simulates a producer bug/retry publishing the identical logical event a second time —
-      // same organizationId/eventName/payload as the one LeadsService.create() already
-      // published for this exact lead. This must never create a second Task.
+      // same organizationId/eventName/payload as the one DealsService.create() already
+      // published for this exact deal. This must never create a second Task.
       const eventBus = app.get(EventBusService);
-      await eventBus.publish(organizationId, 'lead.created', {
-        leadId,
+      await eventBus.publish(organizationId, 'deal.created', {
+        dealId,
         contactId,
         estimatedValue: 5000,
       });
@@ -465,7 +467,7 @@ describe('Workflow module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .expect(200);
       const matching = asSuccess<TaskPayload[]>(tasksRes.body).filter(
-        (task) => task.title === `Qualified lead ${leadId}`,
+        (task) => task.title === `Qualified deal ${dealId}`,
       );
       expect(matching).toHaveLength(1);
       // Must stay above the waitFor budget (20000) plus the explicit 3s settle sleep after it.

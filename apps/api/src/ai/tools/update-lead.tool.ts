@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { updateLeadSchema } from '@korva/validation';
+import { LEAD_STATUSES } from '@korva/types';
 import { Injectable } from '@nestjs/common';
 import type { AiTool } from './tool.interface';
 import { LeadsService } from '../../crm/leads/leads.service';
@@ -12,15 +13,12 @@ const inputSchema = z
 export class UpdateLeadTool implements AiTool<z.infer<typeof inputSchema>> {
   readonly definition = {
     name: 'update_lead',
-    description:
-      "Met à jour le statut, la valeur estimée ou la probabilité d'un prospect.",
+    description: "Met à jour le statut ou le responsable d'un prospect.",
     inputSchema: {
       type: 'object',
       properties: {
         leadId: { type: 'string' },
-        status: { type: 'string', enum: ['open', 'won', 'lost'] },
-        estimatedValue: { type: 'number' },
-        probability: { type: 'number' },
+        status: { type: 'string', enum: LEAD_STATUSES },
       },
       required: ['leadId'],
     },
@@ -49,7 +47,6 @@ export class UpdateLeadTool implements AiTool<z.infer<typeof inputSchema>> {
     return {
       id: lead.id as string,
       status: lead.status,
-      estimatedValue: lead.estimatedValue,
     };
   }
 }

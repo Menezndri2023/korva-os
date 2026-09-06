@@ -15,7 +15,7 @@ export class NotesRepository {
 
   findForEntity(
     organizationId: string,
-    entity: 'contact' | 'lead',
+    entity: 'contact' | 'lead' | 'deal',
     entityId: string,
   ): Promise<NoteDocument[]> {
     return this.noteModel

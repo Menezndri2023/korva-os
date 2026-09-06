@@ -26,7 +26,7 @@ export class ActivitiesService {
 
   listForEntity(
     organizationId: string,
-    entity: 'contact' | 'lead',
+    entity: 'contact' | 'lead' | 'deal',
     entityId: string,
   ): Promise<ActivityDocument[]> {
     return this.activitiesRepository.findForEntity(

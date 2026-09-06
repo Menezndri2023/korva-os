@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 
 import { Contact, ContactSchema } from './contacts/schemas/contact.schema';
 import { Lead, LeadSchema } from './leads/schemas/lead.schema';
+import { Deal, DealSchema } from './deals/schemas/deal.schema';
 import { Pipeline, PipelineSchema } from './pipelines/schemas/pipeline.schema';
 import { Activity, ActivitySchema } from './activities/schemas/activity.schema';
 import { Task, TaskSchema } from './tasks/schemas/task.schema';
@@ -85,6 +86,10 @@ import { LeadsRepository } from './leads/leads.repository';
 import { LeadsService } from './leads/leads.service';
 import { LeadsController } from './leads/leads.controller';
 
+import { DealsRepository } from './deals/deals.repository';
+import { DealsService } from './deals/deals.service';
+import { DealsController } from './deals/deals.controller';
+
 import { PipelinesRepository } from './pipelines/pipelines.repository';
 import { PipelinesService } from './pipelines/pipelines.service';
 import { PipelinesController } from './pipelines/pipelines.controller';
@@ -118,6 +123,7 @@ import { AuditModule } from '../audit/audit.module';
     MongooseModule.forFeature([
       { name: Contact.name, schema: ContactSchema },
       { name: Lead.name, schema: LeadSchema },
+      { name: Deal.name, schema: DealSchema },
       { name: Pipeline.name, schema: PipelineSchema },
       { name: Activity.name, schema: ActivitySchema },
       { name: Task.name, schema: TaskSchema },
@@ -148,6 +154,7 @@ import { AuditModule } from '../audit/audit.module';
   controllers: [
     ContactsController,
     LeadsController,
+    DealsController,
     PipelinesController,
     ActivitiesController,
     TasksController,
@@ -163,6 +170,8 @@ import { AuditModule } from '../audit/audit.module';
     CustomerInactivitySchedulerService,
     LeadsRepository,
     LeadsService,
+    DealsRepository,
+    DealsService,
     PipelinesRepository,
     PipelinesService,
     ActivitiesRepository,
@@ -180,6 +189,7 @@ import { AuditModule } from '../audit/audit.module';
     ContactsService,
     TasksService,
     LeadsService,
+    DealsService,
     NotesService,
     PipelinesService,
     ProjectsService,

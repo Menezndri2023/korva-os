@@ -1396,7 +1396,7 @@ describe('Public storefront API (e2e)', () => {
   });
 
   describe('lead capture (embeddable widget, docs/BUSINESS_OS_AUDIT.md roadmap item #8)', () => {
-    it('creates a Contact, a Lead in a lazily-created default pipeline, and a Note carrying the message', async () => {
+    it('creates a Contact, a qualification-only Lead, and a Note carrying the message', async () => {
       const { slug, accessToken, organizationId } = await setupStorefrontOrg(
         'widget-owner@korva.test',
         'Widget Org',
@@ -1414,31 +1414,28 @@ describe('Public storefront API (e2e)', () => {
         })
         .expect(201);
       const lead = asSuccess<{ id: string; status: string }>(res.body);
-      expect(lead.status).toBe('open');
-
-      const pipelinesRes = await request(server)
-        .get('/api/v1/pipelines')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(200);
-      const pipelines = asSuccess<
-        { id: string; name: string; isDefault: boolean }[]
-      >(pipelinesRes.body);
-      expect(pipelines).toHaveLength(1);
-      expect(pipelines[0]).toMatchObject({ name: 'Ventes', isDefault: true });
+      // No pipeline seeding happens anymore here — a widget lead is qualification-only until a
+      // staff member converts it into a Deal (see LeadsService.convertToDeal).
+      expect(lead.status).toBe('new');
 
       const leadsRes = await request(server)
         .get('/api/v1/leads')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      const leads = asSuccess<
-        { id: string; source?: string; pipelineId: string }[]
-      >(leadsRes.body);
+      const leads = asSuccess<{ id: string; source?: string }[]>(
+        leadsRes.body,
+      );
       expect(leads.map((l) => l.id)).toContain(lead.id);
       const createdLead = leads.find((l) => l.id === lead.id)!;
       expect(createdLead.source).toBe('website_widget');
-      expect(createdLead.pipelineId).toBe(pipelines[0]!.id);
+
+      const pipelinesRes = await request(server)
+        .get('/api/v1/pipelines')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<{ id: string }[]>(pipelinesRes.body)).toHaveLength(0);
 
       const contactsRes = await request(server)
         .get('/api/v1/contacts?search=visitor@customer.test')
@@ -1451,7 +1448,7 @@ describe('Public storefront API (e2e)', () => {
       expect(contacts.some((c) => c.firstName === 'Visiteur')).toBe(true);
     });
 
-    it("reuses the second lead's request on the same visitor's existing Contact instead of creating a duplicate, and reuses the same default pipeline", async () => {
+    it("reuses the second lead's request on the same visitor's existing Contact instead of creating a duplicate", async () => {
       const { slug, accessToken, organizationId } = await setupStorefrontOrg(
         'widget-repeat-owner@korva.test',
         'Widget Repeat Org',
@@ -1478,13 +1475,6 @@ describe('Public storefront API (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .expect(200);
       expect(asSuccess<{ id: string }[]>(contactsRes.body)).toHaveLength(1);
-
-      const pipelinesRes = await request(server)
-        .get('/api/v1/pipelines')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .expect(200);
-      expect(asSuccess<{ id: string }[]>(pipelinesRes.body)).toHaveLength(1);
     });
 
     it('accepts a custom source and rejects a request missing the required message', async () => {

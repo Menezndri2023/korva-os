@@ -42,6 +42,12 @@ export const SYSTEM_EVENTS = [
   "ticket.resolved",
   "ticket.closed",
   "ticket.reopened",
+  "deal.created",
+  "deal.stage_changed",
+  "deal.won",
+  "deal.lost",
+  "deal.reopened",
+  "lead.converted",
 ] as const;
 export type SystemEvent = (typeof SYSTEM_EVENTS)[number];
 

@@ -40,8 +40,15 @@ interface PipelinePayload {
 interface LeadPayload {
   id: string;
   status: string;
+  contactId: string;
+}
+interface DealPayload {
+  id: string;
+  status: string;
   stageId: string;
   contactId: string;
+  leadId?: string;
+  lossReason?: string;
 }
 interface TaskPayload {
   id: string;
@@ -250,7 +257,91 @@ describe('CRM module (e2e)', () => {
     });
   });
 
-  describe('pipelines and leads', () => {
+  describe('leads', () => {
+    let accessToken: string;
+    let organizationId: string;
+    let contactId: string;
+
+    beforeAll(async () => {
+      ({ accessToken, organizationId } = await registerOrgAndToken(
+        'leads-owner@korva.test',
+        'Leads Org',
+      ));
+
+      const contactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName: 'Prospect' })
+        .expect(201);
+      contactId = asSuccess<ContactPayload>(contactRes.body).id;
+    });
+
+    it('rejects a lead referencing a contact that does not exist', async () => {
+      await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId: '000000000000000000000000' })
+        .expect(404);
+    });
+
+    it('creates a lead with the default "new" status and updates its status directly', async () => {
+      const createRes = await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId, source: 'site web' })
+        .expect(201);
+      const lead = asSuccess<LeadPayload>(createRes.body);
+      expect(lead.status).toBe('new');
+
+      const updateRes = await request(server)
+        .patch(`/api/v1/leads/${lead.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ status: 'qualified' })
+        .expect(200);
+      expect(asSuccess<LeadPayload>(updateRes.body).status).toBe('qualified');
+    });
+
+    it('filters leads by contactId', async () => {
+      const otherContactRes = await request(server)
+        .post('/api/v1/contacts')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ firstName: 'Other Prospect' })
+        .expect(201);
+      const otherContactId = asSuccess<ContactPayload>(otherContactRes.body).id;
+
+      const ownLeadRes = await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId })
+        .expect(201);
+      const ownLeadId = asSuccess<LeadPayload>(ownLeadRes.body).id;
+
+      await request(server)
+        .post('/api/v1/leads')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ contactId: otherContactId })
+        .expect(201);
+
+      const filteredRes = await request(server)
+        .get(`/api/v1/leads?contactId=${contactId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      const filtered = asSuccess<LeadPayload[]>(filteredRes.body);
+      expect(filtered.length).toBeGreaterThan(0);
+      expect(filtered.every((lead) => lead.contactId === contactId)).toBe(true);
+      expect(filtered.map((lead) => lead.id)).toContain(ownLeadId);
+    });
+  });
+
+  describe('deals and lead conversion', () => {
     let accessToken: string;
     let organizationId: string;
     let contactId: string;
@@ -260,8 +351,8 @@ describe('CRM module (e2e)', () => {
 
     beforeAll(async () => {
       ({ accessToken, organizationId } = await registerOrgAndToken(
-        'leads-owner@korva.test',
-        'Leads Org',
+        'deals-owner@korva.test',
+        'Deals Org',
       ));
 
       const contactRes = await request(server)
@@ -291,9 +382,9 @@ describe('CRM module (e2e)', () => {
       stageBId = pipeline.stages[1]!.id;
     });
 
-    it('rejects a lead referencing a contact that does not exist', async () => {
+    it('rejects a deal referencing a contact that does not exist', async () => {
       await request(server)
-        .post('/api/v1/leads')
+        .post('/api/v1/deals')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .send({
@@ -304,78 +395,127 @@ describe('CRM module (e2e)', () => {
         .expect(404);
     });
 
-    it('rejects a lead referencing a stage that does not exist in the pipeline', async () => {
+    it('rejects a deal referencing a stage that does not exist in the pipeline', async () => {
       await request(server)
-        .post('/api/v1/leads')
+        .post('/api/v1/deals')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .send({ contactId, pipelineId, stageId: '000000000000000000000000' })
         .expect(404);
     });
 
-    it('creates a lead and moves it through the pipeline to won', async () => {
+    it('creates a deal open, moves its stage, then wins it', async () => {
       const createRes = await request(server)
-        .post('/api/v1/leads')
+        .post('/api/v1/deals')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({
-          contactId,
-          pipelineId,
-          stageId: stageAId,
-          estimatedValue: 1000,
-        })
+        .send({ contactId, pipelineId, stageId: stageAId, estimatedValue: 1000 })
         .expect(201);
-      const lead = asSuccess<LeadPayload>(createRes.body);
-      expect(lead.status).toBe('open');
+      const deal = asSuccess<DealPayload>(createRes.body);
+      expect(deal.status).toBe('open');
 
-      const updateRes = await request(server)
-        .patch(`/api/v1/leads/${lead.id}`)
+      const moveRes = await request(server)
+        .post(`/api/v1/deals/${deal.id}/move-stage`)
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ stageId: stageBId, status: 'won' })
-        .expect(200);
-      const updated = asSuccess<LeadPayload>(updateRes.body);
-      expect(updated.status).toBe('won');
-      expect(updated.stageId).toBe(stageBId);
+        .send({ stageId: stageBId })
+        .expect(201);
+      expect(asSuccess<DealPayload>(moveRes.body).stageId).toBe(stageBId);
+
+      const winRes = await request(server)
+        .post(`/api/v1/deals/${deal.id}/win`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      expect(asSuccess<DealPayload>(winRes.body).status).toBe('won');
+
+      // A won deal is closed: cannot move stage or win again until reopened.
+      await request(server)
+        .post(`/api/v1/deals/${deal.id}/move-stage`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ stageId: stageAId })
+        .expect(400);
+      await request(server)
+        .post(`/api/v1/deals/${deal.id}/win`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(400);
+
+      const reopenRes = await request(server)
+        .post(`/api/v1/deals/${deal.id}/reopen`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      expect(asSuccess<DealPayload>(reopenRes.body).status).toBe('open');
     });
 
-    it('filters leads by contactId', async () => {
-      const otherContactRes = await request(server)
-        .post('/api/v1/contacts')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({ firstName: 'Other Prospect' })
-        .expect(201);
-      const otherContactId = asSuccess<ContactPayload>(otherContactRes.body).id;
-
-      const ownLeadRes = await request(server)
-        .post('/api/v1/leads')
+    it('loses a deal with a reason, and a closed deal cannot be reopened twice', async () => {
+      const createRes = await request(server)
+        .post('/api/v1/deals')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .send({ contactId, pipelineId, stageId: stageAId })
         .expect(201);
-      const ownLeadId = asSuccess<LeadPayload>(ownLeadRes.body).id;
+      const dealId = asSuccess<DealPayload>(createRes.body).id;
+
+      const loseRes = await request(server)
+        .post(`/api/v1/deals/${dealId}/lose`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ lossReason: 'Budget insuffisant' })
+        .expect(201);
+      const lost = asSuccess<DealPayload>(loseRes.body);
+      expect(lost.status).toBe('lost');
+      expect(lost.lossReason).toBe('Budget insuffisant');
 
       await request(server)
+        .post(`/api/v1/deals/${dealId}/reopen`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(201);
+      await request(server)
+        .post(`/api/v1/deals/${dealId}/reopen`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(400);
+    });
+
+    it('converts a lead into a deal, and rejects converting it twice', async () => {
+      const leadRes = await request(server)
         .post('/api/v1/leads')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({
-          contactId: otherContactId,
-          pipelineId,
-          stageId: stageAId,
-        })
+        .send({ contactId })
         .expect(201);
+      const leadId = asSuccess<LeadPayload>(leadRes.body).id;
 
-      const filteredRes = await request(server)
-        .get(`/api/v1/leads?contactId=${contactId}`)
+      const convertRes = await request(server)
+        .post(`/api/v1/leads/${leadId}/convert`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ pipelineId, stageId: stageAId, estimatedValue: 500 })
+        .expect(201);
+      const { lead, deal } = asSuccess<{ lead: LeadPayload; deal: DealPayload }>(
+        convertRes.body,
+      );
+      expect(lead.status).toBe('converted');
+      expect(deal.leadId).toBe(leadId);
+      expect(deal.status).toBe('open');
+
+      await request(server)
+        .post(`/api/v1/leads/${leadId}/convert`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ pipelineId, stageId: stageAId })
+        .expect(400);
+
+      const dealsForLeadRes = await request(server)
+        .get(`/api/v1/deals?leadId=${leadId}`)
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      const filtered = asSuccess<LeadPayload[]>(filteredRes.body);
-      expect(filtered.length).toBeGreaterThan(0);
-      expect(filtered.every((lead) => lead.contactId === contactId)).toBe(true);
-      expect(filtered.map((lead) => lead.id)).toContain(ownLeadId);
+      expect(asSuccess<DealPayload[]>(dealsForLeadRes.body)).toHaveLength(1);
     });
   });
 

@@ -27,6 +27,7 @@ import type {
   ContactTimeline,
   CreditBalance,
   CustomFieldValues,
+  Deal,
   Invoice,
   Lead,
   Note,
@@ -38,7 +39,7 @@ import type {
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
-import { formatCurrency } from "@/lib/analytics-format";
+import { formatCurrency, LEAD_STATUS_LABELS, DEAL_STATUS_LABELS } from "@/lib/analytics-format";
 import { RelationSection } from "@/components/relation-section";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
@@ -103,6 +104,11 @@ export default function ContactDetailPage() {
   const leadsQuery = useQuery({
     queryKey: ["leads", "contact", id],
     queryFn: () => apiClient.get<Lead[]>(`/leads?contactId=${id}`),
+    enabled: authReady,
+  });
+  const dealsQuery = useQuery({
+    queryKey: ["deals", "contact", id],
+    queryFn: () => apiClient.get<Deal[]>(`/deals?contactId=${id}`),
     enabled: authReady,
   });
   const ordersQuery = useQuery({
@@ -662,8 +668,23 @@ export default function ContactDetailPage() {
           emptyLabel="Aucun prospect."
           renderItem={(lead) => (
             <div className="flex items-center justify-between">
-              <Badge>{lead.status}</Badge>
-              {lead.estimatedValue != null && <span>{lead.estimatedValue}</span>}
+              <Link href={`/dashboard/crm/leads/${lead.id}`} className="hover:underline">
+                {lead.source ?? "Prospect"}
+              </Link>
+              <Badge>{LEAD_STATUS_LABELS[lead.status] ?? lead.status}</Badge>
+            </div>
+          )}
+        />
+        <RelationSection<Deal>
+          title="Affaires"
+          query={dealsQuery}
+          emptyLabel="Aucune affaire."
+          renderItem={(deal) => (
+            <div className="flex items-center justify-between">
+              <Link href={`/dashboard/crm/deals/${deal.id}`} className="hover:underline">
+                {deal.estimatedValue != null ? deal.estimatedValue : "Affaire"}
+              </Link>
+              <Badge>{DEAL_STATUS_LABELS[deal.status] ?? deal.status}</Badge>
             </div>
           )}
         />

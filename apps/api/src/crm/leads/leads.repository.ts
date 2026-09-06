@@ -7,8 +7,6 @@ import type { Paginated } from '../contacts/contacts.repository';
 export interface FindLeadsOptions {
   page: number;
   limit: number;
-  pipelineId?: string;
-  stageId?: string;
   status?: string;
   ownerId?: string;
   contactId?: string;
@@ -41,9 +39,6 @@ export class LeadsRepository {
     const filter: FilterQuery<Lead> = {
       organizationId: new Types.ObjectId(organizationId),
     };
-    if (options.pipelineId)
-      filter.pipelineId = new Types.ObjectId(options.pipelineId);
-    if (options.stageId) filter.stageId = new Types.ObjectId(options.stageId);
     if (options.status) filter.status = options.status;
     if (options.ownerId) filter.ownerId = new Types.ObjectId(options.ownerId);
     if (options.contactId)

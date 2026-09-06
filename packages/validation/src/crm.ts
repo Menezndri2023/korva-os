@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { CONTACT_TYPES, LEAD_STATUSES, TASK_STATUSES, TASK_ENTITIES, ACTIVITY_TYPES } from "@korva/types";
+import {
+  CONTACT_TYPES,
+  LEAD_STATUSES,
+  DEAL_STATUSES,
+  TASK_STATUSES,
+  TASK_ENTITIES,
+  ACTIVITY_TYPES,
+} from "@korva/types";
 
 const customFieldsSchema = z.record(z.string(), z.unknown()).optional();
 
@@ -35,22 +42,15 @@ export type ListContactsQuery = z.infer<typeof listContactsQuerySchema>;
 export const createLeadSchema = z.object({
   contactId: z.string().min(1),
   source: z.string().max(120).optional(),
-  pipelineId: z.string().min(1),
-  stageId: z.string().min(1),
   ownerId: z.string().optional(),
-  estimatedValue: z.number().nonnegative().optional(),
-  probability: z.number().min(0).max(100).optional(),
   customFields: customFieldsSchema,
 });
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 
 export const updateLeadSchema = z.object({
   source: z.string().max(120).optional(),
-  stageId: z.string().min(1).optional(),
   ownerId: z.string().optional(),
   status: z.enum(LEAD_STATUSES).optional(),
-  estimatedValue: z.number().nonnegative().optional(),
-  probability: z.number().min(0).max(100).optional(),
   customFields: customFieldsSchema,
 });
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
@@ -58,13 +58,60 @@ export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 export const listLeadsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  pipelineId: z.string().optional(),
-  stageId: z.string().optional(),
   status: z.enum(LEAD_STATUSES).optional(),
   ownerId: z.string().optional(),
   contactId: z.string().optional(),
 });
 export type ListLeadsQuery = z.infer<typeof listLeadsQuerySchema>;
+
+export const convertLeadSchema = z.object({
+  pipelineId: z.string().min(1),
+  stageId: z.string().min(1),
+  estimatedValue: z.number().nonnegative().optional(),
+  probability: z.number().min(0).max(100).optional(),
+});
+export type ConvertLeadInput = z.infer<typeof convertLeadSchema>;
+
+export const createDealSchema = z.object({
+  contactId: z.string().min(1),
+  pipelineId: z.string().min(1),
+  stageId: z.string().min(1),
+  ownerId: z.string().optional(),
+  estimatedValue: z.number().nonnegative().optional(),
+  probability: z.number().min(0).max(100).optional(),
+  customFields: customFieldsSchema,
+});
+export type CreateDealInput = z.infer<typeof createDealSchema>;
+
+export const updateDealSchema = z.object({
+  ownerId: z.string().optional(),
+  estimatedValue: z.number().nonnegative().optional(),
+  probability: z.number().min(0).max(100).optional(),
+  customFields: customFieldsSchema,
+});
+export type UpdateDealInput = z.infer<typeof updateDealSchema>;
+
+export const moveDealStageSchema = z.object({
+  stageId: z.string().min(1),
+});
+export type MoveDealStageInput = z.infer<typeof moveDealStageSchema>;
+
+export const loseDealSchema = z.object({
+  lossReason: z.string().max(500).optional(),
+});
+export type LoseDealInput = z.infer<typeof loseDealSchema>;
+
+export const listDealsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  pipelineId: z.string().optional(),
+  stageId: z.string().optional(),
+  status: z.enum(DEAL_STATUSES).optional(),
+  ownerId: z.string().optional(),
+  contactId: z.string().optional(),
+  leadId: z.string().optional(),
+});
+export type ListDealsQuery = z.infer<typeof listDealsQuerySchema>;
 
 export const pipelineStageInputSchema = z.object({
   name: z.string().min(1).max(80),
@@ -106,14 +153,14 @@ export const updateTaskSchema = z.object({
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 
 export const createNoteSchema = z.object({
-  entity: z.enum(["contact", "lead"]),
+  entity: z.enum(["contact", "lead", "deal"]),
   entityId: z.string().min(1),
   content: z.string().min(1).max(5000),
 });
 export type CreateNoteInput = z.infer<typeof createNoteSchema>;
 
 export const createActivitySchema = z.object({
-  entity: z.enum(["contact", "lead"]),
+  entity: z.enum(["contact", "lead", "deal"]),
   entityId: z.string().min(1),
   type: z.enum(ACTIVITY_TYPES),
   content: z.string().max(2000).optional(),

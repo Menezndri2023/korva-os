@@ -5,8 +5,10 @@ import LeadDetailPage from "./page";
 import { renderWithProviders } from "@/test/render";
 import { apiClient, ApiError } from "@/lib/api-client";
 
+const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "lead-1" }),
+  useRouter: () => ({ push: pushMock }),
 }));
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
@@ -42,12 +44,8 @@ const pipeline = {
 const lead = {
   id: "lead-1",
   contactId: "contact-1",
-  pipelineId: "pipe-1",
-  stageId: "stage-1",
-  status: "open" as const,
+  status: "new" as const,
   source: "site web",
-  estimatedValue: 500,
-  probability: 40,
   customFields: {},
   createdAt: "2026-01-01T00:00:00.000Z",
 };
@@ -56,6 +54,7 @@ function mockGetByPath(path: string) {
   if (path === "/leads/lead-1") return Promise.resolve(lead);
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
   if (path.startsWith("/pipelines")) return Promise.resolve([pipeline]);
+  if (path.startsWith("/deals")) return Promise.resolve([]);
   if (path.startsWith("/notes")) return Promise.resolve([]);
   if (path.startsWith("/tasks")) return Promise.resolve([]);
   if (path.startsWith("/activities")) return Promise.resolve([]);
@@ -68,32 +67,30 @@ describe("LeadDetailPage", () => {
     getMock.mockReset();
     postMock.mockReset();
     patchMock.mockReset();
+    pushMock.mockReset();
     getMock.mockImplementation(mockGetByPath);
   });
 
-  it("shows the contact link, pipeline name, source, estimated value and probability", async () => {
+  it("shows the contact link and source", async () => {
     renderWithProviders(<LeadDetailPage />);
 
     expect(await screen.findByRole("link", { name: "Ada Lovelace" })).toHaveAttribute(
       "href",
       "/dashboard/crm/contact-1",
     );
-    expect(screen.getByText("Ventes")).toBeInTheDocument();
-    expect(screen.getByText("site web")).toBeInTheDocument();
-    expect(screen.getByText("500")).toBeInTheDocument();
-    expect(screen.getByText("40%")).toBeInTheDocument();
+    expect(screen.getAllByText("site web").length).toBeGreaterThan(0);
   });
 
-  it("shows the real pipeline stages and LEAD_STATUSES as select options", async () => {
+  it("shows the real LEAD_STATUSES as select options", async () => {
     renderWithProviders(<LeadDetailPage />);
 
-    const stageSelect = await screen.findByLabelText("Étape");
-    expect(stageSelect).toHaveValue("stage-1");
-    expect(within(stageSelect).getByText("Nouveau")).toBeInTheDocument();
-    expect(within(stageSelect).getByText("Gagné")).toBeInTheDocument();
-
-    const statusSelect = screen.getByLabelText("Statut");
-    expect(statusSelect).toHaveValue("open");
+    const statusSelect = await screen.findByLabelText("Statut");
+    expect(statusSelect).toHaveValue("new");
+    expect(within(statusSelect).getByText("Nouveaux")).toBeInTheDocument();
+    expect(within(statusSelect).getByText("Contactés")).toBeInTheDocument();
+    expect(within(statusSelect).getByText("Qualifiés")).toBeInTheDocument();
+    expect(within(statusSelect).getByText("Disqualifiés")).toBeInTheDocument();
+    expect(within(statusSelect).getByText("Convertis")).toBeInTheDocument();
   });
 
   it("changing the status sends PATCH /leads/:id with only { status }", async () => {
@@ -102,21 +99,10 @@ describe("LeadDetailPage", () => {
     renderWithProviders(<LeadDetailPage />);
 
     const statusSelect = await screen.findByLabelText("Statut");
-    await user.selectOptions(statusSelect, "won");
-
-    await waitFor(() => expect(patchMock).toHaveBeenCalledWith("/leads/lead-1", { status: "won" }));
-  });
-
-  it("changing the stage sends PATCH /leads/:id with only { stageId }", async () => {
-    patchMock.mockResolvedValue(lead);
-    const user = userEvent.setup();
-    renderWithProviders(<LeadDetailPage />);
-
-    const stageSelect = await screen.findByLabelText("Étape");
-    await user.selectOptions(stageSelect, "stage-2");
+    await user.selectOptions(statusSelect, "qualified");
 
     await waitFor(() =>
-      expect(patchMock).toHaveBeenCalledWith("/leads/lead-1", { stageId: "stage-2" }),
+      expect(patchMock).toHaveBeenCalledWith("/leads/lead-1", { status: "qualified" }),
     );
   });
 
@@ -152,6 +138,34 @@ describe("LeadDetailPage", () => {
 
     expect(await screen.findByText("Budget")).toBeInTheDocument();
     expect(screen.getByText("10k")).toBeInTheDocument();
+  });
+
+  it("shows a convert button that reveals a pipeline/stage form and posts to /leads/:id/convert", async () => {
+    postMock.mockResolvedValue({ lead: { ...lead, status: "converted" }, deal: { id: "deal-1" } });
+    const user = userEvent.setup();
+    renderWithProviders(<LeadDetailPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Convertir en affaire" }));
+    await user.click(screen.getByRole("button", { name: "Convertir" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/leads/lead-1/convert",
+        expect.objectContaining({ pipelineId: "pipe-1", stageId: "stage-1" }),
+      ),
+    );
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/crm/deals/deal-1");
+  });
+
+  it("hides the convert button once the lead is already converted", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/leads/lead-1") return Promise.resolve({ ...lead, status: "converted" });
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<LeadDetailPage />);
+
+    await screen.findByLabelText("Statut");
+    expect(screen.queryByRole("button", { name: "Convertir en affaire" })).not.toBeInTheDocument();
   });
 
   it("adds a note scoped to this lead via POST /notes with entity: lead", async () => {

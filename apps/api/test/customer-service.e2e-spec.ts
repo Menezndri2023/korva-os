@@ -102,7 +102,11 @@ describe('Customer Service module (e2e)', () => {
       .send({ enabledModules: ['crm', 'communication'] })
       .expect(200);
 
-    return { accessToken, organizationId: organization.id, slug: organization.slug };
+    return {
+      accessToken,
+      organizationId: organization.id,
+      slug: organization.slug,
+    };
   }
 
   async function createContact(
@@ -165,7 +169,9 @@ describe('Customer Service module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .expect(200);
       expect(
-        asSuccess<TicketPayload[]>(listRes.body).some((t) => t.id === ticket.id),
+        asSuccess<TicketPayload[]>(listRes.body).some(
+          (t) => t.id === ticket.id,
+        ),
       ).toBe(true);
 
       const updateRes = await request(server)
@@ -202,9 +208,9 @@ describe('Customer Service module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ assigneeMembershipId: membershipId })
         .expect(201);
-      expect(asSuccess<TicketPayload>(assignRes.body).assigneeMembershipId).toBe(
-        membershipId,
-      );
+      expect(
+        asSuccess<TicketPayload>(assignRes.body).assigneeMembershipId,
+      ).toBe(membershipId);
 
       const badRes = await request(server)
         .post(`/api/v1/tickets/${ticketId}/assign`)
@@ -259,7 +265,9 @@ describe('Customer Service module (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(400);
-      expect(asError(resolveWhileClosed.body).code).toBe('TICKET_NOT_RESOLVABLE');
+      expect(asError(resolveWhileClosed.body).code).toBe(
+        'TICKET_NOT_RESOLVABLE',
+      );
 
       // reopen
       const reopenRes = await request(server)
@@ -291,7 +299,10 @@ describe('Customer Service module (e2e)', () => {
     let organizationId: string;
     let contactId: string;
 
-    async function addMember(email: string, systemKey: string): Promise<string> {
+    async function addMember(
+      email: string,
+      systemKey: string,
+    ): Promise<string> {
       const authRes = await request(server)
         .post('/api/v1/auth/register')
         .send({ email, password: 'password123' })
@@ -333,7 +344,10 @@ describe('Customer Service module (e2e)', () => {
     });
 
     it('lets STAFF read/create/update tickets but not assign them', async () => {
-      const staffToken = await addMember('ticket-rbac-staff@korva.test', 'STAFF');
+      const staffToken = await addMember(
+        'ticket-rbac-staff@korva.test',
+        'STAFF',
+      );
 
       const createRes = await request(server)
         .post('/api/v1/tickets')
@@ -360,7 +374,10 @@ describe('Customer Service module (e2e)', () => {
     });
 
     it('lets MANAGER assign tickets', async () => {
-      const managerToken = await addMember('ticket-rbac-manager@korva.test', 'MANAGER');
+      const managerToken = await addMember(
+        'ticket-rbac-manager@korva.test',
+        'MANAGER',
+      );
 
       const createRes = await request(server)
         .post('/api/v1/tickets')
@@ -375,7 +392,8 @@ describe('Customer Service module (e2e)', () => {
         .set('Authorization', `Bearer ${ownerToken}`)
         .set('X-Organization-Id', organizationId)
         .expect(200);
-      const ownerMembershipId = asSuccess<MembershipPayload[]>(meRes.body)[0]!.id;
+      const ownerMembershipId = asSuccess<MembershipPayload[]>(meRes.body)[0]!
+        .id;
 
       await request(server)
         .post(`/api/v1/tickets/${ticketId}/assign`)
@@ -386,8 +404,14 @@ describe('Customer Service module (e2e)', () => {
     });
 
     it('denies SALES and FINANCE any access to tickets', async () => {
-      const salesToken = await addMember('ticket-rbac-sales@korva.test', 'SALES');
-      const financeToken = await addMember('ticket-rbac-finance@korva.test', 'FINANCE');
+      const salesToken = await addMember(
+        'ticket-rbac-sales@korva.test',
+        'SALES',
+      );
+      const financeToken = await addMember(
+        'ticket-rbac-finance@korva.test',
+        'FINANCE',
+      );
 
       for (const token of [salesToken, financeToken]) {
         const res = await request(server)
@@ -419,15 +443,23 @@ describe('Customer Service module (e2e)', () => {
 
       const custRes = await request(server)
         .post(`/api/v1/public/${slug}/account/register`)
-        .send({ email: 'portal-customer@customer.test', password: 'clientpass123' })
+        .send({
+          email: 'portal-customer@customer.test',
+          password: 'clientpass123',
+        })
         .expect(201);
       customerToken = asSuccess<CustomerAuthPayload>(custRes.body).accessToken;
 
       const otherRes = await request(server)
         .post(`/api/v1/public/${slug}/account/register`)
-        .send({ email: 'other-portal-customer@customer.test', password: 'clientpass123' })
+        .send({
+          email: 'other-portal-customer@customer.test',
+          password: 'clientpass123',
+        })
         .expect(201);
-      otherCustomerToken = asSuccess<CustomerAuthPayload>(otherRes.body).accessToken;
+      otherCustomerToken = asSuccess<CustomerAuthPayload>(
+        otherRes.body,
+      ).accessToken;
     });
 
     it('lets a customer create, list, and get their own ticket without supplying a contactId', async () => {
@@ -444,7 +476,9 @@ describe('Customer Service module (e2e)', () => {
         .set('Authorization', `Bearer ${customerToken}`)
         .expect(200);
       expect(
-        asSuccess<TicketPayload[]>(listRes.body).some((t) => t.id === ticket.id),
+        asSuccess<TicketPayload[]>(listRes.body).some(
+          (t) => t.id === ticket.id,
+        ),
       ).toBe(true);
 
       await request(server)
@@ -453,7 +487,7 @@ describe('Customer Service module (e2e)', () => {
         .expect(200);
     });
 
-    it('never lets a customer read another customer\'s ticket', async () => {
+    it("never lets a customer read another customer's ticket", async () => {
       const createRes = await request(server)
         .post(`/api/v1/public/${slug}/account/tickets`)
         .set('Authorization', `Bearer ${customerToken}`)

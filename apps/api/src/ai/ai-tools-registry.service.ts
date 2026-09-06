@@ -7,6 +7,11 @@ import { GetCustomerTool } from './tools/get-customer.tool';
 import { CreateCustomerTool } from './tools/create-customer.tool';
 import { SearchLeadsTool } from './tools/search-leads.tool';
 import { UpdateLeadTool } from './tools/update-lead.tool';
+import { CreateDealTool } from './tools/create-deal.tool';
+import { UpdateDealTool } from './tools/update-deal.tool';
+import { SearchDealsTool } from './tools/search-deals.tool';
+import { WinDealTool } from './tools/win-deal.tool';
+import { LoseDealTool } from './tools/lose-deal.tool';
 import { CreateTaskTool } from './tools/create-task.tool';
 import { SearchOffersTool } from './tools/search-offers.tool';
 import { GetOfferTool } from './tools/get-offer.tool';
@@ -33,6 +38,11 @@ const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
     'create_customer',
     'search_leads',
     'update_lead',
+    'create_deal',
+    'update_deal',
+    'search_deals',
+    'win_deal',
+    'lose_deal',
     'create_task',
     'search_offers',
     'get_offer',
@@ -78,6 +88,11 @@ export class AiToolsRegistryService {
     createCustomer: CreateCustomerTool,
     searchLeads: SearchLeadsTool,
     updateLead: UpdateLeadTool,
+    createDeal: CreateDealTool,
+    updateDeal: UpdateDealTool,
+    searchDeals: SearchDealsTool,
+    winDeal: WinDealTool,
+    loseDeal: LoseDealTool,
     createTask: CreateTaskTool,
     searchOffers: SearchOffersTool,
     getOffer: GetOfferTool,
@@ -103,6 +118,11 @@ export class AiToolsRegistryService {
       createCustomer,
       searchLeads,
       updateLead,
+      createDeal,
+      updateDeal,
+      searchDeals,
+      winDeal,
+      loseDeal,
       createTask,
       searchOffers,
       getOffer,

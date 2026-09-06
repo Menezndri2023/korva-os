@@ -23,6 +23,7 @@ const lead = { id: "lead-1", contactId: "contact-1", status: "open", pipelineId:
 function mockGetByPath(path: string) {
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
   if (path.startsWith("/leads")) return Promise.resolve([lead]);
+  if (path.startsWith("/deals")) return Promise.resolve([]);
   throw new Error(`unexpected get ${path}`);
 }
 

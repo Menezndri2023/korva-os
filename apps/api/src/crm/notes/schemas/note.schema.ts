@@ -14,8 +14,8 @@ export class Note {
   })
   organizationId!: Types.ObjectId;
 
-  @Prop({ type: String, enum: ['contact', 'lead'], required: true })
-  entity!: 'contact' | 'lead';
+  @Prop({ type: String, enum: ['contact', 'lead', 'deal'], required: true })
+  entity!: 'contact' | 'lead' | 'deal';
 
   @Prop({ type: Types.ObjectId, required: true, index: true })
   entityId!: Types.ObjectId;
