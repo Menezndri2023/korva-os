@@ -50,6 +50,8 @@ export class SearchOffersTool implements AiTool<z.infer<typeof inputSchema>> {
       type: offer.type,
       pricing: offer.pricing,
       status: offer.status,
+      trackStock: offer.trackStock,
+      stockOnHand: offer.stockOnHand,
     }));
   }
 }

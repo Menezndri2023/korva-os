@@ -13,6 +13,7 @@ import type {
   InvoiceStatus,
   LeadStatus,
   OrderStatus,
+  ReorderSuggestionEntry,
 } from '@korva/types';
 import type { AnalyticsRevenueQuery } from '@korva/validation';
 import { Lead, LeadDocument } from '../crm/leads/schemas/lead.schema';
@@ -388,6 +389,67 @@ export class AnalyticsService {
       currency: organization?.currency ?? null,
       unvaluedOfferCount,
     };
+  }
+
+  /** Phase C4 (docs/KORVA_OS_V2_AUDIT.md §2.4) — offers at or below their own `lowStockThreshold`
+   *  (the same reorder-point field LowStockThresholdAlertRule already reacts to). Only offers
+   *  that opted into a real threshold are considered — an offer with no threshold set has no
+   *  reorder point to compare against, same reasoning as the existing Decision Engine rule. */
+  async getReorderSuggestions(
+    organizationId: string,
+  ): Promise<ReorderSuggestionEntry[]> {
+    const organizationObjectId = new Types.ObjectId(organizationId);
+    const offers = await this.offerModel
+      .find({
+        organizationId: organizationObjectId,
+        trackStock: true,
+        lowStockThreshold: { $exists: true, $ne: null },
+      })
+      .lean()
+      .exec();
+    const belowThreshold = offers.filter(
+      (offer) => totalStock(offer) <= (offer.lowStockThreshold ?? 0),
+    );
+    if (belowThreshold.length === 0) return [];
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const soldRows = await this.stockMovementModel.aggregate<{
+      _id: Types.ObjectId;
+      unitsSold: number;
+    }>([
+      {
+        $match: {
+          organizationId: organizationObjectId,
+          type: 'sold',
+          createdAt: { $gte: since },
+          offerId: { $in: belowThreshold.map((offer) => offer._id) },
+        },
+      },
+      {
+        $group: { _id: '$offerId', unitsSold: { $sum: { $abs: '$quantity' } } },
+      },
+    ]);
+    const soldByOffer = new Map(
+      soldRows.map((row) => [row._id.toString(), row.unitsSold]),
+    );
+
+    return belowThreshold.map((offer) => {
+      const currentStock = totalStock(offer);
+      const lowStockThreshold = offer.lowStockThreshold ?? 0;
+      const unitsSoldInLast30Days = soldByOffer.get(offer._id.toString()) ?? 0;
+      return {
+        offerId: offer._id.toString(),
+        offerName: offer.name,
+        currentStock,
+        lowStockThreshold,
+        unitsSoldInLast30Days,
+        suggestedReorderQuantity: Math.max(
+          unitsSoldInLast30Days,
+          lowStockThreshold - currentStock,
+          1,
+        ),
+      };
+    });
   }
 }
 

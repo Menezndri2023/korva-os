@@ -43,6 +43,11 @@ export class GetOfferTool implements AiTool<z.infer<typeof inputSchema>> {
       pricing: offer.pricing,
       variants: offer.variants,
       status: offer.status,
+      // Phase C4 (docs/KORVA_OS_V2_AUDIT.md §2.4) — previously absent; the AI had zero
+      // stock-awareness even when asked directly about an offer's availability.
+      trackStock: offer.trackStock,
+      stockOnHand: offer.stockOnHand,
+      lowStockThreshold: offer.lowStockThreshold,
     };
   }
 }

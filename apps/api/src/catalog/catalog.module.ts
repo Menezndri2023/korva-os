@@ -110,6 +110,11 @@ import { StockLevelsService } from './warehouses/stock-levels.service';
     StockLevelsRepository,
     StockLevelsService,
   ],
-  exports: [OffersService, InventoryService, CategoriesService],
+  exports: [
+    OffersService,
+    InventoryService,
+    CategoriesService,
+    PurchaseOrdersService,
+  ],
 })
 export class CatalogModule {}

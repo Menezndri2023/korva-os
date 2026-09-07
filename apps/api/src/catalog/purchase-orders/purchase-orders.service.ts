@@ -338,4 +338,27 @@ export class PurchaseOrdersService {
   ): Promise<void> {
     await this.getById(organizationId, id);
   }
+
+  /** Phase C4 (docs/KORVA_OS_V2_AUDIT.md §2.4) — per-supplier spend/on-time analysis, off the
+   *  existing PurchaseOrder ledger. Supplier names resolved via one bounded listing call rather
+   *  than N lookups — organizations realistically have few enough suppliers for this to be fine
+   *  (same simplicity tradeoff SuppliersController's own `findAll` already makes). */
+  async getSupplierAnalysis(organizationId: string) {
+    const [rows, { data: suppliers }] = await Promise.all([
+      this.purchaseOrdersRepository.aggregateSupplierAnalysis(organizationId),
+      this.suppliersService.findAll(organizationId, { page: 1, limit: 200 }),
+    ]);
+    const nameById = new Map(
+      suppliers.map((supplier) => [supplier.id as string, supplier.name]),
+    );
+
+    return rows.map((row) => ({
+      supplierId: row._id.toString(),
+      supplierName: nameById.get(row._id.toString()) ?? 'Unknown supplier',
+      purchaseOrderCount: row.purchaseOrderCount,
+      totalSpend: row.totalSpend,
+      onTimeDeliveryRate:
+        row.onTimeEligible > 0 ? row.onTimeCount / row.onTimeEligible : null,
+    }));
+  }
 }

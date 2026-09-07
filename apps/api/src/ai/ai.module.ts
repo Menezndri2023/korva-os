@@ -58,6 +58,9 @@ import { ListRecommendationsTool } from './tools/list-recommendations.tool';
 import { DismissRecommendationTool } from './tools/dismiss-recommendation.tool';
 import { ResolveRecommendationTool } from './tools/resolve-recommendation.tool';
 import { ProposeRecommendationTool } from './tools/propose-recommendation.tool';
+import { SuggestReorderTool } from './tools/suggest-reorder.tool';
+import { DetectDeadStockTool } from './tools/detect-dead-stock.tool';
+import { AnalyzeSuppliersTool } from './tools/analyze-suppliers.tool';
 
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -69,6 +72,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuditModule } from '../audit/audit.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { DecisionEngineModule } from '../decision-engine/decision-engine.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 
 @Module({
   imports: [
@@ -90,6 +94,7 @@ import { DecisionEngineModule } from '../decision-engine/decision-engine.module'
     AuditModule,
     SubscriptionsModule,
     DecisionEngineModule,
+    AnalyticsModule,
   ],
   controllers: [AiController],
   providers: [
@@ -129,6 +134,9 @@ import { DecisionEngineModule } from '../decision-engine/decision-engine.module'
     DismissRecommendationTool,
     ResolveRecommendationTool,
     ProposeRecommendationTool,
+    SuggestReorderTool,
+    DetectDeadStockTool,
+    AnalyzeSuppliersTool,
 
     {
       provide: AI_PROVIDER,

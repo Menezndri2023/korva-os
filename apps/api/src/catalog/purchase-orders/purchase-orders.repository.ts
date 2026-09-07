@@ -65,6 +65,75 @@ export class PurchaseOrdersRepository {
     return { data, total };
   }
 
+  /** Phase C4 (docs/KORVA_OS_V2_AUDIT.md §2.4) — per-supplier spend and on-time delivery off the
+   *  existing PurchaseOrder ledger. `totalSpend` sums every line's quantity*unitCost across every
+   *  PO (ordered value, not just received) — "how much has this supplier been committed for."
+   *  On-time eligibility requires a RECEIVED PO with both `expectedDate` and `receivedAt` set —
+   *  a PO with no expected date was never given a deadline to judge against. */
+  aggregateSupplierAnalysis(organizationId: string): Promise<
+    {
+      _id: Types.ObjectId;
+      purchaseOrderCount: number;
+      totalSpend: number;
+      onTimeEligible: number;
+      onTimeCount: number;
+    }[]
+  > {
+    return this.purchaseOrderModel.aggregate([
+      { $match: { organizationId: new Types.ObjectId(organizationId) } },
+      {
+        $project: {
+          supplierId: 1,
+          lineTotal: {
+            $sum: {
+              $map: {
+                input: '$items',
+                as: 'item',
+                in: { $multiply: ['$$item.quantity', '$$item.unitCost'] },
+              },
+            },
+          },
+          onTimeEligible: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ['$status', 'received'] },
+                  { $ne: ['$expectedDate', null] },
+                  { $ne: ['$receivedAt', null] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
+          onTime: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ['$status', 'received'] },
+                  { $ne: ['$expectedDate', null] },
+                  { $ne: ['$receivedAt', null] },
+                  { $lte: ['$receivedAt', '$expectedDate'] },
+                ],
+              },
+              1,
+              0,
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$supplierId',
+          purchaseOrderCount: { $sum: 1 },
+          totalSpend: { $sum: '$lineTotal' },
+          onTimeEligible: { $sum: '$onTimeEligible' },
+          onTimeCount: { $sum: '$onTime' },
+        },
+      },
+    ]);
+  }
+
   /** Used by SuppliersService's delete guard — a supplier with any non-cancelled PO can't be
    *  removed (its order history would dangle a broken reference). Cancelled POs don't block
    *  deletion: they're inert history, same "terminal states don't block" reasoning already used

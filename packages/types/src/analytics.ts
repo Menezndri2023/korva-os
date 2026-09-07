@@ -80,3 +80,27 @@ export interface InventoryValuation {
   currency: string | null;
   unvaluedOfferCount: number;
 }
+
+/** Phase C4 — offers at or below their own configured reorder point. `suggestedReorderQuantity`
+ *  is a simple heuristic (at least enough to cover the last 30 days' sales, at least enough to
+ *  refill to the threshold) — never a demand forecast, same "no LLM standing in for a business
+ *  decision" philosophy as the Decision Engine's own rules. */
+export interface ReorderSuggestionEntry {
+  offerId: string;
+  offerName: string;
+  currentStock: number;
+  lowStockThreshold: number;
+  unitsSoldInLast30Days: number;
+  suggestedReorderQuantity: number;
+}
+
+/** Phase C4 — per-supplier spend and on-time delivery, off the existing PurchaseOrder ledger.
+ *  `onTimeDeliveryRate` is null when there's no received PO with both an expectedDate and a
+ *  receivedAt to compare — never defaulted to 0 or 100%, which would misrepresent "no data". */
+export interface SupplierAnalysisEntry {
+  supplierId: string;
+  supplierName: string;
+  purchaseOrderCount: number;
+  totalSpend: number;
+  onTimeDeliveryRate: number | null;
+}

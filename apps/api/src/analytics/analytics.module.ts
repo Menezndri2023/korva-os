@@ -38,5 +38,6 @@ import { AnalyticsController } from './analytics.controller';
   ],
   controllers: [AnalyticsController],
   providers: [AnalyticsService],
+  exports: [AnalyticsService],
 })
 export class AnalyticsModule {}

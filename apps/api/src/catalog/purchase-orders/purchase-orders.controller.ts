@@ -98,4 +98,13 @@ export class PurchaseOrdersController {
       id,
     );
   }
+
+  /** Phase C4 (docs/KORVA_OS_V2_AUDIT.md §2.4). */
+  @RequirePermissions('purchase_orders.read')
+  @Get('analytics/suppliers')
+  getSupplierAnalysis(@CurrentTenant() tenant: TenantContext) {
+    return this.purchaseOrdersService.getSupplierAnalysis(
+      tenant.organizationId,
+    );
+  }
 }

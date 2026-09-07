@@ -100,4 +100,10 @@ export class AnalyticsController {
   getInventoryValuation(@CurrentTenant() tenant: TenantContext) {
     return this.analyticsService.getInventoryValuation(tenant.organizationId);
   }
+
+  @RequirePermissions('analytics.read')
+  @Get('inventory/reorder-suggestions')
+  getReorderSuggestions(@CurrentTenant() tenant: TenantContext) {
+    return this.analyticsService.getReorderSuggestions(tenant.organizationId);
+  }
 }
