@@ -115,5 +115,8 @@ export interface StockMovement {
   referenceType?: "order";
   referenceId?: string;
   userId?: string;
+  /** Only ever set on a `received` movement — the real per-unit cost, when known. See Phase C3
+   *  inventory valuation, which reads each offer's most recent costed `received` movement. */
+  unitCost?: number;
   createdAt: string;
 }

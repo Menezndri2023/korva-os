@@ -43,3 +43,40 @@ export interface AnalyticsActivityEntry {
   entityId?: string;
   createdAt: string;
 }
+
+/**
+ * Phase C3 (docs/KORVA_OS_V2_AUDIT.md §2.4) — read off the existing StockMovement ledger, no new
+ * instrumentation. `turnoverRatio` is a simplified "units sold in period ÷ current stock" proxy,
+ * not a formal weighted-average-inventory calculation — a defensible v1 starting metric.
+ */
+export interface InventoryTurnoverEntry {
+  offerId: string;
+  offerName: string;
+  currentStock: number;
+  unitsSoldInPeriod: number;
+  turnoverRatio: number | null;
+}
+
+export interface InventoryDeadStockEntry {
+  offerId: string;
+  offerName: string;
+  currentStock: number;
+  /** Null means never sold at all (not just "not sold in the lookback window"). */
+  lastSoldAt: string | null;
+}
+
+/** `unvaluedOfferCount` — offers with stock but no costed `received` movement yet, so they're
+ *  excluded from `totalValue` rather than guessed at (see StockMovement.unitCost's doc). */
+export interface InventoryValuationEntry {
+  offerId: string;
+  offerName: string;
+  currentStock: number;
+  unitCost: number;
+  totalValue: number;
+}
+export interface InventoryValuation {
+  entries: InventoryValuationEntry[];
+  totalValue: number;
+  currency: string | null;
+  unvaluedOfferCount: number;
+}

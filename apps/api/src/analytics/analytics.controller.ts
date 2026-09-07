@@ -4,9 +4,13 @@ import {
   analyticsActivityQuerySchema,
   analyticsOverviewQuerySchema,
   analyticsRevenueQuerySchema,
+  inventoryDeadStockQuerySchema,
+  inventoryTurnoverQuerySchema,
   type AnalyticsActivityQuery,
   type AnalyticsOverviewQuery,
   type AnalyticsRevenueQuery,
+  type InventoryDeadStockQuery,
+  type InventoryTurnoverQuery,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import { AnalyticsService } from './analytics.service';
@@ -59,5 +63,41 @@ export class AnalyticsController {
       tenant.organizationId,
       query.limit,
     );
+  }
+
+  /** Phase C3 (docs/KORVA_OS_V2_AUDIT.md §2.4) — inventory analytics, off the existing
+   *  StockMovement ledger. Gated the same as every other analytics endpoint here (analytics.read
+   *  only, no extra `catalog` module check — mirrors how the CRM-facing endpoints above never
+   *  check `crm`/`commerce`/`finance` either). */
+  @RequirePermissions('analytics.read')
+  @Get('inventory/turnover')
+  getInventoryTurnover(
+    @CurrentTenant() tenant: TenantContext,
+    @Query(new ZodValidationPipe(inventoryTurnoverQuerySchema))
+    query: InventoryTurnoverQuery,
+  ) {
+    return this.analyticsService.getInventoryTurnover(
+      tenant.organizationId,
+      query.days,
+    );
+  }
+
+  @RequirePermissions('analytics.read')
+  @Get('inventory/dead-stock')
+  getDeadStock(
+    @CurrentTenant() tenant: TenantContext,
+    @Query(new ZodValidationPipe(inventoryDeadStockQuerySchema))
+    query: InventoryDeadStockQuery,
+  ) {
+    return this.analyticsService.getDeadStock(
+      tenant.organizationId,
+      query.days,
+    );
+  }
+
+  @RequirePermissions('analytics.read')
+  @Get('inventory/valuation')
+  getInventoryValuation(@CurrentTenant() tenant: TenantContext) {
+    return this.analyticsService.getInventoryValuation(tenant.organizationId);
   }
 }

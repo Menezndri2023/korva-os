@@ -3,6 +3,9 @@ import type {
   AnalyticsActivityEntry,
   AnalyticsOverview,
   AnalyticsRevenueTimeseries,
+  InventoryDeadStockEntry,
+  InventoryTurnoverEntry,
+  InventoryValuation,
 } from "@korva/types";
 import { apiClient } from "./api-client";
 import { useAuthStore } from "./auth-store";
@@ -74,6 +77,42 @@ export function useAnalyticsActivity(limit: number) {
     queryKey: ["analytics", "activity", activeOrganizationId, limit],
     queryFn: () =>
       apiClient.get<AnalyticsActivityEntry[]>(`/analytics/activity?limit=${limit}`),
+    enabled,
+  });
+}
+
+/** Phase C3 (docs/KORVA_OS_V2_AUDIT.md §2.4) — inventory analytics off the StockMovement ledger. */
+export function useInventoryTurnover(days: number) {
+  const activeOrganizationId = useAuthStore((state) => state.activeOrganizationId);
+  const enabled = useAnalyticsEnabled();
+
+  return useQuery({
+    queryKey: ["analytics", "inventory-turnover", activeOrganizationId, days],
+    queryFn: () =>
+      apiClient.get<InventoryTurnoverEntry[]>(`/analytics/inventory/turnover?days=${days}`),
+    enabled,
+  });
+}
+
+export function useInventoryDeadStock(days: number) {
+  const activeOrganizationId = useAuthStore((state) => state.activeOrganizationId);
+  const enabled = useAnalyticsEnabled();
+
+  return useQuery({
+    queryKey: ["analytics", "inventory-dead-stock", activeOrganizationId, days],
+    queryFn: () =>
+      apiClient.get<InventoryDeadStockEntry[]>(`/analytics/inventory/dead-stock?days=${days}`),
+    enabled,
+  });
+}
+
+export function useInventoryValuation() {
+  const activeOrganizationId = useAuthStore((state) => state.activeOrganizationId);
+  const enabled = useAnalyticsEnabled();
+
+  return useQuery({
+    queryKey: ["analytics", "inventory-valuation", activeOrganizationId],
+    queryFn: () => apiClient.get<InventoryValuation>("/analytics/inventory/valuation"),
     enabled,
   });
 }

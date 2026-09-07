@@ -7,6 +7,9 @@ import {
   useAnalyticsActivity,
   useAnalyticsOverview,
   useAnalyticsRevenue,
+  useInventoryDeadStock,
+  useInventoryTurnover,
+  useInventoryValuation,
 } from "@/lib/use-analytics";
 import {
   ACTIVITY_ACTION_LABELS,
@@ -37,6 +40,9 @@ export default function AnalyticsPage() {
   const overviewQuery = useAnalyticsOverview(range);
   const revenueQuery = useAnalyticsRevenue({ ...range, interval: period.interval });
   const activityQuery = useAnalyticsActivity(8);
+  const turnoverQuery = useInventoryTurnover(30);
+  const deadStockQuery = useInventoryDeadStock(90);
+  const valuationQuery = useInventoryValuation();
 
   return (
     <div className="space-y-6">
@@ -181,8 +187,88 @@ export default function AnalyticsPage() {
               )}
             </div>
           </Card>
+
+          {turnoverQuery.data && turnoverQuery.data.length > 0 && (
+            <InventorySection
+              turnover={turnoverQuery.data}
+              deadStock={deadStockQuery.data ?? []}
+              valuation={valuationQuery.data}
+            />
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+/** Phase C3 (docs/KORVA_OS_V2_AUDIT.md §2.4) — hidden entirely for an org with no tracked
+ *  inventory at all, rather than showing three empty cards. */
+function InventorySection({
+  turnover,
+  deadStock,
+  valuation,
+}: {
+  turnover: NonNullable<ReturnType<typeof useInventoryTurnover>["data"]>;
+  deadStock: NonNullable<ReturnType<typeof useInventoryDeadStock>["data"]>;
+  valuation: ReturnType<typeof useInventoryValuation>["data"];
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <Card className="p-6">
+        <h2 className="text-sm font-medium text-text">Rotation des stocks (30 jours)</h2>
+        <ul className="mt-3 space-y-2 text-sm">
+          {[...turnover]
+            .sort((a, b) => b.unitsSoldInPeriod - a.unitsSoldInPeriod)
+            .slice(0, 8)
+            .map((entry) => (
+              <li key={entry.offerId} className="flex items-center justify-between">
+                <span className="text-text">{entry.offerName}</span>
+                <span className="text-text-muted">
+                  {entry.unitsSoldInPeriod} vendu(s) · {entry.currentStock} en stock
+                </span>
+              </li>
+            ))}
+        </ul>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="text-sm font-medium text-text">Stock dormant (90 jours)</h2>
+        {deadStock.length === 0 ? (
+          <p className="mt-3 text-sm text-text-muted">Aucun stock dormant détecté.</p>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm">
+            {deadStock.slice(0, 8).map((entry) => (
+              <li key={entry.offerId} className="flex items-center justify-between">
+                <span className="text-text">{entry.offerName}</span>
+                <span className="text-text-muted">
+                  {entry.currentStock} en stock ·{" "}
+                  {entry.lastSoldAt
+                    ? `vendu le ${new Date(entry.lastSoldAt).toLocaleDateString("fr-FR")}`
+                    : "jamais vendu"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="text-sm font-medium text-text">Valorisation du stock</h2>
+        {valuation ? (
+          <>
+            <p className="mt-3 text-2xl font-semibold text-text">
+              {formatCurrency(valuation.totalValue, valuation.currency)}
+            </p>
+            {valuation.unvaluedOfferCount > 0 && (
+              <p className="mt-1 text-xs text-text-muted">
+                {valuation.unvaluedOfferCount} offre(s) sans coût connu, exclue(s) du total.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-text-muted">Chargement...</p>
+        )}
+      </Card>
     </div>
   );
 }

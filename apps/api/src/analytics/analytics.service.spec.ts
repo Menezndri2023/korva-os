@@ -27,6 +27,8 @@ describe('AnalyticsService — tenant isolation', () => {
       orderModel?: ReturnType<typeof makeAggregateModel>;
       invoiceModel?: ReturnType<typeof makeAggregateModel>;
       organizationModel?: ReturnType<typeof makeOrgModel>;
+      offerModel?: ReturnType<typeof makeAggregateModel>;
+      stockMovementModel?: ReturnType<typeof makeAggregateModel>;
     } = {},
   ) {
     const leadModel = overrides.leadModel ?? makeAggregateModel([]);
@@ -34,6 +36,9 @@ describe('AnalyticsService — tenant isolation', () => {
     const orderModel = overrides.orderModel ?? makeAggregateModel([]);
     const invoiceModel = overrides.invoiceModel ?? makeAggregateModel([]);
     const organizationModel = overrides.organizationModel ?? makeOrgModel();
+    const offerModel = overrides.offerModel ?? makeAggregateModel([]);
+    const stockMovementModel =
+      overrides.stockMovementModel ?? makeAggregateModel([]);
     const listRecent = jest.fn().mockResolvedValue([]);
     const auditService = { listRecent } as unknown as AuditService;
 
@@ -43,6 +48,8 @@ describe('AnalyticsService — tenant isolation', () => {
       orderModel as never,
       invoiceModel as never,
       organizationModel as never,
+      offerModel as never,
+      stockMovementModel as never,
       auditService,
     );
 
@@ -53,6 +60,8 @@ describe('AnalyticsService — tenant isolation', () => {
       orderModel,
       invoiceModel,
       organizationModel,
+      offerModel,
+      stockMovementModel,
       auditService,
       listRecent,
     };

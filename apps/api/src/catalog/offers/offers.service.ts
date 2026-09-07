@@ -436,6 +436,7 @@ export class OffersService {
       quantity: delta,
       stockAfter: result.stockAfter,
       reason: input.reason,
+      unitCost: input.type === 'received' ? input.unitCost : undefined,
       userId: new Types.ObjectId(userId),
     });
 

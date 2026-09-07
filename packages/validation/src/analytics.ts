@@ -17,3 +17,13 @@ export const analyticsActivityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 export type AnalyticsActivityQuery = z.infer<typeof analyticsActivityQuerySchema>;
+
+export const inventoryTurnoverQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
+export type InventoryTurnoverQuery = z.infer<typeof inventoryTurnoverQuerySchema>;
+
+export const inventoryDeadStockQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(365).default(90),
+});
+export type InventoryDeadStockQuery = z.infer<typeof inventoryDeadStockQuerySchema>;

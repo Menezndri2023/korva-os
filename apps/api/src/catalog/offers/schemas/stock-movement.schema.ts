@@ -48,6 +48,14 @@ export class StockMovement {
   @Prop({ type: Types.ObjectId })
   referenceId?: Types.ObjectId;
 
+  /** Only ever set on a `received` movement — the real per-unit cost, when known (from a
+   *  purchase order's own line-item cost, or a manual entry). Phase C3 (docs/KORVA_OS_V2_AUDIT.md
+   *  §2.4) valuation reads each offer's MOST RECENT costed `received` movement, never an
+   *  invented/estimated figure — an offer with no costed movement is simply excluded from
+   *  valuation rather than guessed at. */
+  @Prop()
+  unitCost?: number;
+
   @Prop({ type: Types.ObjectId, ref: 'User' })
   userId?: Types.ObjectId;
 }

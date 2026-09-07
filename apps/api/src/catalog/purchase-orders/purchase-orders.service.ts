@@ -291,6 +291,7 @@ export class PurchaseOrdersService {
     }
 
     for (const line of toReceive) {
+      const item = findLine(line.offerId, line.variantId)!;
       await this.offersService.recordStockMovement(
         organizationId,
         userId,
@@ -301,9 +302,11 @@ export class PurchaseOrdersService {
           variantId: line.variantId,
           reason: `Purchase order ${id}`,
           warehouseId: input.warehouseId,
+          // Real cost from the PO's own line item — never invented — feeds Phase C3 valuation.
+          unitCost: item.unitCost,
         },
       );
-      findLine(line.offerId, line.variantId)!.receivedQuantity += line.quantity;
+      item.receivedQuantity += line.quantity;
     }
 
     const fullyReceived = purchaseOrder.items.every(

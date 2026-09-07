@@ -30,12 +30,25 @@ const emptyOverview = {
   invoices: { total: 0, byStatus: {}, outstanding: 0, currency: null },
 };
 
-function mockGetByPath(overview: unknown, revenuePoints: unknown[], activity: unknown[]) {
+function mockGetByPath(
+  overview: unknown,
+  revenuePoints: unknown[],
+  activity: unknown[],
+  inventory: { turnover?: unknown[]; deadStock?: unknown[]; valuation?: unknown } = {},
+) {
   return (path: string) => {
     if (path.startsWith("/analytics/overview")) return Promise.resolve(overview);
     if (path.startsWith("/analytics/revenue-timeseries"))
       return Promise.resolve({ points: revenuePoints, currency: "EUR" });
     if (path.startsWith("/analytics/activity")) return Promise.resolve(activity);
+    if (path.startsWith("/analytics/inventory/turnover"))
+      return Promise.resolve(inventory.turnover ?? []);
+    if (path.startsWith("/analytics/inventory/dead-stock"))
+      return Promise.resolve(inventory.deadStock ?? []);
+    if (path.startsWith("/analytics/inventory/valuation"))
+      return Promise.resolve(
+        inventory.valuation ?? { entries: [], totalValue: 0, currency: null, unvaluedOfferCount: 0 },
+      );
     throw new Error(`unexpected GET ${path}`);
   };
 }
@@ -65,6 +78,36 @@ describe("AnalyticsPage", () => {
       expect(screen.getByText("Aucune donnée disponible pour cette période")).toBeInTheDocument(),
     );
     expect(screen.getByText("Aucune activité récente")).toBeInTheDocument();
+  });
+
+  it("renders the inventory section (Phase C3) once turnover data exists, and stays hidden otherwise", async () => {
+    getMock.mockImplementation(
+      mockGetByPath(overviewWithData, [], [], {
+        turnover: [
+          { offerId: "offer-1", offerName: "Widget", currentStock: 5, unitsSoldInPeriod: 3, turnoverRatio: 0.6 },
+        ],
+        deadStock: [
+          { offerId: "offer-2", offerName: "Dusty Widget", currentStock: 10, lastSoldAt: null },
+        ],
+        valuation: { entries: [], totalValue: 250, currency: "EUR", unvaluedOfferCount: 1 },
+      }),
+    );
+
+    renderWithProviders(<AnalyticsPage />);
+
+    expect(await screen.findByText("Rotation des stocks (30 jours)")).toBeInTheDocument();
+    expect(screen.getByText("Widget")).toBeInTheDocument();
+    expect(screen.getByText("Dusty Widget")).toBeInTheDocument();
+    expect(screen.getAllByText(/250/).length).toBeGreaterThan(0);
+  });
+
+  it("hides the inventory section entirely for an org with no tracked inventory", async () => {
+    getMock.mockImplementation(mockGetByPath(overviewWithData, [], []));
+
+    renderWithProviders(<AnalyticsPage />);
+
+    await waitFor(() => expect(screen.getByText("5")).toBeInTheDocument());
+    expect(screen.queryByText("Rotation des stocks (30 jours)")).not.toBeInTheDocument();
   });
 
   it("shows an error state with a retry action when the overview request fails", async () => {

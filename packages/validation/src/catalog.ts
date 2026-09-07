@@ -88,6 +88,8 @@ export const recordStockMovementSchema = z
     /** Phase C2 — when given, this movement's delta also applies to this warehouse's own
      *  StockLevel row (created on first use), in addition to the offer/variant aggregate. */
     warehouseId: z.string().optional(),
+    /** Phase C3 — only meaningful for `type: "received"`; feeds inventory valuation. */
+    unitCost: z.number().nonnegative().optional(),
   })
   .refine((data) => data.type === "correction" || data.quantity > 0, {
     message: "quantity must be positive for received/returned/damaged",
