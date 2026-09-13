@@ -107,6 +107,16 @@ export class Organization {
   @Prop()
   aboutText?: string;
 
+  /** Org-configurable `<title>`/meta-description override for the public storefront page —
+   *  available at every plan tier (unlike the content sections above), since basic SEO control
+   *  isn't a premium feature. Undefined falls back to PublicService's auto-derived title/description
+   *  (organization name + enabled-services summary) — see [slug]/page.tsx's generateMetadata. */
+  @Prop()
+  seoTitle?: string;
+
+  @Prop()
+  seoDescription?: string;
+
   /** `default: undefined` — same reasoning as `storefrontSections` above: an unset array must
    *  stay distinguishable from "explicitly cleared to empty" is not a concern here (there's no
    *  meaningful difference for content sections), but the auto-`[]`-init would still make every

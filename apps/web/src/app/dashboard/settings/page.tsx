@@ -383,6 +383,8 @@ export default function SettingsPage() {
       logo: organization.logo,
       brandColor: organization.brandColor,
       tagline: organization.tagline,
+      seoTitle: organization.seoTitle,
+      seoDescription: organization.seoDescription,
       heroImage: organization.heroImage,
       shippingFlatRate: organization.shippingFlatRate,
       storefrontTemplate: organization.storefrontTemplate,
@@ -684,6 +686,14 @@ export default function SettingsPage() {
               <dd className="mt-0.5 truncate">{organization?.heroImage ?? "—"}</dd>
             </div>
             <div>
+              <dt className="text-text-muted">Titre SEO (page publique)</dt>
+              <dd className="mt-0.5">{organization?.seoTitle ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">Description SEO (page publique)</dt>
+              <dd className="mt-0.5">{organization?.seoDescription ?? "—"}</dd>
+            </div>
+            <div>
               <dt className="text-text-muted">Frais de livraison (boutique en ligne)</dt>
               <dd className="mt-0.5">
                 {organization?.shippingFlatRate != null
@@ -875,6 +885,37 @@ export default function SettingsPage() {
               />
               {orgErrors.tagline && (
                 <p className="mt-1 text-xs text-destructive">{orgErrors.tagline.message}</p>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-seo-title">
+                Titre SEO (balise &lt;title&gt; de la page publique)
+              </label>
+              <Input
+                id="org-seo-title"
+                className="w-full"
+                placeholder={organization?.name || "Laissez vide pour utiliser le nom de l'organisation"}
+                error={!!orgErrors.seoTitle}
+                {...registerOrg("seoTitle", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+              />
+              {orgErrors.seoTitle && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.seoTitle.message}</p>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-seo-description">
+                Description SEO (meta description de la page publique)
+              </label>
+              <textarea
+                id="org-seo-description"
+                className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+                rows={2}
+                maxLength={200}
+                placeholder="Laissez vide pour générer une description automatiquement"
+                {...registerOrg("seoDescription", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+              />
+              {orgErrors.seoDescription && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.seoDescription.message}</p>
               )}
             </div>
             <div className="sm:col-span-2">

@@ -58,16 +58,19 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
     services.push("commande en ligne");
   }
 
-  const descriptionParts = [`${organization.name} — boutique propulsée par KORVA OS.`];
+  const autoDescriptionParts = [`${organization.name} — boutique propulsée par KORVA OS.`];
   if (services.length > 0) {
-    descriptionParts.push(`Services : ${services.join(", ")}.`);
+    autoDescriptionParts.push(`Services : ${services.join(", ")}.`);
   }
   if (offerNames.length > 0) {
-    descriptionParts.push(`Offres : ${offerNames.join(", ")}.`);
+    autoDescriptionParts.push(`Offres : ${offerNames.join(", ")}.`);
   }
-  const description = descriptionParts.join(" ");
 
-  const title = organization.name;
+  // Phase E4 (docs/KORVA_OS_V2_AUDIT.md §2.6): an org-configured seoTitle/seoDescription always
+  // wins over the auto-derived fallback above — see Organization.seoTitle's own doc comment
+  // (apps/api) for why this is available at every plan tier, unlike the content sections.
+  const title = organization.seoTitle || organization.name;
+  const description = organization.seoDescription || autoDescriptionParts.join(" ");
 
   return {
     title,

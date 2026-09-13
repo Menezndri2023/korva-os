@@ -41,6 +41,26 @@ import { Public } from '../common/decorators/public.decorator';
  */
 const PUBLIC_BOOKING_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
 
+/**
+ * Phase E4 (docs/KORVA_OS_V2_AUDIT.md §2.6) — a distinct, non-parameterized route namespace
+ * (not `public/:organizationSlug/...`) so this org-agnostic "list every tenant slug" endpoint
+ * can never collide with `PublicController`'s per-slug routes below, regardless of controller
+ * registration order.
+ */
+@ApiTags('public')
+@Public()
+@Controller('public-sites')
+export class PublicSitesController {
+  constructor(private readonly publicService: PublicService) {}
+
+  /** Backs apps/storefront's sitemap.ts — the only "list organizations" surface this API
+   *  exposes, deliberately thin (slug + updatedAt), scoped to `website`-enabled orgs only. */
+  @Get('sitemap-entries')
+  listSitemapEntries() {
+    return this.publicService.listSitemapEntries();
+  }
+}
+
 @ApiTags('public')
 @Public()
 @Controller('public/:organizationSlug')

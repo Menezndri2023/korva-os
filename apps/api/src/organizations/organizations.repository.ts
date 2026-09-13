@@ -47,4 +47,17 @@ export class OrganizationsRepository {
       .countDocuments({ slug: new RegExp(`^${prefix}(-\\d+)?$`) })
       .exec();
   }
+
+  /** Phase E4 (docs/KORVA_OS_V2_AUDIT.md §2.6) — the storefront's sitemap.ts has no way to
+   *  enumerate tenant slugs today; this is the minimal, unauthenticated-safe projection it
+   *  needs (slug + freshness only, never the full organization document). */
+  async findWebsiteEnabledSlugs(): Promise<
+    { slug: string; updatedAt: Date }[]
+  > {
+    const docs = await this.organizationModel
+      .find({ enabledModules: 'website' }, { slug: 1, updatedAt: 1 })
+      .lean<{ slug: string; updatedAt: Date }[]>()
+      .exec();
+    return docs;
+  }
 }

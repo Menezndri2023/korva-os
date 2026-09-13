@@ -304,6 +304,32 @@ describe("SettingsPage — Organization profile edit", () => {
     );
   });
 
+  it("submits an edited SEO title/description as part of the organization form (Phase E4)", async () => {
+    patchMock.mockResolvedValue({ ...organization });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    const seoTitleInput = screen.getByLabelText(/Titre SEO/);
+    await user.clear(seoTitleInput);
+    await user.type(seoTitleInput, "Org de test — le meilleur salon");
+    const seoDescriptionInput = screen.getByLabelText(/Description SEO/);
+    await user.type(seoDescriptionInput, "Réservez en ligne dès maintenant.");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith(
+        "/organizations/me",
+        expect.objectContaining({
+          seoTitle: "Org de test — le meilleur salon",
+          seoDescription: "Réservez en ligne dès maintenant.",
+        }),
+      ),
+    );
+  });
+
   it("rejects an invalid brand color and never calls the API", async () => {
     const user = userEvent.setup();
     renderWithProviders(<SettingsPage />);

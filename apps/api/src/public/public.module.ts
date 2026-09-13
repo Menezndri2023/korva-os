@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PublicService } from './public.service';
-import { PublicController } from './public.controller';
+import { PublicController, PublicSitesController } from './public.controller';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { BookingModule } from '../booking/booking.module';
@@ -43,7 +43,7 @@ import { Contact, ContactSchema } from '../crm/contacts/schemas/contact.schema';
       { name: Contact.name, schema: ContactSchema },
     ]),
   ],
-  controllers: [PublicController],
+  controllers: [PublicSitesController, PublicController],
   providers: [PublicService],
 })
 export class PublicModule {}

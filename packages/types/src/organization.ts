@@ -126,6 +126,11 @@ export interface Organization {
   /** Long-form "about us" text for the public storefront — Pro plan and above, see
    *  EntitlementsService.assertContentSectionsAllowed. Distinct from the short `tagline`. */
   aboutText?: string;
+  /** Org-configurable SEO title/description override for the public storefront page — every
+   *  plan tier, unlike the content sections above. Undefined falls back to an auto-derived
+   *  title/description. */
+  seoTitle?: string;
+  seoDescription?: string;
   testimonials?: Testimonial[];
   teamMembers?: TeamMember[];
   galleryImages?: GalleryImage[];

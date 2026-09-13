@@ -48,6 +48,16 @@ export interface PublicOrganization {
   teamMembers?: TeamMember[];
   galleryImages?: GalleryImage[];
   faqItems?: FaqItem[];
+  /** Org-configurable SEO override, every plan tier — undefined means "use the auto-derived
+   *  title/description" (see [slug]/page.tsx's generateMetadata). */
+  seoTitle?: string;
+  seoDescription?: string;
+}
+
+/** Mirrors PublicSitesController#listSitemapEntries exactly. */
+export interface PublicSitemapEntry {
+  slug: string;
+  updatedAt: string;
 }
 
 /**

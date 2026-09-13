@@ -170,6 +170,12 @@ export class OrganizationsService {
     return organization;
   }
 
+  /** Phase E4 — powers apps/storefront's sitemap.ts. Deliberately not org-scoped (the storefront
+   *  needs every tenant, not one) and deliberately thin (slug + updatedAt only). */
+  listWebsiteSitemapEntries(): Promise<{ slug: string; updatedAt: Date }[]> {
+    return this.organizationsRepository.findWebsiteEnabledSlugs();
+  }
+
   async listForUser(userId: string): Promise<OrganizationDocument[]> {
     const memberships =
       await this.membershipsService.listOrganizationIdsForUser(userId);

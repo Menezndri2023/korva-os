@@ -86,6 +86,10 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
   /** Long-form "about us" text for the public storefront — Pro plan and above. */
   aboutText: z.string().max(4000).optional(),
+  /** Google typically truncates a title around 60 chars and a description around 155-160 —
+   *  these caps are generous headroom above that, not a hard SEO best-practice enforcement. */
+  seoTitle: z.string().max(70).optional(),
+  seoDescription: z.string().max(200).optional(),
   testimonials: z.array(testimonialSchema).max(20).optional(),
   teamMembers: z.array(teamMemberSchema).max(30).optional(),
   galleryImages: z.array(galleryImageSchema).max(40).optional(),

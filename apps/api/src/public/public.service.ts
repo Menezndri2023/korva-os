@@ -134,6 +134,15 @@ export class PublicService {
     }
   }
 
+  /** Backs PublicSitesController's `GET /public-sites/sitemap-entries` — see its own doc comment. */
+  async listSitemapEntries() {
+    const entries = await this.organizationsService.listWebsiteSitemapEntries();
+    return entries.map((entry) => ({
+      slug: entry.slug,
+      updatedAt: entry.updatedAt,
+    }));
+  }
+
   async getOrganization(slug: string) {
     const organization = await this.resolveOrganization(slug);
     // Only this method is gated on 'website' — every other public route (catalog/booking/
@@ -165,6 +174,10 @@ export class PublicService {
       storefrontTheme: this.resolveStorefrontTheme(organization, plan.key),
       acceptedPaymentMethods:
         await this.resolveAvailablePaymentMethods(organization),
+      // Unlike the content sections below, SEO overrides are never plan-gated — basic SEO
+      // control isn't a premium feature.
+      seoTitle: organization.seoTitle,
+      seoDescription: organization.seoDescription,
       aboutText: contentSectionsAllowed ? organization.aboutText : undefined,
       testimonials: contentSectionsAllowed
         ? organization.testimonials
