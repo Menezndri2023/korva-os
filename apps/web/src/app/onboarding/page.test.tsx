@@ -288,3 +288,37 @@ describe("OnboardingPage — timezone field (WAVE 2 AGENT E)", () => {
     expect((body as { timezone: string }).timezone).toBe("Europe/Paris");
   });
 });
+
+describe("OnboardingPage — business description field (Phase E2)", () => {
+  beforeEach(() => {
+    postMock.mockReset();
+    patchMock.mockReset();
+    postMock.mockResolvedValue({ id: "org-1" });
+    patchMock.mockResolvedValue({ id: "org-1" });
+  });
+
+  it("sends a filled-in business description in the POST /organizations payload", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fillRequiredFields();
+    fireEvent.input(screen.getByLabelText(/Décrivez vos produits ou services/), {
+      target: { value: "Coupes, colorations et soins bio." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalled());
+    const [, body] = postMock.mock.calls[0]!;
+    expect((body as { businessDescription?: string }).businessDescription).toBe(
+      "Coupes, colorations et soins bio.",
+    );
+  });
+
+  it("omits businessDescription entirely when left blank, rather than sending an empty string", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalled());
+    const [, body] = postMock.mock.calls[0]!;
+    expect((body as { businessDescription?: string }).businessDescription).toBeUndefined();
+  });
+});

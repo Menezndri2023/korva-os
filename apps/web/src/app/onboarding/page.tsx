@@ -258,6 +258,29 @@ export default function OnboardingPage() {
             {errors.type && <p className="mt-1 text-xs text-red-600">{errors.type.message}</p>}
           </div>
 
+          <div>
+            <label className="block text-sm font-medium" htmlFor="business-description">
+              Décrivez vos produits ou services (optionnel)
+            </label>
+            <p className="mt-1 text-xs text-zinc-500">
+              Utilisé pour préremplir le slogan et le texte &quot;À propos&quot; de votre page
+              publique — tout reste modifiable ensuite dans Réglages.
+            </p>
+            <textarea
+              id="business-description"
+              className="mt-2 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              rows={3}
+              maxLength={2000}
+              placeholder="ex: Nous proposons des coupes, colorations et soins capillaires bio à Paris."
+              {...register("businessDescription", {
+                setValueAs: (v: string) => (v === "" ? undefined : v),
+              })}
+            />
+            {errors.businessDescription && (
+              <p className="mt-1 text-xs text-red-600">{errors.businessDescription.message}</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium" htmlFor="country">

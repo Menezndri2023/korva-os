@@ -15,6 +15,13 @@ export const createOrganizationSchema = z.object({
   currency: z.string().length(3),
   timezone: z.string().min(1),
   language: z.string().min(2).max(10).default("fr"),
+  /** Phase E2 (docs/KORVA_OS_V2_AUDIT.md §2.6) — an optional onboarding-only free-text
+   *  description of the org's own products/services, in the owner's own words. Never stored
+   *  verbatim as its own field: OrganizationsService.createForOwner uses it, once, to seed the
+   *  real `tagline`/`aboutText` storefront content fields at creation time — the same
+   *  content-slot fields Settings already lets an owner edit by hand, just pre-filled with
+   *  genuinely entered data instead of left blank. */
+  businessDescription: z.string().min(1).max(2000).optional(),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 

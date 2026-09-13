@@ -1,5 +1,9 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
-import { OrganizationsService, slugify } from './organizations.service';
+import {
+  OrganizationsService,
+  slugify,
+  deriveTaglineFromDescription,
+} from './organizations.service';
 import type { RolesService } from '../identity/roles/roles.service';
 import type { MembershipsService } from '../identity/memberships/memberships.service';
 import type { UsersService } from '../identity/users/users.service';
@@ -29,6 +33,34 @@ describe('slugify', () => {
 
   it('returns an empty string for input with no alphanumeric characters', () => {
     expect(slugify('!!!')).toBe('');
+  });
+});
+
+describe('deriveTaglineFromDescription (Phase E2)', () => {
+  it('uses the first sentence when it fits the 200-char tagline cap', () => {
+    expect(
+      deriveTaglineFromDescription(
+        'Nous proposons des coupes, colorations et soins bio. Ouvert du mardi au samedi.',
+      ),
+    ).toBe('Nous proposons des coupes, colorations et soins bio.');
+  });
+
+  it('returns the whole trimmed description when it has no sentence-ending punctuation and fits', () => {
+    expect(deriveTaglineFromDescription('  Coiffure et soins capillaires bio à Paris  ')).toBe(
+      'Coiffure et soins capillaires bio à Paris',
+    );
+  });
+
+  it('hard-truncates with an ellipsis when neither the first sentence nor the whole text fits', () => {
+    const longDescription = `${'x'.repeat(250)}.`;
+    const result = deriveTaglineFromDescription(longDescription);
+    expect(result.length).toBe(200);
+    expect(result.endsWith('…')).toBe(true);
+  });
+
+  it('never invents content beyond what was entered — output is always a verbatim excerpt', () => {
+    const description = 'Plomberie, chauffage et dépannage rapide dans le 15e arrondissement.';
+    expect(description).toContain(deriveTaglineFromDescription(description).replace('…', ''));
   });
 });
 

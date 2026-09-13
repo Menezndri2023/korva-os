@@ -56,6 +56,26 @@ export function requireSystemRoleRank(
   return rank;
 }
 
+/** Phase E2 — derives a short storefront-hero tagline from the owner's own entered business
+ *  description: the first sentence if it's reasonably short, otherwise a hard character-limit
+ *  truncation. Deliberately never rewrites/embellishes the owner's wording, just excerpts it —
+ *  see createOrganizationSchema's own doc comment on `businessDescription` for why. Matches
+ *  Organization.tagline's own 200-char cap (see updateOrganizationSchema). */
+const TAGLINE_MAX_LENGTH = 200;
+
+export function deriveTaglineFromDescription(description: string): string {
+  const trimmed = description.trim();
+  const firstSentenceMatch = /^[^.!?\n]+[.!?]/.exec(trimmed);
+  const firstSentence = firstSentenceMatch?.[0].trim();
+  if (firstSentence && firstSentence.length <= TAGLINE_MAX_LENGTH) {
+    return firstSentence;
+  }
+  if (trimmed.length <= TAGLINE_MAX_LENGTH) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, TAGLINE_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
 const DIACRITICS_PATTERN = new RegExp('[\\u0300-\\u036f]', 'g');
 
 export function slugify(name: string): string {
@@ -89,6 +109,18 @@ export class OrganizationsService {
     const slug =
       existingCount === 0 ? baseSlug : `${baseSlug}-${existingCount + 1}`;
 
+    // Phase E2 — real auto-generation of the storefront's tagline/aboutText from the owner's
+    // own entered business description, instead of the org starting with no content at all
+    // (the only way to get any was previously the separate "import from an existing external
+    // site" scrape flow). Never invented: absent input.businessDescription, both stay unset,
+    // exactly like before this phase.
+    const generatedContent = input.businessDescription
+      ? {
+          tagline: deriveTaglineFromDescription(input.businessDescription),
+          aboutText: input.businessDescription.trim(),
+        }
+      : {};
+
     const organization = await this.organizationsRepository.create({
       name: input.name,
       slug,
@@ -99,6 +131,7 @@ export class OrganizationsService {
       language: input.language,
       settings: { onboardingCompleted: false },
       enabledModules: [],
+      ...generatedContent,
     });
 
     await this.rolesService.seedSystemRoles(organization.id as string);
