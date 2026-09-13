@@ -23,4 +23,19 @@ export class BusinessGraphController {
       id,
     );
   }
+
+  /** Phase F1 — org-level counterpart to the per-contact timeline above. Overrides the
+   *  controller's own `@RequireModule('crm')` with `'analytics'` (a method-level
+   *  `@RequireModule` replaces, not adds to, the class-level one — see ModuleGuard's
+   *  `getAllAndOverride`) and gates on `analytics.read` rather than `contacts.read`: this
+   *  spans CRM/Finance/Inventory/Suppliers, not CRM specifically, matching
+   *  AnalyticsController's own module gate. */
+  @RequireModule('analytics')
+  @RequirePermissions('analytics.read')
+  @Get('organization/summary')
+  getOrganizationSummary(@CurrentTenant() tenant: TenantContext) {
+    return this.businessGraphService.getOrganizationSummary(
+      tenant.organizationId,
+    );
+  }
 }

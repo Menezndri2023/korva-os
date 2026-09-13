@@ -33,6 +33,26 @@ interface TaskPayload {
 interface ConversationPayload {
   id: string;
 }
+interface PipelineStagePayload {
+  id: string;
+}
+interface PipelinePayload {
+  id: string;
+  stages: PipelineStagePayload[];
+}
+interface DealPayload {
+  id: string;
+}
+interface OrganizationGraphSummaryPayload {
+  crm: {
+    openLeadsCount: number;
+    openDealsCount: number;
+    openDealsValue: number;
+  };
+  finance: { overdueInvoicesCount: number; overdueInvoicesTotal: number };
+  inventory: { lowStockCount: number; deadStockCount: number };
+  suppliers: { supplierCount: number; pendingPurchaseOrdersCount: number };
+}
 interface TimelineEntry {
   type: string;
   id: string;
@@ -185,6 +205,121 @@ describe('Business Graph module (e2e)', () => {
     );
     const sorted = [...timestamps].sort((a, b) => b - a);
     expect(timestamps).toEqual(sorted);
+  });
+
+  it('includes a Deal entry in the contact timeline with its estimatedValue as amount (Phase F1)', async () => {
+    const { accessToken, organizationId, contactId } =
+      await registerOrgAndContact(
+        'timeline-deal-owner@korva.test',
+        'Timeline Deal Org',
+      );
+
+    const pipelineRes = await request(server)
+      .post('/api/v1/pipelines')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({
+        name: 'Sales',
+        isDefault: true,
+        stages: [{ name: 'New', order: 0 }],
+      })
+      .expect(201);
+    const pipeline = asSuccess<PipelinePayload>(pipelineRes.body);
+
+    const dealRes = await request(server)
+      .post('/api/v1/deals')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({
+        contactId,
+        pipelineId: pipeline.id,
+        stageId: pipeline.stages[0]!.id,
+        estimatedValue: 300,
+      })
+      .expect(201);
+    const dealId = asSuccess<DealPayload>(dealRes.body).id;
+
+    const res = await request(server)
+      .get(`/api/v1/business-graph/contacts/${contactId}/timeline`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .expect(200);
+    const timeline = asSuccess<ContactTimelinePayload>(res.body);
+
+    const dealEntry = timeline.entries.find((e) => e.id === dealId);
+    expect(dealEntry?.type).toBe('deal');
+    expect(dealEntry?.amount).toBe(300);
+  });
+
+  it('GET /business-graph/organization/summary returns real CRM counts, gated by the analytics module (Phase F1)', async () => {
+    const { accessToken, organizationId, contactId } =
+      await registerOrgAndContact('summary-owner@korva.test', 'Summary Org');
+
+    // The controller's own module gate (analytics.read) requires 'analytics' — not enabled by
+    // registerOrgAndContact's default ['crm','finance','communication'] set.
+    const beforeRes = await request(server)
+      .get('/api/v1/business-graph/organization/summary')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .expect(403);
+    expect(asError(beforeRes.body).code).toBe('MODULE_NOT_ENABLED');
+
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({
+        enabledModules: ['crm', 'finance', 'communication', 'analytics'],
+      })
+      .expect(200);
+
+    await request(server)
+      .post('/api/v1/leads')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ contactId, source: 'referral' })
+      .expect(201);
+
+    const pipelineRes = await request(server)
+      .post('/api/v1/pipelines')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({
+        name: 'Sales',
+        isDefault: true,
+        stages: [{ name: 'New', order: 0 }],
+      })
+      .expect(201);
+    const pipeline = asSuccess<PipelinePayload>(pipelineRes.body);
+    await request(server)
+      .post('/api/v1/deals')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({
+        contactId,
+        pipelineId: pipeline.id,
+        stageId: pipeline.stages[0]!.id,
+        estimatedValue: 400,
+      })
+      .expect(201);
+
+    const res = await request(server)
+      .get('/api/v1/business-graph/organization/summary')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .expect(200);
+    const summary = asSuccess<OrganizationGraphSummaryPayload>(res.body);
+
+    expect(summary.crm.openLeadsCount).toBe(1);
+    expect(summary.crm.openDealsCount).toBe(1);
+    expect(summary.crm.openDealsValue).toBe(400);
+    // Never invented — a fresh org has no suppliers/purchase orders/overdue invoices/dead or
+    // low stock yet, so every other field is genuinely zero, not omitted or guessed.
+    expect(summary.finance.overdueInvoicesCount).toBe(0);
+    expect(summary.inventory.lowStockCount).toBe(0);
+    expect(summary.inventory.deadStockCount).toBe(0);
+    expect(summary.suppliers.supplierCount).toBe(0);
+    expect(summary.suppliers.pendingPurchaseOrdersCount).toBe(0);
   });
 
   it('404s with CONTACT_NOT_FOUND for a contact id that does not exist in this organization', async () => {

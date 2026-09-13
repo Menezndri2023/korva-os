@@ -30,5 +30,7 @@ import { ActionCenterController } from './action-center.controller';
   ],
   controllers: [ActionCenterController],
   providers: [ActionCenterService],
+  // Phase F2 — AiModule's new global AI tool needs getFeed for its severity-ranked items.
+  exports: [ActionCenterService],
 })
 export class ActionCenterModule {}

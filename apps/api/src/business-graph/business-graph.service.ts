@@ -1,12 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import type { BusinessGraphTimelineEntry, ContactTimeline } from '@korva/types';
+import type {
+  BusinessGraphTimelineEntry,
+  ContactTimeline,
+  OrganizationGraphSummary,
+} from '@korva/types';
 import {
   Contact,
   ContactDocument,
 } from '../crm/contacts/schemas/contact.schema';
 import { Lead, LeadDocument } from '../crm/leads/schemas/lead.schema';
+import { Deal, DealDocument } from '../crm/deals/schemas/deal.schema';
 import { Task, TaskDocument } from '../crm/tasks/schemas/task.schema';
 import { Quote, QuoteDocument } from '../finance/quotes/schemas/quote.schema';
 import {
@@ -26,6 +31,15 @@ import {
   Conversation,
   ConversationDocument,
 } from '../communication/conversations/schemas/conversation.schema';
+import {
+  Supplier,
+  SupplierDocument,
+} from '../catalog/purchase-orders/schemas/supplier.schema';
+import {
+  PurchaseOrder,
+  PurchaseOrderDocument,
+} from '../catalog/purchase-orders/schemas/purchase-order.schema';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 /**
  * The "Business Graph" read layer: every module already cross-references Contact by
@@ -41,6 +55,7 @@ export class BusinessGraphService {
     @InjectModel(Contact.name)
     private readonly contactModel: Model<ContactDocument>,
     @InjectModel(Lead.name) private readonly leadModel: Model<LeadDocument>,
+    @InjectModel(Deal.name) private readonly dealModel: Model<DealDocument>,
     @InjectModel(Task.name) private readonly taskModel: Model<TaskDocument>,
     @InjectModel(Quote.name) private readonly quoteModel: Model<QuoteDocument>,
     @InjectModel(Invoice.name)
@@ -52,6 +67,11 @@ export class BusinessGraphService {
     @InjectModel(Order.name) private readonly orderModel: Model<OrderDocument>,
     @InjectModel(Conversation.name)
     private readonly conversationModel: Model<ConversationDocument>,
+    @InjectModel(Supplier.name)
+    private readonly supplierModel: Model<SupplierDocument>,
+    @InjectModel(PurchaseOrder.name)
+    private readonly purchaseOrderModel: Model<PurchaseOrderDocument>,
+    private readonly analyticsService: AnalyticsService,
   ) {}
 
   async getContactTimeline(
@@ -76,9 +96,10 @@ export class BusinessGraphService {
       contactId: contactObjectId,
     };
 
-    const [leads, quotes, invoices, bookings, orders, conversations] =
+    const [leads, deals, quotes, invoices, bookings, orders, conversations] =
       await Promise.all([
         this.leadModel.find(byContact).lean(),
+        this.dealModel.find(byContact).lean(),
         this.quoteModel.find(byContact).lean(),
         this.invoiceModel.find(byContact).lean(),
         this.bookingModel.find(byContact).lean(),
@@ -88,6 +109,7 @@ export class BusinessGraphService {
 
     const invoiceIds = invoices.map((invoice) => invoice._id);
     const leadIds = leads.map((lead) => lead._id);
+    const dealIds = deals.map((deal) => deal._id);
 
     const [payments, tasks] = await Promise.all([
       invoiceIds.length
@@ -106,6 +128,11 @@ export class BusinessGraphService {
             ...(leadIds.length
               ? [{ entity: 'lead' as const, entityId: { $in: leadIds } }]
               : []),
+            // Phase F1 — same reasoning as the deal timeline entries above: Deal is a valid
+            // Task/Activity/Note entity since D1, so its tasks belong here too.
+            ...(dealIds.length
+              ? [{ entity: 'deal' as const, entityId: { $in: dealIds } }]
+              : []),
           ],
         })
         .lean(),
@@ -120,6 +147,18 @@ export class BusinessGraphService {
           new Date(0).toISOString(),
         status: lead.status,
         summary: `Lead (${lead.status})`,
+      })),
+      // Phase F1 — Deal was split out of Lead in D1; without this, every deal a contact has
+      // (their actual pipeline/value history) would be silently invisible on their timeline.
+      ...deals.map((deal) => ({
+        type: 'deal' as const,
+        id: deal._id.toString(),
+        occurredAt:
+          (deal as { createdAt?: Date }).createdAt?.toISOString() ??
+          new Date(0).toISOString(),
+        status: deal.status,
+        summary: `Affaire (${deal.status})`,
+        amount: deal.estimatedValue,
       })),
       ...quotes.map((quote) => ({
         type: 'quote' as const,
@@ -204,5 +243,75 @@ export class BusinessGraphService {
     );
 
     return { contactId, entries };
+  }
+
+  /**
+   * Phase F1 (docs/KORVA_OS_V2_AUDIT.md §2.7) — the Business Graph's org-level counterpart to
+   * the per-contact timeline above. Every number is a direct count/sum off existing documents,
+   * never an estimate — the inventory fields specifically reuse AnalyticsService's own
+   * getDeadStock/getReorderSuggestions rather than re-deriving those definitions here (see
+   * BusinessGraphModule's own doc comment on why). Backs the global AI tool (F2).
+   */
+  async getOrganizationSummary(
+    organizationId: string,
+  ): Promise<OrganizationGraphSummary> {
+    const organizationObjectId = new Types.ObjectId(organizationId);
+
+    const [
+      openLeadsCount,
+      openDeals,
+      overdueInvoices,
+      deadStock,
+      reorderSuggestions,
+      supplierCount,
+      pendingPurchaseOrdersCount,
+    ] = await Promise.all([
+      this.leadModel.countDocuments({
+        organizationId: organizationObjectId,
+        status: { $nin: ['converted', 'disqualified'] },
+      }),
+      this.dealModel
+        .find({ organizationId: organizationObjectId, status: 'open' })
+        .lean(),
+      this.invoiceModel
+        .find({ organizationId: organizationObjectId, status: 'overdue' })
+        .lean(),
+      this.analyticsService.getDeadStock(organizationId, 90),
+      this.analyticsService.getReorderSuggestions(organizationId),
+      this.supplierModel.countDocuments({
+        organizationId: organizationObjectId,
+      }),
+      this.purchaseOrderModel.countDocuments({
+        organizationId: organizationObjectId,
+        status: 'ordered',
+      }),
+    ]);
+
+    return {
+      crm: {
+        openLeadsCount,
+        openDealsCount: openDeals.length,
+        openDealsValue: openDeals.reduce(
+          (sum, deal) => sum + (deal.estimatedValue ?? 0),
+          0,
+        ),
+      },
+      finance: {
+        overdueInvoicesCount: overdueInvoices.length,
+        overdueInvoicesTotal: overdueInvoices.reduce(
+          (sum, invoice) =>
+            sum + Math.max(0, invoice.total - invoice.amountPaid),
+          0,
+        ),
+      },
+      inventory: {
+        lowStockCount: reorderSuggestions.length,
+        deadStockCount: deadStock.length,
+      },
+      suppliers: {
+        supplierCount,
+        pendingPurchaseOrdersCount,
+      },
+    };
   }
 }

@@ -33,6 +33,7 @@ import { ProposeRecommendationTool } from './tools/propose-recommendation.tool';
 import { SuggestReorderTool } from './tools/suggest-reorder.tool';
 import { DetectDeadStockTool } from './tools/detect-dead-stock.tool';
 import { AnalyzeSuppliersTool } from './tools/analyze-suppliers.tool';
+import { GetBusinessOverviewTool } from './tools/get-business-overview.tool';
 
 const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
   sales_agent: [
@@ -80,6 +81,7 @@ const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
     'suggest_reorder',
     'detect_dead_stock',
     'analyze_suppliers',
+    'get_business_overview',
   ],
   general_assistant: [], // filled below with every tool
 };
@@ -120,6 +122,7 @@ export class AiToolsRegistryService {
     suggestReorder: SuggestReorderTool,
     detectDeadStock: DetectDeadStockTool,
     analyzeSuppliers: AnalyzeSuppliersTool,
+    getBusinessOverview: GetBusinessOverviewTool,
   ) {
     this.tools = [
       searchContacts,
@@ -153,6 +156,7 @@ export class AiToolsRegistryService {
       suggestReorder,
       detectDeadStock,
       analyzeSuppliers,
+      getBusinessOverview,
     ];
     AGENT_TOOL_NAMES.general_assistant = this.tools.map(
       (tool) => tool.definition.name,

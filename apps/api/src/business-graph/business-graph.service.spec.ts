@@ -7,6 +7,7 @@ function makeFindModel(results: unknown[] = []) {
     find: jest
       .fn()
       .mockReturnValue({ lean: jest.fn().mockResolvedValue(results) }),
+    countDocuments: jest.fn().mockResolvedValue(results.length),
   };
 }
 
@@ -26,6 +27,7 @@ describe('BusinessGraphService', () => {
     overrides: {
       contact?: unknown;
       leads?: unknown[];
+      deals?: unknown[];
       quotes?: unknown[];
       invoices?: unknown[];
       payments?: unknown[];
@@ -33,6 +35,8 @@ describe('BusinessGraphService', () => {
       orders?: unknown[];
       conversations?: unknown[];
       tasks?: unknown[];
+      suppliers?: unknown[];
+      purchaseOrders?: unknown[];
     } = {},
   ) {
     const contactModel = makeFindOneModel(
@@ -41,6 +45,7 @@ describe('BusinessGraphService', () => {
         : { _id: new Types.ObjectId(CONTACT_ID) },
     );
     const leadModel = makeFindModel(overrides.leads ?? []);
+    const dealModel = makeFindModel(overrides.deals ?? []);
     const taskModel = makeFindModel(overrides.tasks ?? []);
     const quoteModel = makeFindModel(overrides.quotes ?? []);
     const invoiceModel = makeFindModel(overrides.invoices ?? []);
@@ -48,10 +53,17 @@ describe('BusinessGraphService', () => {
     const bookingModel = makeFindModel(overrides.bookings ?? []);
     const orderModel = makeFindModel(overrides.orders ?? []);
     const conversationModel = makeFindModel(overrides.conversations ?? []);
+    const supplierModel = makeFindModel(overrides.suppliers ?? []);
+    const purchaseOrderModel = makeFindModel(overrides.purchaseOrders ?? []);
+    const analyticsService = {
+      getDeadStock: jest.fn().mockResolvedValue([]),
+      getReorderSuggestions: jest.fn().mockResolvedValue([]),
+    };
 
     const service = new BusinessGraphService(
       contactModel as never,
       leadModel as never,
+      dealModel as never,
       taskModel as never,
       quoteModel as never,
       invoiceModel as never,
@@ -59,12 +71,16 @@ describe('BusinessGraphService', () => {
       bookingModel as never,
       orderModel as never,
       conversationModel as never,
+      supplierModel as never,
+      purchaseOrderModel as never,
+      analyticsService as never,
     );
 
     return {
       service,
       contactModel,
       leadModel,
+      dealModel,
       taskModel,
       quoteModel,
       invoiceModel,
@@ -72,6 +88,9 @@ describe('BusinessGraphService', () => {
       bookingModel,
       orderModel,
       conversationModel,
+      supplierModel,
+      purchaseOrderModel,
+      analyticsService,
     };
   }
 
@@ -204,5 +223,183 @@ describe('BusinessGraphService', () => {
     ]);
     expect(timeline.entries[0]?.summary).toBe('Devis DEV-0001 (sent)');
     expect(timeline.entries[0]?.amount).toBe(240);
+  });
+
+  it('includes deal entries (Phase F1 — Deal was split out of Lead in D1) with their estimatedValue as amount', async () => {
+    const { service } = buildService({
+      deals: [
+        {
+          _id: new Types.ObjectId(),
+          status: 'open',
+          estimatedValue: 500,
+          createdAt: new Date('2026-04-01T00:00:00Z'),
+        },
+      ],
+    });
+
+    const timeline = await service.getContactTimeline(ORG_ID, CONTACT_ID);
+
+    expect(timeline.entries).toHaveLength(1);
+    expect(timeline.entries[0]).toMatchObject({
+      type: 'deal',
+      status: 'open',
+      summary: 'Affaire (open)',
+      amount: 500,
+    });
+  });
+
+  it("includes tasks linked to any of the contact's deals, alongside contact/lead tasks", async () => {
+    const dealId = new Types.ObjectId();
+    const { service, taskModel } = buildService({
+      deals: [{ _id: dealId, status: 'open' }],
+    });
+
+    await service.getContactTimeline(ORG_ID, CONTACT_ID);
+
+    const taskCall = taskModel.find.mock.calls[0] as unknown[];
+    const filter = taskCall[0] as {
+      $or: Array<{ entity: string; entityId: unknown }>;
+    };
+    expect(filter.$or).toEqual([
+      { entity: 'contact', entityId: new Types.ObjectId(CONTACT_ID) },
+      { entity: 'deal', entityId: { $in: [dealId] } },
+    ]);
+  });
+});
+
+describe('BusinessGraphService.getOrganizationSummary (Phase F1)', () => {
+  const ORG_ID = '507f1f77bcf86cd799439011';
+
+  function buildService(overrides: {
+    openLeadsCount?: number;
+    openDeals?: { estimatedValue?: number }[];
+    overdueInvoices?: { total: number; amountPaid: number }[];
+    deadStock?: unknown[];
+    reorderSuggestions?: unknown[];
+    supplierCount?: number;
+    pendingPurchaseOrdersCount?: number;
+  }) {
+    const leadModel = {
+      countDocuments: jest
+        .fn()
+        .mockResolvedValue(overrides.openLeadsCount ?? 0),
+    };
+    const dealModel = makeFindModel(overrides.openDeals ?? []);
+    const invoiceModel = makeFindModel(overrides.overdueInvoices ?? []);
+    const supplierModel = {
+      countDocuments: jest.fn().mockResolvedValue(overrides.supplierCount ?? 0),
+    };
+    const purchaseOrderModel = {
+      countDocuments: jest
+        .fn()
+        .mockResolvedValue(overrides.pendingPurchaseOrdersCount ?? 0),
+    };
+    const analyticsService = {
+      getDeadStock: jest.fn().mockResolvedValue(overrides.deadStock ?? []),
+      getReorderSuggestions: jest
+        .fn()
+        .mockResolvedValue(overrides.reorderSuggestions ?? []),
+    };
+
+    const service = new BusinessGraphService(
+      {} as never,
+      leadModel as never,
+      dealModel as never,
+      {} as never,
+      {} as never,
+      invoiceModel as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      supplierModel as never,
+      purchaseOrderModel as never,
+      analyticsService as never,
+    );
+
+    return {
+      service,
+      leadModel,
+      invoiceModel,
+      supplierModel,
+      purchaseOrderModel,
+    };
+  }
+
+  it('sums openDealsValue off open deals only, defaulting a missing estimatedValue to 0', async () => {
+    const { service } = buildService({
+      openDeals: [
+        { estimatedValue: 100 },
+        { estimatedValue: undefined },
+        { estimatedValue: 50 },
+      ],
+    });
+
+    const summary = await service.getOrganizationSummary(ORG_ID);
+
+    expect(summary.crm.openDealsCount).toBe(3);
+    expect(summary.crm.openDealsValue).toBe(150);
+  });
+
+  it('computes overdueInvoicesTotal as total minus amountPaid, never negative', async () => {
+    const { service } = buildService({
+      overdueInvoices: [
+        { total: 100, amountPaid: 20 },
+        { total: 50, amountPaid: 60 }, // over-paid edge case — must clamp at 0, not go negative
+      ],
+    });
+
+    const summary = await service.getOrganizationSummary(ORG_ID);
+
+    expect(summary.finance.overdueInvoicesCount).toBe(2);
+    expect(summary.finance.overdueInvoicesTotal).toBe(80);
+  });
+
+  it('passes the inventory fields through from AnalyticsService verbatim, never re-deriving them', async () => {
+    const { service } = buildService({
+      deadStock: [{ offerId: '1' }, { offerId: '2' }],
+      reorderSuggestions: [{ offerId: '3' }],
+    });
+
+    const summary = await service.getOrganizationSummary(ORG_ID);
+
+    expect(summary.inventory.deadStockCount).toBe(2);
+    expect(summary.inventory.lowStockCount).toBe(1);
+  });
+
+  it('scopes the lead/deal/invoice/supplier/purchase-order queries to the requesting organization', async () => {
+    const {
+      service,
+      leadModel,
+      invoiceModel,
+      supplierModel,
+      purchaseOrderModel,
+    } = buildService({});
+
+    await service.getOrganizationSummary(ORG_ID);
+
+    const leadCall = leadModel.countDocuments.mock.calls[0] as unknown[];
+    const leadFilter = leadCall[0] as { organizationId: Types.ObjectId };
+    expect(leadFilter.organizationId.toString()).toBe(ORG_ID);
+    const invoiceCall = invoiceModel.find.mock.calls[0] as unknown[];
+    const invoiceFilter = invoiceCall[0] as {
+      organizationId: Types.ObjectId;
+      status: string;
+    };
+    expect(invoiceFilter.organizationId.toString()).toBe(ORG_ID);
+    expect(invoiceFilter.status).toBe('overdue');
+    const supplierCall = supplierModel.countDocuments.mock
+      .calls[0] as unknown[];
+    const supplierFilter = supplierCall[0] as {
+      organizationId: Types.ObjectId;
+    };
+    expect(supplierFilter.organizationId.toString()).toBe(ORG_ID);
+    const poCall = purchaseOrderModel.countDocuments.mock.calls[0] as unknown[];
+    const poFilter = poCall[0] as {
+      organizationId: Types.ObjectId;
+      status: string;
+    };
+    expect(poFilter.organizationId.toString()).toBe(ORG_ID);
+    expect(poFilter.status).toBe('ordered');
   });
 });
