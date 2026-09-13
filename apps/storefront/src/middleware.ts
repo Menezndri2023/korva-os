@@ -3,9 +3,41 @@ import type { NextRequest } from "next/server";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-const apiOrigin = new URL(
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1",
-).origin;
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1").replace(
+  /\/$/,
+  "",
+);
+const apiOrigin = new URL(API_BASE_URL).origin;
+
+// Phase E3 (docs/KORVA_OS_V2_AUDIT.md §2.6) — the platform's own shared storefront host
+// (`{STOREFRONT_URL}/{slug}`). Any request whose `Host` header differs from this is either a
+// connected custom domain or DNS pointed here by mistake — see resolveCustomDomain below.
+const platformHost = new URL(process.env.STOREFRONT_URL ?? "http://localhost:3001").host;
+
+/**
+ * Resolves an incoming custom-domain `Host` header to the owning org's slug via the API,
+ * cached 5 minutes through Next's fetch Data Cache — Proxy defaults to the Node.js runtime in
+ * this Next.js version (see node_modules/next/dist/docs/.../proxy.md "Runtime" section), so an
+ * ordinary `fetch()` here participates in the same cache as a Server Component's would. Returns
+ * null on any failure (unknown domain, API unreachable) so the caller can fall through to
+ * normal routing rather than breaking the request.
+ */
+async function resolveCustomDomain(host: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/public-sites/resolve-domain?host=${encodeURIComponent(host)}`,
+      { next: { revalidate: 300 } },
+    );
+    if (!response.ok) return null;
+    const payload = (await response.json()) as {
+      success: boolean;
+      data?: { slug: string };
+    };
+    return payload.success ? (payload.data?.slug ?? null) : null;
+  } catch {
+    return null;
+  }
+}
 
 // Narrow, deliberate carve-out from a stricter `frame-ancestors 'none'`: Settings' storefront
 // preview (apps/web dashboard/settings) embeds this app in an iframe so an owner can check a
@@ -40,7 +72,7 @@ const dashboardOrigin = new URL(process.env.APP_URL ?? "http://localhost:3000").
  *  - unsafe-eval: dev-only, for Next.js's webpack dev server (Fast Refresh/HMR); never shipped
  *    to production.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 
   const directives = [
@@ -61,6 +93,24 @@ export function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
+
+  // Phase E3 — transparently rewrite a connected custom domain's request onto the existing
+  // /[slug]/... route tree, keeping the custom domain in the visitor's address bar (a rewrite,
+  // never a redirect). A request already on the platform's own shared host is untouched.
+  const hostHeader = request.headers.get("host") ?? "";
+  if (hostHeader && hostHeader !== platformHost) {
+    const slug = await resolveCustomDomain(hostHeader);
+    if (slug) {
+      const rewrittenUrl = request.nextUrl.clone();
+      rewrittenUrl.pathname =
+        rewrittenUrl.pathname === "/" ? `/${slug}` : `/${slug}${rewrittenUrl.pathname}`;
+      const response = NextResponse.rewrite(rewrittenUrl, {
+        request: { headers: requestHeaders },
+      });
+      response.headers.set("Content-Security-Policy", csp);
+      return response;
+    }
+  }
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", csp);

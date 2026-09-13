@@ -26,6 +26,16 @@ export class OrganizationsRepository {
     return this.organizationModel.findOne({ slug }).exec();
   }
 
+  /** Phase E3 — used both by OrganizationsService.update's uniqueness check and by
+   *  PublicSitesController#resolveDomain (apps/storefront's custom-domain middleware). */
+  findByCustomDomain(
+    customDomain: string,
+  ): Promise<OrganizationDocument | null> {
+    return this.organizationModel
+      .findOne({ customDomain: customDomain.toLowerCase() })
+      .exec();
+  }
+
   findByIds(ids: string[]): Promise<OrganizationDocument[]> {
     const objectIds = ids
       .filter((id) => Types.ObjectId.isValid(id))

@@ -209,6 +209,14 @@ export class OrganizationsService {
     return this.organizationsRepository.findWebsiteEnabledSlugs();
   }
 
+  /** Phase E3 — powers PublicSitesController#resolveDomain (apps/storefront's custom-domain
+   *  middleware calls it on every request to an unrecognized host). */
+  getByCustomDomain(
+    customDomain: string,
+  ): Promise<OrganizationDocument | null> {
+    return this.organizationsRepository.findByCustomDomain(customDomain);
+  }
+
   async listForUser(userId: string): Promise<OrganizationDocument[]> {
     const memberships =
       await this.membershipsService.listOrganizationIdsForUser(userId);
@@ -257,6 +265,17 @@ export class OrganizationsService {
         throw new ConflictException({
           code: 'SLUG_TAKEN',
           message: 'Organization name already in use',
+        });
+      }
+    }
+    if (input.customDomain) {
+      const existing = await this.organizationsRepository.findByCustomDomain(
+        input.customDomain,
+      );
+      if (existing && existing.id !== id) {
+        throw new ConflictException({
+          code: 'CUSTOM_DOMAIN_TAKEN',
+          message: 'This domain is already connected to another organization',
         });
       }
     }

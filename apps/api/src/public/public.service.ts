@@ -134,6 +134,22 @@ export class PublicService {
     }
   }
 
+  /**
+   * Phase E3 — backs PublicSitesController's `GET /public-sites/resolve-domain`. Only resolves
+   * when the org both owns this exact custom domain AND has `website` enabled — a custom
+   * domain must obey the same product-activation gate as the shared `{STOREFRONT_URL}/{slug}`
+   * URL (see getOrganization's own `assertModuleEnabled(organization, 'website')`), otherwise
+   * disabling Website would leave a stale custom domain still serving the storefront.
+   */
+  async resolveDomain(hostname: string): Promise<{ slug: string } | null> {
+    const organization =
+      await this.organizationsService.getByCustomDomain(hostname);
+    if (!organization || !organization.enabledModules.includes('website')) {
+      return null;
+    }
+    return { slug: organization.slug };
+  }
+
   /** Backs PublicSitesController's `GET /public-sites/sitemap-entries` — see its own doc comment. */
   async listSitemapEntries() {
     const entries = await this.organizationsService.listWebsiteSitemapEntries();

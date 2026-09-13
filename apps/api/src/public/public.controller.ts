@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
@@ -8,6 +16,7 @@ import {
   listPublicOffersQuerySchema,
   publicAvailabilityQuerySchema,
   publicOfferReviewsQuerySchema,
+  resolveDomainQuerySchema,
   searchPublicOffersQuerySchema,
   trackByEmailQuerySchema,
   trackCartCheckoutStartedSchema,
@@ -17,6 +26,7 @@ import {
   type ListPublicOffersQuery,
   type PublicAvailabilityQuery,
   type PublicOfferReviewsQuery,
+  type ResolveDomainQuery,
   type SearchPublicOffersQuery,
   type TrackByEmailQuery,
   type TrackCartCheckoutStartedInput,
@@ -58,6 +68,25 @@ export class PublicSitesController {
   @Get('sitemap-entries')
   listSitemapEntries() {
     return this.publicService.listSitemapEntries();
+  }
+
+  /** Phase E3 — backs apps/storefront's middleware.ts, called on every request whose `Host`
+   *  header doesn't match the platform's own shared storefront domain. Registered before
+   *  `sitemap-entries` above isn't required (both are literal, non-overlapping segments) — see
+   *  PublicService#resolveDomain for the `website`-module gate. */
+  @Get('resolve-domain')
+  async resolveDomain(
+    @Query(new ZodValidationPipe(resolveDomainQuerySchema))
+    query: ResolveDomainQuery,
+  ) {
+    const resolved = await this.publicService.resolveDomain(query.host);
+    if (!resolved) {
+      throw new NotFoundException({
+        code: 'CUSTOM_DOMAIN_NOT_FOUND',
+        message: 'No organization is connected to this domain',
+      });
+    }
+    return resolved;
   }
 }
 

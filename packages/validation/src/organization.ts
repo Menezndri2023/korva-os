@@ -97,6 +97,19 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
    *  these caps are generous headroom above that, not a hard SEO best-practice enforcement. */
   seoTitle: z.string().max(70).optional(),
   seoDescription: z.string().max(200).optional(),
+  /** Phase E3 v1 custom domain — a bare hostname, no "https://" scheme and no path (the owner
+   *  points it at the storefront via a CNAME record, entered here exactly as they'd type it
+   *  into their DNS provider). Uniqueness enforced by OrganizationsService.update, not this
+   *  schema alone. */
+  customDomain: z
+    .string()
+    .max(253)
+    .regex(
+      /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i,
+      'Must be a bare domain name, e.g. www.masociete.com (no https:// or path)',
+    )
+    .transform((value) => value.toLowerCase())
+    .optional(),
   testimonials: z.array(testimonialSchema).max(20).optional(),
   teamMembers: z.array(teamMemberSchema).max(30).optional(),
   galleryImages: z.array(galleryImageSchema).max(40).optional(),

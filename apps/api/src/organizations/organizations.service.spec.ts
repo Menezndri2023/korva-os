@@ -46,9 +46,11 @@ describe('deriveTaglineFromDescription (Phase E2)', () => {
   });
 
   it('returns the whole trimmed description when it has no sentence-ending punctuation and fits', () => {
-    expect(deriveTaglineFromDescription('  Coiffure et soins capillaires bio à Paris  ')).toBe(
-      'Coiffure et soins capillaires bio à Paris',
-    );
+    expect(
+      deriveTaglineFromDescription(
+        '  Coiffure et soins capillaires bio à Paris  ',
+      ),
+    ).toBe('Coiffure et soins capillaires bio à Paris');
   });
 
   it('hard-truncates with an ellipsis when neither the first sentence nor the whole text fits', () => {
@@ -59,8 +61,11 @@ describe('deriveTaglineFromDescription (Phase E2)', () => {
   });
 
   it('never invents content beyond what was entered — output is always a verbatim excerpt', () => {
-    const description = 'Plomberie, chauffage et dépannage rapide dans le 15e arrondissement.';
-    expect(description).toContain(deriveTaglineFromDescription(description).replace('…', ''));
+    const description =
+      'Plomberie, chauffage et dépannage rapide dans le 15e arrondissement.';
+    expect(description).toContain(
+      deriveTaglineFromDescription(description).replace('…', ''),
+    );
   });
 });
 

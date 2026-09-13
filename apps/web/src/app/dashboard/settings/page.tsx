@@ -219,6 +219,11 @@ interface PaymentPayoutFormValues {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: organization } = useActiveOrganization();
+  // Phase E3 — the bare host a custom domain's CNAME record must target, derived from the same
+  // NEXT_PUBLIC_STOREFRONT_URL already used elsewhere on this page (storefrontPageUrl etc).
+  const storefrontDomainCnameTarget = new URL(
+    process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001",
+  ).host;
   const authReady = useAuthReady();
   const currentUserId = useAuthStore((state) => state.user?.id);
   const { data: members, isLoading } = useQuery({
@@ -385,6 +390,7 @@ export default function SettingsPage() {
       tagline: organization.tagline,
       seoTitle: organization.seoTitle,
       seoDescription: organization.seoDescription,
+      customDomain: organization.customDomain,
       heroImage: organization.heroImage,
       shippingFlatRate: organization.shippingFlatRate,
       storefrontTemplate: organization.storefrontTemplate,
@@ -694,6 +700,10 @@ export default function SettingsPage() {
               <dd className="mt-0.5">{organization?.seoDescription ?? "—"}</dd>
             </div>
             <div>
+              <dt className="text-text-muted">Domaine personnalisé</dt>
+              <dd className="mt-0.5">{organization?.customDomain ?? "—"}</dd>
+            </div>
+            <div>
               <dt className="text-text-muted">Frais de livraison (boutique en ligne)</dt>
               <dd className="mt-0.5">
                 {organization?.shippingFlatRate != null
@@ -917,6 +927,28 @@ export default function SettingsPage() {
               {orgErrors.seoDescription && (
                 <p className="mt-1 text-xs text-destructive">{orgErrors.seoDescription.message}</p>
               )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-custom-domain">
+                Domaine personnalisé (optionnel)
+              </label>
+              <Input
+                id="org-custom-domain"
+                className="w-full"
+                placeholder="www.mon-entreprise.com"
+                error={!!orgErrors.customDomain}
+                {...registerOrg("customDomain", {
+                  setValueAs: (v: string) => (v === "" ? undefined : v),
+                })}
+              />
+              {orgErrors.customDomain && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.customDomain.message}</p>
+              )}
+              <p className="mt-1 text-xs text-text-muted">
+                Chez votre fournisseur de domaine, ajoutez un enregistrement CNAME pointant ce
+                domaine vers <span className="font-mono">{storefrontDomainCnameTarget}</span>.
+                Sans &quot;https://&quot; ni chemin — juste le nom de domaine.
+              </p>
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-hero-image">

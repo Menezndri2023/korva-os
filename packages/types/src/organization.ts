@@ -131,6 +131,9 @@ export interface Organization {
    *  title/description. */
   seoTitle?: string;
   seoDescription?: string;
+  /** v1 custom domain — a bare hostname (no scheme/path), e.g. "www.masociete.com". Undefined
+   *  means the org is only reachable at the shared `{STOREFRONT_URL}/{slug}` URL. */
+  customDomain?: string;
   testimonials?: Testimonial[];
   teamMembers?: TeamMember[];
   galleryImages?: GalleryImage[];

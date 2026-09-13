@@ -115,3 +115,11 @@ export const trackByEmailQuerySchema = z.object({
   email: z.string().email(),
 });
 export type TrackByEmailQuery = z.infer<typeof trackByEmailQuerySchema>;
+
+/** Phase E3 — apps/storefront's custom-domain middleware sends the request's own `Host` header
+ *  verbatim; deliberately permissive (just non-empty) since an unrecognized/malformed hostname
+ *  must resolve to "not found," never a 400 that would break the visitor's page load. */
+export const resolveDomainQuerySchema = z.object({
+  host: z.string().min(1).max(253),
+});
+export type ResolveDomainQuery = z.infer<typeof resolveDomainQuerySchema>;

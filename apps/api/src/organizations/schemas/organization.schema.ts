@@ -117,6 +117,15 @@ export class Organization {
   @Prop()
   seoDescription?: string;
 
+  /** Phase E3 (docs/KORVA_OS_V2_AUDIT.md §2.6) — v1 custom domain: a bare hostname (no scheme,
+   *  no path, e.g. "www.masociete.com") the owner points at the storefront via CNAME. `sparse:
+   *  true` lets every org without one omit the field entirely rather than colliding on a shared
+   *  `null` under the unique index — the same reasoning as `slug`'s own uniqueness, just
+   *  optional. Resolution (domain -> slug) happens in apps/storefront's own middleware via
+   *  PublicSitesController#resolveDomain, never client-side. */
+  @Prop({ unique: true, sparse: true, lowercase: true, trim: true })
+  customDomain?: string;
+
   /** `default: undefined` — same reasoning as `storefrontSections` above: an unset array must
    *  stay distinguishable from "explicitly cleared to empty" is not a concern here (there's no
    *  meaningful difference for content sections), but the auto-`[]`-init would still make every
