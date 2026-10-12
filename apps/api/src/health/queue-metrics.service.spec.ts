@@ -1,6 +1,8 @@
 import type { ConfigService } from '@nestjs/config';
 import { EVENTS_QUEUE_NAME } from '../core/events/event-names';
-import { RECONCILIATION_QUEUE_NAME } from '../finance/payments/reconciliation-scheduler.service';
+// Asserted against the registry rather than a second hardcoded list: duplicating the queue
+// names here is exactly what let the production list fall 4 queues behind reality.
+import { ALL_QUEUE_NAMES } from '../core/queues/queue-registry';
 
 const getJobCountsMock = jest.fn();
 const closeMock = jest.fn();
@@ -49,17 +51,15 @@ describe('QueueMetricsService', () => {
     expect(disconnectMock).not.toHaveBeenCalled();
   });
 
-  it('opens Queue clients for exactly the events and payment-reconciliation queue names when called', async () => {
+  it('opens one Queue client per registered queue name when called', async () => {
     const service = buildService();
 
     await service.getMetrics();
 
-    expect(constructedQueueNames.sort()).toEqual(
-      [EVENTS_QUEUE_NAME, RECONCILIATION_QUEUE_NAME].sort(),
-    );
+    expect(constructedQueueNames.sort()).toEqual([...ALL_QUEUE_NAMES].sort());
   });
 
-  it('calls getJobCounts on both queues and returns the six known counts, keyed by queue name', async () => {
+  it('calls getJobCounts on every registered queue and returns the six known counts, keyed by queue name', async () => {
     getJobCountsMock
       .mockResolvedValueOnce({
         waiting: 1,
@@ -81,7 +81,7 @@ describe('QueueMetricsService', () => {
 
     const metrics = await service.getMetrics();
 
-    expect(getJobCountsMock).toHaveBeenCalledTimes(2);
+    expect(getJobCountsMock).toHaveBeenCalledTimes(ALL_QUEUE_NAMES.length);
     expect(getJobCountsMock).toHaveBeenCalledWith(
       'waiting',
       'active',
@@ -90,9 +90,7 @@ describe('QueueMetricsService', () => {
       'delayed',
       'paused',
     );
-    expect(Object.keys(metrics).sort()).toEqual(
-      [EVENTS_QUEUE_NAME, RECONCILIATION_QUEUE_NAME].sort(),
-    );
+    expect(Object.keys(metrics).sort()).toEqual([...ALL_QUEUE_NAMES].sort());
     expect(metrics[EVENTS_QUEUE_NAME]).toEqual({
       waiting: 1,
       active: 2,
@@ -139,11 +137,11 @@ describe('QueueMetricsService', () => {
     await expect(service.getMetrics()).rejects.toThrow('Redis unreachable');
   });
 
-  it('closes both queues and disconnects after every call, including a failed one', async () => {
+  it('closes every queue and disconnects after every call, including a failed one', async () => {
     const service = buildService();
     await service.getMetrics();
 
-    expect(closeMock).toHaveBeenCalledTimes(2);
+    expect(closeMock).toHaveBeenCalledTimes(ALL_QUEUE_NAMES.length);
     expect(disconnectMock).toHaveBeenCalledTimes(1);
 
     closeMock.mockClear();
@@ -151,7 +149,7 @@ describe('QueueMetricsService', () => {
     getJobCountsMock.mockRejectedValueOnce(new Error('boom'));
 
     await expect(service.getMetrics()).rejects.toThrow('boom');
-    expect(closeMock).toHaveBeenCalledTimes(2);
+    expect(closeMock).toHaveBeenCalledTimes(ALL_QUEUE_NAMES.length);
     expect(disconnectMock).toHaveBeenCalledTimes(1);
   });
 });

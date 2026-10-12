@@ -1,23 +1,7 @@
 import type { ConfigService } from '@nestjs/config';
-import { EVENTS_QUEUE_NAME } from '../core/events/event-names';
-import { RECONCILIATION_QUEUE_NAME } from '../finance/payments/reconciliation-scheduler.service';
-import { QUOTE_EXPIRY_QUEUE_NAME } from '../finance/quotes/quote-expiry-scheduler.service';
-import { INVOICE_OVERDUE_QUEUE_NAME } from '../finance/invoices/invoice-overdue-scheduler.service';
-import { CALENDAR_SYNC_QUEUE_NAME } from '../booking/resources/calendar-sync-scheduler.service';
-import { CUSTOMER_INACTIVITY_QUEUE_NAME } from '../crm/contacts/customer-inactivity-scheduler.service';
-import { WEBHOOK_DELIVERY_QUEUE_NAME } from '../webhook-subscriptions/webhook-delivery.queue';
-import { SUBSCRIPTION_PERIOD_QUEUE_NAME } from '../subscriptions/subscription-period-scheduler.service';
-
-const ALL_QUEUE_NAMES = [
-  EVENTS_QUEUE_NAME,
-  RECONCILIATION_QUEUE_NAME,
-  QUOTE_EXPIRY_QUEUE_NAME,
-  INVOICE_OVERDUE_QUEUE_NAME,
-  CALENDAR_SYNC_QUEUE_NAME,
-  CUSTOMER_INACTIVITY_QUEUE_NAME,
-  WEBHOOK_DELIVERY_QUEUE_NAME,
-  SUBSCRIPTION_PERIOD_QUEUE_NAME,
-];
+// Imported, not re-declared: this spec used to keep its own copy of the queue list, which is
+// how the assertion 'exactly eight' outlived the arrival of the 9th through 12th queues.
+import { ALL_QUEUE_NAMES } from '../core/queues/queue-registry';
 
 interface MockQueueEventsInstance {
   name: string;
@@ -96,13 +80,13 @@ describe('QueueAlertingService', () => {
     loggerErrorSpy.mockRestore();
   });
 
-  it('creates exactly eight QueueEvents, one per known queue name, without a connection created before onModuleInit', () => {
+  it('creates one QueueEvents per registered queue name, without a connection created before onModuleInit', () => {
     const service = buildService();
     expect(instances).toHaveLength(0);
 
     service.onModuleInit();
 
-    expect(instances).toHaveLength(8);
+    expect(instances).toHaveLength(ALL_QUEUE_NAMES.length);
     expect(instances.map((i) => i.name).sort()).toEqual(
       [...ALL_QUEUE_NAMES].sort(),
     );
@@ -252,7 +236,7 @@ describe('QueueAlertingService', () => {
 
     await service.onModuleDestroy();
 
-    expect(instances).toHaveLength(8);
+    expect(instances).toHaveLength(ALL_QUEUE_NAMES.length);
     for (const instance of instances) {
       expect(instance.close).toHaveBeenCalledTimes(1);
     }

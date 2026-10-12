@@ -2,8 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
-import { EVENTS_QUEUE_NAME } from '../core/events/event-names';
-import { RECONCILIATION_QUEUE_NAME } from '../finance/payments/reconciliation-scheduler.service';
+import { ALL_QUEUE_NAMES } from '../core/queues/queue-registry';
 
 export interface QueueCounts {
   waiting: number;
@@ -16,11 +15,12 @@ export interface QueueCounts {
 
 export type QueueMetrics = Record<string, QueueCounts>;
 
-const QUEUE_NAMES = [EVENTS_QUEUE_NAME, RECONCILIATION_QUEUE_NAME];
+const QUEUE_NAMES = ALL_QUEUE_NAMES;
 
 /**
- * Read-only observation of the two existing BullMQ queues ('events',
- * 'payment-reconciliation') for GET /health/queues. Deliberately does NOT reuse
+ * Read-only observation of every BullMQ queue this app runs (see
+ * core/queues/queue-registry.ts — previously a hardcoded list of just 'events' and
+ * 'payment-reconciliation'), for GET /health/queues and GET /metrics. Deliberately does NOT reuse
  * EventBusService's/EventsProcessor's/ReconciliationSchedulerService's own Queue/Worker
  * instances — those are private fields with no accessor, and reaching into them would mean
  * modifying Lot Q / the reconciliation scheduler, which this service must never do. Instead
@@ -49,7 +49,7 @@ export class QueueMetricsService {
   constructor(private readonly configService: ConfigService) {}
 
   /**
-   * Reads counts for both queues over one short-lived connection. Throws if either read fails
+   * Reads counts for every registered queue over one short-lived connection. Throws if either read fails
    * — a partial result would silently report a healthy-looking zero for a queue whose real
    * state is unknown, which is worse than surfacing the outage. The caller (HealthController)
    * is responsible for turning a thrown error into a redacted 503.
