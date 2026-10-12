@@ -33,6 +33,13 @@
  * --limit is capped at 100, mirroring the Stage 2.8 scripts' own pagination convention.
  */
 import { NestFactory } from '@nestjs/core';
+
+// Set BEFORE the application context is built: every scheduler and queue worker checks
+// this in its own onModuleInit, so without it this script would start 26 BullMQ blocking
+// loops, register repeatable job definitions in Redis, and briefly run real background
+// work — a dry-run print could trigger a payment-reconciliation sweep. See
+// src/core/background/background-workers.ts.
+process.env.DISABLE_BACKGROUND_WORKERS = 'true';
 import { AppModule } from '../src/app.module';
 import { PaymentsRepository } from '../src/finance/payments/payments.repository';
 

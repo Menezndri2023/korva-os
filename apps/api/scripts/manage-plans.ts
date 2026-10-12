@@ -38,6 +38,13 @@
  * create, or to leave existing limits untouched on update), --apply
  */
 import { NestFactory } from '@nestjs/core';
+
+// Set BEFORE the application context is built: every scheduler and queue worker checks
+// this in its own onModuleInit, so without it this script would start 26 BullMQ blocking
+// loops, register repeatable job definitions in Redis, and briefly run real background
+// work — a dry-run print could trigger a payment-reconciliation sweep. See
+// src/core/background/background-workers.ts.
+process.env.DISABLE_BACKGROUND_WORKERS = 'true';
 import { KORVA_MODULES, PLAN_INTERVALS } from '@korva/types';
 import type { KorvaModule, PlanInterval } from '@korva/types';
 import { AppModule } from '../src/app.module';

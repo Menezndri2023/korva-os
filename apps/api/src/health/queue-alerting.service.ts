@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { QueueEvents } from 'bullmq';
 import { ALL_QUEUE_NAMES } from '../core/queues/queue-registry';
+import { backgroundWorkersDisabled } from '../core/background/background-workers';
 
 /** Every queue this app runs — see core/queues/queue-registry.ts. This list used to be
  *  maintained by hand here and had silently fallen 4 queues behind reality. */
@@ -75,9 +76,9 @@ export class QueueAlertingService implements OnModuleInit, OnModuleDestroy {
    * running an `XREAD BLOCK` loop that re-arms every few seconds whether or not anything ever
    * happens, so these 13 listeners generate a constant command rate with zero business
    * activity. On a per-request-billed Redis (Upstash pay-as-you-go and similar) they are the
-   * single largest idle cost in the application, roughly 13 of the ~23 permanent blocking loops
-   * an API instance opens — more than half, for a capability whose entire output is one log
-   * line per failing queue every five minutes.
+   * single largest idle cost in the application: 13 of the 26 permanent blocking loops an API
+   * instance opens — exactly half, for a capability whose entire output is one log line per
+   * failing queue every five minutes.
    *
    * What is lost when off: the `QUEUE_JOB_FAILED` log line, i.e. the push signal. What is NOT
    * lost: the `failed` counts per queue, which `GET /health/queues` and `GET /metrics` read
@@ -86,6 +87,9 @@ export class QueueAlertingService implements OnModuleInit, OnModuleDestroy {
    * scrape interval instead of within five minutes.
    */
   private isEnabled(): boolean {
+    // The global kill switch wins over this feature's own flag: a CLI script must not open 13
+    // subscriptions, whatever the deployment's alerting preference happens to be.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     return this.configService.get<string>('QUEUE_ALERTING_ENABLED') !== 'false';
   }
 

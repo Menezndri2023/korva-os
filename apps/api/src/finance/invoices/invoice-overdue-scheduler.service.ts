@@ -10,6 +10,7 @@ import IORedis from 'ioredis';
 import { InvoicesRepository } from './invoices.repository';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 export const INVOICE_OVERDUE_QUEUE_NAME = 'invoice-overdue';
 export const INVOICE_OVERDUE_JOB_NAME = 'sweep';
@@ -155,6 +156,9 @@ export class InvoiceOverdueSchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>('INVOICE_OVERDUE_ENABLED');
     if (override !== undefined) return override === 'true';
     return this.configService.get<string>('NODE_ENV') !== 'test';

@@ -13,6 +13,7 @@ import { PlansRepository } from './plans.repository';
 import { SubscriptionDocument } from './schemas/subscription.schema';
 import { AuditService } from '../audit/audit.service';
 import { CountersService } from '../core/counters/counters.service';
+import { backgroundWorkersDisabled } from '../core/background/background-workers';
 
 export const SUBSCRIPTION_PERIOD_QUEUE_NAME = 'subscription-period';
 export const SUBSCRIPTION_PERIOD_JOB_NAME = 'sweep';
@@ -446,6 +447,9 @@ export class SubscriptionPeriodSchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>(
       'SUBSCRIPTION_PERIOD_ENABLED',
     );

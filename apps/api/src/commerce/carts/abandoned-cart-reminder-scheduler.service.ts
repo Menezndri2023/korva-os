@@ -15,6 +15,7 @@ import { ConversationsService } from '../../communication/conversations/conversa
 import { AuditService } from '../../audit/audit.service';
 import { interpolate } from '../../shared/template';
 import { sendWithChannelFallback } from '../../communication/notify-contact-with-fallback';
+import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 export const ABANDONED_CART_QUEUE_NAME = 'abandoned-cart-reminder';
 export const ABANDONED_CART_JOB_NAME = 'sweep';
@@ -209,6 +210,9 @@ export class AbandonedCartReminderSchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>(
       'ABANDONED_CART_REMINDER_ENABLED',
     );

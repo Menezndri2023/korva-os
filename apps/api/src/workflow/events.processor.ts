@@ -13,6 +13,7 @@ import { DecisionEngineService } from '../decision-engine/decision-engine.servic
 import { OrdersService } from '../commerce/orders/orders.service';
 import { WebhookDispatchService } from '../webhook-subscriptions/webhook-dispatch.service';
 import { WaitlistService } from '../booking/waitlist/waitlist.service';
+import { backgroundWorkersDisabled } from '../core/background/background-workers';
 
 /**
  * Consumes the 'events' queue and hands each event to both the WorkflowEngine (user-configured
@@ -46,6 +47,13 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    // Unlike the schedulers, this worker has no interval and no per-feature flag — it
+    // consumed unconditionally, including inside a CLI script's application context. See
+    // core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) {
+      this.logger.log('EventsProcessor disabled (DISABLE_BACKGROUND_WORKERS)');
+      return;
+    }
     this.connection = new IORedis(
       this.configService.getOrThrow<string>('REDIS_URL'),
       {

@@ -18,6 +18,7 @@ import {
   CampaignSendJobData,
 } from './campaign-send.queue';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 /**
  * Consumes the `campaign-sends` queue CampaignsService.launch enqueues into — split from it the
@@ -48,6 +49,15 @@ export class CampaignSendWorkerService
   ) {}
 
   async onModuleInit(): Promise<void> {
+    // Unlike the schedulers, this worker has no interval and no per-feature flag — it
+    // consumed unconditionally, including inside a CLI script's application context. See
+    // core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) {
+      this.logger.log(
+        'CampaignSendWorkerService disabled (DISABLE_BACKGROUND_WORKERS)',
+      );
+      return;
+    }
     this.connection = new IORedis(
       this.configService.getOrThrow<string>('REDIS_URL'),
       { maxRetriesPerRequest: null },

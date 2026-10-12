@@ -31,6 +31,13 @@
  * is visible immediately either way. See docs/DEMO_ACCOUNTS.md for the full account list.
  */
 import { NestFactory } from '@nestjs/core';
+
+// Set BEFORE the application context is built: every scheduler and queue worker checks
+// this in its own onModuleInit, so without it this script would start 26 BullMQ blocking
+// loops, register repeatable job definitions in Redis, and briefly run real background
+// work — a dry-run print could trigger a payment-reconciliation sweep. See
+// src/core/background/background-workers.ts.
+process.env.DISABLE_BACKGROUND_WORKERS = 'true';
 import { AppModule } from '../src/app.module';
 import { UsersService } from '../src/identity/users/users.service';
 import { OrganizationsService } from '../src/organizations/organizations.service';

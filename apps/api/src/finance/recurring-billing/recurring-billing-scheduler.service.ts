@@ -20,6 +20,7 @@ import {
 } from '../../catalog/offers/schemas/offer.schema';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 export const RECURRING_BILLING_QUEUE_NAME = 'recurring-billing';
 export const RECURRING_BILLING_JOB_NAME = 'sweep';
@@ -196,6 +197,9 @@ export class RecurringBillingSchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>(
       'RECURRING_BILLING_ENABLED',
     );

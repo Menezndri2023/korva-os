@@ -10,6 +10,7 @@ import IORedis from 'ioredis';
 import { QuotesRepository } from './quotes.repository';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 export const QUOTE_EXPIRY_QUEUE_NAME = 'quote-expiry';
 export const QUOTE_EXPIRY_JOB_NAME = 'sweep';
@@ -164,6 +165,9 @@ export class QuoteExpirySchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>('QUOTE_EXPIRY_ENABLED');
     if (override !== undefined) return override === 'true';
     return this.configService.get<string>('NODE_ENV') !== 'test';

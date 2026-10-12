@@ -26,6 +26,9 @@ jest.mock('ioredis', () =>
 function buildService(): EventsProcessor {
   const configService = {
     getOrThrow: jest.fn().mockReturnValue('redis://localhost:6379'),
+    // `get` is read by backgroundWorkersDisabled (core/background/background-workers.ts);
+    // undefined means "not disabled", which is what these tests exercise.
+    get: jest.fn().mockReturnValue(undefined),
   } as unknown as ConfigService;
   const workflowEngineService = {} as unknown as WorkflowEngineService;
   const decisionEngineService = {} as unknown as DecisionEngineService;

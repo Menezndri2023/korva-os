@@ -13,6 +13,7 @@ import { PaymentProviderResolverService } from '../finance/payments/providers/pa
 import { isAmbiguousProviderError } from '../finance/payments/providers/payment-provider.interface';
 import { SubscriptionBillingService } from './subscription-billing.service';
 import type { SubscriptionInvoiceDocument } from '../subscriptions/schemas/subscription-invoice.schema';
+import { backgroundWorkersDisabled } from '../core/background/background-workers';
 
 export const SUBSCRIPTION_AUTO_CHARGE_QUEUE_NAME = 'subscription-auto-charge';
 export const SUBSCRIPTION_AUTO_CHARGE_JOB_NAME = 'sweep';
@@ -240,6 +241,9 @@ export class SubscriptionAutoChargeSchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>(
       'SUBSCRIPTION_AUTO_CHARGE_ENABLED',
     );

@@ -11,6 +11,7 @@ import { ResourcesRepository } from './resources.repository';
 import { safeFetch } from '../../shared/safe-fetch';
 import { parseIcsEvents } from '../../shared/ics';
 import { AuditService } from '../../audit/audit.service';
+import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 export const CALENDAR_SYNC_QUEUE_NAME = 'calendar-sync';
 export const CALENDAR_SYNC_JOB_NAME = 'sweep';
@@ -159,6 +160,9 @@ export class CalendarSyncSchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>('CALENDAR_SYNC_ENABLED');
     if (override !== undefined) return override === 'true';
     return this.configService.get<string>('NODE_ENV') !== 'test';

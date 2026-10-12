@@ -11,6 +11,7 @@ import { WebhookSubscriptionsRepository } from './webhook-subscriptions.reposito
 import { WebhookDeliveriesRepository } from './webhook-deliveries.repository';
 import { CredentialEncryptionService } from '../shared/crypto/credential-encryption.service';
 import { safeFetch } from '../shared/safe-fetch';
+import { backgroundWorkersDisabled } from '../core/background/background-workers';
 import {
   WEBHOOK_EVENT_HEADER,
   WEBHOOK_SIGNATURE_HEADER,
@@ -45,6 +46,15 @@ export class WebhookDeliveryWorkerService
   ) {}
 
   async onModuleInit(): Promise<void> {
+    // Unlike the schedulers, this worker has no interval and no per-feature flag — it
+    // consumed unconditionally, including inside a CLI script's application context. See
+    // core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) {
+      this.logger.log(
+        'WebhookDeliveryWorkerService disabled (DISABLE_BACKGROUND_WORKERS)',
+      );
+      return;
+    }
     this.connection = new IORedis(
       this.configService.getOrThrow<string>('REDIS_URL'),
       { maxRetriesPerRequest: null },

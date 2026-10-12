@@ -35,6 +35,13 @@
  *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/backfill-leads-to-deals.ts --apply    (writes changes)
  */
 import { NestFactory } from '@nestjs/core';
+
+// Set BEFORE the application context is built: every scheduler and queue worker checks
+// this in its own onModuleInit, so without it this script would start 26 BullMQ blocking
+// loops, register repeatable job definitions in Redis, and briefly run real background
+// work — a dry-run print could trigger a payment-reconciliation sweep. See
+// src/core/background/background-workers.ts.
+process.env.DISABLE_BACKGROUND_WORKERS = 'true';
 import { getModelToken } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AppModule } from '../src/app.module';

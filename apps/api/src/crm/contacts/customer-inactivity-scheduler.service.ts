@@ -33,6 +33,7 @@ import {
 } from '../../communication/conversations/schemas/conversation.schema';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 export const CUSTOMER_INACTIVITY_QUEUE_NAME = 'customer-inactivity';
 export const CUSTOMER_INACTIVITY_JOB_NAME = 'sweep';
@@ -255,6 +256,9 @@ export class CustomerInactivitySchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>(
       'CUSTOMER_INACTIVITY_ENABLED',
     );

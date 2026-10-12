@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
+import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 export const RECONCILIATION_QUEUE_NAME = 'payment-reconciliation';
 export const RECONCILIATION_JOB_NAME = 'sweep';
@@ -165,6 +166,9 @@ export class ReconciliationSchedulerService
   }
 
   private isEnabled(): boolean {
+    // A CLI script building an application context must not start background work —
+    // see core/background/background-workers.ts.
+    if (backgroundWorkersDisabled(this.configService)) return false;
     const override = this.configService.get<string>(
       'PAYMENT_RECONCILIATION_ENABLED',
     );
