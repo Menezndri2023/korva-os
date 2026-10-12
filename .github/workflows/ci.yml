@@ -131,11 +131,42 @@ jobs:
       - name: Build
         run: pnpm -r build
 
-      - name: Unit tests
+      - name: Unit tests (api)
         run: pnpm --filter @korva/api test
+
+      # apps/web, apps/storefront and packages/ui carry ~580 Vitest tests between them that this
+      # workflow never ran — only the api suite was wired in, so a frontend regression could
+      # reach main with CI green. Run as its own step so a failure names the frontend directly
+      # rather than hiding inside a recursive command's output.
+      - name: Unit tests (web, storefront, ui)
+        run: pnpm --filter @korva/web --filter @korva/storefront --filter @korva/ui test
 
       - name: E2E tests
         run: pnpm --filter @korva/api test:e2e
+
+  # Fails on any high or critical advisory that is not explicitly declared in
+  # pnpm-workspace.yaml's `auditConfig.ignoreGhsas`, each of which carries a written
+  # reachability argument. Independent of build-and-test (no `needs:`) so a dependency advisory
+  # is reported even when a test is failing for an unrelated reason.
+  dependency-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # `pnpm audit` resolves the dependency graph from the lockfile and queries the registry;
+      # it needs no node_modules, so the install is skipped entirely.
+      - name: Audit dependencies (high and critical)
+        run: pnpm audit --audit-level high
 
   docker-build:
     runs-on: ubuntu-latest

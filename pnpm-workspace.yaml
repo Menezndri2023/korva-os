@@ -7,3 +7,54 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: true
   unrs-resolver: true
+
+# Minimum-patched versions for advisories `pnpm audit` reports against TRANSITIVE dependencies —
+# none of these is a direct dependency of any workspace package, so there is nothing to bump in
+# an app's own package.json. Each pin is the exact `patched_versions` floor from the advisory,
+# never a speculative major bump, and a package present under several majors is pinned per major
+# so a consumer expecting the older API is never force-upgraded across a breaking boundary.
+#
+# This lives here rather than in package.json's "pnpm" field: pnpm 11 no longer reads that field
+# and ignores it with only a warning (see https://pnpm.io/settings).
+#
+# NOT listed, deliberately — pinned per major is NOT safe here, and this was verified the hard
+# way. pnpm's `pkg@<range>` override matches the range a dependency REQUESTS, so
+# `brace-expansion@1: ">=1.1.20"` did match minimatch's own `^1.1.7` — and because 1.1.20 has
+# never been published, it resolved to 5.0.12, two majors up. minimatch@3 then died with
+# `TypeError: expand is not a function` and `pnpm -r lint` failed outright. The same happened to
+# `js-yaml` (3.15.1/4.3.1 -> 5.3.0) and `fast-uri` (3.1.5 -> 4.2.2). All three advisories are
+# dev-only DoS issues and are carried in `auditConfig.ignoreGhsas` below instead. Do not
+# reintroduce a per-major override for them without first confirming the target version exists
+# INSIDE that major.
+#
+# Also NOT listed: `braces`. Its advisory (stack-exhaustion DoS, high) names
+# patched_versions ">=3.0.4", and 3.0.4 does not exist — 3.0.3 is the latest published release.
+# There is nothing to upgrade to, so it is carried as a known, unfixable finding rather than
+# pinned to a version that cannot be installed. See `auditConfig.ignoreGhsas` below.
+#
+# Revisit whenever `pnpm audit` is clean without one — an override kept past its usefulness
+# silently freezes a dependency.
+overrides:
+  # critical
+  proxy-addr: ">=2.0.8" # IP spoofing via IPv4-mapped IPv6
+  handlebars: ">=4.7.10" # JS injection via AST type confusion / own-property-check bypass
+  # high
+  sharp: ">=0.35.4" # libheif
+  multer: ">=2.3.0" # DoS via crafted multipart
+  compression: ">=1.8.2" # DoS
+  engine.io: ">=6.6.10" # Engine.IO protocol revision mismatch DoS
+  source-map-js: ">=1.2.2" # event-loop DoS
+  undici: ">=8.10.2" # DoS via unrequested data
+
+# Known findings the CI audit gate (.github/workflows/ci.yml -> dependency-audit) deliberately
+# tolerates. Every entry needs a reason and a reachability argument, never just "it's noisy":
+# the gate is set at `high`, so anything not listed here fails the build. Keep this list
+# minimal — an entry for an advisory no longer in the tree hides a real regression later.
+auditConfig:
+  ignoreGhsas:
+    # braces stack-exhaustion DoS, reached only via
+    # eslint-config-next > @next/eslint-plugin-next > fast-glob > micromatch — dev tooling, and
+    # the production images install with --prod, so no shipped artifact contains it. UNFIXABLE
+    # rather than merely unfixed: the advisory names patched_versions ">=3.0.4" and 3.0.4 has
+    # never been published (3.0.3 is the latest release). Drop this entry when it ships.
+    - GHSA-vfj7-8cjw-p6xm
