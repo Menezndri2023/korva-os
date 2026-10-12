@@ -15,9 +15,14 @@ COPY packages/config/package.json packages/config/package.json
 # with no store cache, and on a slow or contended connection the default aborts the whole
 # install with `TimeoutError: The operation was aborted due to timeout` — which reads like a
 # broken Dockerfile and is not one. Verified: the same install completes in node:26-slim once
-# the timeout is raised, native install scripts (argon2, msgpackr-extract) included. 120s is
-# generous without letting a genuinely unreachable registry hang the build for minutes.
-RUN pnpm install --frozen-lockfile --filter @korva/storefront... --fetch-timeout 120000
+# the timeout is raised, native install scripts (argon2, msgpackr-extract) included, using the
+# shipped linux-x64 prebuilds with no compiler involved.
+#
+# 300s, not 120s: 120 was still not enough on the connection this was verified against
+# (tarballs at 8-19 KiB/s). It is a PER-REQUEST timeout, not a budget for the whole install, so
+# a high value costs nothing on a fast network — it only decides how long one stalled download
+# is given before the install is abandoned.
+RUN pnpm install --frozen-lockfile --filter @korva/storefront... --fetch-timeout 300000
 
 FROM deps AS build
 COPY packages/types packages/types
@@ -39,7 +44,7 @@ COPY packages/types/package.json packages/types/package.json
 COPY packages/validation/package.json packages/validation/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/config/package.json packages/config/package.json
-RUN pnpm install --frozen-lockfile --prod --filter @korva/storefront... --fetch-timeout 120000
+RUN pnpm install --frozen-lockfile --prod --filter @korva/storefront... --fetch-timeout 300000
 
 FROM base AS runtime
 ENV NODE_ENV=production
