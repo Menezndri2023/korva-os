@@ -1,6 +1,8 @@
 # Déploiement — KORVA OS
 
-Créé en Phase 12 (Hardening). Couvre les images Docker de production, l'intégration continue et les variables d'environnement — pas d'hébergement réel provisionné (hors scope du MVP).
+Couvre les images Docker de production, les manifestes de déploiement, l'intégration continue et les variables d'environnement.
+
+**Aucun hébergement n'est provisionné à ce jour.** Les manifestes ci-dessous (`docker-compose.prod.yml`, `docker/caddy/Caddyfile`, `.env.production.example`) sont prêts à l'emploi mais n'ont jamais été exécutés contre une vraie infrastructure — ils ont été écrits à partir des Dockerfiles et du code réels, pas copiés d'un modèle. Traiter la première exécution comme une première exécution : voir le runbook en §Runbook, qui est séquencé pour échouer tôt et bruyamment plutôt que tard et silencieusement.
 
 ## Images Docker
 
@@ -36,15 +38,28 @@ docker build -f apps/web/Dockerfile --build-arg NEXT_PUBLIC_API_URL=https://api.
 
 ## Variables d'environnement de runtime (API)
 
-Voir `.env.example` pour la liste complète. Obligatoires (`validateEnv` refuse de démarrer sans elles) : `MONGODB_URI`, `REDIS_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`. Toutes les autres (`CORS_ORIGINS`, clés de fournisseurs externes...) ont un comportement de repli sûr — voir [security.md](security.md).
+Voir `.env.production.example` pour un modèle commenté, et `.env.example` pour la liste exhaustive.
 
-## Health checks
+Obligatoires — `validateEnv` (`apps/api/src/core/config/env.validation.ts`) refuse de démarrer sans elles, **six** et non quatre :
+
+```
+MONGODB_URI  REDIS_URL  JWT_SECRET  JWT_REFRESH_SECRET
+CUSTOMER_JWT_SECRET  INTEGRATION_CREDENTIALS_KEY
+```
+
+Toutes les autres (`CORS_ORIGINS`, clés de fournisseurs externes...) ont un comportement de repli sûr — ce qui signifie en pratique que la fonctionnalité concernée est inerte, pas cassée. Voir [security.md](security.md).
+
+## Health checks et métriques
 
 ```
 GET /api/v1/health            (liveness générique)
 GET /api/v1/health/database
 GET /api/v1/health/redis
+GET /api/v1/health/queues     (compteurs BullMQ agrégés, les 12 files)
+GET /api/v1/metrics           (format d'exposition Prometheus 0.0.4)
 ```
+
+Toutes sont `@Public()` : un sonde de liveness ou un scraper Prometheus ne peut pas présenter de JWT de locataire. Aucune n'expose de donnée de locataire — uniquement des compteurs agrégés et des chiffres de process. `/metrics` accepte en plus un `Authorization: Bearer <METRICS_TOKEN>` si la variable est définie, et le Caddyfile la bloque en bordure par défaut.
 
 ## Intégration continue
 
@@ -52,6 +67,77 @@ GET /api/v1/health/redis
 
 **Non vérifié par exécution réelle** (pas d'accès à GitHub Actions depuis cet environnement) — le workflow a été relu attentivement et reproduit exactement les commandes validées manuellement des dizaines de fois pendant ce projet, mais sa toute première exécution sur GitHub doit être surveillée.
 
-## Hors scope (MVP)
+## Manifestes de déploiement
 
-Hébergement réel (aucun provider choisi/provisionné), certificats TLS, domaines personnalisés par organisation (voir [architecture.md](architecture.md), Phase 11), scaling horizontal / orchestration (Kubernetes, etc.), image Docker pour `apps/worker` (squelette non utilisé, depuis retiré du dépôt — voir `docs/IMPLEMENTATION_PLAN.md` §21.0). Le scan de vulnérabilités automatisé en CI, listé ici comme hors scope à l'origine, a depuis été ajouté (`.github/dependabot.yml`, `.github/workflows/codeql.yml` — voir [security.md](security.md)).
+| Fichier | Rôle |
+|---|---|
+| `docker-compose.prod.yml` | Les 3 images applicatives + Caddy. **Ne contient aucune base de données** : voir ci-dessous. |
+| `docker/caddy/Caddyfile` | Terminaison TLS, routage par hostname, TLS à la demande pour les domaines personnalisés des locataires. |
+| `.env.production.example` | Modèle à copier en `.env.production` (gitignoré). |
+
+**Pourquoi aucune base de données dans le compose de production.** `docker-compose.yml` (développement) démarre MongoDB et Redis en conteneurs ; le compose de production ne le fait délibérément pas. Faire tourner le datastore primaire d'un SaaS multi-locataire en conteneur voisin, sans sauvegardes gérées, sans restauration à un instant T et sans bascule, tient jusqu'au jour où ça ne tient plus. `MONGODB_URI` doit pointer vers un **replica set géré** — obligatoire, pas préférable : les écritures financières utilisent des transactions multi-documents, que MongoDB ne supporte que sur un replica set. Un mongod autonome démarrera, servira les lectures, puis échouera sur chaque écriture financière.
+
+**TLS pour les domaines personnalisés.** Les locataires ajoutent leur domaine *à l'exécution*, donc aucun fichier de configuration ne peut les lister au démarrage. Caddy utilise son TLS à la demande, avec un garde-fou : avant d'émettre un certificat, il appelle `GET /api/v1/public-sites/domain-allowed?domain=<host>`, qui répond 204 uniquement pour un domaine réellement rattaché à une organisation dont le module `website` est actif, et 404 sinon. Sans ce garde-fou, n'importe qui pourrait faire pointer un enregistrement DNS vers cet hôte et faire demander un certificat en son nom, épuisant le quota ACME de tout le déploiement en quelques minutes. Cette route est bloquée en bordure (Caddyfile) : elle ne doit être joignable que depuis le réseau interne, sinon un appelant externe pourrait énumérer les domaines configurés, une requête à la fois.
+
+## Runbook
+
+Séquencé pour qu'un échec survienne le plus tôt possible. Ne pas réordonner : chaque étape suppose la précédente vérifiée.
+
+**1. Provisionner les données avant tout le reste.** Créer le cluster MongoDB géré (replica set) et le Redis géré. Vérifier depuis la machine de déploiement, pas depuis un poste de dev :
+
+```bash
+# Doit afficher "ok" et un myState de 1 (PRIMARY)
+mongosh "$MONGODB_URI" --quiet --eval 'db.adminCommand("ping").ok'
+mongosh "$MONGODB_URI" --quiet --eval 'rs.status().myState'
+redis-cli -u "$REDIS_URL" ping
+```
+
+Si `rs.status()` échoue, l'instance n'est pas un replica set — s'arrêter ici, rien d'autre ne sert.
+
+**2. DNS.** Faire pointer `DASHBOARD_DOMAIN`, `API_DOMAIN` et `STOREFRONT_DOMAIN` (enregistrements A/AAAA) vers l'hôte. Attendre la propagation **avant** de démarrer Caddy : un Caddy qui démarre sur un DNS non propagé consomme des tentatives ACME en échec.
+
+**3. Secrets.** `cp .env.production.example .env.production`, puis remplir. Les quatre secrets se génèrent indépendamment :
+
+```bash
+openssl rand -base64 48   # JWT_SECRET
+openssl rand -base64 48   # JWT_REFRESH_SECRET        (jamais la même valeur)
+openssl rand -base64 48   # CUSTOMER_JWT_SECRET       (jamais une des deux précédentes)
+openssl rand -hex 32      # INTEGRATION_CREDENTIALS_KEY
+```
+
+Vérifier que les trois secrets JWT diffèrent réellement — réutiliser une valeur rend un token d'accès fuité également valide comme token de rafraîchissement, ou un token client valide côté dashboard.
+
+**4. Construire et démarrer.**
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production build
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+```
+
+`PUBLIC_API_URL` est injecté à la **construction** (Next.js inline les `NEXT_PUBLIC_*` dans le bundle client). Le modifier plus tard impose de reconstruire web et storefront — le changer seulement dans l'environnement livre silencieusement un bundle pointant vers localhost.
+
+**5. Vérifier que l'application est réellement vivante**, pas seulement que les conteneurs tournent :
+
+```bash
+curl -fsS https://$API_DOMAIN/api/v1/health
+curl -fsS https://$API_DOMAIN/api/v1/health/database
+curl -fsS https://$API_DOMAIN/api/v1/health/redis
+curl -fsS https://$API_DOMAIN/api/v1/health/queues     # les 12 files, voir core/queues/queue-registry.ts
+curl -fsS -o /dev/null -w '%{http_code}\n' https://$DASHBOARD_DOMAIN/login
+```
+
+`/health/database` et `/health/redis` renvoient un message générique en cas de panne — le détail réel est dans les logs du conteneur, jamais dans la réponse HTTP (volontaire, voir §27.4 D4-F de PRODUCTION_READINESS.md). En cas de 503, lire `docker compose -f docker-compose.prod.yml logs api`.
+
+**6. Créer les comptes d'intégration de paiement.** Les clés PSP ne sont pas des variables d'environnement : elles sont chiffrées en base par marché. Voir `scripts/create-platform-integration-account.ts` et `docs/architecture/integrations-platform.md` §4. Il en faut au minimum deux : `role: subscription-billing` (facturation des abonnements KORVA) et un `role: merchant-of-record` par marché de locataire. Sans le premier, `POST /subscriptions/invoices/:id/checkout` renvoie `PAYMENT_PROVIDER_NOT_CONFIGURED` — volontairement, plutôt que de retomber silencieusement sur le fournisseur manuel.
+
+**7. Vérifier un domaine personnalisé de bout en bout**, avec un domaine jetable avant le premier vrai client : le rattacher à une organisation ayant le module `website`, faire pointer son DNS vers l'hôte, puis confirmer que Caddy émet bien un certificat et que le storefront résout le locataire. Un 404 sur le domaine signifie que l'organisation n'a pas `website` activé, pas un problème de proxy.
+
+**8. Surveiller la première exécution de la CI sur `main`.** Le workflow n'a jamais été exécuté depuis cet environnement (pas d'accès à GitHub Actions) — voir §Intégration continue.
+
+### Ce que ce runbook ne couvre pas
+
+Sauvegardes et restauration testée (à configurer côté fournisseur géré), bascule et scaling horizontal, agrégation des logs vers un collecteur externe (le `StructuredLogger` émet du JSON sur stdout, prêt à être collecté, mais aucun collecteur n'est configuré), et rotation des secrets. `INTEGRATION_CREDENTIALS_KEY` en particulier n'est pas rotable sans ressaisie : la changer rend indéchiffrables toutes les informations d'identification déjà stockées.
+
+## Hors scope (MVP) — état historique
+
+Cette section décrit le périmètre du MVP et n'est plus exacte : les certificats TLS et les domaines personnalisés par organisation sont désormais couverts par les manifestes ci-dessus, et le scan de dépendances est en CI. Restent effectivement hors périmètre : l'hébergement réel (aucun provider provisionné), le scaling horizontal / l'orchestration (Kubernetes, etc.), image Docker pour `apps/worker` (squelette non utilisé, depuis retiré du dépôt — voir `docs/IMPLEMENTATION_PLAN.md` §21.0). Le scan de vulnérabilités automatisé en CI, listé ici comme hors scope à l'origine, a depuis été ajouté (`.github/dependabot.yml`, `.github/workflows/codeql.yml` — voir [security.md](security.md)).

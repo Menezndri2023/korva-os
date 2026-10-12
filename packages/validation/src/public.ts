@@ -123,3 +123,11 @@ export const resolveDomainQuerySchema = z.object({
   host: z.string().min(1).max(253),
 });
 export type ResolveDomainQuery = z.infer<typeof resolveDomainQuerySchema>;
+
+/** Caddy's on-demand-TLS `ask` endpoint is called with `?domain=<host>` — a fixed query-parameter
+ *  name set by Caddy, which is why this exists separately from resolveDomainQuerySchema's `host`
+ *  rather than reusing it. Same validation otherwise (253 = maximum DNS name length). */
+export const domainAllowedQuerySchema = z.object({
+  domain: z.string().min(1).max(253),
+});
+export type DomainAllowedQuery = z.infer<typeof domainAllowedQuerySchema>;

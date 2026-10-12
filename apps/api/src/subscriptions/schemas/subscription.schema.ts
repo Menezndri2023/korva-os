@@ -42,7 +42,13 @@ export class Subscription {
 
   /**
    * Computed, stored-only proration from the most recent mid-period changePlan() — positive
-   * means owed, negative means a credit. Never actually charged: no PSP integration exists yet.
+   * means owed, negative means a credit.
+   *
+   * Still never billed, but no longer for want of a PSP: SubscriptionInvoice bills the plan's
+   * full `priceAmount` for the period and ignores this field entirely (see
+   * SubscriptionPeriodSchedulerService.resolveRenewal). Applying it means deciding whether a
+   * mid-period upgrade is invoiced immediately or folded into the next period's amount — a
+   * pricing decision, not a missing integration.
    */
   @Prop({ type: Number, default: null })
   prorationAmount!: number | null;

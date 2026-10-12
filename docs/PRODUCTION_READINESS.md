@@ -772,3 +772,73 @@ Closes the "`emailVerifiedAt` field exists but is never set by any code path" ga
 - **Scope:** `EmailVerificationToken` (new, dedicated `email_verification_tokens` collection — deliberately separate from `PasswordResetToken`'s collection so a bug in one operation can never silently affect the other) — `userId` (unique index, one active token per user, a new request invalidates any previous unused one), `tokenHash` (`select:false`), `expiresAt`, `usedAt`. Token generated via `randomBytes(32)` (256 bits), hashed with the existing `hashToken()` utility (SHA-256) — the raw token is never persisted, logged, or returned by any API response. Expiration is applicative (30 minutes, computed at issuance, exactly the `PasswordResetToken` pattern — no Mongo-native TTL). Consumption is a single atomic `findOneAndUpdate` (`tokenHash` + `usedAt: null` + `expiresAt: {$gt: now}` → `usedAt` set), guaranteeing single use with no separate validate-then-update sequence. `AuthService.register()` issues the token and sends the email additively, in a `try/catch` that logs and never propagates — a failure here can never turn a successful account creation into a failed request. Verification is `POST /auth/verify-email`, `@Public()`, `@Throttle(AUTH_THROTTLE)`, body `{ token }` only (no `userId` accepted from the client — it is derived exclusively from the consumed token document server-side), reusing the existing `EMAIL_PROVIDER` abstraction (no new provider, no new dependency) and `interpolate(..., {escapeHtml: true})` for the email body. An invalid, expired, or already-used token all produce the identical `401 INVALID_VERIFICATION_TOKEN` — never distinguished.
 - **Validation:** `test/email-verification.e2e-spec.ts` (new, 7 scenarios) — 7/7. `auth.e2e-spec.ts` 5/5, `password-reset.e2e-spec.ts` 5/5, full unit suite 157/157 (18 suites) all re-run clean alongside it. Typecheck 0 errors, build succeeded.
 - **Verification is deliberately NOT mandatory in this lot — do not read this as more than it is:** a user with `emailVerifiedAt === null` can register, log in, and use every existing route exactly as before — `login()` and `JwtStrategy.validate()` were not modified, and no guard reads `emailVerifiedAt`. No route is gated on verification status. Whether verification should ever become mandatory (which routes, what grace period, what messaging) is an explicit, separate product decision, not made by this commit. `test/email-verification.e2e-spec.ts`'s TEST 7 exists specifically to pin this behavior down and catch any future accidental regression toward blocking. No `resend-verification` endpoint, no frontend page, and no new environment variable were added — `APP_URL` (already used by `password-reset.service.ts`) is reused as-is for the verification link.
+
+---
+
+## 29. Post-V2 Reconciliation (2026-10-12)
+
+### 29.1 Why this section exists, and a warning about §28
+
+- **Repository:** `korva-os` monorepo, branch `main`.
+- **HEAD at time of this reconciliation:** `e0c971fff715d434158bcda20b9bea97098c781a`.
+- **Nature:** a reconciliation layered on §27 and §28, not a fresh independent audit. Method: direct source inspection at this HEAD, never trusting a prior section's claim about what is or is not implemented.
+
+**§28 declares itself "the source of truth for the current state of the repository as of `HEAD = 0d1f289`." 197 commits have landed since.** Anyone who read §28 as current status between then and now was misled on at least nine items it lists as open, every one of which has shipped. §28's own closing sentence anticipated exactly this ("no future reader should treat this document as current beyond `0d1f289` without checking `git log`") — that instruction was correct and was not followed. Treat this section the same way: check `git log` against the HEAD above before trusting it.
+
+The structural lesson, recorded because it has now repeated three times (§27, §28, §29): a reconciliation section dated against a HEAD goes stale the moment the next commit lands, and each successive layer makes the document harder to read correctly rather than easier. A reader can no longer answer "is file storage implemented?" without reading four sections in order and applying three correction layers. **Recommendation: the next person to touch this document should replace §1–§29 with a single re-derived status table rather than appending §30.** Preserving the original audit text for traceability is worth something, but it has stopped being worth the cost of misleading every reader who stops before the last section.
+
+### 29.2 Findings from §1–§28 that are no longer accurate
+
+Each verified by direct inspection at this HEAD, not inferred from a commit message.
+
+| Finding, as stated in §1–§28 | Actual state | Evidence |
+|---|---|---|
+| Error tracking (Sentry or equivalent): NOT_IMPLEMENTED (§19, §24, §26 rec. 5) | **Implemented** | `core/observability/sentry.ts`, initialized in `main.ts`, wired into `common/filters/http-exception.filter.ts` |
+| Structured logging with shipping to an aggregator: NOT_IMPLEMENTED (§19, §24) | **Implemented** | `common/logging/structured-logger.service.ts` replaces Nest's `ConsoleLogger` via `app.useLogger()`; JSON output, stamped with the request id from `common/middleware/request-id.middleware.ts` |
+| 2FA: NOT_IMPLEMENTED (§6, §24, §26 rec. 7) | **Implemented** | `identity/auth/two-factor.service.ts`, `two-factor.controller.ts`, fields on `identity/schemas/user.schema.ts` |
+| API Keys (model, guard, audit-trail): NOT_IMPLEMENTED (§9, §24) | **Implemented** | `identity/schemas/api-key.schema.ts`, `core/guards/api-key.guard.ts`, `identity/api-keys/*`, incl. a role-hierarchy check on creation |
+| File/object storage for uploads: NOT_IMPLEMENTED (§14, §24, §26 rec. 9) | **Implemented** | `shared/storage/` — S3 backend + local-disk engine, `uploads.controller.ts`, `file-signature-checks.ts` |
+| Wrap Payment→Invoice and Order→Cart writes in transactions (§12, §24) | **Implemented** | `withTransaction` / `startSession` in `commerce/orders/orders.service.ts`, `finance/payments/payments.service.ts`, `booking/bookings/bookings.service.ts`, `crm/contacts/contacts.service.ts` |
+| No real payment provider; `ManualPaymentProvider` is the only adapter (§1, §10, §16, §25 basis 1) | **Implemented for Flow B** | `finance/payments/providers/` — Paystack and Flutterwave adapters, webhook signature verifiers, webhook controllers, `payment-provider.registry.ts`, `payment-provider-resolver.service.ts` |
+| Build an audit-log read API (§24 P2) | **Implemented** | `audit/audit.controller.ts` |
+| Build a custom/editable roles API (§24 P2) | **Implemented** | `identity/roles/roles.controller.ts` |
+| Split CORS policy between public and authenticated routes (§24 P2) | **Implemented** | `publicCorsMiddleware` runs before `app.enableCors()` in `main.ts`; permissive `/public/*` policy, strict allowlist for the dashboard |
+| Add account-level brute-force protection beyond IP rate limiting (§24 P1) | **Implemented** | `failedLoginAttempts` / `lockedUntil` on `user.schema.ts`, enforced against `MAX_FAILED_ATTEMPTS` in `identity/auth/auth.service.ts` |
+| Add rate limiting to public storefront write endpoints (§24 P1) | **Implemented** | `@Throttle(PUBLIC_BOOKING_THROTTLE)` on the write routes in `public/public.controller.ts` |
+| Fix booking engine to use `Organization.timezone` instead of raw UTC (§24 P2) | **Implemented** | commit `5ff82e8`, ADR-004 |
+| Metrics endpoint: NOT_IMPLEMENTED (§19, §24 P1) | **Implemented** | `health/metrics.controller.ts` — `GET /metrics`, Prometheus 0.0.4 exposition format |
+| Add dependency vulnerability scanning to CI (§24 P2) | **Implemented, in three layers** | `.github/dependabot.yml` (weekly grouped update PRs) and `.github/workflows/codeql.yml` (JS/TS SAST, weekly) already existed — §24 was stale on this before any work in this round. Neither *gates* a build on a known advisory, so a `dependency-audit` job running `pnpm audit --audit-level high` was added to `ci.yml` |
+| KORVA's own subscription billing has no PSP path; `past_due` is unreachable (§10, and `subscription.schema.ts`'s own comment) | **Implemented (invoice-first)** | `subscriptions/schemas/subscription-invoice.schema.ts`, the billing branch of `subscription-period-scheduler.service.ts`, and `subscription-billing/` for checkout + verification. See §29.4 for the one capability this deliberately does NOT provide |
+
+### 29.3 What is still genuinely open
+
+Short, and deliberately so — this is the real remaining list, not a restatement of §24.
+
+1. **Production infrastructure is still not provisioned.** No managed MongoDB/Redis, no hosting for the three apps, no DNS/TLS, placeholder secrets unrotated, no real `RESEND_API_KEY`, no SPF/DKIM/DMARC. This is the single largest remaining item and none of it is a code change — it needs accounts, credentials and billing. See `docs/deployment.md` for the step-by-step runbook.
+2. **No migration tool and no first migration.** Schema changes still rely on Mongoose `autoIndex` and ad-hoc scripts. Unchanged since §24 flagged it.
+3. **AI token-level usage is not persisted**, so per-tenant AI cost cannot be attributed. Unchanged since §24.
+4. **Login and logout are not audit-logged.** `identity/auth/auth.service.ts` never calls `AuditService`, while nearly every other state change in the codebase does. Unchanged since §24.
+5. **No Bull Board.** Largely superseded rather than open: `GET /health/queues`, `GET /metrics` and `QueueAlertingService` now cover all 12 queues (see `core/queues/queue-registry.ts`). What remains missing is only a browsable UI for inspecting and retrying individual jobs.
+6. **Mid-period proration is computed but never billed.** `changePlan()` stores
+   `prorationAmount`/`prorationCurrency` on the Subscription, and `SubscriptionInvoice` ignores
+   them — it bills the plan's full `priceAmount` for the period. A tenant upgrading mid-period is
+   therefore not charged the delta. Deliberately left open: whether the delta is invoiced
+   immediately or folded into the next period's amount is a pricing decision, not an engineering
+   gap.
+7. **Four moderate advisories and one unfixable high.** `pnpm audit` reports 5 findings, 0 critical. The high (`braces`, stack-exhaustion DoS) names `patched_versions ">=3.0.4"`, which has never been published; it reaches the tree only through `eslint-config-next` dev tooling and is the single entry in `auditConfig.ignoreGhsas`.
+
+### 29.4 One capability deliberately not built, so nobody assumes it exists
+
+**KORVA cannot charge a card on file.** Subscription renewal issues a `SubscriptionInvoice` and the tenant pays it through a hosted checkout link; there is no server-initiated recurring charge.
+
+This is a constraint of the adapters, not an oversight. `PaystackProvider.createPayment` calls `/transaction/initialize` and `FlutterwaveProvider` returns `data.link` — both are hosted-checkout flows whose status stays `'pending'` until a human completes a redirect, and nothing in the codebase stores a reusable card authorization or mandate. Wiring `createPayment` into the background sweep would mint checkout URLs nobody opens and strand every paid subscription in `past_due`, which is strictly worse than the free-renewal behavior it would replace.
+
+Adding true card-on-file billing means: an optional `chargeRecurring()` on the `PaymentProvider` interface, adapters for Paystack `charge_authorization` and Flutterwave tokenized charges, an encrypted per-organization mandate captured at first successful payment, and the webhook routing to reconcile it. That is a project phase, not an increment.
+
+### 29.5 GO / NO-GO
+
+**Still NO-GO for a public production launch, but the reason has changed, and that distinction matters.**
+
+Of the four bases §28.7 cited, three are now closed: there is a real payment path for both flows, error tracking and structured logging exist, and the account-lifecycle gaps (password reset, email verification, 2FA, brute-force lockout) are all shipped. **The remaining blocker is operational, not architectural: nothing is deployed.** No hosting, no managed data stores, no DNS/TLS, no rotated secrets.
+
+That is a materially better position than §25 and §28.7 described. The codebase is no longer the limiting factor — provisioning is. A closed pilot on real infrastructure is now a reasonable next step, and the P0 security items that made the earlier conditional-GO conditional have all been fixed.

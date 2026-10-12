@@ -1,0 +1,69 @@
+# TLS termination and host-based routing for KORVA.
+#
+# Three fixed hostnames (dashboard, API, the platform's shared storefront domain) plus any
+# number of tenant custom domains, which are added at RUNTIME and therefore cannot be listed
+# here. Those are handled by on-demand TLS below.
+
+{
+	email {$ACME_EMAIL}
+
+	on_demand_tls {
+		# Caddy calls this before issuing a certificate for a hostname it does not already have,
+		# appending ?domain=<hostname>. The API answers 204 only for a domain genuinely connected
+		# to a website-enabled organization, and 404 otherwise (see PublicController#domainAllowed).
+		#
+		# This endpoint is what makes on-demand TLS safe. Without it, anyone could point a DNS
+		# record at this host and make Caddy request a certificate on their behalf, exhausting the
+		# ACME rate limit for the whole deployment within minutes.
+		ask http://api:4000/api/v1/public-sites/domain-allowed
+
+		# Caps new-certificate issuance regardless of what `ask` approves — a second line of
+		# defense if a bug ever made the endpoint too permissive.
+		interval 2m
+		burst 5
+	}
+}
+
+# --- Dashboard ---------------------------------------------------------------
+{$DASHBOARD_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+# --- API ---------------------------------------------------------------------
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy api:4000
+
+	# /metrics exposes operational state and is @Public() because a Prometheus scraper cannot
+	# present a tenant JWT (see MetricsController). METRICS_TOKEN guards it at the application
+	# level; this blocks it at the edge as well, so a misconfigured token cannot expose it to the
+	# internet. Delete this block only if the scraper genuinely lives outside the private network,
+	# and set METRICS_TOKEN if you do.
+	@metrics path /api/v1/metrics
+	respond @metrics 404
+
+	# The on-demand-TLS `ask` endpoint is called by Caddy over the internal network and must never
+	# be reachable from outside: a public caller could enumerate which custom domains are
+	# configured, one guess at a time.
+	@domain_ask path /api/v1/public-sites/domain-allowed
+	respond @domain_ask 404
+}
+
+# --- Platform storefront domain ----------------------------------------------
+{$STOREFRONT_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy storefront:3000
+}
+
+# --- Tenant custom domains ---------------------------------------------------
+# Catch-all for every hostname not matched above. Reached only after `ask` approved the
+# certificate, so an unapproved domain never gets this far. The storefront's own middleware then
+# resolves the Host header to a tenant via GET /public/resolve-domain.
+:443 {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy storefront:3000
+}

@@ -11,8 +11,11 @@ Thumbs.db
 *.log
 
 # Environment
-.env
-.env.local
+# Every local/real env file. Negation keeps the committed templates visible — without it,
+# `.env*` would also hide .env.example and .env.production.example, which are meant to be read.
+.env*
+!.env.example
+!.env.production.example
 
 # Dependencies
 node_modules/

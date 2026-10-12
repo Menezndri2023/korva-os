@@ -52,7 +52,9 @@ export interface Subscription {
   /**
    * Computed, stored-only proration from the most recent changePlan() mid-period — positive
    * means the new plan is more expensive for the remaining period (amount owed), negative means
-   * a credit. Never actually charged/credited: there is no PSP integration yet to apply it.
+   * a credit. Still never charged/credited — SubscriptionInvoice bills the plan's full
+   * priceAmount for the period and ignores this field. Applying it is a pricing decision (invoice
+   * the delta now, or fold it into the next period), not a missing integration.
    */
   prorationAmount: number | null;
   prorationCurrency: string | null;

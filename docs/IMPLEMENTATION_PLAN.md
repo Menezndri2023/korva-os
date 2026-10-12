@@ -1,7 +1,22 @@
 # KORVA OS — Implementation Plan
 
-Statut : PHASE 1 (Foundation) à PHASE 12 (Hardening) terminées et validées — voir sections 9-20, les 12 phases du MVP sont closes. Travaux post-MVP (scheduler de réconciliation BullMQ, Lots Q/R/S/T de fiabilisation et de password reset) réalisés depuis — voir section 21.
-Dernière mise à jour : 2026-08-22
+> **⚠️ Ce document décrit le plan du MVP (phases 1 à 12) et s'arrête là.** Il a été rédigé avant
+> les deux pivots produit qui ont suivi et ne les décrit pas du tout. Ne pas le lire comme un
+> état des lieux.
+>
+> Ce qui a été livré depuis, dans l'ordre :
+> 1. **Business Operating System** (brief du 2026-08-29) — Business Graph, Decision Engine,
+>    Action Center, autonomie de l'IA, verticalisation. Voir `docs/BUSINESS_OS_AUDIT.md`.
+> 2. **Pivot V2 « 4 produits »** (brief du 2026-09-05) — KORVA CRM / INVENTORY / WEBSITE / AI
+>    vendables indépendamment sur une plateforme commune, avec entitlements par produit. Phases A
+>    à F toutes livrées. Voir `docs/KORVA_OS_V2_AUDIT.md`.
+> 3. **Production readiness** — voir `docs/PRODUCTION_READINESS.md` §29, qui est le seul état des
+>    lieux à jour du dépôt.
+>
+> Le statut ci-dessous reste exact *pour le périmètre MVP uniquement* : les 12 phases sont closes.
+
+Statut (périmètre MVP) : PHASE 1 (Foundation) à PHASE 12 (Hardening) terminées et validées — voir sections 9-20. Travaux post-MVP immédiats (scheduler de réconciliation BullMQ, Lots Q/R/S/T) en section 21.
+Dernière mise à jour du plan MVP : 2026-08-22 — bannière ci-dessus ajoutée le 2026-10-12.
 
 ## 1. Résumé du produit
 

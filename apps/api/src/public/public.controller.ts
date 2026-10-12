@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Post,
@@ -11,6 +12,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import {
   createPublicBookingSchema,
+  domainAllowedQuerySchema,
   createPublicLeadSchema,
   createPublicOrderSchema,
   listPublicOffersQuerySchema,
@@ -23,6 +25,7 @@ import {
   type CreatePublicBookingInput,
   type CreatePublicLeadInput,
   type CreatePublicOrderInput,
+  type DomainAllowedQuery,
   type ListPublicOffersQuery,
   type PublicAvailabilityQuery,
   type PublicOfferReviewsQuery,
@@ -87,6 +90,35 @@ export class PublicSitesController {
       });
     }
     return resolved;
+  }
+
+  /**
+   * Authorizes TLS certificate issuance for a tenant's custom domain — the `ask` endpoint for
+   * Caddy's on-demand TLS (see docker/caddy/Caddyfile). Without it, a reverse proxy fronting
+   * arbitrary tenant hostnames would either need every domain listed in its config at boot
+   * (impossible: tenants add domains at runtime) or would issue a certificate for any hostname
+   * pointed at it, which is an open invitation to exhaust Let's Encrypt rate limits.
+   *
+   * Returns 204 for a domain genuinely connected to a website-enabled organization and 404
+   * otherwise. Deliberately returns NO body: Caddy only reads the status code, and this route is
+   * unauthenticated, so revealing which organization owns a domain would leak more than the
+   * caller needs. It is the same question `resolve-domain` above answers — the separate route
+   * exists only because Caddy's query parameter is `domain`, not `host`. Full path, which the
+   * Caddyfile hardcodes: `/api/v1/public-sites/domain-allowed`.
+   */
+  @Get('domain-allowed')
+  @HttpCode(204)
+  async domainAllowed(
+    @Query(new ZodValidationPipe(domainAllowedQuerySchema))
+    query: DomainAllowedQuery,
+  ): Promise<void> {
+    const resolved = await this.publicService.resolveDomain(query.domain);
+    if (!resolved) {
+      throw new NotFoundException({
+        code: 'CUSTOM_DOMAIN_NOT_FOUND',
+        message: 'No organization is connected to this domain',
+      });
+    }
   }
 }
 

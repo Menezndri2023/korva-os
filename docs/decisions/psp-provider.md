@@ -1,6 +1,37 @@
 # PSP Decision Record — Payment Service Provider Selection
 
 ## Status
+**Largely resolved by implementation (2026-10-12). The sections below are kept for their market
+research, but their claims about the codebase are stale and must not be read as current.**
+
+What actually shipped since this record was written:
+
+- **Flow B (tenant → end-customer).** Real adapters exist for **Paystack** and **Flutterwave**
+  (`apps/api/src/finance/payments/providers/`), each with a webhook signature verifier and
+  controller, selected per tenant market through `PaymentProviderRegistry` /
+  `PaymentProviderResolverService`. The W3.1 statement that "no second provider implementation
+  exists anywhere in the repo" and that `finance.module.ts` "still binds ManualPaymentProvider"
+  is no longer true.
+- **Flow A (KORVA → tenant).** Billing exists, invoice-first: the subscription period scheduler
+  issues a `SubscriptionInvoice` per paid period and `subscription-billing/` turns it into a
+  hosted checkout, reusing the same two adapters via the resolver's `flow: 'subscription'`
+  branch. The `subscription.schema.ts` comment this record quotes ("Never actually charged: no
+  PSP integration exists yet") applies to `prorationAmount` specifically, and its *reason* is now
+  wrong — a PSP integration does exist. Proration is still never billed, but because it is not
+  folded into the invoice amount, not because there is nowhere to charge it.
+- **Open question #1 (where KORVA is incorporated)** was answered in
+  `docs/architecture/integrations-platform.md` §4: **Morocco**, which is what makes Flow A's
+  platform account market-independent.
+
+**Still genuinely open, and the reason this record is not simply closed:** KORVA cannot charge a
+card on file. Both adapters are hosted-checkout only, and no reusable mandate is stored anywhere
+— so recurring billing means "issue an invoice and send a payment link", not "charge the card
+automatically". The split/marketplace-settlement analysis below also remains unimplemented. See
+`docs/PRODUCTION_READINESS.md` §29.4 for what true card-on-file billing would require.
+
+---
+
+## Status at time of writing (historical)
 Proposed — awaiting KORVA stakeholder confirmation. Refined once (Wave 3, see update section below); still no single-provider pick, by design.
 
 ## Update — Wave 3 (implementation-focused refinement)

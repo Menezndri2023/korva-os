@@ -1,0 +1,85 @@
+# Production deployment of the three KORVA images behind a TLS-terminating reverse proxy.
+#
+# NOT the same file as docker-compose.yml — that one exists only to give local development a
+# MongoDB and a Redis, and it runs no application container at all.
+#
+# Data stores are deliberately absent here. Running the primary datastore of a multi-tenant SaaS
+# as a sibling container on the same host, with no managed backups, no point-in-time recovery
+# and no failover, is the kind of decision that is survivable right up until it isn't. Point
+# MONGODB_URI at a managed replica set (MongoDB Atlas or equivalent — a replica set is REQUIRED,
+# not preferred: financial writes use multi-document transactions, which MongoDB only supports on
+# one) and REDIS_URL at a managed Redis. docs/deployment.md has the full runbook.
+#
+# Usage:
+#   cp .env.production.example .env.production   # then fill it in
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# Images are built from the repo root as context, never from an app directory — each Dockerfile
+# needs the other workspace packages' manifests to resolve `workspace:*`.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: [.env.production]
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+    expose:
+      - "4000"
+    # No `ports:` on any app service on purpose — only Caddy binds a host port. An API reachable
+    # directly on :4000 would bypass TLS termination and the proxy's rate limiting.
+    depends_on:
+      caddy:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Next.js inlines NEXT_PUBLIC_* into the CLIENT bundle at BUILD time, so this is a build
+        # arg and not a runtime variable. Changing it later means rebuilding the image; setting it
+        # only in the environment silently ships a bundle pointing at localhost.
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
+
+  storefront:
+    build:
+      context: .
+      dockerfile: apps/storefront/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      STOREFRONT_DOMAIN: ${STOREFRONT_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Issued certificates live here. Losing this volume means re-requesting every certificate
+      # on the next boot, which is the fastest way to hit Let's Encrypt's rate limits.
+      - korva_caddy_data:/data
+      - korva_caddy_config:/config
+
+volumes:
+  korva_caddy_data:
+  korva_caddy_config:

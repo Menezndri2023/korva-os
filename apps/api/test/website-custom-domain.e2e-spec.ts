@@ -193,4 +193,72 @@ describe('Website custom domain (Phase E3, e2e)', () => {
       .expect(404);
     expect(asError(res.body).code).toBe('CUSTOM_DOMAIN_NOT_FOUND');
   });
+
+  /**
+   * GET /public-sites/domain-allowed — the `ask` endpoint for Caddy's on-demand TLS (see
+   * docker/caddy/Caddyfile). Caddy reads the STATUS CODE only, so these tests assert the status
+   * and the absence of a body rather than a payload shape.
+   */
+  describe('domain-allowed (on-demand TLS authorization)', () => {
+    it('204s with an empty body for a domain connected to a website-enabled organization', async () => {
+      const { accessToken, organizationId } = await setupOrg(
+        'domain-allowed-owner@korva.test',
+        'Domain Allowed Org',
+        ['website'],
+      );
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ customDomain: 'www.allowed-test.com' })
+        .expect(200);
+
+      const res = await request(server)
+        .get('/api/v1/public-sites/domain-allowed')
+        .query({ domain: 'www.allowed-test.com' })
+        .expect(204);
+      // No body at all: this route is unauthenticated, and naming the organization that owns a
+      // domain would tell an unapproved caller more than Caddy needs to know.
+      expect(res.text).toBe('');
+      expect(res.body).toEqual({});
+    });
+
+    it('404s for a domain nobody has connected, so Caddy never requests a certificate for it', async () => {
+      await request(server)
+        .get('/api/v1/public-sites/domain-allowed')
+        .query({ domain: 'attacker-pointed-this-here.example.com' })
+        .expect(404);
+    });
+
+    it('404s for a connected domain whose organization has website disabled — same product gate as resolve-domain', async () => {
+      const { accessToken, organizationId } = await setupOrg(
+        'domain-allowed-off-owner@korva.test',
+        'Domain Allowed Off Org',
+        ['website'],
+      );
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ customDomain: 'www.allowed-off-test.com' })
+        .expect(200);
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ enabledModules: ['catalog'] })
+        .expect(200);
+
+      await request(server)
+        .get('/api/v1/public-sites/domain-allowed')
+        .query({ domain: 'www.allowed-off-test.com' })
+        .expect(404);
+    });
+
+    it('rejects a missing domain parameter rather than treating it as an empty host', async () => {
+      await request(server)
+        .get('/api/v1/public-sites/domain-allowed')
+        .expect(400);
+    });
+  });
 });
