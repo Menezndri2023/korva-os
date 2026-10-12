@@ -79,6 +79,24 @@ Toutes sont `@Public()` : un sonde de liveness ou un scraper Prometheus ne peut 
 
 **TLS pour les domaines personnalisés.** Les locataires ajoutent leur domaine *à l'exécution*, donc aucun fichier de configuration ne peut les lister au démarrage. Caddy utilise son TLS à la demande, avec un garde-fou : avant d'émettre un certificat, il appelle `GET /api/v1/public-sites/domain-allowed?domain=<host>`, qui répond 204 uniquement pour un domaine réellement rattaché à une organisation dont le module `website` est actif, et 404 sinon. Sans ce garde-fou, n'importe qui pourrait faire pointer un enregistrement DNS vers cet hôte et faire demander un certificat en son nom, épuisant le quota ACME de tout le déploiement en quelques minutes. Cette route est bloquée en bordure (Caddyfile) : elle ne doit être joignable que depuis le réseau interne, sinon un appelant externe pourrait énumérer les domaines configurés, une requête à la fois.
 
+## Modèle de coût Redis — à lire avant de choisir un hébergeur
+
+BullMQ est conçu en supposant que **les commandes Redis sont gratuites**, et cette application en fait un usage intensif au repos. Une instance d'API ouvre en permanence :
+
+- **10 `Worker`** — chacun réémet un `bzpopmin` bloquant toutes les quelques secondes sur une file vide ;
+- **13 listeners `QueueEvents`** (`QueueAlertingService`, un par file du registre) — chacun une boucle `XREAD BLOCK` qui se réarme de la même façon.
+
+Soit **~23 boucles bloquantes permanentes, même avec zéro activité métier** : ordre de grandeur quelques commandes par seconde, donc plusieurs millions de commandes par mois et par instance, sans qu'aucun client n'ait rien fait.
+
+**Conséquence pratique : un Redis facturé à la requête (Upstash pay-as-you-go et équivalents) est une incompatibilité d'architecture, pas un réglage à ajuster.** Privilégier un Redis à **prix fixe** — on paie une capacité, pas des requêtes de sondage.
+
+Si la facturation à la requête est imposée, deux atténuations, par ordre de rapport gain/risque :
+
+1. `QUEUE_ALERTING_ENABLED=false` — supprime 13 des 23 boucles, soit **plus de la moitié** du trafic au repos, immédiatement. On perd la ligne de log `QUEUE_JOB_FAILED` ; on garde les compteurs `failed` par file, que `GET /health/queues` et `GET /metrics` lisent à la demande. Un scrapeur Prometheus voit donc toujours les échecs, à son intervalle de scrape.
+2. Fusionner les 9 schedulers de balayage en une seule file avec un nom de job discriminant (10 workers → 2). Gain important, mais c'est un refactor réel touchant des flux financiers — à ne pas improviser.
+
+Ne pas chercher à réduire les intervalles des schedulers pour économiser : ce ne sont pas eux qui coûtent. Un balayage toutes les 15 minutes représente 4 commandes par heure ; les boucles bloquantes, elles, en représentent des milliers.
+
 ## Runbook
 
 Séquencé pour qu'un échec survienne le plus tôt possible. Ne pas réordonner : chaque étape suppose la précédente vérifiée.

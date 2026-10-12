@@ -55,10 +55,38 @@ export class QueueAlertingService implements OnModuleInit, OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {}
 
   onModuleInit(): void {
+    if (!this.isEnabled()) {
+      this.logger.log(
+        `Queue failure alerting disabled (QUEUE_ALERTING_ENABLED=false) — ${QUEUE_NAMES.length} QueueEvents listeners not opened. Failure counts remain visible via GET /health/queues and GET /metrics.`,
+      );
+      return;
+    }
     const url = this.configService.getOrThrow<string>('REDIS_URL');
     for (const queueName of QUEUE_NAMES) {
       this.startListening(queueName, url);
     }
+  }
+
+  /**
+   * Opt-OUT, not opt-in: leaving it on is the right default, and a deployment that turns it off
+   * should have decided to.
+   *
+   * Why it needs a switch at all — Redis cost. Each QueueEvents listener holds a connection
+   * running an `XREAD BLOCK` loop that re-arms every few seconds whether or not anything ever
+   * happens, so these 13 listeners generate a constant command rate with zero business
+   * activity. On a per-request-billed Redis (Upstash pay-as-you-go and similar) they are the
+   * single largest idle cost in the application, roughly 13 of the ~23 permanent blocking loops
+   * an API instance opens — more than half, for a capability whose entire output is one log
+   * line per failing queue every five minutes.
+   *
+   * What is lost when off: the `QUEUE_JOB_FAILED` log line, i.e. the push signal. What is NOT
+   * lost: the `failed` counts per queue, which `GET /health/queues` and `GET /metrics` read
+   * through QueueMetricsService on demand rather than by holding a subscription open. A
+   * deployment that scrapes /metrics therefore still sees failures; it learns about them on its
+   * scrape interval instead of within five minutes.
+   */
+  private isEnabled(): boolean {
+    return this.configService.get<string>('QUEUE_ALERTING_ENABLED') !== 'false';
   }
 
   /**

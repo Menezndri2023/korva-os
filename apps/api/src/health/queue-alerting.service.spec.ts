@@ -50,9 +50,16 @@ jest.mock('bullmq', () => ({
 
 import { QueueAlertingService } from './queue-alerting.service';
 
-function buildService(): QueueAlertingService {
+function buildService(
+  options: { alertingEnabled?: string } = {},
+): QueueAlertingService {
   const configService = {
     getOrThrow: jest.fn().mockReturnValue('redis://localhost:6379'),
+    get: jest
+      .fn()
+      .mockImplementation((key: string) =>
+        key === 'QUEUE_ALERTING_ENABLED' ? options.alertingEnabled : undefined,
+      ),
   } as unknown as ConfigService;
   return new QueueAlertingService(configService);
 }
@@ -283,5 +290,36 @@ describe('QueueAlertingService', () => {
     for (const instance of instances) {
       expect(instance.close).toHaveBeenCalledTimes(2);
     }
+  });
+
+  describe('QUEUE_ALERTING_ENABLED opt-out', () => {
+    it('opens no listener at all when set to "false"', () => {
+      const service = buildService({ alertingEnabled: 'false' });
+
+      service.onModuleInit();
+
+      // The point of the switch: 13 permanent XREAD BLOCK loops are the largest idle Redis
+      // cost in the app, and on per-request billing they are charged whether or not a job
+      // ever fails.
+      expect(instances).toHaveLength(0);
+    });
+
+    it('stays ON for any other value, including unset — opt-out, never opt-in', () => {
+      for (const value of [undefined, 'true', '', 'FALSE', '0']) {
+        instances.length = 0;
+        const service = buildService({ alertingEnabled: value });
+
+        service.onModuleInit();
+
+        expect(instances).toHaveLength(ALL_QUEUE_NAMES.length);
+      }
+    });
+
+    it('destroy is a no-op when nothing was ever started', async () => {
+      const service = buildService({ alertingEnabled: 'false' });
+      service.onModuleInit();
+
+      await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+    });
   });
 });
