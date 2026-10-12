@@ -1,12 +1,17 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import type { KorvaProduct } from '@korva/types';
-import { resolveEffectiveModules } from '@korva/types';
+import {
+  KORVA_PRODUCTS,
+  PRODUCT_MODULES,
+  resolveEffectiveModules,
+} from '@korva/types';
 import { PlansService } from './plans.service';
 import { SubscriptionsRepository } from './subscriptions.repository';
 import { SubscriptionDocument } from './schemas/subscription.schema';
@@ -65,11 +70,80 @@ export class SubscriptionsService {
     private readonly eventBus: EventBusService,
   ) {}
 
+  /**
+   * A tenant may switch a product OFF freely — restricting its own access is always its call.
+   * Switching one ON is only allowed when the plan already grants every module that product
+   * carries, i.e. when the override changes nothing about entitlement.
+   *
+   * Without this, the route was a monetization hole rather than a feature: it is gated on
+   * `settings.manage`, which the tenant's own OWNER holds, and `resolveEffectiveModules` grants
+   * a `true` product's modules "even if the plan doesn't include them (an add-on)" — so any
+   * admin on the free plan could grant itself any of the four products in one request. The four
+   * products are independently *entitleable* but there is no per-product price anywhere in the
+   * model, so self-service add-ons were free by construction.
+   *
+   * Genuine add-ons beyond a plan are still possible, via scripts/set-product-overrides.ts —
+   * deploy access as the authorization boundary, the same pattern manage-plans.ts and
+   * create-platform-integration-account.ts already use for operator-only actions this RBAC
+   * model has no role for.
+   */
+  private async assertOverridesWithinPlan(
+    subscription: SubscriptionDocument,
+    productOverrides: Partial<Record<KorvaProduct, boolean>>,
+  ): Promise<void> {
+    const granting = KORVA_PRODUCTS.filter(
+      (product) => productOverrides[product] === true,
+    );
+    if (granting.length === 0) return;
+
+    const plan = await this.plansService.getById(
+      subscription.planId.toString(),
+    );
+    const planModules = new Set(plan.modules);
+    for (const product of granting) {
+      const missing = PRODUCT_MODULES[product].filter(
+        (module) => !planModules.has(module),
+      );
+      if (missing.length > 0) {
+        throw new ForbiddenException({
+          code: 'PRODUCT_NOT_IN_PLAN',
+          message: `Your plan ("${plan.name}") does not include the "${product}" product`,
+          details: { product, plan: plan.key, missingModules: missing },
+        });
+      }
+    }
+  }
+
+  /**
+   * The currency every plan lookup for this organization is scoped to. Read straight off the
+   * Organization rather than cached: it is set at onboarding and effectively immutable, and a
+   * stale value here would mean selling a plan in the wrong currency.
+   */
+  private async organizationCurrency(
+    organizationId: string,
+  ): Promise<string | undefined> {
+    const organization = await this.organizationModel
+      .findById(organizationId)
+      .select('currency')
+      .exec();
+    // `undefined` makes PlansService fall back to the platform default — correct for an
+    // organization that somehow has no currency, rather than failing the whole lookup.
+    return organization?.currency ?? undefined;
+  }
+
   /** Called once, from OrganizationsService.createForOwner — every organization starts on "free". */
   async createDefaultSubscription(
     organizationId: string,
   ): Promise<SubscriptionDocument> {
-    const plan = await this.plansService.getByKey('free');
+    // The free plan is looked up in the organization's OWN currency, not the platform default:
+    // a subscription is bound to the currency it was sold in, and starting every tenant on a
+    // EUR subscription would make a later upgrade to an XOF tier a currency change rather than
+    // a plan change. PlansService seeds "free" in every supported currency precisely so this
+    // lookup can never miss.
+    const plan = await this.plansService.getByKey(
+      'free',
+      await this.organizationCurrency(organizationId),
+    );
     const now = new Date();
     return this.subscriptionsRepository.create({
       organizationId: new Types.ObjectId(organizationId),
@@ -104,7 +178,13 @@ export class SubscriptionsService {
     userId: string,
     planKey: string,
   ): Promise<SubscriptionDocument> {
-    const plan = await this.plansService.getByKey(planKey);
+    // Resolved in the organization's own currency: a tier the platform prices in EUR but not in
+    // this tenant's currency is simply not sellable to them, and PLAN_NOT_FOUND says so rather
+    // than quietly billing them in a currency their provider cannot charge.
+    const plan = await this.plansService.getByKey(
+      planKey,
+      await this.organizationCurrency(organizationId),
+    );
 
     const existing =
       await this.subscriptionsRepository.findForOrganization(organizationId);
@@ -287,7 +367,8 @@ export class SubscriptionsService {
     userId: string,
     productOverrides: Partial<Record<KorvaProduct, boolean>>,
   ): Promise<SubscriptionDocument> {
-    await this.getForOrganization(organizationId);
+    const subscription = await this.getForOrganization(organizationId);
+    await this.assertOverridesWithinPlan(subscription, productOverrides);
 
     const updated = await this.subscriptionsRepository.update(organizationId, {
       productOverrides,

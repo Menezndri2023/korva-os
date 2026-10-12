@@ -9,22 +9,34 @@ export class PlansRepository {
     @InjectModel(Plan.name) private readonly planModel: Model<PlanDocument>,
   ) {}
 
-  upsertByKey(key: string, data: Partial<Plan>): Promise<PlanDocument> {
+  upsertByKeyAndCurrency(
+    key: string,
+    priceCurrency: string,
+    data: Partial<Plan>,
+  ): Promise<PlanDocument> {
     return this.planModel
       .findOneAndUpdate(
-        { key },
+        { key, priceCurrency },
         { $setOnInsert: data },
         { upsert: true, new: true },
       )
       .exec();
   }
 
-  findAll(): Promise<PlanDocument[]> {
-    return this.planModel.find().sort({ priceAmount: 1 }).exec();
+  /** Plans sellable in one currency, cheapest first. Never every plan in every currency: a
+   *  tenant must not be shown a price they cannot be charged in. */
+  findAllForCurrency(priceCurrency: string): Promise<PlanDocument[]> {
+    return this.planModel
+      .find({ priceCurrency })
+      .sort({ priceAmount: 1 })
+      .exec();
   }
 
-  findByKey(key: string): Promise<PlanDocument | null> {
-    return this.planModel.findOne({ key }).exec();
+  findByKeyAndCurrency(
+    key: string,
+    priceCurrency: string,
+  ): Promise<PlanDocument | null> {
+    return this.planModel.findOne({ key, priceCurrency }).exec();
   }
 
   findById(id: string): Promise<PlanDocument | null> {
@@ -43,12 +55,17 @@ export class PlansRepository {
   /** `$set`, unlike upsertByKey's `$setOnInsert` — the one way to actually change an existing
    *  plan's price/modules/limits. Never upserts: updating a plan that doesn't exist is a
    *  script-usage error, not a create. */
-  updateByKey(
+  updateByKeyAndCurrency(
     key: string,
+    priceCurrency: string,
     updates: Partial<Plan>,
   ): Promise<PlanDocument | null> {
     return this.planModel
-      .findOneAndUpdate({ key }, { $set: updates }, { new: true })
+      .findOneAndUpdate(
+        { key, priceCurrency },
+        { $set: updates },
+        { new: true },
+      )
       .exec();
   }
 }

@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   changePlanSchema,
+  listPlansQuerySchema,
   type ChangePlanInput,
+  type ListPlansQuery,
   cancelSubscriptionSchema,
   type CancelSubscriptionInput,
   updateProductOverridesSchema,
@@ -30,10 +32,23 @@ export class SubscriptionsController {
     private readonly subscriptionInvoicesRepository: SubscriptionInvoicesRepository,
   ) {}
 
+  /**
+   * The plans sellable in one currency. `@SkipTenant()` is kept — this is a price list, not
+   * tenant data — so the currency arrives as a query parameter rather than from tenant context,
+   * and the caller (Settings) passes its own organization's currency. Omitted, it falls back to
+   * the platform's default billing currency.
+   *
+   * Validated against SUPPORTED_BILLING_CURRENCIES rather than accepted free-form: an unknown
+   * currency would otherwise return an empty list, which reads as "we have no plans" instead of
+   * "that is not a currency we bill in".
+   */
   @SkipTenant()
   @Get('plans')
-  listPlans() {
-    return this.plansService.list();
+  listPlans(
+    @Query(new ZodValidationPipe(listPlansQuerySchema))
+    query: ListPlansQuery,
+  ) {
+    return this.plansService.list(query.currency);
   }
 
   @Get('subscriptions/me')

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { KORVA_PRODUCTS } from "@korva/types";
+import { KORVA_PRODUCTS, SUPPORTED_BILLING_CURRENCIES } from "@korva/types";
 
 export const changePlanSchema = z.object({
   planKey: z.string().min(1),
@@ -25,3 +25,10 @@ export const updateProductOverridesSchema = z.object({
 export type UpdateProductOverridesInput = z.infer<
   typeof updateProductOverridesSchema
 >;
+
+/** Query for GET /plans — see SubscriptionsController.listPlans for why the currency is a
+ *  parameter rather than tenant context. Optional: omitted means the platform default. */
+export const listPlansQuerySchema = z.object({
+  currency: z.enum(SUPPORTED_BILLING_CURRENCIES).optional(),
+});
+export type ListPlansQuery = z.infer<typeof listPlansQuerySchema>;

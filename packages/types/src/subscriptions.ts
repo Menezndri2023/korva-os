@@ -19,6 +19,24 @@ export interface Plan {
 }
 
 /**
+ * Currencies KORVA can bill a tenant in. The same list the onboarding and settings screens
+ * offer for `Organization.currency`, which is what decides which Plan documents an organization
+ * is shown — see PlansService.list.
+ *
+ * Previously duplicated as a bare `CURRENCIES` array in both apps/web/src/app/onboarding/page.tsx
+ * and .../dashboard/settings/page.tsx, with nothing tying either to the billing layer. A tenant
+ * could be created with a currency no plan was ever priced in.
+ */
+export const SUPPORTED_BILLING_CURRENCIES = [
+  "EUR",
+  "XOF",
+  "MAD",
+  "USD",
+  "CAD",
+] as const;
+export type BillingCurrency = (typeof SUPPORTED_BILLING_CURRENCIES)[number];
+
+/**
  * "trialing" is intentionally NOT modeled yet: Plan (see plan.schema.ts) has no trial-related
  * field anywhere in this codebase, so there is no real trial concept to drive that state —
  * adding it here would be a state nothing could ever transition into or out of. Add it once a

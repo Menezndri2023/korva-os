@@ -16,6 +16,7 @@ import {
   STOREFRONT_TEMPLATES,
   STOREFRONT_PALETTES,
   STOREFRONT_FONT_PAIRINGS,
+  SUPPORTED_BILLING_CURRENCIES,
   SYSTEM_EVENTS,
   planMeetsMinimum,
   type StorefrontFontPairingKey,
@@ -136,7 +137,10 @@ const COUNTRIES = [
   { code: "BE", label: "Belgique" },
   { code: "CA", label: "Canada" },
 ];
-const CURRENCIES = ["EUR", "XOF", "MAD", "USD", "CAD"];
+// Imported, no longer re-declared here and in onboarding: the list now also decides which
+// Plan documents exist (see PlansService.list), so a local copy could drift from what is
+// actually billable.
+const CURRENCIES = [...SUPPORTED_BILLING_CURRENCIES];
 const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
 // Wave 4 Stage 2 — one card per known integration TYPE, not per row returned by the API: the
@@ -242,9 +246,19 @@ export default function SettingsPage() {
     queryFn: () => apiClient.get<SubscriptionSummary>("/subscriptions/me"),
     enabled: authReady,
   });
+  // Scoped to the organization's own currency: plans are one document per (tier, currency), and
+  // showing a price the tenant cannot be charged in would be worse than showing none. Keyed on
+  // the currency too, so switching organizations refetches instead of serving a cached list in
+  // the wrong currency.
+  const organizationCurrency = organization?.currency;
   const { data: plans } = useQuery({
-    queryKey: ["plans"],
-    queryFn: () => apiClient.get<Plan[]>("/plans"),
+    queryKey: ["plans", organizationCurrency],
+    queryFn: () =>
+      apiClient.get<Plan[]>(
+        organizationCurrency
+          ? `/plans?currency=${encodeURIComponent(organizationCurrency)}`
+          : "/plans",
+      ),
     enabled: authReady,
   });
   // settings.manage-gated (see ai.controller.ts) — non-admin members get PERMISSION_DENIED,

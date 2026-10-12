@@ -117,10 +117,25 @@ async function run() {
   });
 
   try {
-    const plansRepository = app.get(PlansRepository);
-    const existing = await plansRepository.findByKey(args.key);
+    // --currency is now part of a plan's IDENTITY, not just a field on it: a tier is one
+    // document per currency (see plan.schema.ts's compound unique index), so "--key starter"
+    // alone no longer names a single plan. Required for every operation, not only creation.
+    if (!args.currency) {
+      throw new Error(
+        '--currency is required: a plan is identified by (key, currency), so "--key starter" alone is ambiguous',
+      );
+    }
+    const currency = args.currency;
 
-    console.log(`${args.apply ? 'APPLY' : 'DRY RUN'} — plan "${args.key}"`);
+    const plansRepository = app.get(PlansRepository);
+    const existing = await plansRepository.findByKeyAndCurrency(
+      args.key,
+      currency,
+    );
+
+    console.log(
+      `${args.apply ? 'APPLY' : 'DRY RUN'} — plan "${args.key}" in ${currency}`,
+    );
     console.log(`  mode: ${existing ? 'UPDATE existing plan' : 'CREATE new plan'}`);
 
     if (!existing) {
@@ -153,7 +168,7 @@ async function run() {
     }
 
     const result = existing
-      ? await plansRepository.updateByKey(args.key, fields)
+      ? await plansRepository.updateByKeyAndCurrency(args.key, currency, fields)
       : await plansRepository.create({
           key: args.key,
           name: args.name!,

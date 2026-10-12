@@ -12,6 +12,7 @@ import {
 } from "@korva/validation";
 import {
   KORVA_MODULES,
+  SUPPORTED_BILLING_CURRENCIES,
   VERTICAL_TEMPLATES,
   type KorvaModule,
   type Organization,
@@ -44,7 +45,9 @@ const COUNTRIES = [
   { code: "CA", label: "Canada" },
 ];
 
-const CURRENCIES = ["EUR", "XOF", "MAD", "USD", "CAD"];
+// See the matching comment in dashboard/settings/page.tsx — one shared list, because it now
+// also determines which Plan documents are seeded.
+const CURRENCIES = [...SUPPORTED_BILLING_CURRENCIES];
 
 // createOrganizationSchema (packages/validation/src/organization.ts) already requires and
 // accepts `timezone: z.string().min(1)` — the payload below was already sending it, just

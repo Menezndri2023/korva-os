@@ -63,7 +63,12 @@ describe('SubscriptionsService.changePlan — enabledModules synchronization', (
     const auditService = { record } as unknown as AuditService;
 
     const exec = jest.fn().mockResolvedValue(options.organization);
-    const findById = jest.fn().mockReturnValue({ exec });
+    // `.select()` is chained by SubscriptionsService#organizationCurrency, which reads only the
+    // currency field; the enabledModules path calls findById().exec() with no select. One
+    // chainable stub covers both, so the two fakes below do not need to diverge.
+    const findById = jest
+      .fn()
+      .mockReturnValue({ exec, select: jest.fn().mockReturnValue({ exec }) });
     const organizationModel = {
       findById,
     } as unknown as Model<OrganizationDocument>;
@@ -196,7 +201,12 @@ describe('SubscriptionsService.changePlan — proration', () => {
     // above; NEW_PLAN_EXPENSIVE.modules is empty and findById resolves null, so that branch is
     // a no-op here.
     const exec = jest.fn().mockResolvedValue(null);
-    const findById = jest.fn().mockReturnValue({ exec });
+    // `.select()` is chained by SubscriptionsService#organizationCurrency, which reads only the
+    // currency field; the enabledModules path calls findById().exec() with no select. One
+    // chainable stub covers both, so the two fakes below do not need to diverge.
+    const findById = jest
+      .fn()
+      .mockReturnValue({ exec, select: jest.fn().mockReturnValue({ exec }) });
     const organizationModel = {
       findById,
     } as unknown as Model<OrganizationDocument>;
