@@ -112,9 +112,40 @@ redis-cli -u "$REDIS_URL" ping
 
 Si `rs.status()` échoue, l'instance n'est pas un replica set — s'arrêter ici, rien d'autre ne sert.
 
-**2. DNS.** Faire pointer `DASHBOARD_DOMAIN`, `API_DOMAIN` et `STOREFRONT_DOMAIN` (enregistrements A/AAAA) vers l'hôte. Attendre la propagation **avant** de démarrer Caddy : un Caddy qui démarre sur un DNS non propagé consomme des tentatives ACME en échec.
+**2. Provisionner l'hôte applicatif.** Étape absente de la première version de ce runbook, ce qui rendait l'étape DNS impossible à exécuter : un enregistrement A doit pointer vers une adresse, et il n'y en a pas avant qu'un hôte existe.
 
-**3. Secrets.** `cp .env.production.example .env.production`, puis remplir. Les quatre secrets se génèrent indépendamment :
+**Ce que `docker-compose.prod.yml` exige de cet hôte**, et qui restreint réellement le choix :
+
+- **Docker + Docker Compose**, et le contrôle des **ports 80 et 443**. Caddy est le point d'entrée TLS ; il doit pouvoir les lier.
+- **Une IP publique stable** (v4, et v6 si tu publies des AAAA).
+- **Le TLS à la demande pour les domaines des locataires impose que Caddy soit l'edge.** C'est le point qui disqualifie la plupart des PaaS : Vercel, Render ou Fly terminent le TLS eux-mêmes et exposent leur propre API de domaines personnalisés, ils ne laissent pas un Caddy demander des certificats pour des hostnames arbitraires à l'exécution. Avec eux, il faudrait réécrire la résolution de domaine contre leur API au lieu d'utiliser `/public-sites/domain-allowed`.
+- **Un volume persistant** pour `/data` de Caddy. Le perdre signifie re-demander chaque certificat au prochain démarrage, soit le moyen le plus rapide d'atteindre les limites de Let's Encrypt.
+
+**En pratique : un VPS** (Hetzner, OVH, Scaleway, DigitalOcean...), pas un PaaS. Dimensionnement de départ raisonnable pour les 3 conteneurs + Caddy : 2 vCPU / 4 Go. Les données vivant chez Atlas et Upstash, l'hôte ne stocke que les images et les certificats.
+
+**Région** : les bases sont déjà provisionnées, donc choisir la région de l'hôte au plus près du cluster Atlas — chaque requête applicative traverse ce lien, et 80 ms de latence par aller-retour se paient sur toutes les pages.
+
+**3. DNS.** Trois enregistrements A (et AAAA si l'hôte a une IPv6) vers l'IP de l'étape 2 :
+
+| Nom | Type | Valeur |
+|---|---|---|
+| `DASHBOARD_DOMAIN` (ex. `app.exemple.com`) | A | IP de l'hôte |
+| `API_DOMAIN` (ex. `api.exemple.com`) | A | IP de l'hôte |
+| `STOREFRONT_DOMAIN` (ex. `sites.exemple.com`) | A | IP de l'hôte |
+
+Les domaines personnalisés des locataires ne figurent pas ici : c'est le locataire qui crée un enregistrement vers cette même IP, et Caddy obtient le certificat à la demande après validation par `/public-sites/domain-allowed`.
+
+Vérifier la propagation **avant** de démarrer Caddy — un Caddy lancé sur un DNS non résolu consomme des tentatives ACME en échec, et Let's Encrypt les limite :
+
+```bash
+for d in "$DASHBOARD_DOMAIN" "$API_DOMAIN" "$STOREFRONT_DOMAIN"; do
+  echo "$d -> $(dig +short A "$d" | tr '\n' ' ')"
+done
+```
+
+Chaque ligne doit afficher l'IP de l'hôte. Une ligne vide signifie que la propagation n'est pas terminée : attendre, ne pas démarrer.
+
+**4. Secrets.** `cp .env.production.example .env.production`, puis remplir. Les quatre secrets se génèrent indépendamment :
 
 ```bash
 openssl rand -base64 48   # JWT_SECRET
@@ -125,7 +156,7 @@ openssl rand -hex 32      # INTEGRATION_CREDENTIALS_KEY
 
 Vérifier que les trois secrets JWT diffèrent réellement — réutiliser une valeur rend un token d'accès fuité également valide comme token de rafraîchissement, ou un token client valide côté dashboard.
 
-**4. Appliquer les migrations — AVANT de démarrer l'API.**
+**5. Appliquer les migrations — AVANT de démarrer l'API.**
 
 ```bash
 # Dry run : liste ce qui est en attente, n'écrit rien
@@ -145,7 +176,7 @@ Le runner n'est volontairement pas exécuté au démarrage de l'application : pe
 
 > ⚠️ **Le flag `-r ./scripts/support/ts-extension-resolver.cjs` est obligatoire** pour *tous* les scripts de `apps/api/scripts/`, pas seulement celui-ci. Sans lui, chacun s'arrête sur `Cannot find module './rbac.js'` avant sa première ligne : les packages partagés s'importent avec des extensions `.ts` explicites (ADR-001) que `rewriteRelativeImportExtensions` réécrit en `.js`, lesquels n'existent pas sur disque. Les commandes documentées dans ces scripts étaient toutes fausses jusqu'au 2026-10-12.
 
-**5. Construire et démarrer.**
+**6. Construire et démarrer.**
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production build
@@ -154,7 +185,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 
 `PUBLIC_API_URL` est injecté à la **construction** (Next.js inline les `NEXT_PUBLIC_*` dans le bundle client). Le modifier plus tard impose de reconstruire web et storefront — le changer seulement dans l'environnement livre silencieusement un bundle pointant vers localhost.
 
-**6. Vérifier que l'application est réellement vivante**, pas seulement que les conteneurs tournent :
+**7. Vérifier que l'application est réellement vivante**, pas seulement que les conteneurs tournent :
 
 ```bash
 curl -fsS https://$API_DOMAIN/api/v1/health
@@ -166,11 +197,11 @@ curl -fsS -o /dev/null -w '%{http_code}\n' https://$DASHBOARD_DOMAIN/login
 
 `/health/database` et `/health/redis` renvoient un message générique en cas de panne — le détail réel est dans les logs du conteneur, jamais dans la réponse HTTP (volontaire, voir §27.4 D4-F de PRODUCTION_READINESS.md). En cas de 503, lire `docker compose -f docker-compose.prod.yml logs api`.
 
-**7. Créer les comptes d'intégration de paiement.** Les clés PSP ne sont pas des variables d'environnement : elles sont chiffrées en base par marché. Voir `scripts/create-platform-integration-account.ts` et `docs/architecture/integrations-platform.md` §4. Il en faut au minimum deux : `role: subscription-billing` (facturation des abonnements KORVA) et un `role: merchant-of-record` par marché de locataire. Sans le premier, `POST /subscriptions/invoices/:id/checkout` renvoie `PAYMENT_PROVIDER_NOT_CONFIGURED` — volontairement, plutôt que de retomber silencieusement sur le fournisseur manuel.
+**8. Créer les comptes d'intégration de paiement.** Les clés PSP ne sont pas des variables d'environnement : elles sont chiffrées en base par marché. Voir `scripts/create-platform-integration-account.ts` et `docs/architecture/integrations-platform.md` §4. Il en faut au minimum deux : `role: subscription-billing` (facturation des abonnements KORVA) et un `role: merchant-of-record` par marché de locataire. Sans le premier, `POST /subscriptions/invoices/:id/checkout` renvoie `PAYMENT_PROVIDER_NOT_CONFIGURED` — volontairement, plutôt que de retomber silencieusement sur le fournisseur manuel.
 
-**8. Vérifier un domaine personnalisé de bout en bout**, avec un domaine jetable avant le premier vrai client : le rattacher à une organisation ayant le module `website`, faire pointer son DNS vers l'hôte, puis confirmer que Caddy émet bien un certificat et que le storefront résout le locataire. Un 404 sur le domaine signifie que l'organisation n'a pas `website` activé, pas un problème de proxy.
+**9. Vérifier un domaine personnalisé de bout en bout**, avec un domaine jetable avant le premier vrai client : le rattacher à une organisation ayant le module `website`, faire pointer son DNS vers l'hôte, puis confirmer que Caddy émet bien un certificat et que le storefront résout le locataire. Un 404 sur le domaine signifie que l'organisation n'a pas `website` activé, pas un problème de proxy.
 
-**9. Surveiller la première exécution de la CI sur `main`.** Le workflow n'a jamais été exécuté depuis cet environnement (pas d'accès à GitHub Actions) — voir §Intégration continue.
+**10. Surveiller la première exécution de la CI sur `main`.** Le workflow n'a jamais été exécuté depuis cet environnement (pas d'accès à GitHub Actions) — voir §Intégration continue.
 
 ### Ce que ce runbook ne couvre pas
 
