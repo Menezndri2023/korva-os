@@ -13,8 +13,8 @@
  * Idempotent: re-running with no organizations left to fix makes zero writes.
  *
  * Usage:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/backfill-enabled-modules.ts            (dry run, default)
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/backfill-enabled-modules.ts --apply    (writes changes)
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/backfill-enabled-modules.ts            (dry run, default)
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/backfill-enabled-modules.ts --apply    (writes changes)
  */
 import { NestFactory } from '@nestjs/core';
 import { getModelToken } from '@nestjs/mongoose';

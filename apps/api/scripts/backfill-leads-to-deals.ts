@@ -31,8 +31,8 @@
  * risk despite not grouping by organizationId up front.
  *
  * Usage:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/backfill-leads-to-deals.ts            (dry run, default)
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/backfill-leads-to-deals.ts --apply    (writes changes)
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/backfill-leads-to-deals.ts            (dry run, default)
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/backfill-leads-to-deals.ts --apply    (writes changes)
  */
 import { NestFactory } from '@nestjs/core';
 import { getModelToken } from '@nestjs/mongoose';

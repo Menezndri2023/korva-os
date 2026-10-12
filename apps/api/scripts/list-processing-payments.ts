@@ -25,7 +25,7 @@
  * ProcessingPaymentSummary type declares. Makes no provider/network call of any kind.
  *
  * Usage:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/list-processing-payments.ts \
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/list-processing-payments.ts \
  *     [--page 1] [--limit 20] [--organization-id <id>]
  *
  * All flags optional. --organization-id restricts the listing to one tenant (an operator-only

@@ -19,7 +19,7 @@
  * account's safe summary (id/domain/provider/role/market/status) is shown.
  *
  * Usage:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/create-platform-integration-account.ts \
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/create-platform-integration-account.ts \
  *     --domain payment --provider flutterwave --role merchant-of-record --market CI \
  *     --secret "$FLUTTERWAVE_SECRET_KEY"                                                  (dry run, default — validates and prints, writes nothing)
  *

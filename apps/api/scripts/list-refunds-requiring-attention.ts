@@ -22,7 +22,7 @@
  * exactly what is and isn't exposed, and why.
  *
  * Usage:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/list-refunds-requiring-attention.ts \
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/list-refunds-requiring-attention.ts \
  *     [--page 1] [--limit 20] [--organization-id <id>]
  *
  * All flags optional. --organization-id restricts the listing to one tenant (an operator-only

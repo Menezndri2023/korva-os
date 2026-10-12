@@ -26,7 +26,7 @@
  * is a discovery/triage tool, not a payload viewer.
  *
  * Usage:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/list-unresolved-webhook-events.ts \
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/list-unresolved-webhook-events.ts \
  *     [--page 1] [--limit 20] [--provider flutterwave] [--domain payment]
  *
  * All flags optional. --limit is capped at 100 (mirrors this codebase's own

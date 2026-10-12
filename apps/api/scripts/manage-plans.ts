@@ -18,8 +18,13 @@
  * behavior in SubscriptionsService; adding a real deactivation concept is a separate, real
  * product decision, not something to bolt onto this script.
  *
+ * NOTE on the `-r ./scripts/support/ts-extension-resolver.cjs` flag below: it is REQUIRED, not
+ * optional polish. Without it every script in this directory dies on
+ * `Cannot find module './rbac.js'` before reaching its first line — see that file's own comment
+ * for why. The commands documented here were wrong until 2026-10-12.
+ *
  * Usage:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/manage-plans.ts \
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/manage-plans.ts \
  *     --key starter --name Starter --price 29 --currency EUR --interval month \
  *     --modules crm,catalog,booking,commerce,finance,communication,analytics \
  *     --limits seats=10,ai_messages_per_month=100                                   (dry run, default)

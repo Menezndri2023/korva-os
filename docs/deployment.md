@@ -107,7 +107,27 @@ openssl rand -hex 32      # INTEGRATION_CREDENTIALS_KEY
 
 Vérifier que les trois secrets JWT diffèrent réellement — réutiliser une valeur rend un token d'accès fuité également valide comme token de rafraîchissement, ou un token client valide côté dashboard.
 
-**4. Construire et démarrer.**
+**4. Appliquer les migrations — AVANT de démarrer l'API.**
+
+```bash
+# Dry run : liste ce qui est en attente, n'écrit rien
+pnpm --filter @korva/api exec ts-node \
+  -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register \
+  scripts/migrate.ts
+
+# Application
+pnpm --filter @korva/api exec ts-node \
+  -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register \
+  scripts/migrate.ts --apply
+```
+
+`autoIndex` est désactivé en production (`app.module.ts`) : Mongoose le laisse à `true` par défaut, ce qui fait démarrer une construction d'index pour chaque modèle à **chaque** démarrage de **chaque** instance — anodin en local, risqué contre un vrai cluster pendant un déploiement progressif. Les index sont donc créés par la migration `0001-sync-indexes`, qui doit tourner **avant** que les nouvelles instances démarrent. Sauter cette étape ne provoque aucune erreur visible : les requêtes deviennent lentes et les contraintes d'unicité n'existent tout simplement pas.
+
+Le runner n'est volontairement pas exécuté au démarrage de l'application : pendant un déploiement progressif, plusieurs instances démarrent en même temps, et trois d'entre elles qui courent après la même migration est exactement la manière d'obtenir une transformation de données à moitié appliquée. Une invocation délibérée depuis le pipeline, c'est tout l'intérêt.
+
+> ⚠️ **Le flag `-r ./scripts/support/ts-extension-resolver.cjs` est obligatoire** pour *tous* les scripts de `apps/api/scripts/`, pas seulement celui-ci. Sans lui, chacun s'arrête sur `Cannot find module './rbac.js'` avant sa première ligne : les packages partagés s'importent avec des extensions `.ts` explicites (ADR-001) que `rewriteRelativeImportExtensions` réécrit en `.js`, lesquels n'existent pas sur disque. Les commandes documentées dans ces scripts étaient toutes fausses jusqu'au 2026-10-12.
+
+**5. Construire et démarrer.**
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production build
@@ -116,7 +136,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 
 `PUBLIC_API_URL` est injecté à la **construction** (Next.js inline les `NEXT_PUBLIC_*` dans le bundle client). Le modifier plus tard impose de reconstruire web et storefront — le changer seulement dans l'environnement livre silencieusement un bundle pointant vers localhost.
 
-**5. Vérifier que l'application est réellement vivante**, pas seulement que les conteneurs tournent :
+**6. Vérifier que l'application est réellement vivante**, pas seulement que les conteneurs tournent :
 
 ```bash
 curl -fsS https://$API_DOMAIN/api/v1/health
@@ -128,11 +148,11 @@ curl -fsS -o /dev/null -w '%{http_code}\n' https://$DASHBOARD_DOMAIN/login
 
 `/health/database` et `/health/redis` renvoient un message générique en cas de panne — le détail réel est dans les logs du conteneur, jamais dans la réponse HTTP (volontaire, voir §27.4 D4-F de PRODUCTION_READINESS.md). En cas de 503, lire `docker compose -f docker-compose.prod.yml logs api`.
 
-**6. Créer les comptes d'intégration de paiement.** Les clés PSP ne sont pas des variables d'environnement : elles sont chiffrées en base par marché. Voir `scripts/create-platform-integration-account.ts` et `docs/architecture/integrations-platform.md` §4. Il en faut au minimum deux : `role: subscription-billing` (facturation des abonnements KORVA) et un `role: merchant-of-record` par marché de locataire. Sans le premier, `POST /subscriptions/invoices/:id/checkout` renvoie `PAYMENT_PROVIDER_NOT_CONFIGURED` — volontairement, plutôt que de retomber silencieusement sur le fournisseur manuel.
+**7. Créer les comptes d'intégration de paiement.** Les clés PSP ne sont pas des variables d'environnement : elles sont chiffrées en base par marché. Voir `scripts/create-platform-integration-account.ts` et `docs/architecture/integrations-platform.md` §4. Il en faut au minimum deux : `role: subscription-billing` (facturation des abonnements KORVA) et un `role: merchant-of-record` par marché de locataire. Sans le premier, `POST /subscriptions/invoices/:id/checkout` renvoie `PAYMENT_PROVIDER_NOT_CONFIGURED` — volontairement, plutôt que de retomber silencieusement sur le fournisseur manuel.
 
-**7. Vérifier un domaine personnalisé de bout en bout**, avec un domaine jetable avant le premier vrai client : le rattacher à une organisation ayant le module `website`, faire pointer son DNS vers l'hôte, puis confirmer que Caddy émet bien un certificat et que le storefront résout le locataire. Un 404 sur le domaine signifie que l'organisation n'a pas `website` activé, pas un problème de proxy.
+**8. Vérifier un domaine personnalisé de bout en bout**, avec un domaine jetable avant le premier vrai client : le rattacher à une organisation ayant le module `website`, faire pointer son DNS vers l'hôte, puis confirmer que Caddy émet bien un certificat et que le storefront résout le locataire. Un 404 sur le domaine signifie que l'organisation n'a pas `website` activé, pas un problème de proxy.
 
-**8. Surveiller la première exécution de la CI sur `main`.** Le workflow n'a jamais été exécuté depuis cet environnement (pas d'accès à GitHub Actions) — voir §Intégration continue.
+**9. Surveiller la première exécution de la CI sur `main`.** Le workflow n'a jamais été exécuté depuis cet environnement (pas d'accès à GitHub Actions) — voir §Intégration continue.
 
 ### Ce que ce runbook ne couvre pas
 

@@ -16,12 +16,12 @@
  * Run AFTER re-seeding/updating existing Plan documents to include "website" in their `modules`
  * (plans.service.ts's DEFAULT_PLANS only seeds brand-new databases — see plans.repository.ts's
  * upsertByKey, which is insert-only and never touches an already-existing Plan document):
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/manage-plans.ts --key free --modules <...,website> --apply
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/manage-plans.ts --key free --modules <...,website> --apply
  *   (repeat per plan key: free, starter, pro, business, and any custom plan)
  *
  * Then run this script:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/backfill-website-module.ts            (dry run, default)
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/backfill-website-module.ts --apply    (writes changes)
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/backfill-website-module.ts            (dry run, default)
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/backfill-website-module.ts --apply    (writes changes)
  *
  * Idempotent: re-running with nothing left to fix makes zero writes.
  */

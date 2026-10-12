@@ -16,6 +16,7 @@ import { IdentityModule } from './identity/identity.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
+import { MigrationsModule } from './core/migrations/migrations.module';
 import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { CrmModule } from './crm/crm.module';
 import { CatalogModule } from './catalog/catalog.module';
@@ -48,11 +49,25 @@ import { CustomerServiceModule } from './customer-service/customer-service.modul
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         uri: configService.getOrThrow<string>('MONGODB_URI'),
+        /**
+         * Mongoose defaults this to true, which means every API instance starts an index build
+         * for every model on every boot — harmless on a laptop, a real hazard against a cluster
+         * with several instances rolling at once and collections large enough for a build to
+         * matter.
+         *
+         * In production, indexes are built by migrations/0001-sync-indexes.ts instead, run from
+         * the deploy pipeline BEFORE the new instances start (see docs/deployment.md's runbook
+         * and scripts/migrate.ts). Left on everywhere else so local development and the e2e
+         * suite keep working with no extra step — the suite also calls syncIndexes() itself in
+         * its own bootstrap, so it never depended on this.
+         */
+        autoIndex: configService.get<string>('NODE_ENV') !== 'production',
       }),
     }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     EventsModule,
     HealthModule,
+    MigrationsModule,
     AuditModule,
     IdentityModule,
     SubscriptionsModule,

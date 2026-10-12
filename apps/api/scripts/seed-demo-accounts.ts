@@ -14,8 +14,8 @@
  * organization's seeding is skipped entirely rather than attempting to upsert every sub-record.
  *
  * Usage:
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/seed-demo-accounts.ts            (dry run, default)
- *   pnpm --filter @korva/api exec ts-node -r tsconfig-paths/register scripts/seed-demo-accounts.ts --apply    (writes changes)
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/seed-demo-accounts.ts            (dry run, default)
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/seed-demo-accounts.ts --apply    (writes changes)
  *
  * If plain ts-node fails to resolve `@korva/types`/`@korva/validation`'s NodeNext-style
  * `./foo.js`-pointing-at-`.ts` relative imports in your environment (a classic ts-node/CJS
