@@ -6,6 +6,16 @@ import {
   SubscriptionInvoiceDocument,
 } from './schemas/subscription-invoice.schema';
 
+/** Fields the schema fills in itself, so an issuer never has to supply them. */
+type DefaultedFields =
+  'status' | 'paidAt' | 'providerReference' | 'checkoutUrl';
+
+export type IssueSubscriptionInvoiceInput = Omit<
+  SubscriptionInvoice,
+  DefaultedFields
+> &
+  Partial<Pick<SubscriptionInvoice, DefaultedFields>>;
+
 @Injectable()
 export class SubscriptionInvoicesRepository {
   constructor(
@@ -21,8 +31,7 @@ export class SubscriptionInvoicesRepository {
    * issued", never "failed" — the caller treats it as success and proceeds to renew.
    */
   async issueForPeriod(
-    data: Omit<SubscriptionInvoice, 'paidAt' | 'status'> &
-      Partial<Pick<SubscriptionInvoice, 'paidAt' | 'status'>>,
+    data: IssueSubscriptionInvoiceInput,
   ): Promise<SubscriptionInvoiceDocument | null> {
     try {
       return await this.model.create(data);
@@ -52,6 +61,51 @@ export class SubscriptionInvoicesRepository {
       .find({ organizationId: new Types.ObjectId(organizationId) })
       .sort({ periodStart: -1 })
       .limit(limit)
+      .exec();
+  }
+
+  /**
+   * One invoice, scoped to its owning organization — so an id from another tenant reads as
+   * "not found" rather than leaking the document.
+   *
+   * A syntactically invalid id short-circuits to null instead of letting `new Types.ObjectId()`
+   * throw a BSONError: nothing in this codebase translates that into an HTTP response (there is
+   * no cast-error filter), so it would surface as a 500 for what is plainly a 404.
+   */
+  async findOwnedById(
+    organizationId: string,
+    id: string,
+  ): Promise<SubscriptionInvoiceDocument | null> {
+    if (!Types.ObjectId.isValid(id)) return null;
+    return this.model
+      .findOne({
+        _id: new Types.ObjectId(id),
+        organizationId: new Types.ObjectId(organizationId),
+      })
+      .exec();
+  }
+
+  /**
+   * Records the hosted checkout created for an open invoice. Guarded on `status: 'open'` so a
+   * checkout can never be attached to an invoice that was paid or voided in the meantime —
+   * returns null in that case, and the caller treats the provider's own values as authoritative.
+   */
+  attachCheckout(
+    organizationId: string,
+    id: string,
+    providerReference: string,
+    checkoutUrl: string,
+  ): Promise<SubscriptionInvoiceDocument | null> {
+    return this.model
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          status: 'open',
+        },
+        { providerReference, checkoutUrl },
+        { new: true },
+      )
       .exec();
   }
 

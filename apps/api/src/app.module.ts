@@ -27,6 +27,7 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { CommunicationModule } from './communication/communication.module';
 import { AiModule } from './ai/ai.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { SubscriptionBillingModule } from './subscription-billing/subscription-billing.module';
 import { PublicModule } from './public/public.module';
 import { CustomerAuthModule } from './customer-auth/customer-auth.module';
 import { ReviewsModule } from './reviews/reviews.module';
@@ -55,6 +56,7 @@ import { CustomerServiceModule } from './customer-service/customer-service.modul
     AuditModule,
     IdentityModule,
     SubscriptionsModule,
+    SubscriptionBillingModule,
     OrganizationsModule,
     CustomFieldsModule,
     CrmModule,

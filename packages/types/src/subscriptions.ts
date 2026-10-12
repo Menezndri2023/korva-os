@@ -110,6 +110,11 @@ export interface SubscriptionInvoice {
   /** Payment is due by this date; past it, the next sweep moves the subscription to past_due. */
   dueAt: string;
   paidAt: string | null;
+  /** PSP reference for the hosted checkout last created for this invoice; null until a payment
+   *  link is requested. */
+  providerReference: string | null;
+  /** The hosted checkout URL `providerReference` belongs to. */
+  checkoutUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

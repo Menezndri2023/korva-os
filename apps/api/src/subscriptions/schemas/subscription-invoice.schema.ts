@@ -56,6 +56,20 @@ export class SubscriptionInvoice {
 
   @Prop({ type: Date, default: null })
   paidAt!: Date | null;
+
+  /**
+   * The PSP's own reference for the hosted checkout last created for this invoice (Paystack's
+   * `reference`, Flutterwave's `tx_ref`). Null until a tenant actually requests a payment link.
+   * Overwritten if a new link is requested — the latest attempt is the only one worth verifying,
+   * and an abandoned checkout has no lasting state at the provider.
+   */
+  @Prop({ type: String, default: null })
+  providerReference!: string | null;
+
+  /** The hosted checkout URL that `providerReference` belongs to, so re-requesting a link for an
+   *  invoice whose checkout is still valid returns the same URL instead of minting another. */
+  @Prop({ type: String, default: null })
+  checkoutUrl!: string | null;
 }
 
 export const SubscriptionInvoiceSchema =

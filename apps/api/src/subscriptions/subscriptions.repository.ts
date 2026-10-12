@@ -155,6 +155,33 @@ export class SubscriptionsRepository {
    * already-renewed subscription (currentPeriodEnd now in the future) is a no-op (returns null).
    */
   /**
+   * Returns a 'past_due' subscription to 'active' once its overdue SubscriptionInvoice is paid.
+   *
+   * Deliberately does NOT touch the billing period. The paid invoice covers the period that
+   * already elapsed while the subscription sat past_due, so leaving currentPeriodEnd in the past
+   * makes the subscription an immediate renewal candidate again — and the very next sweep, now
+   * seeing that latest invoice as 'paid', issues the next period's invoice and advances
+   * normally. Rewriting the period here would duplicate that logic and risk disagreeing with it.
+   *
+   * Guarded on status:'past_due', so paying an invoice for an already-active or canceled
+   * subscription is a no-op (returns null) rather than resurrecting it.
+   */
+  reactivateFromPastDue(
+    organizationId: string,
+  ): Promise<SubscriptionDocument | null> {
+    return this.subscriptionModel
+      .findOneAndUpdate(
+        {
+          organizationId: new Types.ObjectId(organizationId),
+          status: 'past_due',
+        },
+        { status: 'active' },
+        { new: true },
+      )
+      .exec();
+  }
+
+  /**
    * Atomically moves a single subscription to 'past_due', guarded by the SAME eligibility filter
    * used by findRenewalCandidates plus cancelAtPeriodEnd:false — so a subscription canceled
    * concurrently between the sweep's read and this write is left untouched, and re-running this

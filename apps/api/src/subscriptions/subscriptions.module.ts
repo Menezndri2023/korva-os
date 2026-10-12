@@ -60,6 +60,16 @@ import { CountersModule } from '../core/counters/counters.module';
     EntitlementsService,
     SubscriptionPeriodSchedulerService,
   ],
-  exports: [PlansService, SubscriptionsService, EntitlementsService],
+  exports: [
+    PlansService,
+    SubscriptionsService,
+    EntitlementsService,
+    // Consumed by SubscriptionBillingModule, which pairs it with IntegrationsModule's payment
+    // provider resolver. That lives in its own module rather than here because
+    // SubscriptionsModule cannot import IntegrationsModule: IntegrationsModule imports
+    // OrganizationsModule, which imports this module back.
+    SubscriptionInvoicesRepository,
+    SubscriptionsRepository,
+  ],
 })
 export class SubscriptionsModule {}
