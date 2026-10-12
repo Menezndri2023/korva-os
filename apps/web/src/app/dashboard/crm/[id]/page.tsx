@@ -46,6 +46,7 @@ import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
 const TIMELINE_TYPE_LABELS: Record<BusinessGraphTimelineEntry["type"], string> = {
   lead: "Prospect",
+  deal: "Affaire",
   quote: "Devis",
   invoice: "Facture",
   payment: "Paiement",
