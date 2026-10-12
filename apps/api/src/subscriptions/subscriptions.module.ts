@@ -12,6 +12,10 @@ import {
   SubscriptionInvoiceSchema,
 } from './schemas/subscription-invoice.schema';
 import {
+  PaymentMandate,
+  PaymentMandateSchema,
+} from './schemas/payment-mandate.schema';
+import {
   Organization,
   OrganizationSchema,
 } from '../organizations/schemas/organization.schema';
@@ -20,6 +24,7 @@ import { PlansRepository } from './plans.repository';
 import { PlansService } from './plans.service';
 import { SubscriptionsRepository } from './subscriptions.repository';
 import { SubscriptionInvoicesRepository } from './subscription-invoices.repository';
+import { PaymentMandatesRepository } from './payment-mandates.repository';
 import { SubscriptionsService } from './subscriptions.service';
 import { UsageRepository } from './usage.repository';
 import { EntitlementsService } from './entitlements.service';
@@ -32,6 +37,9 @@ import { AuditModule } from '../audit/audit.module';
 // InvoicesService already uses for 'FAC-0001'. CountersModule is a leaf core module — importing
 // it here adds no cycle.
 import { CountersModule } from '../core/counters/counters.module';
+// PaymentMandatesRepository encrypts stored authorizations under the same AES-256-GCM key as
+// IntegrationAccount credentials. A leaf module, so no cycle.
+import { CredentialEncryptionModule } from '../shared/crypto/credential-encryption.module';
 
 @Module({
   imports: [
@@ -40,6 +48,7 @@ import { CountersModule } from '../core/counters/counters.module';
       { name: Subscription.name, schema: SubscriptionSchema },
       { name: Usage.name, schema: UsageSchema },
       { name: SubscriptionInvoice.name, schema: SubscriptionInvoiceSchema },
+      { name: PaymentMandate.name, schema: PaymentMandateSchema },
       // Registered here (not via OrganizationsModule) so changePlan can trim enabledModules on
       // downgrade — OrganizationsModule already imports SubscriptionsModule, so depending on
       // OrganizationsModule/OrganizationsRepository here would be circular.
@@ -48,6 +57,7 @@ import { CountersModule } from '../core/counters/counters.module';
     IdentityModule,
     AuditModule,
     CountersModule,
+    CredentialEncryptionModule,
   ],
   controllers: [SubscriptionsController],
   providers: [
@@ -55,6 +65,7 @@ import { CountersModule } from '../core/counters/counters.module';
     PlansService,
     SubscriptionsRepository,
     SubscriptionInvoicesRepository,
+    PaymentMandatesRepository,
     SubscriptionsService,
     UsageRepository,
     EntitlementsService,
@@ -70,6 +81,7 @@ import { CountersModule } from '../core/counters/counters.module';
     // OrganizationsModule, which imports this module back.
     SubscriptionInvoicesRepository,
     SubscriptionsRepository,
+    PaymentMandatesRepository,
   ],
 })
 export class SubscriptionsModule {}

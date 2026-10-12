@@ -70,6 +70,15 @@ export class SubscriptionInvoice {
    *  invoice whose checkout is still valid returns the same URL instead of minting another. */
   @Prop({ type: String, default: null })
   checkoutUrl!: string | null;
+
+  /**
+   * The email the hosted checkout was opened under. Persisted rather than re-derived from
+   * whoever happens to trigger a later action, because both Paystack and Flutterwave reject a
+   * recurring charge whose email does not match the one the authorization was created under —
+   * so this is the address a captured PaymentMandate must carry.
+   */
+  @Prop({ type: String, default: null })
+  payerEmail!: string | null;
 }
 
 export const SubscriptionInvoiceSchema =

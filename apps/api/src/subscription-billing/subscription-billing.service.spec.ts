@@ -6,6 +6,7 @@ import type { ConfigService } from '@nestjs/config';
 import { SubscriptionBillingService } from './subscription-billing.service';
 import type { SubscriptionInvoicesRepository } from '../subscriptions/subscription-invoices.repository';
 import type { SubscriptionsRepository } from '../subscriptions/subscriptions.repository';
+import type { PaymentMandatesRepository } from '../subscriptions/payment-mandates.repository';
 import type { PaymentProviderResolverService } from '../finance/payments/providers/payment-provider-resolver.service';
 import type { AuditService } from '../audit/audit.service';
 
@@ -33,10 +34,11 @@ interface Harness {
     markPaidIfOpen: jest.Mock;
   };
   subscriptions: { reactivateFromPastDue: jest.Mock };
+  mandates: { capture: jest.Mock };
   provider: {
     name: string;
     createPayment: jest.Mock;
-    getPaymentStatus: jest.Mock;
+    verifyPayment: jest.Mock;
   };
   resolve: jest.Mock;
   audit: { record: jest.Mock };
@@ -47,8 +49,10 @@ function buildHarness(
     invoice?: Record<string, unknown> | null;
     createPaymentResult?: unknown;
     providerStatus?: string;
+    mandateReference?: string;
     reactivated?: unknown;
     resolveError?: Error;
+    captureThrows?: boolean;
   } = {},
 ): Harness {
   const invoices = {
@@ -85,25 +89,43 @@ function buildHarness(
           }
         : options.createPaymentResult,
     ),
-    getPaymentStatus: jest
-      .fn()
-      .mockResolvedValue(options.providerStatus ?? 'completed'),
+    verifyPayment: jest.fn().mockResolvedValue({
+      providerReference: 'korva_ABO-0001_abc',
+      status: options.providerStatus ?? 'completed',
+      ...(options.mandateReference
+        ? { mandateReference: options.mandateReference }
+        : {}),
+    }),
   };
   const resolve = options.resolveError
     ? jest.fn().mockRejectedValue(options.resolveError)
     : jest.fn().mockResolvedValue(provider);
   const audit = { record: jest.fn().mockResolvedValue(undefined) };
+  const mandates = {
+    capture: options.captureThrows
+      ? jest.fn().mockRejectedValue(new Error('encryption key rotated'))
+      : jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new SubscriptionBillingService(
     invoices as unknown as SubscriptionInvoicesRepository,
     subscriptions as unknown as SubscriptionsRepository,
+    mandates as unknown as PaymentMandatesRepository,
     { resolve } as unknown as PaymentProviderResolverService,
     {
       get: jest.fn().mockReturnValue('https://app.korva.test'),
     } as unknown as ConfigService,
     audit as unknown as AuditService,
   );
-  return { service, invoices, subscriptions, provider, resolve, audit };
+  return {
+    service,
+    invoices,
+    subscriptions,
+    mandates,
+    provider,
+    resolve,
+    audit,
+  };
 }
 
 describe('SubscriptionBillingService — createCheckout', () => {
@@ -239,6 +261,54 @@ describe('SubscriptionBillingService — verifyPayment', () => {
     expect(result.status).toBe('paid');
     expect(h.invoices.markPaidIfOpen).not.toHaveBeenCalled();
     expect(h.resolve).not.toHaveBeenCalled();
+  });
+
+  it('captures a reusable authorization when the provider returns one', async () => {
+    const h = buildHarness({
+      invoice: openInvoice({
+        providerReference: 'korva_ABO-0001_abc',
+        payerEmail: 'owner@korva.test',
+      }),
+      providerStatus: 'completed',
+      mandateReference: 'AUTH_abc123',
+    });
+
+    await h.service.verifyPayment(ORG, INVOICE_ID);
+
+    expect(h.mandates.capture).toHaveBeenCalledWith({
+      organizationId: ORG,
+      provider: 'paystack',
+      reference: 'AUTH_abc123',
+      // Must be the email the checkout was opened under: both providers reject a recurring
+      // charge whose email differs from the authorization's.
+      payerEmail: 'owner@korva.test',
+    });
+  });
+
+  it('captures nothing when the provider returns no reusable authorization', async () => {
+    const h = buildHarness({
+      invoice: openInvoice({ providerReference: 'korva_ABO-0001_abc' }),
+      providerStatus: 'completed',
+    });
+
+    await h.service.verifyPayment(ORG, INVOICE_ID);
+
+    expect(h.mandates.capture).not.toHaveBeenCalled();
+  });
+
+  it('still reports the payment as paid when storing the mandate fails', async () => {
+    const h = buildHarness({
+      invoice: openInvoice({ providerReference: 'korva_ABO-0001_abc' }),
+      providerStatus: 'completed',
+      mandateReference: 'AUTH_abc123',
+      captureThrows: true,
+    });
+
+    // A failure to store an optimization must never turn a real payment into an error.
+    const result = await h.service.verifyPayment(ORG, INVOICE_ID);
+
+    expect(result.status).toBe('paid');
+    expect(h.invoices.markPaidIfOpen).toHaveBeenCalledTimes(1);
   });
 
   it('refuses to verify an invoice for which no payment was ever started', async () => {

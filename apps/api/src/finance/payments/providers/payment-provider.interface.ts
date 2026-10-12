@@ -32,6 +32,20 @@ export interface PaymentProviderResult {
    * into one field would destroy that distinction for no reason.
    */
   providerRefundReference?: string;
+  /**
+   * A REUSABLE authorization the provider issued for this payer — Paystack's
+   * `data.authorization.authorization_code`, Flutterwave's saved-card `token`. Set only by
+   * `verifyPayment()`, and only when the provider's own response says the authorization is
+   * reusable; `createPayment()` cannot produce one, because nothing has been authorized yet at
+   * that point.
+   *
+   * This is what makes `chargeRecurring()` possible: it is captured the first time a payer
+   * completes a hosted checkout, stored encrypted (see PaymentMandate), and replayed on later
+   * renewals without the payer being present. It is NOT a payment status and never implies one —
+   * a failed payment can still carry an authorization, and a successful one may carry none (a
+   * one-off bank transfer, a mobile-money push).
+   */
+  mandateReference?: string;
 }
 
 /**
@@ -88,6 +102,33 @@ export interface PaymentProvider {
     organizationId: string;
     payoutDetails: Record<string, string>;
   }): Promise<{ destinationRef: string }>;
+  /**
+   * Charges a previously captured, reusable authorization with no payer present — the
+   * card-on-file path that `createPayment()` cannot provide, since every real adapter's
+   * `createPayment` is a HOSTED CHECKOUT whose status stays `'pending'` until a human completes
+   * a redirect.
+   *
+   * Optional at the interface level, and that optionality is load-bearing:
+   * `ManualPaymentProvider` has no provider to call, and an adapter for a market where only
+   * one-off mobile-money pushes exist may genuinely never be able to implement it. A caller MUST
+   * therefore check for the method before using it and keep a working path for when it is
+   * absent — see SubscriptionPeriodSchedulerService, which falls back to issuing an unpaid
+   * invoice with a payment link.
+   *
+   * `reference` is caller-chosen and must be stable for a given charge attempt: it is the only
+   * thing that lets a retry be recognized as the same attempt rather than a second charge.
+   * Unlike `createPayment`, this returns a FINAL status — `'completed'` or `'failed'` — because
+   * there is no redirect left to wait on. An ambiguous network failure must be thrown as an
+   * error carrying `ambiguous: true` (see AmbiguousProviderErrorMarker), never collapsed into
+   * `'failed'`: a caller who sees `'failed'` may legitimately charge again.
+   */
+  chargeRecurring?(input: {
+    mandateReference: string;
+    amount: number;
+    currency: string;
+    reference: string;
+    customerEmail: string;
+  }): Promise<PaymentProviderResult>;
   /**
    * Lightweight authenticated call proving stored credentials actually work — used by the
    * Settings → Integrations "Test connection" action (Wave 4 Stage 2). See

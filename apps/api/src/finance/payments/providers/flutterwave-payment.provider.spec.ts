@@ -674,4 +674,100 @@ describe('FlutterwaveProvider', () => {
       expect(result.message).toBeDefined();
     });
   });
+
+  describe('mandate capture on verify', () => {
+    it('captures a saved-card token as mandateReference', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, {
+          status: 'success',
+          data: { status: 'successful', card: { token: 'flw-card-token-1' } },
+        }),
+      );
+
+      const result = await new FlutterwaveProvider(SECRET_KEY).verifyPayment(
+        'korva_inv_123_abc',
+      );
+
+      expect(result.status).toBe('completed');
+      expect(result.mandateReference).toBe('flw-card-token-1');
+    });
+
+    it('leaves mandateReference undefined for a non-card channel', async () => {
+      // Bank transfer / mobile money / USSD carry no reusable token, and that is the common
+      // case in this adapter's own markets — no token means "cannot charge unattended", never
+      // that something failed.
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, {
+          status: 'success',
+          data: { status: 'successful' },
+        }),
+      );
+
+      const result = await new FlutterwaveProvider(SECRET_KEY).verifyPayment(
+        'korva_inv_123_abc',
+      );
+
+      expect(result.status).toBe('completed');
+      expect('mandateReference' in result).toBe(false);
+    });
+  });
+
+  describe('chargeRecurring', () => {
+    const input = {
+      mandateReference: 'flw-card-token-1',
+      amount: 29,
+      currency: 'XOF',
+      reference: 'korva_auto_ABO-0001',
+      customerEmail: 'owner@korva.test',
+    };
+
+    it('posts the token to the tokenized-charges endpoint', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, {
+          status: 'success',
+          data: { status: 'successful' },
+        }),
+      );
+
+      const result = await new FlutterwaveProvider(SECRET_KEY).chargeRecurring(
+        input,
+      );
+
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/tokenized-charges');
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      expect(body.token).toBe('flw-card-token-1');
+      expect(body.email).toBe('owner@korva.test');
+      expect(body.tx_ref).toBe('korva_auto_ABO-0001');
+      // Flutterwave takes major units here, unlike Paystack's minor units.
+      expect(body.amount).toBe(29);
+      expect(result.status).toBe('completed');
+    });
+
+    it('reports a declined card as a provider-confirmed failure, not an exception', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, {
+          status: 'success',
+          data: { status: 'failed' },
+        }),
+      );
+
+      const result = await new FlutterwaveProvider(SECRET_KEY).chargeRecurring(
+        input,
+      );
+
+      expect(result.status).toBe('failed');
+    });
+
+    it('marks a network failure ambiguous and keeps the reference', async () => {
+      fetchSpy.mockRejectedValue(new Error('socket hang up'));
+
+      await expect(
+        new FlutterwaveProvider(SECRET_KEY).chargeRecurring(input),
+      ).rejects.toMatchObject({
+        ambiguous: true,
+        generatedReference: 'korva_auto_ABO-0001',
+      });
+    });
+  });
 });

@@ -416,4 +416,121 @@ describe('PaystackProvider', () => {
       expect(result.message).toBeDefined();
     });
   });
+
+  describe('mandate capture on verify', () => {
+    it('captures a reusable authorization_code as mandateReference', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, {
+          status: true,
+          data: {
+            status: 'success',
+            authorization: {
+              authorization_code: 'AUTH_abc123',
+              reusable: true,
+            },
+          },
+        }),
+      );
+
+      const result = await new PaystackProvider(SECRET_KEY).verifyPayment(
+        'korva_inv_123_abc',
+      );
+
+      expect(result.status).toBe('completed');
+      expect(result.mandateReference).toBe('AUTH_abc123');
+    });
+
+    it('ignores a non-reusable authorization', async () => {
+      // Paystack sets reusable:false for channels that cannot be charged again without the
+      // payer. Replaying one would fail on every renewal while KORVA believed it had
+      // card-on-file billing.
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, {
+          status: true,
+          data: {
+            status: 'success',
+            authorization: {
+              authorization_code: 'AUTH_abc123',
+              reusable: false,
+            },
+          },
+        }),
+      );
+
+      const result = await new PaystackProvider(SECRET_KEY).verifyPayment(
+        'korva_inv_123_abc',
+      );
+
+      expect(result.mandateReference).toBeUndefined();
+    });
+
+    it('leaves mandateReference undefined when the response carries no authorization at all', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, { status: true, data: { status: 'success' } }),
+      );
+
+      const result = await new PaystackProvider(SECRET_KEY).verifyPayment(
+        'korva_inv_123_abc',
+      );
+
+      expect(result.status).toBe('completed');
+      expect('mandateReference' in result).toBe(false);
+    });
+  });
+
+  describe('chargeRecurring', () => {
+    const input = {
+      mandateReference: 'AUTH_abc123',
+      amount: 29,
+      currency: 'NGN',
+      reference: 'korva_auto_ABO-0001',
+      customerEmail: 'owner@korva.test',
+    };
+
+    it('posts the authorization to charge_authorization in minor units', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, { status: true, data: { status: 'success' } }),
+      );
+
+      const result = await new PaystackProvider(SECRET_KEY).chargeRecurring(
+        input,
+      );
+
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/transaction/charge_authorization');
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      expect(body.authorization_code).toBe('AUTH_abc123');
+      expect(body.email).toBe('owner@korva.test');
+      expect(body.amount).toBe(2900);
+      expect(body.reference).toBe('korva_auto_ABO-0001');
+      // Final, unlike createPayment: there is no redirect left to wait on.
+      expect(result.status).toBe('completed');
+      expect(result.providerReference).toBe('korva_auto_ABO-0001');
+    });
+
+    it('reports a declined card as a provider-confirmed failure, not an exception', async () => {
+      fetchSpy.mockResolvedValue(
+        mockJsonResponse(200, { status: true, data: { status: 'failed' } }),
+      );
+
+      const result = await new PaystackProvider(SECRET_KEY).chargeRecurring(
+        input,
+      );
+
+      expect(result.status).toBe('failed');
+    });
+
+    it('re-attaches the reference to a network failure so it is never lost', async () => {
+      fetchSpy.mockRejectedValue(new Error('socket hang up'));
+
+      await expect(
+        new PaystackProvider(SECRET_KEY).chargeRecurring(input),
+      ).rejects.toMatchObject({
+        // Ambiguous: no response ever arrived, so the charge may have gone through. The caller
+        // must never treat this as 'failed' — see isAmbiguousProviderError.
+        ambiguous: true,
+        generatedReference: 'korva_auto_ABO-0001',
+      });
+    });
+  });
 });

@@ -117,6 +117,8 @@ export interface SubscriptionInvoice {
   providerReference: string | null;
   /** The hosted checkout URL `providerReference` belongs to. */
   checkoutUrl: string | null;
+  /** The email the checkout was opened under — the address a recurring charge must reuse. */
+  payerEmail: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -5,6 +5,7 @@ import { IntegrationsModule } from '../integrations/integrations.module';
 import { AuditModule } from '../audit/audit.module';
 import { SubscriptionBillingController } from './subscription-billing.controller';
 import { SubscriptionBillingService } from './subscription-billing.service';
+import { SubscriptionAutoChargeSchedulerService } from './subscription-auto-charge-scheduler.service';
 
 /**
  * Pairs SubscriptionsModule's invoice/subscription repositories with IntegrationsModule's
@@ -18,6 +19,9 @@ import { SubscriptionBillingService } from './subscription-billing.service';
 @Module({
   imports: [SubscriptionsModule, IntegrationsModule, AuditModule],
   controllers: [SubscriptionBillingController],
-  providers: [SubscriptionBillingService],
+  providers: [
+    SubscriptionBillingService,
+    SubscriptionAutoChargeSchedulerService,
+  ],
 })
 export class SubscriptionBillingModule {}

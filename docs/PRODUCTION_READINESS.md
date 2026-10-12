@@ -824,13 +824,44 @@ Short, and deliberately so — this is the real remaining list, not a restatemen
 5. **No Bull Board.** Largely superseded rather than open: `GET /health/queues`, `GET /metrics` and `QueueAlertingService` now cover all 12 queues (see `core/queues/queue-registry.ts`). What remains missing is only a browsable UI for inspecting and retrying individual jobs.
 6. **Four moderate advisories and one unfixable high.** `pnpm audit` reports 5 findings, 0 critical. The high (`braces`, stack-exhaustion DoS) names `patched_versions ">=3.0.4"`, which has never been published; it reaches the tree only through `eslint-config-next` dev tooling and is the single entry in `auditConfig.ignoreGhsas`.
 
-### 29.4 One capability deliberately not built, so nobody assumes it exists
+### 29.4 Card-on-file billing — built, with its limits stated
 
-**KORVA cannot charge a card on file.** Subscription renewal issues a `SubscriptionInvoice` and the tenant pays it through a hosted checkout link; there is no server-initiated recurring charge.
+**KORVA can now charge a stored card.** `PaymentProvider.chargeRecurring()` is implemented for
+both adapters (Paystack `charge_authorization`, Flutterwave `tokenized-charges`), a reusable
+authorization is captured the one moment it is observable — on the verify response for a checkout
+the payer just completed — and stored encrypted as a `PaymentMandate` under the same AES-256-GCM
+key as PSP credentials. `SubscriptionAutoChargeSchedulerService` charges open invoices
+unattended.
 
-This is a constraint of the adapters, not an oversight. `PaystackProvider.createPayment` calls `/transaction/initialize` and `FlutterwaveProvider` returns `data.link` — both are hosted-checkout flows whose status stays `'pending'` until a human completes a redirect, and nothing in the codebase stores a reusable card authorization or mandate. Wiring `createPayment` into the background sweep would mint checkout URLs nobody opens and strand every paid subscription in `past_due`, which is strictly worse than the free-renewal behavior it would replace.
+**Issuing and collecting are deliberately separate sweeps.** The renewal sweep
+(`SubscriptionPeriodSchedulerService`, in `SubscriptionsModule`) issues the invoice; the
+auto-charge sweep (in `SubscriptionBillingModule`) collects it. Partly structural —
+`SubscriptionsModule` cannot import `IntegrationsModule`, because
+`IntegrationsModule → OrganizationsModule → SubscriptionsModule` is a real cycle, so the renewal
+sweep cannot resolve a payment provider at all. Mostly design: a provider outage then delays
+collection without ever blocking a renewal, each retries on its own schedule, and **the fallback
+needs no code** — an invoice that could not be charged simply stays open with the payment link it
+already has, which is the pre-card-on-file behavior.
 
-Adding true card-on-file billing means: an optional `chargeRecurring()` on the `PaymentProvider` interface, adapters for Paystack `charge_authorization` and Flutterwave tokenized charges, an encrypted per-organization mandate captured at first successful payment, and the webhook routing to reconcile it. That is a project phase, not an increment.
+**What it refuses to do.** The provider reference is derived from the invoice number and is
+therefore identical on every retry, so a provider that deduplicates by reference sees one
+attempt. An ambiguous provider error — a timeout where no response ever arrived — leaves the
+invoice, the mandate and the subscription completely untouched: the charge may have succeeded,
+and treating that as a failure is precisely how a customer gets billed twice or locked out of a
+subscription they paid for. Only a provider-confirmed `'failed'` revokes a mandate.
+
+**Limits, stated proportionately:**
+- **Neither adapter has ever been exercised against a live or sandbox account.** No credentials
+  exist in this environment. Endpoints and field names match each provider's current published
+  docs; that is not the same as proven. The first real renewal must be watched.
+- Paystack only captures an authorization it reports as `reusable: true`, and Flutterwave only a
+  card `token`. Bank transfer, mobile money and USSD carry neither — which is the common case in
+  these adapters' own markets — so for those payers billing stays invoice-plus-link, permanently
+  and by design, not as a degraded mode.
+- A revoked mandate is never re-captured automatically: the payer has to complete one more
+  hosted checkout, which is exactly the event that proves they can be charged again.
+- There is no dunning schedule. A declined invoice stays open until its grace window expires and
+  the renewal sweep moves the subscription to `past_due`; nothing emails the customer in between.
 
 ### 29.5 GO / NO-GO
 

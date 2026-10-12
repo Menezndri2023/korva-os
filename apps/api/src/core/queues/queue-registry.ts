@@ -10,6 +10,7 @@ import { WEBHOOK_DELIVERY_QUEUE_NAME } from '../../webhook-subscriptions/webhook
 import { SUBSCRIPTION_PERIOD_QUEUE_NAME } from '../../subscriptions/subscription-period-scheduler.service';
 import { ABANDONED_CART_QUEUE_NAME } from '../../commerce/carts/abandoned-cart-reminder-scheduler.service';
 import { CAMPAIGN_SEND_QUEUE_NAME } from '../../marketing/campaigns/campaign-send.queue';
+import { SUBSCRIPTION_AUTO_CHARGE_QUEUE_NAME } from '../../subscription-billing/subscription-auto-charge-scheduler.service';
 
 /**
  * Every BullMQ queue this application runs — the single list both observability consumers read
@@ -39,4 +40,5 @@ export const ALL_QUEUE_NAMES = [
   SUBSCRIPTION_PERIOD_QUEUE_NAME,
   ABANDONED_CART_QUEUE_NAME,
   CAMPAIGN_SEND_QUEUE_NAME,
+  SUBSCRIPTION_AUTO_CHARGE_QUEUE_NAME,
 ] as const;

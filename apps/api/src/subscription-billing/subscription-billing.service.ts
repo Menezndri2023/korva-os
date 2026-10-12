@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SubscriptionInvoicesRepository } from '../subscriptions/subscription-invoices.repository';
 import { SubscriptionsRepository } from '../subscriptions/subscriptions.repository';
+import { PaymentMandatesRepository } from '../subscriptions/payment-mandates.repository';
 import { PaymentProviderResolverService } from '../finance/payments/providers/payment-provider-resolver.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -35,6 +36,7 @@ export class SubscriptionBillingService {
   constructor(
     private readonly invoicesRepository: SubscriptionInvoicesRepository,
     private readonly subscriptionsRepository: SubscriptionsRepository,
+    private readonly paymentMandatesRepository: PaymentMandatesRepository,
     private readonly paymentProviderResolver: PaymentProviderResolverService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
@@ -109,6 +111,7 @@ export class SubscriptionBillingService {
       invoiceId,
       result.providerReference,
       result.checkoutUrl,
+      payerEmail,
     );
 
     await this.auditService.record({
@@ -167,7 +170,32 @@ export class SubscriptionBillingService {
       flow: 'subscription',
       organizationId,
     });
-    const status = await provider.getPaymentStatus(invoice.providerReference);
+    // verifyPayment rather than getPaymentStatus: the full result is what carries
+    // `mandateReference`, and this is the ONLY moment a reusable authorization is observable —
+    // the provider returns it on the verify response for the checkout the payer just completed,
+    // and never again.
+    const result = await provider.verifyPayment(invoice.providerReference);
+    const status = result.status;
+
+    if (result.mandateReference) {
+      // Best-effort and deliberately non-fatal: failing to store a mandate must never turn a
+      // genuinely successful payment into an error. The worst case is that the next renewal
+      // falls back to an invoice with a payment link, which is the behavior without any mandate
+      // at all.
+      try {
+        await this.paymentMandatesRepository.capture({
+          organizationId,
+          provider: provider.name,
+          reference: result.mandateReference,
+          payerEmail: invoice.payerEmail ?? '',
+        });
+      } catch (error) {
+        this.logger.error(
+          `Failed to store payment mandate for organization ${organizationId}`,
+          error,
+        );
+      }
+    }
 
     if (status !== 'completed') {
       this.logger.log(
@@ -176,46 +204,66 @@ export class SubscriptionBillingService {
       return { invoiceNumber: invoice.number, status: 'open' };
     }
 
-    // markPaidIfOpen is guarded on status:'open', so a second verification (a double click, a
-    // retry) returns null instead of overwriting the original paidAt.
+    await this.settleAsPaid(organizationId, invoiceId, invoice.number, {
+      provider: provider.name,
+      collection: 'checkout',
+    });
+    return { invoiceNumber: invoice.number, status: 'paid' };
+  }
+
+  /**
+   * The single definition of "this subscription invoice got paid", shared by the
+   * payer-completed-a-checkout path above and the unattended card-on-file sweep
+   * (SubscriptionAutoChargeSchedulerService). Kept in one place deliberately: duplicating it
+   * would put the decision of whether a payment also ends a suspension in two places, and they
+   * would eventually disagree.
+   *
+   * markPaidIfOpen is guarded on status:'open', so replaying this — a double click, a sweep
+   * racing a manual verification — returns null and does nothing rather than overwriting the
+   * original paidAt. Returns whether this call was the one that settled it.
+   */
+  async settleAsPaid(
+    organizationId: string,
+    invoiceId: string,
+    invoiceNumber: string,
+    context: Record<string, unknown>,
+  ): Promise<boolean> {
     const paid = await this.invoicesRepository.markPaidIfOpen(
       organizationId,
       invoiceId,
     );
-    if (paid) {
+    if (!paid) return false;
+
+    await this.auditService.record({
+      organizationId,
+      action: 'UPDATE',
+      entity: 'subscription',
+      entityId: invoiceId,
+      metadata: {
+        reason: 'subscription_invoice_paid',
+        invoiceNumber,
+        ...context,
+      },
+    });
+
+    // Paying the overdue invoice is what ends a suspension. No-op (null) when the subscription
+    // was never past_due, which is the common case — an invoice paid on time.
+    const reactivated =
+      await this.subscriptionsRepository.reactivateFromPastDue(organizationId);
+    if (reactivated) {
       await this.auditService.record({
         organizationId,
         action: 'UPDATE',
         entity: 'subscription',
-        entityId: invoiceId,
+        entityId: reactivated.id as string,
         metadata: {
-          reason: 'subscription_invoice_paid',
-          invoiceNumber: invoice.number,
-          provider: provider.name,
+          status: 'active',
+          reason: 'subscription_invoice_paid_after_past_due',
+          invoiceNumber,
         },
       });
-
-      // Paying the overdue invoice is what ends a suspension. No-op (null) when the
-      // subscription was never past_due, which is the common case — an invoice paid on time.
-      const reactivated =
-        await this.subscriptionsRepository.reactivateFromPastDue(
-          organizationId,
-        );
-      if (reactivated) {
-        await this.auditService.record({
-          organizationId,
-          action: 'UPDATE',
-          entity: 'subscription',
-          entityId: reactivated.id as string,
-          metadata: {
-            status: 'active',
-            reason: 'subscription_invoice_paid_after_past_due',
-            invoiceNumber: invoice.number,
-          },
-        });
-      }
     }
-    return { invoiceNumber: invoice.number, status: 'paid' };
+    return true;
   }
 
   private appUrl(): string {

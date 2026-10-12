@@ -8,7 +8,7 @@ import {
 
 /** Fields the schema fills in itself, so an issuer never has to supply them. */
 type DefaultedFields =
-  'status' | 'paidAt' | 'providerReference' | 'checkoutUrl';
+  'status' | 'paidAt' | 'providerReference' | 'checkoutUrl' | 'payerEmail';
 
 export type IssueSubscriptionInvoiceInput = Omit<
   SubscriptionInvoice,
@@ -95,6 +95,7 @@ export class SubscriptionInvoicesRepository {
     id: string,
     providerReference: string,
     checkoutUrl: string,
+    payerEmail: string,
   ): Promise<SubscriptionInvoiceDocument | null> {
     return this.model
       .findOneAndUpdate(
@@ -103,9 +104,22 @@ export class SubscriptionInvoicesRepository {
           organizationId: new Types.ObjectId(organizationId),
           status: 'open',
         },
-        { providerReference, checkoutUrl },
+        { providerReference, checkoutUrl, payerEmail },
         { new: true },
       )
+      .exec();
+  }
+
+  /**
+   * Open invoices across every organization, oldest period first — the worklist for the
+   * auto-charge sweep. Not tenant-scoped on purpose: this is a platform-side collection job, the
+   * same way the renewal sweep reads every subscription.
+   */
+  findOpen(limit = 100): Promise<SubscriptionInvoiceDocument[]> {
+    return this.model
+      .find({ status: 'open' })
+      .sort({ periodStart: 1 })
+      .limit(limit)
       .exec();
   }
 

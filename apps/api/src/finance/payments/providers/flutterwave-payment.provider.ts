@@ -505,7 +505,74 @@ export class FlutterwaveProvider implements PaymentProvider {
     return {
       providerReference,
       status: this.mapTransactionStatus(status),
+      ...(this.readCardToken(data) ?? {}),
     };
+  }
+
+  /**
+   * Flutterwave returns `data.card.token` on a verify response for a card transaction — the
+   * saved-card token its tokenized-charge endpoint replays. Absent for every non-card channel
+   * (bank transfer, mobile money, USSD), which is the common case in this adapter's own markets,
+   * so this must stay strictly optional: no token simply means this payer cannot be charged
+   * unattended, not that anything failed.
+   *
+   * Returns a partial so the caller can spread it — an absent token must leave
+   * `mandateReference` undefined rather than set to an empty string.
+   */
+  private readCardToken(
+    data: Record<string, unknown> | undefined,
+  ): { mandateReference: string } | undefined {
+    const card = isRecord(data?.card) ? data.card : undefined;
+    const token = card?.token;
+    if (typeof token !== 'string' || !token) return undefined;
+    return { mandateReference: token };
+  }
+
+  /**
+   * Calls Flutterwave's tokenized-charge endpoint: `POST https://api.flutterwave.com/v3/
+   * tokenized-charges`, replaying a saved-card `token` captured earlier by `readCardToken`.
+   * Synchronous and final, unlike `createPayment`'s hosted-checkout `data.link` — which is what
+   * makes it usable from a background sweep with no payer present.
+   *
+   * `email` must match the one the token was created under; Flutterwave documents a mismatch as
+   * a rejection rather than a silent charge of the wrong customer.
+   *
+   * The response is mapped through the same `toPaymentResult`/`mapTransactionStatus` path as
+   * verify, so a declined card is a provider-confirmed `'failed'` and never an exception. A
+   * network failure with no response still surfaces as an ambiguous FlutterwaveApiError via
+   * `request()`, never as `'failed'`.
+   */
+  async chargeRecurring(input: {
+    mandateReference: string;
+    amount: number;
+    currency: string;
+    reference: string;
+    customerEmail: string;
+  }): Promise<PaymentProviderResult> {
+    let response: FlutterwaveEnvelope;
+    try {
+      response = await this.request('/tokenized-charges', 'POST', {
+        token: input.mandateReference,
+        email: input.customerEmail,
+        amount: input.amount,
+        currency: input.currency,
+        tx_ref: input.reference,
+      });
+    } catch (error) {
+      // The tx_ref was already sent before any failure here, so it is re-attached rather than
+      // lost — never as evidence the charge succeeded, only so it can be looked up later.
+      if (error instanceof FlutterwaveApiError) {
+        throw new FlutterwaveApiError(
+          error.message,
+          error.statusCode,
+          error.responseBody,
+          error.ambiguous,
+          input.reference,
+        );
+      }
+      throw error;
+    }
+    return this.toPaymentResult(input.reference, response);
   }
 
   /**

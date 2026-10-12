@@ -307,7 +307,82 @@ export class PaystackProvider implements PaymentProvider {
     return {
       providerReference,
       status: this.mapTransactionStatus(status),
+      ...(this.readReusableAuthorization(data) ?? {}),
     };
+  }
+
+  /**
+   * Paystack returns `data.authorization` on a verify response, carrying an
+   * `authorization_code` and a `reusable` boolean. Only a `reusable: true` authorization is
+   * captured: Paystack sets it to false for channels that cannot be charged again without the
+   * payer (bank transfer, USSD, some mobile-money flows), and replaying one of those would fail
+   * on every renewal while making KORVA believe it had card-on-file billing.
+   *
+   * Returns a partial rather than a bare string so the caller can spread it — an absent
+   * authorization must leave `mandateReference` undefined, not set to an empty string.
+   */
+  private readReusableAuthorization(
+    data: Record<string, unknown> | undefined,
+  ): { mandateReference: string } | undefined {
+    const authorization = isRecord(data?.authorization)
+      ? data.authorization
+      : undefined;
+    if (!authorization) return undefined;
+    const code = authorization.authorization_code;
+    if (authorization.reusable !== true || typeof code !== 'string' || !code) {
+      return undefined;
+    }
+    return { mandateReference: code };
+  }
+
+  /**
+   * Calls Paystack's Charge Authorization endpoint: `POST https://api.paystack.co/transaction/
+   * charge_authorization`. Unlike `createPayment`, this is synchronous and final — Paystack
+   * either charges the stored authorization or declines it, with no `authorization_url` and
+   * nothing to redirect to, which is exactly why subscription renewal can use it unattended.
+   *
+   * `email` is required by Paystack and must be the one the authorization was created under;
+   * sending a different address is documented to fail rather than silently charge.
+   *
+   * No status is inferred from the HTTP code: the response's own `data.status` is mapped
+   * through the same `mapTransactionStatus` every other method here uses, so a declined card
+   * comes back as `'failed'` (a real, provider-confirmed answer) and never as an error.
+   */
+  async chargeRecurring(input: {
+    mandateReference: string;
+    amount: number;
+    currency: string;
+    reference: string;
+    customerEmail: string;
+  }): Promise<PaymentProviderResult> {
+    let response: PaystackEnvelope;
+    try {
+      response = await this.request(
+        '/transaction/charge_authorization',
+        'POST',
+        {
+          authorization_code: input.mandateReference,
+          email: input.customerEmail,
+          amount: toMinorUnits(input.amount),
+          currency: input.currency,
+          reference: input.reference,
+        },
+      );
+    } catch (error) {
+      // Same correlation-capture reasoning as createPayment: the reference was already sent, so
+      // it must not be lost — but its presence is never evidence the charge went through.
+      if (error instanceof PaystackApiError) {
+        throw new PaystackApiError(
+          error.message,
+          error.statusCode,
+          error.responseBody,
+          error.ambiguous,
+          input.reference,
+        );
+      }
+      throw error;
+    }
+    return this.toPaymentResult(input.reference, response);
   }
 
   /**
