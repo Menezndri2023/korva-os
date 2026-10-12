@@ -8,8 +8,11 @@ import { ConfigService } from '@nestjs/config';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { SubscriptionsRepository } from './subscriptions.repository';
+import { SubscriptionInvoicesRepository } from './subscription-invoices.repository';
+import { PlansRepository } from './plans.repository';
 import { SubscriptionDocument } from './schemas/subscription.schema';
 import { AuditService } from '../audit/audit.service';
+import { CountersService } from '../core/counters/counters.service';
 
 export const SUBSCRIPTION_PERIOD_QUEUE_NAME = 'subscription-period';
 export const SUBSCRIPTION_PERIOD_JOB_NAME = 'sweep';
@@ -25,6 +28,23 @@ const JOB_OPTIONS = {
   removeOnFail: false,
 } as const;
 
+/** Days a tenant has to pay a SubscriptionInvoice before the next sweep moves the subscription
+ *  to 'past_due'. Overridable via SUBSCRIPTION_INVOICE_GRACE_DAYS. */
+const DEFAULT_GRACE_DAYS = 7;
+
+/** What one renewal attempt actually did — the sweep aggregates these for its summary log. */
+interface RenewalOutcome {
+  renewed: boolean;
+  invoiced: boolean;
+  pastDue: boolean;
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
 function addOneMonth(date: Date): Date {
   const result = new Date(date);
   result.setUTCMonth(result.getUTCMonth() + 1);
@@ -38,12 +58,24 @@ function addOneMonth(date: Date): Date {
  *
  *  - `cancelAtPeriodEnd: true` (a cancel-at-period-end request is pending) -> transitions to
  *    'canceled'. This is the terminal step of POST /subscriptions/cancel with immediate:false.
- *  - `cancelAtPeriodEnd: false` -> this is where real renewal/re-billing would happen once a PSP
- *    exists. For now, the correct provider-agnostic behavior is to simply advance
- *    currentPeriodStart/currentPeriodEnd by one billing cycle and leave status 'active' —
- *    preserving today's "free tier never expires" behavior while adding the scaffolding a future
- *    PSP integration hooks into (e.g. attempting a charge here first, and only renewing on
- *    success — falling through to 'past_due' on failure instead).
+ *  - `cancelAtPeriodEnd: false` -> renewal, which now branches on the plan's own price:
+ *      - `priceAmount <= 0` (free plan): advance the period, stay 'active', issue nothing. This
+ *        is byte-for-byte the old behavior — a free tier still never expires.
+ *      - `priceAmount > 0` (paid plan): KORVA bills the tenant for the upcoming period by
+ *        issuing a `SubscriptionInvoice` (invoice-first, the same shape
+ *        RecurringBillingSchedulerService already uses for tenant-side recurring billing), then
+ *        advances the period. If the PREVIOUS period's invoice is still 'open' past its
+ *        `dueAt` grace window, the subscription moves to 'past_due' instead and the period is
+ *        not advanced — the tenant did not pay for another period, so it does not get one.
+ *
+ * Why invoice-first rather than charging a card here: neither real adapter can do a
+ * server-initiated recurring charge. PaystackProvider.createPayment calls
+ * /transaction/initialize and FlutterwaveProvider returns `data.link` — both are HOSTED
+ * CHECKOUT flows whose status is always 'pending' until a human completes a redirect, and
+ * nothing in this codebase stores a reusable card authorization/mandate. Calling createPayment
+ * from a background sweep would therefore mint a checkout URL nobody ever opens and strand
+ * every paid subscription in 'past_due'. Collecting against an issued invoice (payment link on
+ * demand) is the mechanism that actually works today.
  *
  * Architecture is a deliberate copy of ReconciliationSchedulerService (finance/payments/
  * reconciliation-scheduler.service.ts) and its siblings QuoteExpirySchedulerService /
@@ -75,6 +107,9 @@ export class SubscriptionPeriodSchedulerService
   constructor(
     private readonly configService: ConfigService,
     private readonly subscriptionsRepository: SubscriptionsRepository,
+    private readonly subscriptionInvoicesRepository: SubscriptionInvoicesRepository,
+    private readonly plansRepository: PlansRepository,
+    private readonly countersService: CountersService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -147,6 +182,8 @@ export class SubscriptionPeriodSchedulerService
       await this.subscriptionsRepository.findRenewalCandidates();
     let canceled = 0;
     let renewed = 0;
+    let pastDue = 0;
+    let invoiced = 0;
 
     for (const candidate of candidates) {
       try {
@@ -154,8 +191,10 @@ export class SubscriptionPeriodSchedulerService
           const updated = await this.resolveCancellation(candidate);
           if (updated) canceled += 1;
         } else {
-          const updated = await this.resolveRenewal(candidate);
-          if (updated) renewed += 1;
+          const outcome = await this.resolveRenewal(candidate);
+          if (outcome.renewed) renewed += 1;
+          if (outcome.pastDue) pastDue += 1;
+          if (outcome.invoiced) invoiced += 1;
         }
       } catch (error) {
         this.logger.error(
@@ -166,7 +205,7 @@ export class SubscriptionPeriodSchedulerService
     }
 
     this.logger.log(
-      `Subscription period sweep finished: candidates=${candidates.length} canceled=${canceled} renewed=${renewed}`,
+      `Subscription period sweep finished: candidates=${candidates.length} canceled=${canceled} renewed=${renewed} invoiced=${invoiced} pastDue=${pastDue}`,
     );
   }
 
@@ -190,12 +229,117 @@ export class SubscriptionPeriodSchedulerService
     return true;
   }
 
+  /**
+   * A paid plan only gets another period once the previous one was paid for. Order matters:
+   * the invoice for the upcoming period is issued BEFORE the period is advanced, so a crash
+   * between the two re-runs safely — the unique (subscriptionId, periodStart) index turns the
+   * second issuance into a no-op and the renewal is simply retried on the next tick.
+   */
   private async resolveRenewal(
     candidate: SubscriptionDocument,
-  ): Promise<boolean> {
+  ): Promise<RenewalOutcome> {
     const organizationId = candidate.organizationId.toString();
+    const plan = await this.plansRepository.findById(
+      candidate.planId.toString(),
+    );
+
+    // A subscription whose plan no longer exists cannot be priced. Never guess an amount and
+    // never silently grant a free period — surface it and leave the row untouched for a human.
+    if (!plan) {
+      throw new Error(
+        `Subscription ${candidate.id as string} references Plan ${candidate.planId.toString()}, which no longer exists — cannot price its renewal`,
+      );
+    }
+
+    // Free plan: no money is owed, so there is nothing to invoice and nothing that could fail
+    // to be paid. Advance the period and stay 'active', exactly as before this method ever
+    // knew about invoices.
+    if (plan.priceAmount <= 0) {
+      const renewed = await this.renewPeriod(candidate, organizationId);
+      return { renewed, invoiced: false, pastDue: false };
+    }
+
+    const previous =
+      await this.subscriptionInvoicesRepository.findLatestForSubscription(
+        candidate.id as string,
+      );
+
+    // The previous period was billed and never paid, and its grace window has run out.
+    if (
+      previous &&
+      previous.status === 'open' &&
+      previous.dueAt.getTime() < Date.now()
+    ) {
+      const updated = await this.subscriptionsRepository.markPastDueIfEligible(
+        organizationId,
+        candidate.id as string,
+      );
+      if (!updated) return { renewed: false, invoiced: false, pastDue: false };
+
+      await this.auditService.record({
+        organizationId,
+        action: 'UPDATE',
+        entity: 'subscription',
+        entityId: candidate.id as string,
+        metadata: {
+          status: 'past_due',
+          automated: true,
+          reason: 'subscription_invoice_unpaid',
+          unpaidInvoiceNumber: previous.number,
+        },
+      });
+      return { renewed: false, invoiced: false, pastDue: true };
+    }
+
     // Advance from the period's own end (not "now") so a late-running sweep never shortens or
     // drifts the next period — matches changePlan()'s one-month convention.
+    const newPeriodStart = candidate.currentPeriodEnd;
+    const newPeriodEnd = addOneMonth(candidate.currentPeriodEnd);
+    const issuedAt = new Date();
+
+    const invoice = await this.subscriptionInvoicesRepository.issueForPeriod({
+      organizationId: candidate.organizationId,
+      subscriptionId: candidate._id,
+      planId: candidate.planId,
+      number: await this.countersService.nextFormatted(
+        organizationId,
+        'subscription-invoice',
+        'ABO',
+      ),
+      periodStart: newPeriodStart,
+      periodEnd: newPeriodEnd,
+      amount: plan.priceAmount,
+      currency: plan.priceCurrency,
+      issuedAt,
+      dueAt: addDays(issuedAt, this.getGraceDays()),
+    });
+
+    // `null` means this period's invoice already existed (a retried sweep) — success, not
+    // failure. Either way the period may now be advanced.
+    if (invoice) {
+      await this.auditService.record({
+        organizationId,
+        action: 'CREATE',
+        entity: 'subscription',
+        entityId: candidate.id as string,
+        metadata: {
+          automated: true,
+          reason: 'subscription_invoice_issued',
+          invoiceNumber: invoice.number,
+          amount: invoice.amount,
+          currency: invoice.currency,
+        },
+      });
+    }
+
+    const renewed = await this.renewPeriod(candidate, organizationId);
+    return { renewed, invoiced: invoice !== null, pastDue: false };
+  }
+
+  private async renewPeriod(
+    candidate: SubscriptionDocument,
+    organizationId: string,
+  ): Promise<boolean> {
     const newPeriodStart = candidate.currentPeriodEnd;
     const newPeriodEnd = addOneMonth(candidate.currentPeriodEnd);
 
@@ -220,6 +364,14 @@ export class SubscriptionPeriodSchedulerService
       },
     });
     return true;
+  }
+
+  private getGraceDays(): number {
+    const raw = this.configService.get<string>(
+      'SUBSCRIPTION_INVOICE_GRACE_DAYS',
+    );
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_GRACE_DAYS;
   }
 
   private isEnabled(): boolean {

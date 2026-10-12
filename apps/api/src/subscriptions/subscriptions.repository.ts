@@ -154,6 +154,37 @@ export class SubscriptionsRepository {
    * untouched (the cancel branch picks it up on its own next tick), and re-running this on an
    * already-renewed subscription (currentPeriodEnd now in the future) is a no-op (returns null).
    */
+  /**
+   * Atomically moves a single subscription to 'past_due', guarded by the SAME eligibility filter
+   * used by findRenewalCandidates plus cancelAtPeriodEnd:false — so a subscription canceled
+   * concurrently between the sweep's read and this write is left untouched, and re-running this
+   * on an already-past_due subscription is a no-op (returns null).
+   *
+   * Deliberately leaves currentPeriodStart/currentPeriodEnd alone: the period genuinely did NOT
+   * advance, because it was not paid for. The subscription therefore stays a renewal candidate
+   * (status is filtered to 'active' by findRenewalCandidates, so it drops out of the sweep until
+   * something reactivates it) — reaching past_due is a terminal step for the sweep, not a state
+   * it keeps re-deciding every tick.
+   */
+  markPastDueIfEligible(
+    organizationId: string,
+    id: string,
+  ): Promise<SubscriptionDocument | null> {
+    return this.subscriptionModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          status: 'active',
+          cancelAtPeriodEnd: false,
+          currentPeriodEnd: { $lt: new Date() },
+        },
+        { status: 'past_due' },
+        { new: true },
+      )
+      .exec();
+  }
+
   renewIfEligible(
     organizationId: string,
     id: string,

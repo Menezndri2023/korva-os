@@ -13,6 +13,7 @@ import type { AuthenticatedUser } from '../core/tenant/request-context.types';
 import { PlansService } from './plans.service';
 import { SubscriptionsService } from './subscriptions.service';
 import { EntitlementsService } from './entitlements.service';
+import { SubscriptionInvoicesRepository } from './subscription-invoices.repository';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -26,6 +27,7 @@ export class SubscriptionsController {
     private readonly plansService: PlansService,
     private readonly subscriptionsService: SubscriptionsService,
     private readonly entitlementsService: EntitlementsService,
+    private readonly subscriptionInvoicesRepository: SubscriptionInvoicesRepository,
   ) {}
 
   @SkipTenant()
@@ -37,6 +39,23 @@ export class SubscriptionsController {
   @Get('subscriptions/me')
   getMySubscription(@CurrentTenant() tenant: TenantContext) {
     return this.entitlementsService.getSummary(tenant.organizationId);
+  }
+
+  /**
+   * The tenant's own KORVA billing history — the SubscriptionInvoices the period scheduler
+   * issued for it. Read-only and tenant-scoped like every other route here; these are
+   * KORVA-issued invoices, so there is nothing for a tenant to create or edit.
+   *
+   * Gated on 'settings.manage' rather than a finance permission on purpose: this is the
+   * organization's own SaaS billing with KORVA (same concern as the plan/cancel routes below),
+   * not the tenant's finance data that finance.* permissions govern.
+   */
+  @RequirePermissions('settings.manage')
+  @Get('subscriptions/invoices')
+  listMyInvoices(@CurrentTenant() tenant: TenantContext) {
+    return this.subscriptionInvoicesRepository.listForOrganization(
+      tenant.organizationId,
+    );
   }
 
   @RequirePermissions('settings.manage')

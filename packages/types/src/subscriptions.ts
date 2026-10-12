@@ -24,10 +24,10 @@ export interface Plan {
  * adding it here would be a state nothing could ever transition into or out of. Add it once a
  * real trial concept exists on Plan.
  *
- * "past_due" is modeled as a state and included in the transition shape (see
- * SubscriptionsService/SubscriptionPeriodSchedulerService) but nothing sets it yet — it only
- * becomes reachable once a real PSP integration can report a failed payment attempt. Until then
- * a subscription with no payment collection simply renews (see the scheduler).
+ * "past_due" is set by SubscriptionPeriodSchedulerService when a paid plan's previous
+ * SubscriptionInvoice is still unpaid past its grace window (see that service's resolveRenewal).
+ * A free plan (priceAmount <= 0) issues no invoice and can therefore never reach this state —
+ * it simply renews forever, exactly as it always has.
  */
 export const SUBSCRIPTION_STATUSES = [
   "active",
@@ -74,4 +74,42 @@ export interface SubscriptionSummary {
   subscription: Subscription;
   plan: Plan;
   usage: UsageSummaryItem[];
+}
+
+/**
+ * KORVA's own invoice to a tenant organization for one subscription period ("Flow A" in
+ * docs/architecture/integrations-platform.md §4 — KORVA is the issuer, the tenant is the payer).
+ *
+ * Deliberately NOT the `Invoice` entity in finance/: that one is the tenant's invoice to its own
+ * end-customer. It requires a `contactId` from the tenant's CRM (KORVA has none, and fabricating
+ * one inside a tenant's contact list would be wrong), and AnalyticsService aggregates it into
+ * the tenant's own revenue/outstanding figures — so billing KORVA's SaaS fees through it would
+ * show up as money the TENANT is owed. Separate collection, never read by any finance/analytics
+ * query.
+ */
+export const SUBSCRIPTION_INVOICE_STATUSES = ["open", "paid", "void"] as const;
+export type SubscriptionInvoiceStatus =
+  (typeof SUBSCRIPTION_INVOICE_STATUSES)[number];
+
+export interface SubscriptionInvoice {
+  id: string;
+  /** The tenant being billed — NOT a scoping key for tenant-owned data, but kept as the
+   *  organization dimension so a tenant can read its own KORVA billing history. */
+  organizationId: string;
+  subscriptionId: string;
+  planId: string;
+  /** Per-organization sequence, "ABO-0001" (CountersService, key 'subscription-invoice'). */
+  number: string;
+  status: SubscriptionInvoiceStatus;
+  /** The period this invoice covers — equal to the Subscription period it was issued for. */
+  periodStart: string;
+  periodEnd: string;
+  amount: number;
+  currency: string;
+  issuedAt: string;
+  /** Payment is due by this date; past it, the next sweep moves the subscription to past_due. */
+  dueAt: string;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
