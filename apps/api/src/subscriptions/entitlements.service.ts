@@ -178,6 +178,29 @@ export class EntitlementsService {
     }
   }
 
+  /**
+   * Gates attaching a custom domain behind Starter. Ungated until 2026-10-12, which meant a
+   * free organization could point its own domain at the platform and have Caddy issue it a TLS
+   * certificate — real infrastructure and support cost, for the single clearest "I am a paying
+   * business" signal in the product.
+   *
+   * A flat Starter gate rather than a per-tier one: there is nothing graduated about owning a
+   * domain. Note this gates ATTACHING one, not serving one already attached — a subscription
+   * that lapses does not silently take a live site offline, which would be a far harsher
+   * failure than refusing the next change.
+   */
+  async assertCustomDomainAllowed(organizationId: string): Promise<void> {
+    await this.assertSubscriptionActive(organizationId);
+    const plan = await this.subscriptionsService.getActivePlan(organizationId);
+    if (!planMeetsMinimum(plan.key, 'starter')) {
+      throw new ForbiddenException({
+        code: 'CUSTOM_DOMAIN_NOT_IN_PLAN',
+        message: `Your plan ("${plan.name}") does not include a custom domain — upgrade to Starter or higher`,
+        details: { plan: plan.key },
+      });
+    }
+  }
+
   async assertSeatAvailable(organizationId: string): Promise<void> {
     await this.assertSubscriptionActive(organizationId);
     const plan = await this.subscriptionsService.getActivePlan(organizationId);

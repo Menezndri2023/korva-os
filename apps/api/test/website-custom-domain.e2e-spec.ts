@@ -87,6 +87,17 @@ describe('Website custom domain (Phase E3, e2e)', () => {
       orgRes.body,
     );
 
+    // Attaching a custom domain requires Starter or higher
+    // (EntitlementsService.assertCustomDomainAllowed), and every org starts on free — so every
+    // test in this file needs the upgrade. Done BEFORE enabledModules: changePlan trims the
+    // module list to what the new plan allows, which would undo it in the other order.
+    await request(server)
+      .post('/api/v1/subscriptions/change-plan')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ planKey: 'starter' })
+      .expect(201);
+
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -96,6 +107,76 @@ describe('Website custom domain (Phase E3, e2e)', () => {
 
     return { accessToken, organizationId, slug };
   }
+
+  /** An organization left on the free plan — the one case that must be refused. */
+  async function setupFreeOrg(email: string, name: string) {
+    const authRes = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email, password: 'password123' })
+      .expect(201);
+    const accessToken = asSuccess<AuthPayload>(authRes.body).accessToken;
+    const orgRes = await request(server)
+      .post('/api/v1/organizations')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        name,
+        type: 'services',
+        country: 'FR',
+        currency: 'EUR',
+        timezone: 'Europe/Paris',
+        language: 'fr',
+      })
+      .expect(201);
+    return {
+      accessToken,
+      organizationId: asSuccess<OrganizationPayload>(orgRes.body).id,
+    };
+  }
+
+  it('refuses to attach a custom domain on the free plan, and says why', async () => {
+    const { accessToken, organizationId } = await setupFreeOrg(
+      'domain-free-plan@korva.test',
+      'Domain Free Plan Org',
+    );
+
+    const res = await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ customDomain: 'www.free-plan-domain.com' })
+      .expect(403);
+
+    expect(asError(res.body).code).toBe('CUSTOM_DOMAIN_NOT_IN_PLAN');
+  });
+
+  it('reports the plan before the uniqueness conflict — a free org is told about its plan, not about someone else\u2019s domain', async () => {
+    const taken = await setupOrg(
+      'domain-taken-by@korva.test',
+      'Domain Taken By Org',
+      ['website'],
+    );
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${taken.accessToken}`)
+      .set('X-Organization-Id', taken.organizationId)
+      .send({ customDomain: 'www.contested-domain.com' })
+      .expect(200);
+
+    const free = await setupFreeOrg(
+      'domain-free-contest@korva.test',
+      'Domain Free Contest Org',
+    );
+    const res = await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${free.accessToken}`)
+      .set('X-Organization-Id', free.organizationId)
+      .send({ customDomain: 'www.contested-domain.com' })
+      .expect(403);
+
+    // Not CUSTOM_DOMAIN_TAKEN: revealing that a domain is already connected to another
+    // organization is information a non-eligible caller has no business receiving.
+    expect(asError(res.body).code).toBe('CUSTOM_DOMAIN_NOT_IN_PLAN');
+  });
 
   it('rejects a customDomain that is not a bare hostname (scheme/path included)', async () => {
     const { accessToken, organizationId } = await setupOrg(

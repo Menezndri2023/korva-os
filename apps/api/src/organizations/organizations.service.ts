@@ -269,6 +269,9 @@ export class OrganizationsService {
       }
     }
     if (input.customDomain) {
+      // Plan check before the uniqueness check: a free organization must be told its plan does
+      // not include a custom domain, not that the domain it wants is taken.
+      await this.entitlementsService.assertCustomDomainAllowed(id);
       const existing = await this.organizationsRepository.findByCustomDomain(
         input.customDomain,
       );
