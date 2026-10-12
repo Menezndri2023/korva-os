@@ -40,7 +40,10 @@ class BusinessOverviewScriptedProvider implements AIProvider {
   chat(input: { messages: AiChatMessage[] }): Promise<AiChatResult> {
     const last = input.messages[input.messages.length - 1];
     if (last?.role === 'tool') {
-      return Promise.resolve({ type: 'text', text: `Résultat: ${last.content}` });
+      return Promise.resolve({
+        type: 'text',
+        text: `Résultat: ${last.content}`,
+      });
     }
     if (last?.role === 'user' && last.content === 'GET_BUSINESS_OVERVIEW') {
       return Promise.resolve({
@@ -103,7 +106,9 @@ describe('Global business overview AI tool (Phase F2, e2e)', () => {
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Organization-Id', organizationId)
-      .send({ enabledModules: ['crm', 'finance', 'catalog', 'analytics', 'ai'] })
+      .send({
+        enabledModules: ['crm', 'finance', 'catalog', 'analytics', 'ai'],
+      })
       .expect(200);
   });
 
