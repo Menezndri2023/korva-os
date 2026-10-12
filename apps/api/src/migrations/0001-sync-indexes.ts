@@ -1,4 +1,4 @@
-import type { MigrationDefinition } from '../src/core/migrations/migration.types';
+import type { MigrationDefinition } from '../core/migrations/migration.types';
 
 /**
  * Builds every index declared by the Mongoose schemas, explicitly.

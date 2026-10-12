@@ -1,0 +1,19 @@
+import type { MigrationDefinition } from '../core/migrations/migration.types';
+import { migration as m0001 } from './0001-sync-indexes';
+import { migration as m0002 } from './0002-plan-currency-index';
+
+/**
+ * Every migration, registered explicitly.
+ *
+ * Deliberately a static list rather than a `readdirSync` of this directory. Scanning looked
+ * tidier and was worse in three ways: it needed to accept both `.ts` and `.js` because the same
+ * runner executes from `src/` under ts-node and from `dist/` in the production image, it had to
+ * de-duplicate a stale compiled artifact sitting beside its source, and it used `require()`,
+ * which this codebase's lint rules forbid. Static imports also mean the compiler proves every
+ * entry exists — a renamed file is a build error rather than a migration that silently stops
+ * being applied.
+ *
+ * ADDING ONE: create the file, then add it here. Order in this array is irrelevant — the runner
+ * sorts by each migration's own `name`, which is what gets recorded.
+ */
+export const MIGRATIONS: MigrationDefinition[] = [m0001, m0002];

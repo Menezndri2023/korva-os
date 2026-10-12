@@ -158,16 +158,24 @@ Vérifier que les trois secrets JWT diffèrent réellement — réutiliser une v
 
 **5. Appliquer les migrations — AVANT de démarrer l'API.**
 
+Le runner est **compilé dans l'image** (`dist/migrate.js`), donc il s'exécute depuis l'image de production elle-même — aucun toolchain de développement n'est nécessaire sur l'hôte :
+
 ```bash
 # Dry run : liste ce qui est en attente, n'écrit rien
-pnpm --filter @korva/api exec ts-node \
-  -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register \
-  scripts/migrate.ts
+docker compose -f docker-compose.prod.yml --env-file .env.production \
+  run --rm api node dist/migrate.js
 
 # Application
-pnpm --filter @korva/api exec ts-node \
-  -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register \
-  scripts/migrate.ts --apply
+docker compose -f docker-compose.prod.yml --env-file .env.production \
+  run --rm api node dist/migrate.js --apply
+```
+
+`run --rm` place le conteneur sur le réseau du compose : le nom d'hôte interne `redis` et l'URI Atlas se résolvent exactement comme pour l'API en fonctionnement, et le service `redis` démarre automatiquement via `depends_on` (voulu — l'application valide `REDIS_URL` au démarrage).
+
+En local, contre la base de développement, la même chose sans Docker :
+
+```bash
+pnpm --filter @korva/api build && (cd apps/api && node dist/migrate.js)
 ```
 
 `autoIndex` est désactivé en production (`app.module.ts`) : Mongoose le laisse à `true` par défaut, ce qui fait démarrer une construction d'index pour chaque modèle à **chaque** démarrage de **chaque** instance — anodin en local, risqué contre un vrai cluster pendant un déploiement progressif. Les index sont donc créés par la migration `0001-sync-indexes`, qui doit tourner **avant** que les nouvelles instances démarrent. Sauter cette étape ne provoque aucune erreur visible : les requêtes deviennent lentes et les contraintes d'unicité n'existent tout simplement pas.

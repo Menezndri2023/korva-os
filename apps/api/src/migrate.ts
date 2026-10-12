@@ -1,6 +1,19 @@
 /**
- * Applies pending migrations from `apps/api/migrations/`, in lexicographic order of each
- * migration's own `name`, recording each in the `migrations` collection once it completes.
+ * Applies pending migrations from `./migrations/index.ts`'s registry, in lexicographic order of
+ * each migration's own `name`, recording each in the `migrations` collection once it completes.
+ *
+ * Lives under `src/` rather than in `scripts/` for one decisive reason: `nest build` compiles
+ * it to `dist/migrate.js`, so it ships INSIDE the production image and runs with plain `node`.
+ * It was in `scripts/` first, which made the runbook's migration step impossible to execute —
+ * the image contains only `dist/`, `packages/` and production `node_modules`, so neither the
+ * script nor `ts-node` (a devDependency, excluded by `pnpm install --prod`) was there at all.
+ *
+ * In production:
+ *   docker compose -f docker-compose.prod.yml --env-file .env.production \
+ *     run --rm --no-deps api node dist/migrate.js --apply
+ *
+ * `run --rm` on the `api` service puts it on the compose network, so the internal `redis`
+ * hostname and the Atlas URI both resolve exactly as they do for the running API.
  *
  * Deliberately NOT an HTTP endpoint and deliberately not run automatically at boot:
  *
@@ -14,14 +27,12 @@
  *    whole point. See docs/deployment.md's runbook.
  *
  * Dry run is the default, matching every other script here:
- *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/migrate.ts
- *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register scripts/migrate.ts --apply
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register src/migrate.ts
+ *   pnpm --filter @korva/api exec ts-node -r ./scripts/support/ts-extension-resolver.cjs -r tsconfig-paths/register src/migrate.ts --apply
  *
  * Exits non-zero if any migration throws, and stops at the first failure rather than carrying on
  * — a later migration may well depend on an earlier one having completed.
  */
-import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 
 // Set BEFORE the application context is built: every scheduler and queue worker checks
@@ -32,42 +43,34 @@ import { NestFactory } from '@nestjs/core';
 process.env.DISABLE_BACKGROUND_WORKERS = 'true';
 import { getConnectionToken, getModelToken } from '@nestjs/mongoose';
 import type { Connection, Model } from 'mongoose';
-import { AppModule } from '../src/app.module';
+import { AppModule } from './app.module';
 import {
   Migration,
   MigrationDocument,
-} from '../src/core/migrations/schemas/migration.schema';
-import type { MigrationDefinition } from '../src/core/migrations/migration.types';
+} from './core/migrations/schemas/migration.schema';
+import type { MigrationDefinition } from './core/migrations/migration.types';
+import { MIGRATIONS } from './migrations';
 
-const MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
-
-/** Loads every `*.ts` in migrations/, sorted by the definition's own `name` rather than by
- *  filename — the name is what gets recorded, so it must be what defines order. */
+/**
+ * Validates the registered list and returns it in application order — sorted by each
+ * migration's own `name`, since the name is what is recorded and must therefore define
+ * sequence, not the order someone happened to add an import in.
+ */
 function loadMigrations(): MigrationDefinition[] {
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
-    .sort();
-  const loaded = files.map((file) => {
-    const mod = require(join(MIGRATIONS_DIR, file)) as {
-      migration?: MigrationDefinition;
-      default?: MigrationDefinition;
-    };
-    const migration = mod.migration ?? mod.default;
-    if (!migration?.name || typeof migration.up !== 'function') {
-      throw new Error(
-        `migrations/${file} does not export a MigrationDefinition (expected a named \`migration\` or a default export)`,
-      );
-    }
-    return migration;
-  });
-  const names = loaded.map((m) => m.name);
+  const names = MIGRATIONS.map((m) => m.name);
   const duplicate = names.find((n, i) => names.indexOf(n) !== i);
   if (duplicate) {
     // Two migrations sharing a name means the second could never be recorded, and would be
     // silently re-run forever. Fail loudly rather than half-apply.
     throw new Error(`Duplicate migration name: "${duplicate}"`);
   }
-  return loaded.sort((a, b) => a.name.localeCompare(b.name));
+  const unnamed = MIGRATIONS.find((m) => !m.name || typeof m.up !== 'function');
+  if (unnamed) {
+    throw new Error(
+      'A registered migration is missing a name or an up() function',
+    );
+  }
+  return [...MIGRATIONS].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function run() {

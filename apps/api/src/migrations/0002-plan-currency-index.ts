@@ -1,4 +1,4 @@
-import type { MigrationDefinition } from '../src/core/migrations/migration.types';
+import type { MigrationDefinition } from '../core/migrations/migration.types';
 
 /**
  * Replaces Plan's old `unique: { key }` index with the compound `unique: { key, priceCurrency }`

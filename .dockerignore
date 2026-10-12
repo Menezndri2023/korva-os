@@ -1,6 +1,12 @@
 node_modules
 **/node_modules
 **/dist
+# TypeScript's incremental build state. Excluded for a reason that bit us: `**/dist` above keeps
+# the host's build output out of the context, but a stale tsbuildinfo told tsc inside the image
+# that everything was already emitted — so `nest build` wrote almost nothing and the resulting
+# API image had no dist/main.js at all. The image content depended on whether the developer
+# happened to have built locally.
+**/*.tsbuildinfo
 **/.next
 **/.turbo
 .git

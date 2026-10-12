@@ -3,12 +3,21 @@
 # NOT the same file as docker-compose.yml — that one exists only to give local development a
 # MongoDB and a Redis, and it runs no application container at all.
 #
-# Data stores are deliberately absent here. Running the primary datastore of a multi-tenant SaaS
-# as a sibling container on the same host, with no managed backups, no point-in-time recovery
-# and no failover, is the kind of decision that is survivable right up until it isn't. Point
-# MONGODB_URI at a managed replica set (MongoDB Atlas or equivalent — a replica set is REQUIRED,
-# not preferred: financial writes use multi-document transactions, which MongoDB only supports on
-# one) and REDIS_URL at a managed Redis. docs/deployment.md has the full runbook.
+# MongoDB is NOT here, Redis IS, and the asymmetry is deliberate rather than an oversight.
+#
+# MongoDB holds the system of record — invoices, payments, subscriptions, every tenant's data.
+# Running it as a sibling container with no managed backups, no point-in-time recovery and no
+# failover is survivable right up until it isn't. MONGODB_URI must point at a managed replica
+# set (Atlas or equivalent). A replica set is REQUIRED, not preferred: financial writes use
+# multi-document transactions, which MongoDB only supports on one.
+#
+# Redis holds BullMQ's queues, which have a completely different loss profile: the schedulers
+# re-derive their worklists from MongoDB's current state on the next sweep, so losing the queues
+# costs at worst some in-flight events, never a financial record. That tolerance is what makes
+# a local Redis the right call — and it removes the real problem with a per-request-billed
+# managed Redis, which this application is a poor fit for: 13 BullMQ workers and 13 QueueEvents
+# listeners keep 26 blocking loops re-arming every few seconds with zero business activity. See
+# docs/deployment.md's "Modèle de coût Redis".
 #
 # Usage:
 #   cp .env.production.example .env.production   # then fill it in
@@ -18,6 +27,34 @@
 # needs the other workspace packages' manifests to resolve `workspace:*`.
 
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # `--appendonly yes` so a restart does not drop queued jobs on the floor. `--maxmemory-policy
+    # noeviction` is not optional for BullMQ: under an eviction policy Redis would silently drop
+    # queue keys when memory fills, and a lost job looks exactly like a job that never existed.
+    # Failing writes loudly is the only acceptable behavior for a queue broker.
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    # No `ports:` — reachable only on the compose network. A Redis exposed on a host port with
+    # only a password in front of it is one scan away from being someone else's.
+    expose:
+      - "6379"
+    volumes:
+      - korva_redis_data:/data
+
   api:
     build:
       context: .
@@ -32,8 +69,8 @@ services:
     # No `ports:` on any app service on purpose — only Caddy binds a host port. An API reachable
     # directly on :4000 would bypass TLS termination and the proxy's rate limiting.
     depends_on:
-      caddy:
-        condition: service_started
+      redis:
+        condition: service_healthy
 
   web:
     build:
@@ -79,7 +116,15 @@ services:
       # on the next boot, which is the fastest way to hit Let's Encrypt's rate limits.
       - korva_caddy_data:/data
       - korva_caddy_config:/config
+    # Caddy proxies these, so it starts after them. The previous graph had `api` waiting on
+    # `caddy`, which is backwards: Caddy's on-demand-TLS `ask` endpoint calls the API, so an API
+    # that waits for Caddy waits for something that needs it first.
+    depends_on:
+      - api
+      - web
+      - storefront
 
 volumes:
+  korva_redis_data:
   korva_caddy_data:
   korva_caddy_config:
