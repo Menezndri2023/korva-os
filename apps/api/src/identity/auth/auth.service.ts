@@ -90,6 +90,10 @@ export class AuthService {
   async login(input: LoginInput) {
     const user = await this.usersService.findByEmail(input.email, true);
     if (!user) {
+      this.logAuthEvent('AUTH_LOGIN_FAILED', {
+        reason: 'unknown_email',
+        email: input.email,
+      });
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password',
@@ -100,6 +104,11 @@ export class AuthService {
     // (correct password or not) until the cooldown elapses, and must never leak whether the
     // password itself was right or wrong while locked.
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      this.logAuthEvent('AUTH_LOGIN_BLOCKED', {
+        reason: 'account_locked',
+        userId: user.id as string,
+        lockedUntil: user.lockedUntil.toISOString(),
+      });
       throw new UnauthorizedException({
         code: 'ACCOUNT_LOCKED',
         message:
@@ -113,6 +122,10 @@ export class AuthService {
     );
     if (!valid) {
       await this.registerFailedAttempt(user);
+      this.logAuthEvent('AUTH_LOGIN_FAILED', {
+        reason: 'bad_password',
+        userId: user.id as string,
+      });
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password',
@@ -132,6 +145,10 @@ export class AuthService {
         !!this.twoFactorService?.verifyActiveCode(secret, input.totpCode);
       if (!codeValid) {
         await this.registerFailedAttempt(user);
+        this.logAuthEvent('AUTH_LOGIN_FAILED', {
+          reason: 'bad_totp_code',
+          userId: user.id as string,
+        });
         throw new UnauthorizedException({
           code: 'INVALID_TOTP_CODE',
           message: 'Invalid verification code',
@@ -146,6 +163,10 @@ export class AuthService {
     }
 
     const tokens = await this.issueTokens(user);
+    this.logAuthEvent('AUTH_LOGIN_SUCCEEDED', {
+      userId: user.id as string,
+      twoFactor: user.totpEnabled === true,
+    });
     return { user: toPublicUser(user), ...tokens };
   }
 
@@ -163,7 +184,37 @@ export class AuthService {
         user.id as string,
         new Date(Date.now() + LOCKOUT_DURATION_MS),
       );
+      this.logAuthEvent('AUTH_ACCOUNT_LOCKED', {
+        userId: user.id as string,
+        attempts,
+        lockoutMs: LOCKOUT_DURATION_MS,
+      });
     }
+  }
+
+  /**
+   * Authentication events go to the structured log, NOT to AuditService.
+   *
+   * AuditLog.organizationId is `required` and AuditService.listRecent filters on it (it backs a
+   * tenant-visible read API) — but a login has no organization: the user picks one afterwards,
+   * and may belong to several. Writing these as audit rows would mean either making the tenant
+   * scope nullable, which breaks the isolation guarantee that read API rests on, or inventing a
+   * second audit concept for six log lines. StructuredLogger already emits JSON stamped with
+   * the request id (common/logging/structured-logger.service.ts), which is what a log
+   * aggregator needs — so these are platform security events in the log stream rather than
+   * tenant business events in the audit trail. Recorded against
+   * docs/PRODUCTION_READINESS.md §24's "Add audit logging to login/logout events".
+   *
+   * `email` is included ONLY for the unknown-email case, where there is no userId to identify
+   * the attempt by and a line with no identifier at all would be useless for incident response.
+   * Every other event carries userId instead. The password, the TOTP code, the TOTP secret and
+   * any token or token hash are never passed in — asserted by this file's own spec.
+   */
+  private logAuthEvent(
+    event: string,
+    details: Record<string, string | number | boolean>,
+  ): void {
+    this.logger.log(`${event} ${JSON.stringify(details)}`);
   }
 
   /**
@@ -200,6 +251,9 @@ export class AuthService {
   async logout(refreshToken: string): Promise<void> {
     const tokenHash = hashToken(refreshToken);
     await this.sessionsService.revokeByTokenHash(tokenHash);
+    // No outcome in the line: revokeByTokenHash returns void, and the endpoint deliberately
+    // answers identically for a known, an already-revoked and an entirely unknown token.
+    this.logAuthEvent('AUTH_LOGOUT', {});
   }
 
   /**
