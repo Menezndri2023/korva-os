@@ -28,6 +28,12 @@ Les trois images ont été construites et démarrées manuellement pendant cette
 
 `packages/types`/`packages/validation`/`packages/ui` n'ont pas d'étape de build ([ADR-001](architecture-decisions.md#adr-001)) : leur `package.json` pointe `main`/`types` directement sur `src/*.ts`. Chaque image de runtime copie donc ces packages en source, pas juste leur `node_modules` — le JS compilé (`dist/main.js` pour l'API, le serveur Next.js pour web/storefront) continue de les résoudre via l'exécution native de TypeScript par Node au runtime.
 
+## Temps et fiabilité du build d'image
+
+Un build d'image à froid n'a aucun cache de store pnpm : il télécharge chaque tarball, et pnpm 11 vérifie en plus les politiques de chaîne d'approvisionnement du lockfile (~1200 entrées, **4 à 5 minutes** à elles seules, mesuré). Comptez une quinzaine de minutes par image sur une connexion ordinaire, bien plus sur une connexion lente.
+
+Les trois Dockerfiles passent `--fetch-timeout 120000` à `pnpm install`, au lieu des 60 s par défaut. Ce n'est pas du confort : sur une connexion lente ou saturée, le défaut interrompt l'installation entière avec `TimeoutError: The operation was aborted due to timeout`, ce qui ressemble à un Dockerfile cassé sans en être un. Vérifié en reproduisant l'étape dans `node:26-slim` — la même installation aboutit dès que le timeout est relevé, scripts natifs compris (`argon2`, `msgpackr-extract` utilisent leurs prébuilds `linux-x64`, aucun compilateur n'est requis).
+
 ## Variables d'environnement de build
 
 `apps/web`/`apps/storefront` ont besoin de `NEXT_PUBLIC_API_URL` **au moment du build** (Next.js inline les variables `NEXT_PUBLIC_*` dans le bundle client, pas au runtime) :

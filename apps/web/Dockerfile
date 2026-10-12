@@ -16,7 +16,13 @@ COPY packages/types/package.json packages/types/package.json
 COPY packages/validation/package.json packages/validation/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/config/package.json packages/config/package.json
-RUN pnpm install --frozen-lockfile --filter @korva/web...
+# `--fetch-timeout` raised from pnpm's 60s default. A cold image build downloads every tarball
+# with no store cache, and on a slow or contended connection the default aborts the whole
+# install with `TimeoutError: The operation was aborted due to timeout` — which reads like a
+# broken Dockerfile and is not one. Verified: the same install completes in node:26-slim once
+# the timeout is raised, native install scripts (argon2, msgpackr-extract) included. 120s is
+# generous without letting a genuinely unreachable registry hang the build for minutes.
+RUN pnpm install --frozen-lockfile --filter @korva/web... --fetch-timeout 120000
 
 FROM deps AS build
 COPY packages/types packages/types
@@ -38,7 +44,7 @@ COPY packages/types/package.json packages/types/package.json
 COPY packages/validation/package.json packages/validation/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/config/package.json packages/config/package.json
-RUN pnpm install --frozen-lockfile --prod --filter @korva/web...
+RUN pnpm install --frozen-lockfile --prod --filter @korva/web... --fetch-timeout 120000
 
 FROM base AS runtime
 ENV NODE_ENV=production
