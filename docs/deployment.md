@@ -129,6 +129,15 @@ Si `rs.status()` échoue, l'instance n'est pas un replica set — s'arrêter ici
 
 **En pratique : un VPS** (Hetzner, OVH, Scaleway, DigitalOcean...), pas un PaaS. Dimensionnement de départ raisonnable pour les 3 conteneurs + Caddy : 2 vCPU / 4 Go. Les données vivant chez Atlas et Upstash, l'hôte ne stocke que les images et les certificats.
 
+**Préparation de l'hôte** : `docker/host/bootstrap-vps.sh` fait tout le travail système, et il est idempotent.
+
+```bash
+scp docker/host/bootstrap-vps.sh root@<IP>:/root/
+ssh root@<IP> 'bash /root/bootstrap-vps.sh korva'
+```
+
+Il installe Docker Engine depuis le dépôt officiel (celui d'Ubuntu n'embarque pas le plugin `compose` v2 que ce projet utilise), crée un utilisateur non privilégié avec la clé SSH déjà en place, ferme le pare-feu sauf 22/80/443, active les mises à jour de sécurité automatiques sans redémarrage automatique, ajoute 2 Go de swap, et applique les trois réglages noyau que Redis réclame : `vm.overcommit_memory=1` (sinon le fork de réécriture AOF peut être refusé et l'AOF grossit sans fin), `net.core.somaxconn` relevé (une instance d'API ouvre 26 connexions longues), et la désactivation des Transparent Huge Pages, qui provoquent des pics de latence pendant la persistance de Redis.
+
 **Région** : les bases sont déjà provisionnées, donc choisir la région de l'hôte au plus près du cluster Atlas — chaque requête applicative traverse ce lien, et 80 ms de latence par aller-retour se paient sur toutes les pages.
 
 **3. DNS.** Trois enregistrements A (et AAAA si l'hôte a une IPv6) vers l'IP de l'étape 2 :
