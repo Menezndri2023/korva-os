@@ -33,6 +33,13 @@ jobs:
       REDIS_URL: redis://localhost:6380
       JWT_SECRET: ci-jwt-secret
       JWT_REFRESH_SECRET: ci-jwt-refresh-secret
+      # The other two of validateEnv's six REQUIRED_VARS
+      # (apps/api/src/core/config/env.validation.ts). Without them the application refuses to
+      # boot, so every e2e test and the API image smoke test failed deterministically — neither
+      # job could ever have been green. INTEGRATION_CREDENTIALS_KEY has no format requirement:
+      # CredentialEncryptionService hashes whatever it is given with SHA-256.
+      CUSTOMER_JWT_SECRET: ci-customer-jwt-secret
+      INTEGRATION_CREDENTIALS_KEY: ci-integration-credentials-key
 
     steps:
       - uses: actions/checkout@v4
@@ -199,6 +206,13 @@ jobs:
       REDIS_URL: redis://localhost:6380
       JWT_SECRET: ci-jwt-secret
       JWT_REFRESH_SECRET: ci-jwt-refresh-secret
+      # The other two of validateEnv's six REQUIRED_VARS
+      # (apps/api/src/core/config/env.validation.ts). Without them the application refuses to
+      # boot, so every e2e test and the API image smoke test failed deterministically — neither
+      # job could ever have been green. INTEGRATION_CREDENTIALS_KEY has no format requirement:
+      # CredentialEncryptionService hashes whatever it is given with SHA-256.
+      CUSTOMER_JWT_SECRET: ci-customer-jwt-secret
+      INTEGRATION_CREDENTIALS_KEY: ci-integration-credentials-key
 
     steps:
       - uses: actions/checkout@v4
@@ -318,6 +332,8 @@ jobs:
             -e REDIS_URL \
             -e JWT_SECRET \
             -e JWT_REFRESH_SECRET \
+            -e CUSTOMER_JWT_SECRET \
+            -e INTEGRATION_CREDENTIALS_KEY \
             -e CORS_ORIGINS=http://localhost:3000 \
             korva-api:ci
           ok=false

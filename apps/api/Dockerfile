@@ -31,7 +31,12 @@ COPY packages/validation packages/validation
 COPY packages/ui packages/ui
 COPY packages/config packages/config
 COPY apps/api apps/api
-RUN pnpm --filter @korva/api build
+# The tsbuildinfo is removed right after the build, not left for the runtime COPY to pick up:
+# `tsBuildInfoFile` deliberately points inside `dist` so nest-cli's `deleteOutDir` clears it
+# (see apps/api/tsconfig.build.json), but the runtime stage copies `dist` wholesale, which would
+# ship 948 KB of incremental compiler state in a production image. Shipping build metadata is
+# how this file caused a broken image in the first place — it has no business in the artifact.
+RUN pnpm --filter @korva/api build && rm -f apps/api/dist/*.tsbuildinfo
 
 # Separate production-only install (--prod): excludes devDependencies (jest, typescript,
 # eslint, @nestjs/cli, ts-node, ...) from what actually ships in the runtime image. Uses the
