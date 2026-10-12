@@ -155,6 +155,37 @@ export class SubscriptionsRepository {
    * already-renewed subscription (currentPeriodEnd now in the future) is a no-op (returns null).
    */
   /**
+   * Clears a stored proration once it has been folded into a SubscriptionInvoice, so it is
+   * billed exactly once. Called AFTER the invoice is issued, never before: if the issuance
+   * fails, the proration must still be there for the next sweep to apply.
+   *
+   * Guarded on the exact `prorationAmount` that was applied, not just on the subscription id —
+   * a changePlan() landing between the issuance and this write stores a NEW proration, and
+   * clearing blindly would discard it unbilled.
+   */
+  clearAppliedProration(
+    organizationId: string,
+    id: string,
+    appliedAmount: number,
+  ): Promise<SubscriptionDocument | null> {
+    return this.subscriptionModel
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+          prorationAmount: appliedAmount,
+        },
+        {
+          prorationAmount: null,
+          prorationCurrency: null,
+          prorationCalculatedAt: null,
+        },
+        { new: true },
+      )
+      .exec();
+  }
+
+  /**
    * Returns a 'past_due' subscription to 'active' once its overdue SubscriptionInvoice is paid.
    *
    * Deliberately does NOT touch the billing period. The paid invoice covers the period that

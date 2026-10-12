@@ -44,11 +44,15 @@ export class Subscription {
    * Computed, stored-only proration from the most recent mid-period changePlan() — positive
    * means owed, negative means a credit.
    *
-   * Still never billed, but no longer for want of a PSP: SubscriptionInvoice bills the plan's
-   * full `priceAmount` for the period and ignores this field entirely (see
-   * SubscriptionPeriodSchedulerService.resolveRenewal). Applying it means deciding whether a
-   * mid-period upgrade is invoiced immediately or folded into the next period's amount — a
-   * pricing decision, not a missing integration.
+   * Billed by being folded into the NEXT SubscriptionInvoice's amount, then cleared, so it is
+   * charged exactly once (SubscriptionPeriodSchedulerService.resolveRenewal +
+   * SubscriptionsRepository.clearAppliedProration). Invoiced with the next period rather than
+   * immediately because there is no card on file: a separate mid-period invoice would mean
+   * sending the tenant another payment link for what is often a few units of currency.
+   *
+   * A credit larger than the period's price is clamped at zero — never a negative invoice — and
+   * the unapplied remainder is recorded in the audit entry rather than carried forward, which
+   * would need a credit-balance concept this codebase does not have.
    */
   @Prop({ type: Number, default: null })
   prorationAmount!: number | null;

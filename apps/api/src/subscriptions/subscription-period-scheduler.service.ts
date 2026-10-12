@@ -297,6 +297,40 @@ export class SubscriptionPeriodSchedulerService
     const newPeriodEnd = addOneMonth(candidate.currentPeriodEnd);
     const issuedAt = new Date();
 
+    // A mid-period changePlan() stores the price delta for the overlap it created
+    // (SubscriptionsService#computeProration) and resets the period. Folding that delta into
+    // the next invoice is the right move for an invoice-first model: issuing a second invoice
+    // mid-period would send the tenant another payment link for what is often a few units of
+    // currency. Currency is re-checked rather than assumed — computeProration stores the plan's
+    // currency at the time of the change, and a later plan price-currency change would desync
+    // it; mixing currencies in one amount is never acceptable.
+    const proration =
+      candidate.prorationAmount !== null &&
+      candidate.prorationCurrency === plan.priceCurrency
+        ? candidate.prorationAmount
+        : 0;
+    // Never a negative invoice. A credit larger than the period's price is clamped, and the
+    // unapplied remainder is surfaced in the audit entry rather than silently swallowed —
+    // carrying it forward would need a real credit-balance concept, which does not exist here.
+    const rawAmount = plan.priceAmount + proration;
+    const amount = Math.max(0, Math.round(rawAmount * 100) / 100);
+    const unappliedCredit =
+      rawAmount < 0 ? Math.round(rawAmount * -100) / 100 : 0;
+
+    // A credit that fully covers the period leaves nothing to bill. Issuing a zero-amount
+    // invoice would hand the tenant a checkout link for nothing, so this takes the same path a
+    // free plan does: advance the period, issue nothing, and still consume the proration.
+    if (amount === 0) {
+      const renewed = await this.renewPeriod(candidate, organizationId);
+      await this.consumeProration(candidate, organizationId, proration, {
+        reason: 'subscription_period_fully_covered_by_credit',
+        planAmount: plan.priceAmount,
+        prorationApplied: proration,
+        unappliedCredit,
+      });
+      return { renewed, invoiced: false, pastDue: false };
+    }
+
     const invoice = await this.subscriptionInvoicesRepository.issueForPeriod({
       organizationId: candidate.organizationId,
       subscriptionId: candidate._id,
@@ -308,7 +342,7 @@ export class SubscriptionPeriodSchedulerService
       ),
       periodStart: newPeriodStart,
       periodEnd: newPeriodEnd,
-      amount: plan.priceAmount,
+      amount,
       currency: plan.priceCurrency,
       issuedAt,
       dueAt: addDays(issuedAt, this.getGraceDays()),
@@ -328,12 +362,49 @@ export class SubscriptionPeriodSchedulerService
           invoiceNumber: invoice.number,
           amount: invoice.amount,
           currency: invoice.currency,
+          planAmount: plan.priceAmount,
+          prorationApplied: proration,
+          unappliedCredit,
         },
       });
     }
 
+    // Only after the invoice exists: if issuance had failed, the proration must still be there
+    // for the next sweep to apply.
+    await this.consumeProration(candidate, organizationId, proration, null);
+
     const renewed = await this.renewPeriod(candidate, organizationId);
     return { renewed, invoiced: invoice !== null, pastDue: false };
+  }
+
+  /**
+   * Clears a proration that has been billed, and optionally records why. `appliedAmount` of 0
+   * means there was nothing to apply (no proration, or a currency mismatch), in which case
+   * there is nothing to clear either — a currency-mismatched proration is deliberately LEFT in
+   * place rather than discarded, so it is still visible for a human to resolve.
+   */
+  private async consumeProration(
+    candidate: SubscriptionDocument,
+    organizationId: string,
+    appliedAmount: number,
+    auditMetadata: Record<string, unknown> | null,
+  ): Promise<void> {
+    if (appliedAmount !== 0) {
+      await this.subscriptionsRepository.clearAppliedProration(
+        organizationId,
+        candidate.id as string,
+        appliedAmount,
+      );
+    }
+    if (auditMetadata) {
+      await this.auditService.record({
+        organizationId,
+        action: 'UPDATE',
+        entity: 'subscription',
+        entityId: candidate.id as string,
+        metadata: { automated: true, ...auditMetadata },
+      });
+    }
   }
 
   private async renewPeriod(

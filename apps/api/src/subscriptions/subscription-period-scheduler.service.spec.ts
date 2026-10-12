@@ -65,6 +65,8 @@ function candidate(
   overrides: Partial<{
     cancelAtPeriodEnd: boolean;
     currentPeriodEnd: Date;
+    prorationAmount: number | null;
+    prorationCurrency: string | null;
   }> = {},
 ): SubscriptionDocument {
   return {
@@ -77,6 +79,8 @@ function candidate(
     currentPeriodStart: new Date('2026-01-01T00:00:00.000Z'),
     currentPeriodEnd:
       overrides.currentPeriodEnd ?? new Date('2026-02-01T00:00:00.000Z'),
+    prorationAmount: overrides.prorationAmount ?? null,
+    prorationCurrency: overrides.prorationCurrency ?? null,
   } as unknown as SubscriptionDocument;
 }
 
@@ -87,6 +91,7 @@ interface Harness {
     renewIfEligible: jest.Mock;
     cancelIfEligible: jest.Mock;
     markPastDueIfEligible: jest.Mock;
+    clearAppliedProration: jest.Mock;
   };
   invoices: {
     issueForPeriod: jest.Mock;
@@ -121,6 +126,9 @@ async function buildHarness(
     renewIfEligible: jest.fn().mockResolvedValue({ id: SUB_ID.toString() }),
     cancelIfEligible: jest.fn().mockResolvedValue({ id: SUB_ID.toString() }),
     markPastDueIfEligible: jest
+      .fn()
+      .mockResolvedValue({ id: SUB_ID.toString() }),
+    clearAppliedProration: jest
       .fn()
       .mockResolvedValue({ id: SUB_ID.toString() }),
   };
@@ -337,6 +345,104 @@ describe('SubscriptionPeriodSchedulerService — renewal billing', () => {
     await h.runSweep();
 
     expect(h.subscriptions.renewIfEligible).toHaveBeenCalledTimes(2);
+  });
+
+  describe('mid-period proration folded into the next invoice', () => {
+    it('adds a positive proration to the period price, then clears it so it bills once', async () => {
+      const h = await buildHarness({
+        plan: { priceAmount: 2900, priceCurrency: 'EUR' },
+        candidates: [
+          candidate({ prorationAmount: 1500, prorationCurrency: 'EUR' }),
+        ],
+      });
+
+      await h.runSweep();
+
+      expect(
+        firstCallArg<{ amount: number }>(h.invoices.issueForPeriod).amount,
+      ).toBe(4400);
+      // Cleared only once the invoice exists, and guarded on the exact amount applied.
+      expect(h.subscriptions.clearAppliedProration).toHaveBeenCalledWith(
+        ORG_ID.toString(),
+        SUB_ID.toString(),
+        1500,
+      );
+    });
+
+    it('subtracts a credit from the period price', async () => {
+      const h = await buildHarness({
+        plan: { priceAmount: 2900, priceCurrency: 'EUR' },
+        candidates: [
+          candidate({ prorationAmount: -900, prorationCurrency: 'EUR' }),
+        ],
+      });
+
+      await h.runSweep();
+
+      expect(
+        firstCallArg<{ amount: number }>(h.invoices.issueForPeriod).amount,
+      ).toBe(2000);
+    });
+
+    it('never issues a negative or zero invoice: a credit beyond the price issues nothing and still renews', async () => {
+      const h = await buildHarness({
+        plan: { priceAmount: 2900, priceCurrency: 'EUR' },
+        candidates: [
+          candidate({ prorationAmount: -5000, prorationCurrency: 'EUR' }),
+        ],
+      });
+
+      await h.runSweep();
+
+      // A zero-amount invoice would hand the tenant a checkout link for nothing.
+      expect(h.invoices.issueForPeriod).not.toHaveBeenCalled();
+      expect(h.subscriptions.renewIfEligible).toHaveBeenCalledTimes(1);
+      expect(h.subscriptions.clearAppliedProration).toHaveBeenCalledTimes(1);
+      // The discarded part of the credit is surfaced rather than silently swallowed.
+      expect(auditReasons(h.audit.record)).toContainEqual(
+        expect.objectContaining({
+          reason: 'subscription_period_fully_covered_by_credit',
+          unappliedCredit: 2100,
+        }),
+      );
+    });
+
+    it('ignores — and deliberately does not clear — a proration stored in another currency', async () => {
+      const h = await buildHarness({
+        plan: { priceAmount: 2900, priceCurrency: 'EUR' },
+        candidates: [
+          candidate({ prorationAmount: 1500, prorationCurrency: 'MAD' }),
+        ],
+      });
+
+      await h.runSweep();
+
+      // Mixing currencies in one amount is never acceptable; the invoice bills the plan alone.
+      expect(
+        firstCallArg<{ amount: number }>(h.invoices.issueForPeriod).amount,
+      ).toBe(2900);
+      // Left in place so it stays visible for a human instead of being discarded unbilled.
+      expect(h.subscriptions.clearAppliedProration).not.toHaveBeenCalled();
+    });
+
+    it('leaves a stored proration untouched when the subscription goes past_due instead', async () => {
+      const h = await buildHarness({
+        plan: { priceAmount: 2900, priceCurrency: 'EUR' },
+        candidates: [
+          candidate({ prorationAmount: 1500, prorationCurrency: 'EUR' }),
+        ],
+        latestInvoice: {
+          status: 'open',
+          number: 'ABO-0001',
+          dueAt: new Date(Date.now() - 60_000),
+        },
+      });
+
+      await h.runSweep();
+
+      // Still owed: nothing was billed, so nothing may be consumed.
+      expect(h.subscriptions.clearAppliedProration).not.toHaveBeenCalled();
+    });
   });
 
   it('a cancel-at-period-end subscription is canceled and never invoiced', async () => {

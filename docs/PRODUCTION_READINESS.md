@@ -807,6 +807,9 @@ Each verified by direct inspection at this HEAD, not inferred from a commit mess
 | Add rate limiting to public storefront write endpoints (§24 P1) | **Implemented** | `@Throttle(PUBLIC_BOOKING_THROTTLE)` on the write routes in `public/public.controller.ts` |
 | Fix booking engine to use `Organization.timezone` instead of raw UTC (§24 P2) | **Implemented** | commit `5ff82e8`, ADR-004 |
 | Metrics endpoint: NOT_IMPLEMENTED (§19, §24 P1) | **Implemented** | `health/metrics.controller.ts` — `GET /metrics`, Prometheus 0.0.4 exposition format |
+| Add audit logging to login/logout events (§24 P2) | **Implemented, as structured log events rather than audit rows** | `identity/auth/auth.service.ts` emits AUTH_LOGIN_SUCCEEDED / AUTH_LOGIN_FAILED / AUTH_LOGIN_BLOCKED / AUTH_ACCOUNT_LOCKED / AUTH_LOGOUT. Not AuditService: `AuditLog.organizationId` is required and `listRecent` filters on it, but a login has no organization — see that method's own doc comment |
+| Mid-period proration computed but never billed | **Implemented** | Folded into the next `SubscriptionInvoice` amount and then cleared, so it bills once; a credit beyond the period price is clamped at zero — `SubscriptionPeriodSchedulerService.resolveRenewal` + `SubscriptionsRepository.clearAppliedProration` |
+| Onboarding verticals: 17/17 omitted `website` while all 17 name a `defaultStorefrontTemplate` | **Fixed** | `packages/types/src/verticals.ts`, enforced by `vertical-templates.spec.ts` (8 coherence rules) |
 | Add dependency vulnerability scanning to CI (§24 P2) | **Implemented, in three layers** | `.github/dependabot.yml` (weekly grouped update PRs) and `.github/workflows/codeql.yml` (JS/TS SAST, weekly) already existed — §24 was stale on this before any work in this round. Neither *gates* a build on a known advisory, so a `dependency-audit` job running `pnpm audit --audit-level high` was added to `ci.yml` |
 | KORVA's own subscription billing has no PSP path; `past_due` is unreachable (§10, and `subscription.schema.ts`'s own comment) | **Implemented (invoice-first)** | `subscriptions/schemas/subscription-invoice.schema.ts`, the billing branch of `subscription-period-scheduler.service.ts`, and `subscription-billing/` for checkout + verification. See §29.4 for the one capability this deliberately does NOT provide |
 
@@ -817,15 +820,9 @@ Short, and deliberately so — this is the real remaining list, not a restatemen
 1. **Production infrastructure is still not provisioned.** No managed MongoDB/Redis, no hosting for the three apps, no DNS/TLS, placeholder secrets unrotated, no real `RESEND_API_KEY`, no SPF/DKIM/DMARC. This is the single largest remaining item and none of it is a code change — it needs accounts, credentials and billing. See `docs/deployment.md` for the step-by-step runbook.
 2. **No migration tool and no first migration.** Schema changes still rely on Mongoose `autoIndex` and ad-hoc scripts. Unchanged since §24 flagged it.
 3. **AI token-level usage is not persisted**, so per-tenant AI cost cannot be attributed. Unchanged since §24.
-4. **Login and logout are not audit-logged.** `identity/auth/auth.service.ts` never calls `AuditService`, while nearly every other state change in the codebase does. Unchanged since §24.
+4. **No credit-balance concept.** A proration credit larger than the period it offsets is clamped at zero, with the unapplied remainder recorded in the audit trail rather than carried forward to the following invoice. Acceptable while plan prices sit close together; revisit if a downgrade can generate a credit worth more than one month.
 5. **No Bull Board.** Largely superseded rather than open: `GET /health/queues`, `GET /metrics` and `QueueAlertingService` now cover all 12 queues (see `core/queues/queue-registry.ts`). What remains missing is only a browsable UI for inspecting and retrying individual jobs.
-6. **Mid-period proration is computed but never billed.** `changePlan()` stores
-   `prorationAmount`/`prorationCurrency` on the Subscription, and `SubscriptionInvoice` ignores
-   them — it bills the plan's full `priceAmount` for the period. A tenant upgrading mid-period is
-   therefore not charged the delta. Deliberately left open: whether the delta is invoiced
-   immediately or folded into the next period's amount is a pricing decision, not an engineering
-   gap.
-7. **Four moderate advisories and one unfixable high.** `pnpm audit` reports 5 findings, 0 critical. The high (`braces`, stack-exhaustion DoS) names `patched_versions ">=3.0.4"`, which has never been published; it reaches the tree only through `eslint-config-next` dev tooling and is the single entry in `auditConfig.ignoreGhsas`.
+6. **Four moderate advisories and one unfixable high.** `pnpm audit` reports 5 findings, 0 critical. The high (`braces`, stack-exhaustion DoS) names `patched_versions ">=3.0.4"`, which has never been published; it reaches the tree only through `eslint-config-next` dev tooling and is the single entry in `auditConfig.ignoreGhsas`.
 
 ### 29.4 One capability deliberately not built, so nobody assumes it exists
 

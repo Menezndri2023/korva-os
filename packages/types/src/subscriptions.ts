@@ -52,9 +52,9 @@ export interface Subscription {
   /**
    * Computed, stored-only proration from the most recent changePlan() mid-period — positive
    * means the new plan is more expensive for the remaining period (amount owed), negative means
-   * a credit. Still never charged/credited — SubscriptionInvoice bills the plan's full
-   * priceAmount for the period and ignores this field. Applying it is a pricing decision (invoice
-   * the delta now, or fold it into the next period), not a missing integration.
+   * a credit. Folded into the next SubscriptionInvoice's amount and then cleared, so it is
+   * charged exactly once; a credit beyond the period's price is clamped at zero rather than
+   * producing a negative invoice. See subscription.schema.ts for the full rules.
    */
   prorationAmount: number | null;
   prorationCurrency: string | null;

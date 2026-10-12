@@ -16,9 +16,8 @@ What actually shipped since this record was written:
   issues a `SubscriptionInvoice` per paid period and `subscription-billing/` turns it into a
   hosted checkout, reusing the same two adapters via the resolver's `flow: 'subscription'`
   branch. The `subscription.schema.ts` comment this record quotes ("Never actually charged: no
-  PSP integration exists yet") applies to `prorationAmount` specifically, and its *reason* is now
-  wrong — a PSP integration does exist. Proration is still never billed, but because it is not
-  folded into the invoice amount, not because there is nowhere to charge it.
+  PSP integration exists yet") applied to `prorationAmount`, and is gone: a mid-period
+  proration is now folded into the next SubscriptionInvoice's amount and then cleared.
 - **Open question #1 (where KORVA is incorporated)** was answered in
   `docs/architecture/integrations-platform.md` §4: **Morocco**, which is what makes Flow A's
   platform account market-independent.
