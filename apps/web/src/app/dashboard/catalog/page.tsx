@@ -6,10 +6,17 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createOfferSchema, type CreateOfferInput } from "@korva/validation";
-import { OFFER_TYPES, type CustomFieldValues, type Offer, type OfferType } from "@korva/types";
+import {
+  OFFER_TYPES,
+  verticalForOrganizationType,
+  type CustomFieldValues,
+  type Offer,
+  type OfferType,
+} from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
 const TYPE_LABELS: Record<OfferType, string> = {
@@ -33,6 +40,10 @@ export default function CatalogPage() {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
+  const { data: organization } = useActiveOrganization();
+  // Best-effort: `Organization.type` is free-form, so an owner who typed their own sector simply
+  // gets no suggestions rather than the wrong trade's.
+  const vertical = verticalForOrganizationType(organization?.type);
 
   const { data: offersPage, isLoading } = useQuery({
     queryKey: ["offers", typeFilter, page],
@@ -62,6 +73,30 @@ export default function CatalogPage() {
       trackStock: false,
     },
   });
+
+  /**
+   * Opens the creation form, optionally pre-filled from one of the trade's suggestions.
+   *
+   * Always resets through here rather than relying on `defaultValues`, for the currency: that
+   * object is evaluated once when the component mounts, before useActiveOrganization has
+   * resolved, so the hardcoded "EUR" above was the currency EVERY organization got — an offer
+   * created in Casablanca or Abidjan was priced in euros unless the owner noticed the field.
+   * Resetting at open time means the organization has loaded by then.
+   */
+  function openForm(prefill?: { name: string; type: OfferType }) {
+    reset({
+      type: prefill?.type ?? "product",
+      name: prefill?.name ?? "",
+      images: [],
+      categories: [],
+      variants: [],
+      status: "draft",
+      pricing: { amount: 0, currency: organization?.currency ?? "EUR" },
+      trackStock: false,
+    });
+    setCreateCustomFields({});
+    setShowForm(true);
+  }
   const trackStock = watch("trackStock");
 
   const [createCustomFields, setCreateCustomFields] = useState<CustomFieldValues>({});
@@ -95,7 +130,7 @@ export default function CatalogPage() {
             </option>
           ))}
         </select>
-        <Button onClick={() => setShowForm((v) => !v)}>
+        <Button onClick={() => (showForm ? setShowForm(false) : openForm())}>
           {showForm ? "Annuler" : "Nouvelle offre"}
         </Button>
       </div>
@@ -195,8 +230,38 @@ export default function CatalogPage() {
               )}
               {!isLoading && data?.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Aucune offre.
+                  <td colSpan={4} className="px-4 py-6">
+                    {/* An empty catalogue blocks the whole product: no offers means nothing on
+                        the public site and nothing to book or order. Rather than stating the
+                        obvious, the empty state offers what this trade usually sells — names
+                        only, from VERTICAL_TEMPLATES. Clicking one opens the form pre-filled so
+                        the owner sets their own price; nothing is ever created for them. */}
+                    {vertical?.suggestedOffers?.length ? (
+                      <div className="text-center">
+                        <p className="text-text-muted">
+                          Votre catalogue est vide. Voici ce que propose généralement un
+                          établissement du secteur « {vertical.label} ».
+                        </p>
+                        <div className="mt-3 flex flex-wrap justify-center gap-2">
+                          {vertical.suggestedOffers.map((suggestion) => (
+                            <button
+                              key={suggestion.name}
+                              type="button"
+                              onClick={() => openForm(suggestion)}
+                              className="rounded-full border border-border-input px-3 py-1.5 text-sm text-text transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                            >
+                              {suggestion.name}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-xs text-text-muted">
+                          Vous fixez vous-même le prix. Ce sont des suggestions, rien n&apos;est
+                          créé sans vous.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-center text-text-muted">Aucune offre.</p>
+                    )}
                   </td>
                 </tr>
               )}

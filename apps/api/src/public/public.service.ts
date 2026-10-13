@@ -9,7 +9,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
   STOREFRONT_SECTIONS,
-  VERTICAL_TEMPLATES,
+  verticalForOrganizationType,
   getStorefrontTemplate,
   pickDeterministic,
   planMeetsMinimum,
@@ -259,9 +259,7 @@ export class PublicService {
     organization: OrganizationDocument,
     planKey: string,
   ): StorefrontTheme {
-    const vertical = VERTICAL_TEMPLATES.find(
-      (v) => v.suggestedType === organization.type,
-    );
+    const vertical = verticalForOrganizationType(organization.type);
     const requestedKey =
       organization.storefrontTemplate ??
       vertical?.defaultStorefrontTemplate ??

@@ -1,4 +1,5 @@
 import type { KorvaModule } from "./organization.ts";
+import type { OfferType } from "./catalog.ts";
 import type { SystemEvent, WorkflowAction } from "./workflow.ts";
 import type { StorefrontTemplateKey } from "./storefront-themes.ts";
 
@@ -40,6 +41,24 @@ export interface VerticalStarterWorkflow {
   action: WorkflowAction;
 }
 
+/**
+ * A catalogue line this trade is likely to sell, offered to the owner as a SUGGESTION in the
+ * dashboard — never created automatically.
+ *
+ * No price, deliberately. A name ("Coloration") is a description of the trade; a price is a
+ * commercial claim that belongs to the business, and writing one into their catalogue — let
+ * alone publishing it on their public site — would put words in their mouth. The owner clicks a
+ * suggestion, the creation form opens pre-filled with the name and type, and they set the price.
+ *
+ * Absent for the trades where it would be noise rather than help: generic "Commerce &
+ * e-commerce", "Mode & habillement" and "Immobilier" sell things no list could usefully guess,
+ * so they get none instead of something vague.
+ */
+export interface VerticalSuggestedOffer {
+  name: string;
+  type: OfferType;
+}
+
 export interface VerticalTemplate {
   key: string;
   label: string;
@@ -50,6 +69,9 @@ export interface VerticalTemplate {
   /** Storefront visual template pre-selected for this vertical — see storefront-themes.ts.
    *  Still just a default: the owner can change it afterwards in Settings. */
   defaultStorefrontTemplate: StorefrontTemplateKey;
+  /** Catalogue lines suggested to the owner, never created for them — see
+   *  VerticalSuggestedOffer. Omitted where a guess would not help. */
+  suggestedOffers?: VerticalSuggestedOffer[];
 }
 
 export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
@@ -80,6 +102,14 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         },
       },
     },
+    suggestedOffers: [
+      { name: "Coupe femme", type: "booking" },
+      { name: "Coupe homme", type: "booking" },
+      { name: "Coloration", type: "booking" },
+      { name: "Brushing", type: "booking" },
+      { name: "Soin du visage", type: "booking" },
+      { name: "Manucure", type: "booking" },
+    ],
     defaultStorefrontTemplate: "salon",
   },
   {
@@ -109,6 +139,13 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         },
       },
     },
+    suggestedOffers: [
+      { name: "Plat du jour", type: "product" },
+      { name: "Entrée", type: "product" },
+      { name: "Dessert", type: "product" },
+      { name: "Menu midi", type: "package" },
+      { name: "Boisson", type: "product" },
+    ],
     defaultStorefrontTemplate: "table",
   },
   {
@@ -132,6 +169,12 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Qualifier le prospect {{leadId}}" },
       },
     },
+    suggestedOffers: [
+      { name: "Premier rendez-vous", type: "booking" },
+      { name: "Audit", type: "service" },
+      { name: "Accompagnement mensuel", type: "subscription" },
+      { name: "Formation sur mesure", type: "service" },
+    ],
     defaultStorefrontTemplate: "vitrine",
   },
   {
@@ -161,6 +204,12 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         },
       },
     },
+    suggestedOffers: [
+      { name: "Séance découverte", type: "booking" },
+      { name: "Atelier d'une journée", type: "booking" },
+      { name: "Formation complète", type: "package" },
+      { name: "Accompagnement individuel", type: "booking" },
+    ],
     defaultStorefrontTemplate: "academie",
   },
   {
@@ -215,6 +264,11 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Nouveau rendez-vous", body: "Réservation {{bookingId}} créée." },
       },
     },
+    suggestedOffers: [
+      { name: "Première consultation", type: "booking" },
+      { name: "Séance de suivi", type: "booking" },
+      { name: "Bilan complet", type: "booking" },
+    ],
     defaultStorefrontTemplate: "salon",
   },
   {
@@ -238,6 +292,11 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Rappeler le prospect {{leadId}}" },
       },
     },
+    suggestedOffers: [
+      { name: "Visite technique et devis", type: "booking" },
+      { name: "Dépannage urgent", type: "service" },
+      { name: "Intervention à l'heure", type: "service" },
+    ],
     defaultStorefrontTemplate: "vitrine",
   },
   {
@@ -287,6 +346,11 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Nouvelle réservation", body: "Séjour {{bookingId}} confirmé." },
       },
     },
+    suggestedOffers: [
+      { name: "Nuitée", type: "booking" },
+      { name: "Petit-déjeuner", type: "product" },
+      { name: "Séjour deux nuits", type: "package" },
+    ],
     defaultStorefrontTemplate: "salon",
   },
   {
@@ -337,6 +401,11 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Nouvelle commande", body: "Commande {{orderId}} reçue." },
       },
     },
+    suggestedOffers: [
+      { name: "Panier de saison", type: "product" },
+      { name: "Vente au kilo", type: "product" },
+      { name: "Commande sur mesure", type: "service" },
+    ],
     defaultStorefrontTemplate: "boutique",
   },
   {
@@ -363,6 +432,12 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Nouvelle séance", body: "Réservation {{bookingId}} créée." },
       },
     },
+    suggestedOffers: [
+      { name: "Séance d'essai", type: "booking" },
+      { name: "Cours collectif", type: "booking" },
+      { name: "Coaching individuel", type: "booking" },
+      { name: "Abonnement mensuel", type: "subscription" },
+    ],
     defaultStorefrontTemplate: "salon",
   },
   {
@@ -386,6 +461,11 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Qualifier le prospect {{leadId}}" },
       },
     },
+    suggestedOffers: [
+      { name: "Audit et cadrage", type: "service" },
+      { name: "Site vitrine", type: "package" },
+      { name: "Maintenance mensuelle", type: "subscription" },
+    ],
     defaultStorefrontTemplate: "vitrine",
   },
   {
@@ -412,6 +492,11 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Rappeler le prospect {{leadId}}" },
       },
     },
+    suggestedOffers: [
+      { name: "Reportage photo", type: "service" },
+      { name: "Prestation sur événement", type: "service" },
+      { name: "Forfait mariage", type: "package" },
+    ],
     defaultStorefrontTemplate: "vitrine",
   },
   {
@@ -438,6 +523,10 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Nouvelle adhésion", body: "Commande {{orderId}} reçue." },
       },
     },
+    suggestedOffers: [
+      { name: "Adhésion annuelle", type: "subscription" },
+      { name: "Don libre", type: "product" },
+    ],
     defaultStorefrontTemplate: "vitrine",
   },
   {
@@ -464,6 +553,11 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Nouvelle intervention", body: "Réservation {{bookingId}} créée." },
       },
     },
+    suggestedOffers: [
+      { name: "Garde à l'heure", type: "booking" },
+      { name: "Ménage deux heures", type: "booking" },
+      { name: "Aide aux devoirs", type: "booking" },
+    ],
     defaultStorefrontTemplate: "salon",
   },
   {
@@ -488,6 +582,27 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Nouvelle commande", body: "Commande {{orderId}} reçue." },
       },
     },
+    suggestedOffers: [
+      { name: "Panier hebdomadaire", type: "subscription" },
+      { name: "Vente au kilo", type: "product" },
+      { name: "Commande groupée", type: "service" },
+    ],
     defaultStorefrontTemplate: "boutique",
   },
 ];
+
+/**
+ * The vertical template an organization belongs to, matched on `Organization.type`.
+ *
+ * `type` is free-form by design (see organization.schema.ts), so this is a best-effort match and
+ * returns undefined for an owner who typed their own sector. Extracted here because
+ * PublicService#resolveStorefrontTheme did this find() inline and the dashboard now needs the
+ * same answer to show a trade's catalogue suggestions — two copies of "which trade is this?"
+ * would drift the moment `suggestedType` changed.
+ */
+export function verticalForOrganizationType(
+  type: string | undefined,
+): VerticalTemplate | undefined {
+  if (!type) return undefined;
+  return VERTICAL_TEMPLATES.find((template) => template.suggestedType === type);
+}

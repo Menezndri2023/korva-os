@@ -15,6 +15,16 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 
+// Mutable through a hoisted holder so each test picks its own organization: the describes above
+// rely on there being NO organization (and therefore no trade suggestions), so this cannot be a
+// fixed module-level mock.
+const orgMock = vi.hoisted(() => ({
+  current: undefined as { type?: string; currency?: string } | undefined,
+}));
+vi.mock("@/lib/use-active-organization", () => ({
+  useActiveOrganization: () => ({ data: orgMock.current }),
+}));
+
 const getMock = vi.mocked(apiClient.get);
 const getListMock = vi.mocked(apiClient.getList);
 const postMock = vi.mocked(apiClient.post);
@@ -122,5 +132,79 @@ describe("CatalogPage — pagination", () => {
         expect.objectContaining({ customFields: { warranty_months: 24 } }),
       ),
     );
+  });
+});
+
+/**
+ * An empty catalogue blocks everything downstream — no public site content, nothing to book or
+ * order — so the empty state offers what the organization's trade usually sells, read from
+ * VERTICAL_TEMPLATES.suggestedOffers. Suggestions only: clicking one pre-fills the creation form
+ * and the owner sets the price, because a price is a commercial claim that belongs to them.
+ */
+describe("CatalogPage — trade suggestions and currency", () => {
+  beforeEach(() => {
+    getMock.mockReset();
+    getMock.mockResolvedValue([]);
+    getListMock.mockReset();
+    postMock.mockReset();
+    mockOffersPage([]);
+    orgMock.current = undefined;
+  });
+
+  it("offers the trade's catalogue suggestions when the catalogue is empty", async () => {
+    orgMock.current = { type: "beauté", currency: "MAD" };
+    renderWithProviders(<CatalogPage />);
+
+    expect(await screen.findByText(/Salon & bien-être/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Coupe femme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Coloration" })).toBeInTheDocument();
+    // The promise that nothing is created behind the owner's back is part of the UI, not just
+    // the implementation.
+    expect(screen.getByText(/rien n'est créé sans vous/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the plain empty state for a trade it cannot recognise", async () => {
+    // Organization.type is free-form, so an owner who typed their own sector must not be shown
+    // another trade's suggestions.
+    orgMock.current = { type: "quelque chose que personne n'a prévu", currency: "EUR" };
+    renderWithProviders(<CatalogPage />);
+    expect(await screen.findByText("Aucune offre.")).toBeInTheDocument();
+  });
+
+  it("pre-fills the creation form from a suggestion without creating anything", async () => {
+    orgMock.current = { type: "beauté", currency: "MAD" };
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Coupe femme" }));
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Nom")).toHaveValue("Coupe femme");
+    });
+    expect(postMock).not.toHaveBeenCalled();
+  });
+
+  it("prices a new offer in the organization's own currency, not EUR", async () => {
+    // The form's defaultValues hardcoded "EUR" and are evaluated once on mount, before
+    // useActiveOrganization resolves — so every organization got euros, and an offer created in
+    // Casablanca or Abidjan was priced in a currency its customers do not use.
+    orgMock.current = { type: "beauté", currency: "MAD" };
+    postMock.mockResolvedValue({ id: "offer-new" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Coupe femme" }));
+    await user.click(screen.getByRole("button", { name: /créer l'offre/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({
+          name: "Coupe femme",
+          type: "booking",
+          pricing: expect.objectContaining({ currency: "MAD" }),
+        }),
+      );
+    });
   });
 });
