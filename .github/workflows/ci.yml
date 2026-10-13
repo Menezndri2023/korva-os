@@ -27,7 +27,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
-    # Deliberately NO MONGODB_URI / REDIS_URL / JWT secrets here.
+    # Deliberately NO MONGODB_URI / REDIS_URL here. The four secrets below ARE needed —
+    # see the second note.
     #
     # apps/api/test/env.setup.ts already supplies all six of validateEnv's REQUIRED_VARS, and
     # it does so with `??=` — so any value defined at this level WINS and suppresses what that
@@ -43,8 +44,20 @@ jobs:
     #
     # The docker-build job keeps its own copies, and must: there is no env.setup.ts inside a
     # production image.
+    #
+    # The four secrets, on the other hand, ARE required here. 23 unit specs build a Nest
+    # TestingModule that reads them through ConfigService and fail with
+    # `Configuration key "JWT_SECRET" does not exist` without them. That went unnoticed locally
+    # because `apps/api/.env` exists on a developer machine and is gitignored, so only CI runs
+    # without it — removing them in the previous commit broke the unit step. Verified both ways:
+    # with `apps/api/.env` moved aside, 916/916 unit and 10/10 isolation e2e pass with exactly
+    # this set.
     env:
       NODE_ENV: test
+      JWT_SECRET: ci-jwt-secret
+      JWT_REFRESH_SECRET: ci-jwt-refresh-secret
+      CUSTOMER_JWT_SECRET: ci-customer-jwt-secret
+      INTEGRATION_CREDENTIALS_KEY: ci-integration-credentials-key
 
     steps:
       - uses: actions/checkout@v4
