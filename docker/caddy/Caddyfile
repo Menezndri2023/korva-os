@@ -15,12 +15,11 @@
 		# This endpoint is what makes on-demand TLS safe. Without it, anyone could point a DNS
 		# record at this host and make Caddy request a certificate on their behalf, exhausting the
 		# ACME rate limit for the whole deployment within minutes.
+		# This is the ONLY protection, so the endpoint carries the whole weight. Caddy removed
+		# the `interval`/`burst` rate limits from `on_demand_tls` (it refuses to start if they
+		# are present, which is how this was found), on the reasoning that a rate limit cannot
+		# distinguish an attack from a busy launch day while `ask` can answer definitively.
 		ask http://api:4000/api/v1/public-sites/domain-allowed
-
-		# Caps new-certificate issuance regardless of what `ask` approves — a second line of
-		# defense if a bug ever made the endpoint too permissive.
-		interval 2m
-		burst 5
 	}
 }
 
