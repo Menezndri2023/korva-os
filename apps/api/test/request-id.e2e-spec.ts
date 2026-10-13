@@ -125,7 +125,26 @@ describe('Structured log / request-id correlation (e2e)', () => {
     // forceConsole routes through console.log instead of process.stdout.write, so a plain
     // jest.spyOn(console, 'log') below can capture it deterministically.
     app.useLogger(new StructuredLogger({ forceConsole: true }));
-    await app.init();
+    // `listen(0)` rather than the `init()` every other spec here uses, because TEST 5 issues
+    // two requests CONCURRENTLY and that is incompatible with a server supertest has to start
+    // itself. supertest's Test constructor (lib/test.js, serverAddress) does
+    // `if (!addr) this._server = app.listen(0)`, and its `end()` then calls
+    // `server.close()` on whichever Test owns `_server`. With an un-listened server the two
+    // Tests are built in the same tick, so the FIRST one binds the port and owns it while the
+    // second gets no `_server` at all — and the moment the first response lands, the first Test
+    // closes the listening socket out from under the second, which fails with ECONNRESET or
+    // ECONNREFUSED depending on how far its handshake had got. Measured with a standalone
+    // two-request probe against supertest 7.2.2: with `init()` a second request lagging even
+    // 5 ms behind the first fails every time; with the server already listening, neither Test
+    // owns it, nothing is closed early, and lags of 0/5/50 ms all pass.
+    //
+    // This is why the failure only ever showed up in CI: a loaded runner spreads the two
+    // requests far enough apart to lose the race that a local machine wins. It had been the
+    // single red test on `main` since before 2026-10-13.
+    //
+    // Every sequential spec in this directory is unaffected — one request at a time means
+    // listen/close cycles never overlap — so only the describe with concurrency needs this.
+    await app.listen(0);
     server = app.getHttpServer();
   });
 
