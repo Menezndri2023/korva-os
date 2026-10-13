@@ -53,6 +53,11 @@ https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_C
     docker-buildx-plugin docker-compose-plugin
 fi
 usermod -aG docker "$DEPLOY_USER"
+# Also sudo. Not a loosening: membership in `docker` is already root-equivalent — anyone in it
+# can bind-mount / into a container and write anywhere — so withholding sudo buys no security
+# while making ordinary operations (reboot, apt upgrade, reading a service log) impossible
+# without falling back to the root password the whole point was to stop using.
+usermod -aG sudo "$DEPLOY_USER"
 
 log "Firewall"
 # Only what Caddy and SSH need. Nothing else is reachable: the app containers expose their ports
