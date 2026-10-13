@@ -27,19 +27,24 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+    # Deliberately NO MONGODB_URI / REDIS_URL / JWT secrets here.
+    #
+    # apps/api/test/env.setup.ts already supplies all six of validateEnv's REQUIRED_VARS, and
+    # it does so with `??=` — so any value defined at this level WINS and suppresses what that
+    # file would have derived. That is not a harmless duplication: env.setup.ts mints a
+    # per-process MongoDB database name and a per-process Redis DB index precisely so two
+    # concurrent e2e runs cannot drop each other's database mid-test. Hardcoding
+    # `korva_test` and `redis://localhost:6380` here defeated that mechanism, and
+    # mongo-isolation.e2e-spec.ts / redis-isolation.e2e-spec.ts failed because they assert it.
+    #
+    # The service containers it points at (localhost:27017, localhost:6380) are started by the
+    # steps below, so nothing is lost. The unit suites need none of these — verified by running
+    # all 916 with every one of them unset.
+    #
+    # The docker-build job keeps its own copies, and must: there is no env.setup.ts inside a
+    # production image.
     env:
       NODE_ENV: test
-      MONGODB_URI: mongodb://korva:korva@localhost:27017/korva_test?authSource=admin&replicaSet=rs0
-      REDIS_URL: redis://localhost:6380
-      JWT_SECRET: ci-jwt-secret
-      JWT_REFRESH_SECRET: ci-jwt-refresh-secret
-      # The other two of validateEnv's six REQUIRED_VARS
-      # (apps/api/src/core/config/env.validation.ts). Without them the application refuses to
-      # boot, so every e2e test and the API image smoke test failed deterministically — neither
-      # job could ever have been green. INTEGRATION_CREDENTIALS_KEY has no format requirement:
-      # CredentialEncryptionService hashes whatever it is given with SHA-256.
-      CUSTOMER_JWT_SECRET: ci-customer-jwt-secret
-      INTEGRATION_CREDENTIALS_KEY: ci-integration-credentials-key
 
     steps:
       - uses: actions/checkout@v4
