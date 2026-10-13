@@ -75,7 +75,23 @@ function usePreviewOverride() {
   return override;
 }
 
-export default function StorefrontClient({ slug, nonce }: { slug: string; nonce?: string }) {
+/**
+ * `initialOrganization`/`initialOffers` come from the server render (see page.tsx) and are what
+ * put the tenant's actual content into the initial HTML. Both are optional: the dashboard's
+ * preview iframe and any future caller can still mount this with nothing and let the queries
+ * fetch, exactly as before.
+ */
+export default function StorefrontClient({
+  slug,
+  nonce,
+  initialOrganization,
+  initialOffers,
+}: {
+  slug: string;
+  nonce?: string;
+  initialOrganization?: PublicOrganization;
+  initialOffers?: PublicOffer[];
+}) {
   const queryClient = useQueryClient();
   const previewOverride = usePreviewOverride();
 
@@ -83,11 +99,20 @@ export default function StorefrontClient({ slug, nonce }: { slug: string; nonce?
     queryKey: ["public-org", slug],
     queryFn: () => publicApiClient.get<PublicOrganization>(`/public/${slug}`),
     retry: false,
+    // Providers sets staleTime: 30s, so seeding this does not trigger an immediate duplicate
+    // fetch in the browser — the first paint is the server's data and it is reused.
+    initialData: initialOrganization,
   });
   const offersQuery = useQuery({
     queryKey: ["public-offers", slug],
     queryFn: () => publicApiClient.get<PublicOffer[]>(`/public/${slug}/offers`),
     enabled: !!orgQuery.data?.visibleSections.includes("catalog"),
+    // Only seeded when the server actually fetched them. An empty array where the catalog IS
+    // visible would otherwise read as "this shop has no offers" for the first 30 seconds.
+    initialData:
+      initialOrganization?.visibleSections.includes("catalog") && initialOffers
+        ? initialOffers
+        : undefined,
   });
 
   const { cart, addToCart, clearCart } = useCart(slug);

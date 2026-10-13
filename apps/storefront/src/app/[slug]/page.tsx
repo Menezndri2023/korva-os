@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import StorefrontClient from "./storefront-client";
@@ -12,26 +13,46 @@ interface StorefrontPageProps {
   params: Promise<{ slug: string }>;
 }
 
-async function fetchOrganization(slug: string): Promise<PublicOrganization | null> {
-  try {
-    return await publicApiClient.get<PublicOrganization>(`/public/${slug}`);
-  } catch {
-    // Unknown/unavailable slug — the client component renders its own "boutique introuvable"
-    // state; here we just fall back to non-indexable metadata for that same case.
-    return null;
-  }
-}
+/**
+ * Wrapped in React's `cache()` so generateMetadata and the page body share ONE call per request.
+ * publicApiClient sends `cache: "no-store"`, which opts out of Next's fetch memoization, so
+ * without this the organization was fetched twice for every page view — and three times once the
+ * page started fetching it for the initial render below.
+ */
+const fetchOrganization = cache(
+  async (slug: string): Promise<PublicOrganization | null> => {
+    try {
+      return await publicApiClient.get<PublicOrganization>(`/public/${slug}`);
+    } catch {
+      // Unknown/unavailable slug — the client component renders its own "boutique introuvable"
+      // state; here we just fall back to non-indexable metadata for that same case.
+      return null;
+    }
+  },
+);
 
-async function fetchOfferSample(slug: string, organization: PublicOrganization): Promise<PublicOffer[]> {
-  if (!organization.enabledModules.includes("catalog")) {
-    return [];
-  }
-  try {
-    return await publicApiClient.get<PublicOffer[]>(`/public/${slug}/offers`);
-  } catch {
-    return [];
-  }
-}
+/**
+ * Gated on `visibleSections`, not `enabledModules`. visibleSections is the narrower of the two —
+ * the API intersects the enabled module with the organization's own storefrontSections choice —
+ * so an organization that keeps the catalog for internal use but hides it from its public page
+ * was previously having its offer names listed in that page's own meta description. It is also
+ * the exact condition StorefrontClient uses to decide whether to run its offers query, which is
+ * what makes the result below usable as that query's initial data.
+ *
+ * Cached for the same reason as fetchOrganization.
+ */
+const fetchOfferSample = cache(
+  async (slug: string, catalogVisible: boolean): Promise<PublicOffer[]> => {
+    if (!catalogVisible) {
+      return [];
+    }
+    try {
+      return await publicApiClient.get<PublicOffer[]>(`/public/${slug}/offers`);
+    } catch {
+      return [];
+    }
+  },
+);
 
 export async function generateMetadata({ params }: StorefrontPageProps): Promise<Metadata> {
   const { slug } = await params;
@@ -47,7 +68,10 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
     };
   }
 
-  const offers = await fetchOfferSample(slug, organization);
+  const offers = await fetchOfferSample(
+    slug,
+    organization.visibleSections.includes("catalog"),
+  );
   const offerNames = offers.slice(0, 3).map((offer) => offer.name);
 
   const services: string[] = [];
@@ -94,10 +118,42 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
   };
 }
 
+/**
+ * Fetches the page's data on the server and hands it to StorefrontClient as initial data.
+ *
+ * Without this the tenant site shipped NO CONTENT in its HTML. StorefrontClient is a client
+ * component, so Next renders it on the server — but its two react-query hooks have nothing to
+ * render during that pass, so the server emitted the loading skeleton and the browser then
+ * re-fetched everything. A crawler saw meta tags and an empty page, and a visitor on mobile data
+ * waited for the bundle plus two API round trips before the first word appeared. Both matter
+ * more here than anywhere else in the product: this IS the customer's website, and the markets
+ * it ships to are mobile-majority.
+ *
+ * Costs nothing extra: generateMetadata already made both calls, and `cache()` above now means
+ * all of it is one request each.
+ */
 export default async function StorefrontPage({ params }: StorefrontPageProps) {
   const { slug } = await params;
   // Same nonce middleware.ts put on the CSP's `style-src` for this request — see
   // templates/storefront-theme-style.tsx for why StorefrontClient needs it.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
-  return <StorefrontClient slug={slug} nonce={nonce} />;
+  const organization = await fetchOrganization(slug);
+  const offers = organization
+    ? await fetchOfferSample(
+        slug,
+        organization.visibleSections.includes("catalog"),
+      )
+    : [];
+
+  return (
+    <StorefrontClient
+      slug={slug}
+      nonce={nonce}
+      // Null (unknown slug) is passed as undefined, never as initial data: react-query would
+      // treat null as a successful empty result and StorefrontClient would render its
+      // "boutique introuvable" state permanently instead of retrying.
+      initialOrganization={organization ?? undefined}
+      initialOffers={offers}
+    />
+  );
 }
