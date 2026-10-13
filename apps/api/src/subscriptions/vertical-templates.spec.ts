@@ -1,7 +1,10 @@
 import {
   KORVA_MODULES,
+  MODULE_MIN_PLAN,
   STOREFRONT_TEMPLATE_KEYS,
   VERTICAL_TEMPLATES,
+  getStorefrontTemplate,
+  modulesForPlan,
 } from '@korva/types';
 
 /**
@@ -97,5 +100,104 @@ describe('VERTICAL_TEMPLATES coherence', () => {
       (t) => t.starterWorkflow && !t.suggestedModules.includes('workflow'),
     ).map((t) => t.key);
     expect(dead).toEqual([]);
+  });
+});
+
+/**
+ * The same coherence rules, applied to what onboarding ACTUALLY SENDS.
+ *
+ * The block above checks `suggestedModules` as declared. Since 2026-10-13 onboarding no longer
+ * sends that list: every organization is created on the free plan, and PATCH /organizations/me
+ * rejects the whole update if it names a module the plan does not grant, so the web form clamps
+ * the suggestions to modulesForPlan("free") first. A rule that holds for the declared list and
+ * not for the clamped one is a rule guarding something that never happens.
+ *
+ * This is what couples the commercial ladder to the vertical catalog. Raising a module's
+ * threshold in plan-tiers.ts is a one-word edit that can silently empty a vertical's starter
+ * configuration — `workflow: "pro"` did exactly that, and the only thing that caught it was the
+ * onboarding test suite in apps/web. These assertions make it fail here, next to the data.
+ */
+describe('VERTICAL_TEMPLATES coherence on the free plan', () => {
+  const FREE = modulesForPlan('free');
+  const clamped = (modules: readonly string[]) =>
+    modules.filter((module) => FREE.includes(module as never));
+
+  it('leaves every template with a starter workflow that is actually created', () => {
+    // Onboarding posts the workflow only when `workflow` survived the clamp. A paid `workflow`
+    // means all seventeen trades are configured with an automation nobody ever receives.
+    const dead = VERTICAL_TEMPLATES.filter(
+      (t) =>
+        t.starterWorkflow && !clamped(t.suggestedModules).includes('workflow'),
+    ).map((t) => t.key);
+    expect(dead).toEqual([]);
+  });
+
+  it('leaves every starter workflow with a trigger that can still fire', () => {
+    // A workflow created with its trigger's module stripped is created and then permanently
+    // silent — the same defect nonprofit_association shipped, arriving by a different route.
+    const TRIGGER_OWNER: Record<string, string> = {
+      'booking.created': 'booking',
+      'order.created': 'commerce',
+      'lead.created': 'crm',
+    };
+    for (const t of VERTICAL_TEMPLATES) {
+      const trigger = t.starterWorkflow?.trigger;
+      if (!trigger) continue;
+      expect(clamped(t.suggestedModules)).toContain(TRIGGER_OWNER[trigger]);
+    }
+  });
+
+  it("leaves 'website' enabled everywhere, so the public page still renders", () => {
+    // Every template names a defaultStorefrontTemplate; without `website` the organization has
+    // no public page at all and that field is inert.
+    for (const t of VERTICAL_TEMPLATES) {
+      expect(clamped(t.suggestedModules)).toContain('website');
+    }
+  });
+
+  it("keeps 'booking' paired with 'communication' after the clamp", () => {
+    // BookingReminderSchedulerService has no channel without it. Both are free today, so this
+    // passes — it exists to fail the day either threshold moves.
+    for (const t of VERTICAL_TEMPLATES) {
+      const modules = clamped(t.suggestedModules);
+      if (modules.includes('booking')) {
+        expect(modules).toContain('communication');
+      }
+    }
+  });
+
+  it('leaves every trade with a usable workspace, not a husk', () => {
+    // A trade clamped down to one or two modules is a signup that lands on an empty product.
+    // The weakest today keeps 4 of 6 (professional_services, trades_construction, real_estate,
+    // digital_agency — each losing only `finance` and `ai`).
+    for (const t of VERTICAL_TEMPLATES) {
+      expect(clamped(t.suggestedModules).length).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it('documents that no trade gets its own storefront template on the free plan', () => {
+    // NOT an assertion that this is desirable — it is a record of a live product decision.
+    // Every one of the five sector templates carries minPlan: "starter", and all seventeen
+    // trades default to one of them, so a free organization always falls back to "essentiel"
+    // (PublicService#resolveStorefrontTheme clamps to what the plan allows). Seventeen trades
+    // therefore render one identical generic site until someone upgrades.
+    //
+    // If the sector templates are ever made free, this test fails and should simply be deleted
+    // along with the "modèle de site de votre secteur" line in apps/web's PLAN_PERKS.starter.
+    const freeByDefault = VERTICAL_TEMPLATES.filter(
+      (t) =>
+        getStorefrontTemplate(t.defaultStorefrontTemplate).minPlan === 'free',
+    );
+    expect(freeByDefault).toEqual([]);
+  });
+
+  it('never lets a module be suggested by a trade without existing in the ladder', () => {
+    // MODULE_MIN_PLAN is a Record<KorvaModule, PlanKey>, so a missing entry is `undefined`,
+    // which planMeetsMinimum ranks as free — silently granting it to everyone.
+    for (const t of VERTICAL_TEMPLATES) {
+      for (const module of t.suggestedModules) {
+        expect(MODULE_MIN_PLAN[module]).toBeDefined();
+      }
+    }
   });
 });
