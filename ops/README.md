@@ -1,0 +1,48 @@
+# ops/
+
+Operational scripts that run **on the production server**, not in CI and not on a laptop. They
+read `~/korva-os/.env.production`, so they only work where that file exists.
+
+Install or refresh them with:
+
+```
+scp ops/*.sh korva@13.140.174.3:/tmp/ && \
+  ssh korva@13.140.174.3 'mkdir -p ~/ops && install -m 700 /tmp/*.sh ~/ops/ && rm -f /tmp/*.sh'
+```
+
+## backup-mongo.sh
+
+Dumps the production database to `~/backups/korva-<timestamp>.archive.gz`, 0600, and keeps 14
+days (`KORVA_BACKUP_RETAIN_DAYS`). Exits non-zero on an archive under 1 KiB, which is the
+failure mode that otherwise looks like success — `mongodump` can exit 0 having written a valid
+gzip header and nothing else.
+
+The connection URI never touches a command line. It is written to a 0600 YAML file that
+`mongodump` reads with `--config`, and a `trap` removes it on every exit path. This is not
+theoretical: on 2026-10-13 a container image's own entrypoint printed its full `argv` —
+including the Atlas password — into a crash message.
+
+## verify-backup.sh
+
+Restores an archive (newest by default) into a throwaway `mongod` on a private Docker network
+with **no published port**, prints the per-collection document counts, the organizations, the
+plan catalog and the applied migrations, then destroys it. `mongorestore --dryRun` cannot do
+this: it still needs a server to connect to.
+
+**Run this after any change to the backup path.** An archive nobody has restored is a file, not
+a backup.
+
+## install-backup-cron.sh
+
+Installs the nightly dump at 03:17 UTC in the invoking user's crontab, appending to
+`~/backups/backup.log`. Idempotent — re-running replaces the existing entry. Resolves `docker`'s
+directory at install time because cron runs with a near-empty `PATH`.
+
+## Two gaps these scripts do NOT close
+
+1. **The archives live on the machine they back up.** That protects against a bad migration or a
+   mistaken delete inside Mongo, and not at all against losing the VPS. Copying them to object
+   storage needs credentials that do not exist yet.
+2. **Atlas is still the free M0 tier, which has no backups of its own.** M10 is the first tier
+   with continuous backups and point-in-time restore. Until then, the nightly archive is the
+   only copy of every invoice and payment that exists.
