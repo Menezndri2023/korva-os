@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { VERTICAL_TEMPLATES } from "@korva/types";
 import { KorvaGlyph, KorvaWordmark } from "@/components/brand/korva-mark";
-import { PLAN_SUMMARIES, REPLACES } from "@/lib/landing-content";
+import { REPLACES } from "@/lib/landing-content";
+import { PlanLadder } from "./plan-ladder";
 import { TradePanel } from "./trade-panel";
 
 /**
@@ -129,34 +130,11 @@ export function LandingPage() {
           Quatre formules. Vous commencez par la gratuite.
         </h2>
         <p className="mt-3 max-w-2xl text-[0.9375rem] leading-relaxed text-ink-soft">
-          Pas de carte bancaire pour ouvrir un compte. Vous ne payez que le jour où votre activité
-          a besoin de plus, et vous gardez vos données en changeant de formule.
+          Pas de carte bancaire pour ouvrir un compte. Les prix sont fixés pays par pays, pas
+          convertis depuis l&apos;euro.
         </p>
-
-        {/* Ruled rows rather than four identical cards. A plan ladder is a sequence, and a table
-            shows "this one, plus" far better than four boxes of equal visual weight do. */}
-        <div className="mt-10 divide-y divide-rule border-t border-ink">
-          {PLAN_SUMMARIES.map((plan) => (
-            <div
-              key={plan.key}
-              className="grid gap-3 py-6 sm:grid-cols-[15rem_1fr] sm:gap-10"
-            >
-              <div>
-                <h3 className="text-lg font-semibold tracking-tight text-ink">{plan.name}</h3>
-                <p className="mt-1 text-sm leading-snug text-ink-soft">{plan.who}</p>
-              </div>
-              <ul className="grid gap-x-8 gap-y-1.5 sm:grid-cols-2">
-                {plan.includes.map((item) => (
-                  <li key={item} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
-                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                      ✓
-                    </span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <div className="mt-10">
+          <PlanLadder />
         </div>
       </section>
 

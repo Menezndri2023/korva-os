@@ -1,67 +1,47 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { KorvaModule } from '@korva/types';
-import { KORVA_MODULES, SUPPORTED_BILLING_CURRENCIES } from '@korva/types';
+import {
+  PLAN_KEYS,
+  PLAN_LIMITS,
+  PLAN_NAMES,
+  PLAN_PRICES,
+  SUPPORTED_BILLING_CURRENCIES,
+  modulesForPlan,
+} from '@korva/types';
 import { PlansRepository } from './plans.repository';
 import { PlanDocument } from './schemas/plan.schema';
 
-const ALL_MODULES = [...KORVA_MODULES] as KorvaModule[];
-const STARTER_MODULES = ALL_MODULES.filter(
-  (m) => m !== 'workflow' && m !== 'ai',
-);
-
-/** Fallback billing currency for the seeded paid tiers, overridable with
- *  BILLING_DEFAULT_CURRENCY. EUR keeps the pre-multi-currency values exactly as they were. */
+/** Fallback billing currency, overridable with BILLING_DEFAULT_CURRENCY. Only used when a plan
+ *  lookup arrives with no currency at all (the `GET /plans` route is @SkipTenant()). */
 const FALLBACK_BILLING_CURRENCY = 'EUR';
 
 /**
- * Default plan catalog. Every new organization starts on "free": deliberately generous
- * (every module, small-but-usable limits) so onboarding never breaks for an org that hasn't
- * chosen a paid plan yet. "starter" exists specifically to demonstrate real module-tier
- * restrictions (excludes workflow/ai).
+ * The seed catalog: every tier, in every currency KORVA bills in.
  *
- * These prices are DEMONSTRATION values, not a commercial decision — real prices are set per
- * currency with scripts/manage-plans.ts. They are seeded only in the default billing currency;
- * see ensureSeeded for why "free" is the one exception.
+ * Derived from @korva/types/plan-tiers.ts rather than written out here. This file used to hold
+ * the module lists, limits and prices directly, with a comment admitting the prices were
+ * "DEMONSTRATION values", while storefront-themes.ts held a second, hand-synchronised copy of
+ * the tier ranking. The two drifted: `free` ended up granting all eleven modules and `starter`
+ * nine, so upgrading from free to paid REMOVED `workflow` and `ai`. plan-tiers.ts now declares a
+ * minimum tier per module, which makes that shape unrepresentable.
+ *
+ * Every tier is now priced in all five currencies, so the old "free is the one tier seeded
+ * everywhere, paid tiers only in the default currency" special case is gone with it — that rule
+ * meant PlansService.list, which filters by the organization's own currency, returned nothing but
+ * the free plan to every organization in XOF, MAD, USD or CAD. Côte d'Ivoire, Senegal, Morocco
+ * and Canada could not buy anything at all.
  */
-const DEFAULT_PLANS = [
-  {
-    key: 'free',
-    name: 'Free',
-    priceAmount: 0,
-    priceCurrency: 'EUR',
+const DEFAULT_PLANS = PLAN_KEYS.flatMap((key) =>
+  SUPPORTED_BILLING_CURRENCIES.map((currency) => ({
+    key,
+    name: PLAN_NAMES[key],
+    priceAmount: PLAN_PRICES[currency][key],
+    priceCurrency: currency,
     interval: 'month' as const,
-    modules: ALL_MODULES,
-    limits: { seats: 3, ai_messages_per_month: 5 },
-  },
-  {
-    key: 'starter',
-    name: 'Starter',
-    priceAmount: 29,
-    priceCurrency: 'EUR',
-    interval: 'month' as const,
-    modules: STARTER_MODULES,
-    limits: { seats: 10, ai_messages_per_month: 100 },
-  },
-  {
-    key: 'pro',
-    name: 'Pro',
-    priceAmount: 99,
-    priceCurrency: 'EUR',
-    interval: 'month' as const,
-    modules: ALL_MODULES,
-    limits: { seats: 25, ai_messages_per_month: 1000 },
-  },
-  {
-    key: 'business',
-    name: 'Business',
-    priceAmount: 299,
-    priceCurrency: 'EUR',
-    interval: 'month' as const,
-    modules: ALL_MODULES,
-    limits: { seats: -1, ai_messages_per_month: -1 },
-  },
-];
+    modules: modulesForPlan(key),
+    limits: PLAN_LIMITS[key],
+  })),
+);
 
 @Injectable()
 export class PlansService {
@@ -88,35 +68,24 @@ export class PlansService {
    * nothing to repopulate it. Seeding on first access is self-healing regardless of when the
    * database gets reset. See docs/architecture-decisions.md.
    */
+  /**
+   * Seeds lazily on first real access rather than in OnModuleInit: an app-boot hook runs
+   * once, but e2e tests call `connection.dropDatabase()` in their own beforeAll AFTER boot
+   * to reset tenant isolation between files — that would silently wipe a boot-time seed with
+   * nothing to repopulate it. Seeding on first access is self-healing regardless of when the
+   * database gets reset. See docs/architecture-decisions.md.
+   *
+   * `upsertByKeyAndCurrency` is $setOnInsert, so this only ever CREATES. It will not repair a
+   * database that already holds the old defective catalog — that is what
+   * migrations/0003-plan-catalog-realignment.ts is for.
+   */
   private async ensureSeeded(): Promise<void> {
     if (this.seeded) return;
-    const defaultCurrency = this.defaultCurrency();
     for (const plan of DEFAULT_PLANS) {
-      if (plan.priceAmount === 0) {
-        // "free" is seeded in EVERY supported currency, and must be: an organization's default
-        // subscription is looked up as (key 'free', the org's own currency), so an organization
-        // created in a currency with no free plan could not be created at all. A price of 0 is
-        // the same in every currency, so there is no commercial judgment being made here —
-        // unlike the paid tiers below.
-        for (const currency of SUPPORTED_BILLING_CURRENCIES) {
-          await this.plansRepository.upsertByKeyAndCurrency(
-            plan.key,
-            currency,
-            {
-              ...plan,
-              priceCurrency: currency,
-            },
-          );
-        }
-        continue;
-      }
-      // Paid tiers are seeded ONLY in the default currency. Inventing a price for XOF or MAD
-      // would be a commercial decision disguised as a default; a tier with no price in a
-      // currency is simply not sold there until someone sets one via manage-plans.ts.
       await this.plansRepository.upsertByKeyAndCurrency(
         plan.key,
-        defaultCurrency,
-        { ...plan, priceCurrency: defaultCurrency },
+        plan.priceCurrency,
+        plan,
       );
     }
     this.seeded = true;

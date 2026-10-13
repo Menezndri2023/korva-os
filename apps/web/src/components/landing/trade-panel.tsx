@@ -3,8 +3,11 @@
 import { useId, useState } from "react";
 import Link from "next/link";
 import {
+  MODULE_MIN_PLAN,
+  PLAN_NAMES,
   VERTICAL_TEMPLATES,
   getStorefrontTemplate,
+  modulesForPlan,
   type VerticalTemplate,
 } from "@korva/types";
 import {
@@ -30,12 +33,8 @@ import {
  * catalog to exist.
  */
 
-const PLAN_NAMES: Record<string, string> = {
-  free: "Gratuit",
-  starter: "Starter",
-  pro: "Pro",
-  business: "Business",
-};
+/** What a brand-new organization actually gets: every account starts on the free plan. */
+const FREE_PLAN_MODULES = modulesForPlan("free");
 
 function starterSentence(vertical: VerticalTemplate): string | null {
   const workflow = vertical.starterWorkflow;
@@ -55,6 +54,12 @@ export function TradePanel() {
     VERTICAL_TEMPLATES.find((item) => item.key === selectedKey) ?? VERTICAL_TEMPLATES[0]!;
   const template = getStorefrontTemplate(vertical.defaultStorefrontTemplate);
   const automation = starterSentence(vertical);
+  const freeModules = vertical.suggestedModules.filter((module) =>
+    FREE_PLAN_MODULES.includes(module),
+  );
+  const paidModules = vertical.suggestedModules.filter(
+    (module) => !FREE_PLAN_MODULES.includes(module),
+  );
 
   return (
     <div className="mt-10">
@@ -123,10 +128,14 @@ export function TradePanel() {
           {vertical.description}
         </p>
 
+        {/* Split by what the free plan actually grants. Onboarding clamps a vertical's
+            suggestedModules to the plan before sending them (PATCH /organizations/me rejects the
+            update otherwise), so listing all of them under "day one" would promise a new signup
+            modules their account will not have. */}
         <div className="mt-6 border-t border-rule pt-5">
-          <h3 className="text-sm font-medium">Dès le premier jour</h3>
+          <h3 className="text-sm font-medium">Dès le premier jour, gratuitement</h3>
           <ul className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
-            {vertical.suggestedModules.map((module) => (
+            {freeModules.map((module) => (
               <li key={module} className="flex gap-2.5 text-[0.9375rem] leading-snug">
                 <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                   ✓
@@ -135,6 +144,27 @@ export function TradePanel() {
               </li>
             ))}
           </ul>
+          {paidModules.length > 0 && (
+            <ul className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
+              {paidModules.map((module) => (
+                <li
+                  key={module}
+                  className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink-soft"
+                >
+                  <span aria-hidden="true" className="mt-px select-none">
+                    +
+                  </span>
+                  <span>
+                    {MODULE_PROMISES[module]}
+                    <span className="text-mark">
+                      {" "}
+                      — formule {PLAN_NAMES[MODULE_MIN_PLAN[module]]}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {automation && vertical.starterWorkflow && (
@@ -148,6 +178,16 @@ export function TradePanel() {
               </span>{" "}
               {automation}
             </p>
+            {/* `workflow` is a Pro module (MODULE_MIN_PLAN), and onboarding only creates the
+                starter workflow when that module made it into the final list — so on a free
+                account this automation is prepared and not created. Saying so beats letting
+                someone discover it after signing up. */}
+            {MODULE_MIN_PLAN.workflow !== "free" && (
+              <p className="mt-2 text-sm text-mark">
+                Les automatisations demandent la formule{" "}
+                {PLAN_NAMES[MODULE_MIN_PLAN.workflow]}.
+              </p>
+            )}
           </div>
         )}
 

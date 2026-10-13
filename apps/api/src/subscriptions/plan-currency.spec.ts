@@ -1,7 +1,11 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
-import { SUPPORTED_BILLING_CURRENCIES } from '@korva/types';
+import {
+  PLAN_KEYS,
+  PLAN_PRICES,
+  SUPPORTED_BILLING_CURRENCIES,
+} from '@korva/types';
 import { PlansService } from './plans.service';
 import type { PlansRepository } from './plans.repository';
 
@@ -66,24 +70,62 @@ describe('PlansService — multi-currency catalog', () => {
     }
   });
 
-  it('seeds paid tiers only in the default currency — a price is never invented for a market', async () => {
+  /**
+   * This replaces a test that asserted the opposite — "seeds paid tiers only in the default
+   * currency". That rule was not a safeguard, it was the bug: PlansService.list filters by the
+   * organization's own currency, so seeding paid tiers in EUR alone meant every organization in
+   * XOF, MAD, USD or CAD was offered the free plan and nothing else. Côte d'Ivoire, Senegal,
+   * Morocco and Canada could not buy anything.
+   */
+  it('seeds EVERY tier in EVERY supported currency — each market has something to buy', async () => {
     const h = buildPlansService();
 
     await h.service.list();
 
-    const paid = h.seeded.filter((p) => p.amount > 0);
-    expect(paid.length).toBeGreaterThan(0);
-    expect(new Set(paid.map((p) => p.currency))).toEqual(new Set(['EUR']));
+    for (const key of PLAN_KEYS) {
+      const currencies = h.seeded
+        .filter((p) => p.key === key)
+        .map((p) => p.currency)
+        .sort();
+      expect(currencies).toEqual([...SUPPORTED_BILLING_CURRENCIES].sort());
+    }
   });
 
-  it('honours BILLING_DEFAULT_CURRENCY for the paid tiers', async () => {
+  it('takes every price from the declared catalog, never converting one', async () => {
+    const h = buildPlansService();
+
+    await h.service.list();
+
+    // The point of asserting this rather than a few literals: a price must come from
+    // PLAN_PRICES, which is set per market. Deriving MAD or XOF from EUR at an exchange rate
+    // would price KORVA out of its primary market (29 EUR is 19 023 XOF — see plan-tiers.ts).
+    expect(h.seeded.length).toBe(
+      PLAN_KEYS.length * SUPPORTED_BILLING_CURRENCIES.length,
+    );
+    for (const seeded of h.seeded) {
+      const expected =
+        PLAN_PRICES[seeded.currency as keyof typeof PLAN_PRICES][
+          seeded.key as (typeof PLAN_KEYS)[number]
+        ];
+      expect(seeded.amount).toBe(expected);
+    }
+  });
+
+  it('does not let BILLING_DEFAULT_CURRENCY change what gets seeded', async () => {
     const h = buildPlansService({ defaultCurrency: 'XOF' });
 
     await h.service.list();
 
-    expect(
-      new Set(h.seeded.filter((p) => p.amount > 0).map((p) => p.currency)),
-    ).toEqual(new Set(['XOF']));
+    // It used to decide which currency the paid tiers existed in at all. Now every tier is
+    // priced everywhere, so this setting only picks the fallback for a lookup that arrives
+    // without a currency (the GET /plans route is @SkipTenant) — covered by the test below.
+    for (const key of PLAN_KEYS) {
+      const currencies = h.seeded
+        .filter((p) => p.key === key)
+        .map((p) => p.currency)
+        .sort();
+      expect(currencies).toEqual([...SUPPORTED_BILLING_CURRENCIES].sort());
+    }
   });
 
   it('lists only the plans priced in the requested currency', async () => {

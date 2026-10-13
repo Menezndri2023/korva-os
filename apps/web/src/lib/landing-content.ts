@@ -85,61 +85,33 @@ export const REPLACES: ReadonlyArray<{ today: string; korva: string }> = [
 ];
 
 /**
- * What each plan unlocks, in prospect language.
+ * The non-module things a tier unlocks. Modules are NOT listed here — the pricing section
+ * derives those from MODULE_MIN_PLAN in @korva/types, so the page cannot claim a module the
+ * plan does not grant. These are the gates that live elsewhere in the code, each paired with
+ * what enforces it, so a line here can always be checked against a real check:
  *
- * NO PRICES, ON PURPOSE. Prices live in the Plan collection, one document per (key, currency),
- * and are set with scripts/manage-plans.ts. `GET /plans` sits behind the auth guard (it carries
- * @SkipTenant, not a public decorator), so this page cannot read them, and printing a number
- * here would publish a commercial claim that nothing in the system is bound to honour. The
- * section sells the shape of the ladder and sends people to signup, which is free.
+ *   starter  custom domain        -> EntitlementsService.assertCustomDomainAllowed
+ *   starter  sector template      -> STOREFRONT_TEMPLATES[*].minPlan ("essentiel" is the only
+ *                                    free one), via assertStorefrontThemeAllowed
+ *   pro      palette + fonts      -> STOREFRONT_TEMPLATES[*].refinedChoiceMinPlan
+ *   business brand accent colour  -> STOREFRONT_TEMPLATES[*].customAccentMinPlan
+ *
+ * Seats and the AI allowance are not here either: they are read from PLAN_LIMITS directly.
  */
-export const PLAN_SUMMARIES: ReadonlyArray<{
-  key: string;
-  name: string;
-  who: string;
-  includes: readonly string[];
-}> = [
-  {
-    key: "free",
-    name: "Gratuit",
-    who: "Pour démarrer seul, sans carte bancaire",
-    includes: [
-      "Fiches clients et catalogue",
-      "Réservations et commandes",
-      "Un site public sur korvasuite.com",
-    ],
-  },
-  {
-    key: "starter",
-    name: "Starter",
-    who: "Pour une activité qui tourne déjà",
-    includes: [
-      "Tout le gratuit",
-      "Votre propre nom de domaine",
-      "Devis et factures",
-      "Rappels automatiques aux clients",
-    ],
-  },
-  {
-    key: "pro",
-    name: "Pro",
-    who: "Pour une équipe et plusieurs points de vente",
-    includes: [
-      "Tout le Starter",
-      "Automatisations sur mesure",
-      "Campagnes marketing",
-      "Assistant IA",
-    ],
-  },
-  {
-    key: "business",
-    name: "Business",
-    who: "Pour un réseau ou une activité multi-sites",
-    includes: [
-      "Tout le Pro",
-      "Choix complet des thèmes de site",
-      "Couleurs et typographies personnalisées",
-      "Accompagnement à la mise en route",
-    ],
-  },
-];
+export const PLAN_PERKS: Record<string, readonly string[]> = {
+  free: ["Votre site public sur korvasuite.com"],
+  starter: [
+    "Votre propre nom de domaine",
+    "Le modèle de site de votre secteur",
+  ],
+  pro: ["Couleurs et typographies de votre site au choix"],
+  business: ["Votre couleur de marque sur votre site"],
+};
+
+/** One line per tier, saying who it is for. */
+export const PLAN_AUDIENCE: Record<string, string> = {
+  free: "Pour démarrer seul, sans carte bancaire",
+  starter: "Pour une activité qui tourne déjà",
+  pro: "Pour une équipe qui veut arrêter le travail manuel",
+  business: "Pour un réseau ou une activité multi-sites",
+};

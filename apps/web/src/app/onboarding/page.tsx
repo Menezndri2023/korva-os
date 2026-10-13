@@ -11,9 +11,11 @@ import {
   type ImportOrganizationPreviewInput,
 } from "@korva/validation";
 import {
-  KORVA_MODULES,
-  SUPPORTED_BILLING_CURRENCIES,
+  BILLABLE_COUNTRIES,
+  PLAN_NAMES,
   VERTICAL_TEMPLATES,
+  currencyForCountry,
+  modulesForPlan,
   type KorvaModule,
   type Organization,
   type Workflow,
@@ -36,18 +38,20 @@ const MODULE_LABELS: Record<KorvaModule, string> = {
   marketing: "Marketing",
 };
 
-const COUNTRIES = [
-  { code: "FR", label: "France" },
-  { code: "CI", label: "Côte d'Ivoire" },
-  { code: "SN", label: "Sénégal" },
-  { code: "MA", label: "Maroc" },
-  { code: "BE", label: "Belgique" },
-  { code: "CA", label: "Canada" },
-];
+/** The countries KORVA bills in, with their currency — shared with the public pricing section
+ *  so the two can never offer a country the other does not (see @korva/types/plan-tiers.ts). */
+const COUNTRIES = BILLABLE_COUNTRIES;
 
 // See the matching comment in dashboard/settings/page.tsx — one shared list, because it now
 // also determines which Plan documents are seeded.
-const CURRENCIES = [...SUPPORTED_BILLING_CURRENCIES];
+/**
+ * Every organization is created on the free plan, so these are the only modules it can actually
+ * be given: PATCH /organizations/me runs assertModulesAllowed against the plan, and a checkbox
+ * for anything else is a checkbox that returns 403. The form used to offer all eleven
+ * KORVA_MODULES, which only ever worked because `free` wrongly granted all eleven (see
+ * @korva/types/plan-tiers.ts).
+ */
+const FREE_PLAN_MODULES = modulesForPlan("free");
 
 // createOrganizationSchema (packages/validation/src/organization.ts) already requires and
 // accepts `timezone: z.string().min(1)` — the payload below was already sending it, just
@@ -112,6 +116,11 @@ export default function OnboardingPage() {
   );
   const [importUrl, setImportUrl] = useState("");
   const [imported, setImported] = useState<ImportPreview | null>(null);
+  // Mirrors the hidden `currency` form field purely so it can be shown. Kept as state rather
+  // than read with react-hook-form's watch(), which the React Compiler cannot memoize (see the
+  // react-hooks/incompatible-library warnings this repo already carries) — the value only ever
+  // changes in the country field's onChange below, so there is nothing to subscribe to.
+  const [billingCurrency, setBillingCurrency] = useState(currencyForCountry("FR"));
 
   const {
     register,
@@ -122,11 +131,15 @@ export default function OnboardingPage() {
     resolver: zodResolver(createOrganizationSchema),
     defaultValues: {
       country: "FR",
-      currency: "EUR",
+      currency: currencyForCountry("FR"),
       timezone: resolveDefaultTimezone(),
       language: "fr",
     },
   });
+
+  // Registered once and spread manually below so the select can run register()'s own onChange
+  // AND derive the billing currency from the same event.
+  const countryField = register("country");
 
   const enabledModulesControl = useForm<{ modules: KorvaModule[] }>({ defaultValues: { modules: [] } });
 
@@ -146,7 +159,14 @@ export default function OnboardingPage() {
     if (!template) return;
     setSelectedVertical(key);
     setValue("type", template.suggestedType);
-    enabledModulesControl.setValue("modules", template.suggestedModules);
+    // Clamped to the free plan: a template's suggestedModules describe the vertical in full
+    // (they include `workflow`, and `marketing` for some), but a brand-new organization is on
+    // free, and PATCH /organizations/me rejects the whole update if it names a module the plan
+    // does not grant. Sending the full list would 403 the last step of onboarding.
+    enabledModulesControl.setValue(
+      "modules",
+      template.suggestedModules.filter((module) => FREE_PLAN_MODULES.includes(module)),
+    );
   }
 
   const mutation = useMutation({
@@ -331,7 +351,13 @@ export default function OnboardingPage() {
               <select
                 id="country"
                 className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
-                {...register("country")}
+                {...countryField}
+                onChange={(event) => {
+                  void countryField.onChange(event);
+                  const currency = currencyForCountry(event.target.value);
+                  setValue("currency", currency);
+                  setBillingCurrency(currency);
+                }}
               >
                 {COUNTRIES.map((country) => (
                   <option key={country.code} value={country.code}>
@@ -341,20 +367,18 @@ export default function OnboardingPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium" htmlFor="currency">
-                Devise
-              </label>
-              <select
-                id="currency"
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
-                {...register("currency")}
-              >
-                {CURRENCIES.map((currency) => (
-                  <option key={currency} value={currency}>
-                    {currency}
-                  </option>
-                ))}
-              </select>
+              <p className="block text-sm font-medium">Devise de facturation</p>
+              {/* Derived from the country, never chosen separately. This was an independent
+                  five-currency dropdown defaulting to EUR, so a merchant in Morocco was billed
+                  in euros unless they spotted it — and a Subscription is bound for good to the
+                  currency it was sold in (see the unique index note in plan.schema.ts), so that
+                  default could not be undone for that subscription afterwards. Registered as a
+                  hidden field so react-hook-form still tracks and submits it. */}
+              <p className="mt-1 rounded-md border border-dashed border-border-input px-3 py-2 text-sm text-text-muted">
+                {billingCurrency}
+                <span className="ml-2 text-xs">selon votre pays</span>
+              </p>
+              <input type="hidden" {...register("currency")} />
             </div>
           </div>
 
@@ -381,7 +405,7 @@ export default function OnboardingPage() {
               name="modules"
               render={({ field }) => (
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  {KORVA_MODULES.map((module) => (
+                  {FREE_PLAN_MODULES.map((module) => (
                     <label key={module} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
@@ -400,7 +424,11 @@ export default function OnboardingPage() {
                 </div>
               )}
             />
-            <p className="mt-1 text-xs text-zinc-500">Vous pourrez activer d&apos;autres modules plus tard.</p>
+            <p className="mt-1 text-xs text-text-muted">
+              Vous pourrez en activer d&apos;autres plus tard. Les devis et factures arrivent avec
+              la formule {PLAN_NAMES.starter} ; les automatisations, les campagnes et
+              l&apos;assistant IA avec la formule {PLAN_NAMES.pro}.
+            </p>
           </div>
 
           {mutation.isError && (

@@ -1,18 +1,12 @@
 /**
- * Plan keys are otherwise just free-form strings (see Plan.key in subscriptions.ts — plans are
- * seeded data, not a closed enum). This local, closed list mirrors PlansService.DEFAULT_PLANS
- * (apps/api/src/subscriptions/plans.service.ts) purely for ranking which plan unlocks which
- * storefront customization; update both together if a plan tier is ever added/renamed.
+ * PLAN_KEYS, PLAN_RANK and planMeetsMinimum used to be declared here, with a comment instructing
+ * whoever edited them to also edit PlansService.DEFAULT_PLANS by hand. They now live in
+ * plan-tiers.ts together with the module thresholds, limits and prices they describe — see that
+ * file for what the split was costing. Imported rather than re-exported: index.ts exports both
+ * modules with `export *`, so re-exporting them here would be a duplicate export of the same
+ * name. Every consumer reads them from "@korva/types" and is unaffected.
  */
-export const PLAN_KEYS = ["free", "starter", "pro", "business"] as const;
-export type PlanKey = (typeof PLAN_KEYS)[number];
-const PLAN_RANK: Record<PlanKey, number> = { free: 0, starter: 1, pro: 2, business: 3 };
-
-/** Unrecognized plan keys rank as "free" (the lowest tier) — fail closed, never grant access. */
-export function planMeetsMinimum(planKey: string, minPlan: PlanKey): boolean {
-  const rank = (PLAN_RANK as Record<string, number>)[planKey] ?? 0;
-  return rank >= PLAN_RANK[minPlan];
-}
+import { planMeetsMinimum, type PlanKey } from "./plan-tiers.ts";
 
 /**
  * Storefront visual template system — lets each organization's public site (apps/storefront)
