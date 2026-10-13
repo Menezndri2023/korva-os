@@ -154,11 +154,27 @@ describe('EntitlementsService — subscription status enforcement', () => {
       ).resolves.toBeUndefined();
     });
 
-    it('rejects a sector template (starter+) on the free plan', async () => {
+    it('allows a sector template on the free plan, on its first preset only', async () => {
+      // This asserted the opposite until 2026-10-13, when the five sector templates were made
+      // free: all seventeen vertical templates default to one of them, so a free organization
+      // always fell back to "essentiel" and every trade rendered the same generic site. The
+      // gate itself did not move — it is `refinedChoiceMinPlan` that still holds the line, so
+      // a free organization gets `boutique` on palettes[0]/fontPairings[0] and nothing else.
       const service = buildServiceWithPlan('free');
+      await expect(
+        service.assertStorefrontThemeAllowed(ORG_ID, {
+          template: 'boutique',
+          palette: 'marine',
+          fontPairing: 'geometrique',
+        }),
+      ).resolves.toBeUndefined();
+
       await expectForbiddenCode(
-        service.assertStorefrontThemeAllowed(ORG_ID, { template: 'boutique' }),
-        'STOREFRONT_TEMPLATE_NOT_IN_PLAN',
+        service.assertStorefrontThemeAllowed(ORG_ID, {
+          template: 'boutique',
+          palette: 'corail',
+        }),
+        'STOREFRONT_PALETTE_NOT_IN_PLAN',
       );
     });
 
@@ -200,10 +216,18 @@ describe('EntitlementsService — subscription status enforcement', () => {
     });
 
     it('rejects an unrecognized plan key as the lowest tier — fails closed, never grants access', async () => {
+      // Aimed at refinedChoiceMinPlan ("pro") rather than a template's minPlan: every template
+      // is reachable from free now, so a template no longer proves anything about ranking. The
+      // invariant under test is unchanged and is the one that matters — planMeetsMinimum ranks
+      // a plan key it does not recognise as the LOWEST tier, so a corrupt or renamed plan
+      // grants the least, never the most.
       const service = buildServiceWithPlan('mystery-plan');
       await expectForbiddenCode(
-        service.assertStorefrontThemeAllowed(ORG_ID, { template: 'vitrine' }),
-        'STOREFRONT_TEMPLATE_NOT_IN_PLAN',
+        service.assertStorefrontThemeAllowed(ORG_ID, {
+          template: 'vitrine',
+          palette: 'sauge',
+        }),
+        'STOREFRONT_PALETTE_NOT_IN_PLAN',
       );
     });
   });

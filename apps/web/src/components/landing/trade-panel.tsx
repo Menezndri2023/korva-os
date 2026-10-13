@@ -197,11 +197,10 @@ export function TradePanel() {
             <span className="font-medium text-ink">Modèle « {template.label} »</span>{" "}
             {template.description}
           </p>
-          {/* The honest footnote, and the one place --color-mark is earned. Every template except
-              "essentiel" carries minPlan: "starter" (storefront-themes.ts), while the verticals
-              point at "salon"/"table"/"boutique"/"academie"/"vitrine" — so promising a prospect
-              their trade's template without naming the plan it needs would be a claim
-              EntitlementsService.assertStorefrontThemeAllowed actively refuses to honour. */}
+          {/* Kept as a conditional even though every template is reachable from free today: the
+              gate is real (assertStorefrontThemeAllowed), and if a template is ever put behind a
+              tier again this says so instead of promising a prospect something the API refuses.
+              It renders nothing while minPlan is "free" everywhere. */}
           {template.minPlan !== "free" && (
             <p className="mt-2 text-sm text-mark">
               Ce modèle demande la formule {PLAN_NAMES[template.minPlan] ?? template.minPlan}. En

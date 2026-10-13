@@ -185,8 +185,9 @@ export default function OnboardingPage() {
       // No explicit storefrontTemplate PATCH here: PublicService#resolveStorefrontTheme already
       // falls back to the vertical's defaultStorefrontTemplate from `organization.type` alone
       // (set above via `type: template.suggestedType`), clamped to whatever the org's plan
-      // covers — sending it explicitly would just get rejected outright since every new
-      // organization starts on the free plan (see @korva/types storefront-themes.ts minPlan).
+      // covers. Since the sector templates became free this would no longer be rejected — it is
+      // simply still redundant, and storing a value the resolver already derives would mean two
+      // places to keep in step.
       if (modules.length > 0 || Object.keys(brandingUpdate).length > 0) {
         await apiClient.patch<Organization>("/organizations/me", {
           ...(modules.length > 0 ? { enabledModules: modules } : {}),

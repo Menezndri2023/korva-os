@@ -178,7 +178,19 @@ export interface StorefrontTemplateDefinition {
   key: StorefrontTemplateKey;
   label: string;
   description: string;
-  /** Minimum plan required to select this template at all (see EntitlementsService.assertStorefrontThemeAllowed). */
+  /**
+   * Minimum plan required to select this template at all (see
+   * EntitlementsService.assertStorefrontThemeAllowed).
+   *
+   * Every sector template was "starter" until 2026-10-13, while all seventeen VERTICAL_TEMPLATES
+   * default to one of them — so a free organization always fell back to "essentiel" and the
+   * seventeen trades rendered one identical generic site. The public page is the free plan's
+   * whole visible output, seen by the customer's own customers, so that was the worst possible
+   * place to economise. Paid visual differentiation stays where it already was and is already
+   * enforced: `refinedChoiceMinPlan` (choose a palette and font pairing) and
+   * `customAccentMinPlan` (your own brand colour). A free organization gets its sector's
+   * template on the template's first preset.
+   */
   minPlan: PlanKey;
   /** Empty for "essentiel", which uses `organization.brandColor` directly instead of a palette. */
   palettes: StorefrontPaletteKey[];
@@ -204,7 +216,7 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplateDefinition[] = [
     key: "vitrine",
     label: "Vitrine services",
     description: "Services professionnels, artisanat & BTP, immobilier, agences, associations, événementiel.",
-    minPlan: "starter",
+    minPlan: "free",
     palettes: ["graphite", "sauge", "ocre"],
     fontPairings: ["sobre", "editorial"],
     refinedChoiceMinPlan: "pro",
@@ -214,7 +226,7 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplateDefinition[] = [
     key: "table",
     label: "Table",
     description: "Restauration, hôtellerie légère, traiteur.",
-    minPlan: "starter",
+    minPlan: "free",
     palettes: ["ardoise", "terracotta", "ocre"],
     fontPairings: ["chaleureux", "sobre"],
     refinedChoiceMinPlan: "pro",
@@ -224,7 +236,7 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplateDefinition[] = [
     key: "boutique",
     label: "Boutique",
     description: "Commerce & e-commerce, mode, épicerie/alimentation, agriculture & vente directe.",
-    minPlan: "starter",
+    minPlan: "free",
     palettes: ["marine", "corail", "graphite"],
     fontPairings: ["geometrique", "sobre"],
     refinedChoiceMinPlan: "pro",
@@ -234,7 +246,7 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplateDefinition[] = [
     key: "academie",
     label: "Académie",
     description: "Formation, coaching, ateliers.",
-    minPlan: "starter",
+    minPlan: "free",
     palettes: ["indigo", "sauge", "marine"],
     fontPairings: ["arrondi", "sobre"],
     refinedChoiceMinPlan: "pro",
@@ -244,7 +256,7 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplateDefinition[] = [
     key: "salon",
     label: "Salon",
     description: "Beauté & bien-être, santé non médicale, sport & fitness, hôtellerie, garde d'enfants & services à la personne — réservation au premier plan.",
-    minPlan: "starter",
+    minPlan: "free",
     palettes: ["corail", "sauge", "ardoise"],
     fontPairings: ["editorial", "arrondi"],
     refinedChoiceMinPlan: "pro",

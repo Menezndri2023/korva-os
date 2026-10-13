@@ -90,20 +90,20 @@ export const REPLACES: ReadonlyArray<{ today: string; korva: string }> = [
  * plan does not grant. These are the gates that live elsewhere in the code, each paired with
  * what enforces it, so a line here can always be checked against a real check:
  *
+ *   free     sector template      -> STOREFRONT_TEMPLATES[*].minPlan, via
+ *                                    assertStorefrontThemeAllowed
  *   starter  custom domain        -> EntitlementsService.assertCustomDomainAllowed
- *   starter  sector template      -> STOREFRONT_TEMPLATES[*].minPlan ("essentiel" is the only
- *                                    free one), via assertStorefrontThemeAllowed
  *   pro      palette + fonts      -> STOREFRONT_TEMPLATES[*].refinedChoiceMinPlan
  *   business brand accent colour  -> STOREFRONT_TEMPLATES[*].customAccentMinPlan
  *
  * Seats and the AI allowance are not here either: they are read from PLAN_LIMITS directly.
  */
 export const PLAN_PERKS: Record<string, readonly string[]> = {
-  free: ["Votre site public sur korvasuite.com"],
-  starter: [
-    "Votre propre nom de domaine",
-    "Le modèle de site de votre secteur",
+  free: [
+    "Votre site public sur korvasuite.com",
+    "Le modèle de site de votre métier",
   ],
+  starter: ["Votre propre nom de domaine"],
   pro: ["Couleurs et typographies de votre site au choix"],
   business: ["Votre couleur de marque sur votre site"],
 };

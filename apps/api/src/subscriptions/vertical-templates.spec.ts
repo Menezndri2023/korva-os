@@ -175,20 +175,17 @@ describe('VERTICAL_TEMPLATES coherence on the free plan', () => {
     }
   });
 
-  it('documents that no trade gets its own storefront template on the free plan', () => {
-    // NOT an assertion that this is desirable — it is a record of a live product decision.
-    // Every one of the five sector templates carries minPlan: "starter", and all seventeen
-    // trades default to one of them, so a free organization always falls back to "essentiel"
-    // (PublicService#resolveStorefrontTheme clamps to what the plan allows). Seventeen trades
-    // therefore render one identical generic site until someone upgrades.
-    //
-    // If the sector templates are ever made free, this test fails and should simply be deleted
-    // along with the "modèle de site de votre secteur" line in apps/web's PLAN_PERKS.starter.
-    const freeByDefault = VERTICAL_TEMPLATES.filter(
+  it('gives every trade its own storefront template on the free plan', () => {
+    // The inverse of the test that stood here until the sector templates were made free: it
+    // recorded that all five carried minPlan "starter", so seventeen trades rendered one
+    // identical generic "essentiel" site until someone upgraded. Now each trade's own template
+    // must be reachable from free, or defaultStorefrontTemplate is inert again for every new
+    // signup (PublicService#resolveStorefrontTheme clamps to what the plan allows).
+    const unreachable = VERTICAL_TEMPLATES.filter(
       (t) =>
-        getStorefrontTemplate(t.defaultStorefrontTemplate).minPlan === 'free',
-    );
-    expect(freeByDefault).toEqual([]);
+        getStorefrontTemplate(t.defaultStorefrontTemplate).minPlan !== 'free',
+    ).map((t) => t.key);
+    expect(unreachable).toEqual([]);
   });
 
   it('never lets a module be suggested by a trade without existing in the ladder', () => {
