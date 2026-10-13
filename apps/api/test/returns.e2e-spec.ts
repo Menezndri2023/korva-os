@@ -5,6 +5,7 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -152,6 +153,7 @@ describe('Returns / RMA (e2e)', () => {
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

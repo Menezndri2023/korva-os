@@ -5,6 +5,7 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -104,8 +105,9 @@ describe('Subscription product overrides (e2e)', () => {
       'Product Override Crosscut Org',
     );
 
-    // Starter still grants crm/catalog/commerce/finance/communication/analytics/website
-    // (only workflow/ai excluded) — a real plan with real cross-cutting modules to test against.
+    // Starter grants every module except `ai`, which is Pro's — a real plan with real
+    // cross-cutting modules to test against. (`workflow` was excluded here too until
+    // 2026-10-13; it is free now, because all seventeen vertical templates depend on it.)
     await request(server)
       .post('/api/v1/subscriptions/change-plan')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -144,8 +146,20 @@ describe('Subscription product overrides (e2e)', () => {
       'Product Override Revoke Org',
     );
 
-    // Free plan: enabledModules already includes catalog/commerce/finance (via createForOwner
-    // copying plan.modules verbatim) — no PATCH needed to enable them first.
+    // Starter, and finance enabled explicitly. Until 2026-10-13 this ran on the free plan
+    // with no PATCH at all, because the demonstration catalog gave `free` all eleven modules
+    // and createForOwner copies plan.modules verbatim. `finance` is a Starter module now, so
+    // the tier has to be real before the module can be, and this test needs finance present:
+    // it is the one that must SURVIVE the override, proving the prune is per-product and not
+    // a blanket reset.
+    await putOrganizationOnPlan(connection, organizationId, 'starter');
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ enabledModules: ['crm', 'catalog', 'commerce', 'finance'] })
+      .expect(200);
+
     const before = await request(server)
       .get('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -225,6 +239,10 @@ describe('Subscription product overrides (e2e)', () => {
     });
     expect(staffRole).not.toBeNull();
 
+    // Starter, for its five seats: the free plan is a single seat, the owner's, and this test
+    // needs a staff member to exist before it can check that one may not change overrides.
+    await putOrganizationOnPlan(connection, owner.organizationId, 'starter');
+
     await request(server)
       .post('/api/v1/organizations/me/members')
       .set('Authorization', `Bearer ${owner.accessToken}`)
@@ -250,7 +268,19 @@ describe('Subscription product overrides (e2e)', () => {
       'Product Override Downgrade Org',
     );
 
-    // Force-grant "ai" via an override, independent of whatever plan is active.
+    // Pro first, because an override may only be switched ON for a product the active plan
+    // already grants — assertOverridesWithinPlan, which exists so that a tenant's own OWNER
+    // cannot hand itself a paid product for free. This test ran straight from the free plan
+    // until 2026-10-13, when `free` still granted all eleven modules and the call was a no-op
+    // entitlement-wise. The behaviour under test is unchanged and is now actually reachable:
+    // an override survives a plan change that would otherwise remove the module.
+    await request(server)
+      .post('/api/v1/subscriptions/change-plan')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ planKey: 'pro' })
+      .expect(201);
+
     await request(server)
       .patch('/api/v1/subscriptions/product-overrides')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -264,7 +294,7 @@ describe('Subscription product overrides (e2e)', () => {
       .send({ enabledModules: ['crm', 'ai'] })
       .expect(200);
 
-    // "starter" would normally exclude "ai" entirely.
+    // "starter" excludes "ai" entirely — so only the override can keep it alive.
     await request(server)
       .post('/api/v1/subscriptions/change-plan')
       .set('Authorization', `Bearer ${accessToken}`)

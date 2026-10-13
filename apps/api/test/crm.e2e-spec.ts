@@ -5,6 +5,7 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -139,6 +140,10 @@ describe('CRM module (e2e)', () => {
       .set('X-Organization-Id', organizationId)
       .send({ enabledModules: ['crm'] })
       .expect(200);
+
+    // Paid tier: these tests add members, and the free plan is one seat (the owner).
+    // Seat enforcement itself is covered by subscriptions.e2e-spec.ts.
+    await putOrganizationOnPlan(connection, organizationId);
 
     return { accessToken, organizationId };
   }

@@ -5,6 +5,7 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -94,7 +95,14 @@ describe('Multi-tenant isolation (e2e)', () => {
         language: 'fr',
       })
       .expect(201);
-    return asSuccess<OrganizationPayload>(res.body).id;
+    const organizationId = asSuccess<OrganizationPayload>(res.body).id;
+
+    // Every organization here goes on a paid tier: three of these tests add a second member
+    // and the free plan is one seat, the owner's. This spec asserts nothing about plans — seat
+    // and module enforcement are covered by subscriptions.e2e-spec.ts — so lifting the tier
+    // changes none of what it checks, and keeps isolation the only variable.
+    await putOrganizationOnPlan(connection, organizationId);
+    return organizationId;
   }
 
   describe('auth', () => {

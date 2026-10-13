@@ -5,6 +5,7 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -121,6 +122,7 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
       slug = organization.slug;
       organizationId = organization.id;
 
+      await putOrganizationOnPlan(connection, organizationId);
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${staffToken}`)
@@ -441,6 +443,7 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
       slug = organization.slug;
       organizationId = organization.id;
 
+      await putOrganizationOnPlan(connection, organizationId);
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${staffToken}`)
@@ -608,6 +611,7 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
       slug = organization.slug;
       organizationId = organization.id;
 
+      await putOrganizationOnPlan(connection, organizationId);
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${staffToken}`)

@@ -6,6 +6,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { OrdersRepository } from '../src/commerce/orders/orders.repository';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -155,6 +156,7 @@ describe('Commerce module (e2e)', () => {
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

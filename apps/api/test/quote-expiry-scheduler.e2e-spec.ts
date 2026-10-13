@@ -11,6 +11,7 @@ import {
   QUOTE_EXPIRY_QUEUE_NAME,
   QUOTE_EXPIRY_SCHEDULER_ID,
 } from '../src/finance/quotes/quote-expiry-scheduler.service';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -120,6 +121,7 @@ describe('Quote expiry scheduler (e2e)', () => {
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

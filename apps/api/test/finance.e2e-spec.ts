@@ -10,6 +10,7 @@ import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
 } from '../src/finance/payments/providers/payment-provider.interface';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -108,6 +109,7 @@ describe('Finance module (e2e)', () => {
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -301,6 +303,7 @@ describe('Finance module (e2e)', () => {
       ));
       // registerOrgAndContact only enables crm/finance — orders (commerce) are also exercised
       // by the discount-code tests below, so enable that module too for this describe block.
+      await putOrganizationOnPlan(connection, organizationId);
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)

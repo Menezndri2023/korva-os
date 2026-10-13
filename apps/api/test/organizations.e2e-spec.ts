@@ -11,6 +11,7 @@ import {
   type EmailProvider,
   type EmailSendResult,
 } from '../src/communication/providers/email-provider.interface';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -135,7 +136,7 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
     );
   });
 
-  it('still rejects enabling a module outside the plan after downgrading (entitlement enforcement unchanged)', async () => {
+  it('still rejects enabling a module outside the plan after a plan change (entitlement enforcement unchanged)', async () => {
     const { accessToken, organization } = await registerOrgAndToken(
       'org-default-modules-gate@korva.test',
       'Default Modules Gate Org',
@@ -148,13 +149,18 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
       .send({ planKey: 'starter' })
       .expect(201);
 
-    // "starter" excludes "workflow" and "ai" — attempting to (re-)enable "workflow" must
-    // still be rejected even though it was part of the org's original default modules.
+    // "starter" excludes "ai", which is a Pro module. This asserted "workflow" until
+    // 2026-10-13: under the old demonstration catalog `free` granted all eleven modules and
+    // `starter` granted nine, so moving to starter was a DOWNGRADE that stripped "workflow".
+    // The real ladder is monotonic — free's eight modules are a subset of starter's ten — so
+    // no module is lost going free -> starter and "workflow" is now legitimately allowed.
+    // What this test guards is unchanged: a module the active plan does not include is
+    // refused, whatever the organization had enabled before.
     const res = await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Organization-Id', organization.id)
-      .send({ enabledModules: ['crm', 'workflow'] })
+      .send({ enabledModules: ['crm', 'ai'] })
       .expect(403);
     expect(asError(res.body).code).toBe('MODULE_NOT_IN_PLAN');
   });
@@ -343,6 +349,10 @@ describe('Organizations — team invitations (e2e)', () => {
       })
       .expect(201);
     const organization = asSuccess<OrganizationPayload>(orgRes.body);
+
+    // Paid tier: these tests add members, and the free plan is one seat (the owner).
+    // Seat enforcement itself is covered by subscriptions.e2e-spec.ts.
+    await putOrganizationOnPlan(connection, organization.id);
 
     return { accessToken, organization };
   }
@@ -634,6 +644,10 @@ describe('Organizations — member role change and removal (e2e)', () => {
       })
       .expect(201);
     const organization = asSuccess<OrganizationPayload>(orgRes.body);
+
+    // Paid tier: these tests add members, and the free plan is one seat (the owner).
+    // Seat enforcement itself is covered by subscriptions.e2e-spec.ts.
+    await putOrganizationOnPlan(connection, organization.id);
 
     return { accessToken, organization };
   }

@@ -11,6 +11,7 @@ import {
   INVOICE_OVERDUE_QUEUE_NAME,
   INVOICE_OVERDUE_SCHEDULER_ID,
 } from '../src/finance/invoices/invoice-overdue-scheduler.service';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -125,6 +126,7 @@ describe('Invoice overdue scheduler (e2e)', () => {
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

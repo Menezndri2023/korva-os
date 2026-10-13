@@ -5,6 +5,7 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -518,6 +519,9 @@ describe('Public storefront API (e2e)', () => {
     });
 
     it('applies a discount code and shipping cost at storefront checkout, and drops an incomplete shipping address rather than rejecting the order', async () => {
+      // Starter: this is the one test in the describe that needs `finance`, which became a paid
+      // module on 2026-10-13. Nothing here is about plans — the storefront checkout is.
+      await putOrganizationOnPlan(connection, organizationId, 'starter');
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
@@ -762,31 +766,48 @@ describe('Public storefront API (e2e)', () => {
       expect(themeAgain).toEqual(theme);
     });
 
-    it('rejects saving a template the current plan does not cover', async () => {
+    /**
+     * This asserted a rejected TEMPLATE until 2026-10-13, when all five sector templates were
+     * made free: every one of the seventeen vertical templates defaults to one of them, so a
+     * free organization always fell back to "essentiel" and every trade rendered the same
+     * generic site. The paid line did not disappear, it moved: `refinedChoiceMinPlan` ("pro")
+     * is what a free plan cannot cross, so a free organization gets its template's FIRST
+     * palette and font pairing and nothing else. `salon`'s palettes are
+     * ["corail", "sauge", "ardoise"], which puts "sauge" out of reach here.
+     */
+    it('rejects saving a palette the current plan does not cover', async () => {
       const { accessToken, organizationId, slug } = await setupStorefrontOrg(
         'storefront-theme-reject@korva.test',
         'Theme Reject Org',
       );
 
+      const before = await request(server)
+        .get(`/api/v1/public/${slug}`)
+        .expect(200);
+      const themeBefore = asSuccess<PublicOrganizationPayload>(
+        before.body,
+      ).storefrontTheme;
+
       const res = await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ storefrontTemplate: 'salon' })
+        .send({ storefrontTemplate: 'salon', storefrontPalette: 'sauge' })
         .expect(403);
-      expect(asError(res.body).code).toBe('STOREFRONT_TEMPLATE_NOT_IN_PLAN');
+      expect(asError(res.body).code).toBe('STOREFRONT_PALETTE_NOT_IN_PLAN');
 
-      // The rejected PATCH must not have partially applied — still "essentiel" publicly.
-      const stillDefault = await request(server)
+      // The rejected PATCH must not have partially applied: the template travelled in the same
+      // request as the refused palette, so the public theme has to come back identical — not
+      // merely "not sauge", which a half-applied update would also satisfy.
+      const after = await request(server)
         .get(`/api/v1/public/${slug}`)
         .expect(200);
       expect(
-        asSuccess<PublicOrganizationPayload>(stillDefault.body).storefrontTheme
-          .template,
-      ).toBe('essentiel');
+        asSuccess<PublicOrganizationPayload>(after.body).storefrontTheme,
+      ).toEqual(themeBefore);
     });
 
-    it('clamps an explicitly saved template back down after a downgrade, without erroring', async () => {
+    it('clamps an explicitly saved palette back down after a downgrade, without erroring', async () => {
       const { accessToken, organizationId, slug } = await setupStorefrontOrg(
         'storefront-theme-clamp@korva.test',
         'Theme Clamp Org',
@@ -803,7 +824,7 @@ describe('Public storefront API (e2e)', () => {
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ storefrontTemplate: 'salon', storefrontPalette: 'corail' })
+        .send({ storefrontTemplate: 'salon', storefrontPalette: 'ardoise' })
         .expect(200);
 
       const onBusiness = await request(server)
@@ -811,7 +832,7 @@ describe('Public storefront API (e2e)', () => {
         .expect(200);
       expect(
         asSuccess<PublicOrganizationPayload>(onBusiness.body).storefrontTheme,
-      ).toMatchObject({ template: 'salon', palette: 'corail' });
+      ).toMatchObject({ template: 'salon', palette: 'ardoise' });
 
       await request(server)
         .post('/api/v1/subscriptions/change-plan')
@@ -820,13 +841,26 @@ describe('Public storefront API (e2e)', () => {
         .send({ planKey: 'free' })
         .expect(201);
 
+      // The clamp is per-dimension, which is the whole point: `salon` is free, so the template
+      // survives the downgrade, while "ardoise" is a refined choice the free plan cannot hold
+      // and falls back to the template's first palette. Before 2026-10-13 the template itself
+      // was what clamped, back to "essentiel".
       const onFree = await request(server)
         .get(`/api/v1/public/${slug}`)
         .expect(200);
       expect(
-        asSuccess<PublicOrganizationPayload>(onFree.body).storefrontTheme
-          .template,
-      ).toBe('essentiel');
+        asSuccess<PublicOrganizationPayload>(onFree.body).storefrontTheme,
+      ).toMatchObject({ template: 'salon', palette: 'corail' });
+
+      // And the clamp is a read-time projection, not a destructive write: the owner's saved
+      // choice is still on the document, so re-upgrading returns it rather than losing it.
+      const saved = await connection
+        .collection('organizations')
+        .findOne(
+          { _id: new Types.ObjectId(organizationId) },
+          { projection: { storefrontPalette: 1 } },
+        );
+      expect(saved?.storefrontPalette).toBe('ardoise');
     });
   });
 

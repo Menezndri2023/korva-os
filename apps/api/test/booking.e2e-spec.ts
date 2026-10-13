@@ -5,6 +5,7 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -173,6 +174,10 @@ describe('Booking module (e2e)', () => {
       })
       .expect(201);
     const offerId = asSuccess<OfferPayload>(offerRes.body).id;
+
+    // Paid tier: these tests add members, and the free plan is one seat (the owner).
+    // Seat enforcement itself is covered by subscriptions.e2e-spec.ts.
+    await putOrganizationOnPlan(connection, organizationId);
 
     return { accessToken, organizationId, contactId, offerId };
   }

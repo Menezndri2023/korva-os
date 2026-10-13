@@ -5,6 +5,7 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -181,6 +182,10 @@ describe('Custom roles (e2e)', () => {
   });
 
   it('OWNER can assign a custom role to a member; refuses to delete a role currently in use', async () => {
+    // A paid tier first: this organization is about to take on a second member, and the free
+    // plan is one seat — the owner's. Seat enforcement is covered by subscriptions.e2e-spec.ts.
+    await putOrganizationOnPlan(connection, organizationId);
+
     const memberAuthRes = await request(server)
       .post('/api/v1/auth/register')
       .send({ email: 'roles-member@korva.test', password: 'password123' })

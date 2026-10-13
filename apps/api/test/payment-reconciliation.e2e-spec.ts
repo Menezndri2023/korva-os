@@ -13,6 +13,7 @@ import {
   PAYMENT_PROVIDER,
   type PaymentProvider,
 } from '../src/finance/payments/providers/payment-provider.interface';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -127,6 +128,7 @@ describe('Payment/Refund reconciliation (e2e)', () => {
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -273,6 +275,7 @@ describe('Payment/Refund reconciliation (e2e)', () => {
   it('publishes payment.completed from reconciliation too (not just create()), verified by a Workflow configured on it actually firing', async () => {
     // 'workflow' wasn't part of this file's original enabledModules — added here rather than
     // in beforeAll to keep the blast radius of this change scoped to just this test.
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

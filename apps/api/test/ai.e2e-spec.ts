@@ -20,6 +20,7 @@ import { CancelBookingTool } from '../src/ai/tools/cancel-booking.tool';
 import { BookingsService } from '../src/booking/bookings/bookings.service';
 import type { AiTool } from '../src/ai/tools/tool.interface';
 import { AuditService } from '../src/audit/audit.service';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -270,6 +271,7 @@ describe('AI module (e2e)', () => {
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -1360,6 +1362,7 @@ describe('AI module (e2e)', () => {
         })
         .expect(201);
       const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+      await putOrganizationOnPlan(connection, organizationId);
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
@@ -1577,6 +1580,7 @@ describe('AI module (e2e)', () => {
         })
         .expect(201);
       const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+      await putOrganizationOnPlan(connection, organizationId);
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
@@ -1717,6 +1721,9 @@ describe('AI usage/cost tracking', () => {
 
   async function registerOrgWithAi(
     server: App,
+    // Taken as a parameter rather than closed over: this helper sits outside the describe that
+    // owns the app, so the only `connection` in scope here belongs to a different suite.
+    connection: Connection,
     email: string,
     orgName: string,
   ) {
@@ -1738,6 +1745,7 @@ describe('AI usage/cost tracking', () => {
       })
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -1771,6 +1779,7 @@ describe('AI usage/cost tracking', () => {
     it('logs inputTokens/outputTokens/costUsd and surfaces the total via the summary endpoint', async () => {
       const { accessToken, organizationId } = await registerOrgWithAi(
         server,
+        app.get(getConnectionToken()),
         'ai-usage-priced@korva.test',
         'AI Usage Priced Org',
       );
@@ -1827,6 +1836,7 @@ describe('AI usage/cost tracking', () => {
     it('logs tokens with a null cost rather than a guessed figure, and counts it as unpriced', async () => {
       const { accessToken, organizationId } = await registerOrgWithAi(
         server,
+        app.get(getConnectionToken()),
         'ai-usage-unpriced@korva.test',
         'AI Usage Unpriced Org',
       );
@@ -1906,6 +1916,7 @@ describe('AI module (e2e) — default NullAIProvider (no AI_API_KEY)', () => {
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

@@ -5,6 +5,7 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -592,6 +593,10 @@ describe('Suppliers & purchase orders (e2e)', () => {
       const memberAccessToken = asSuccess<AuthPayload>(
         memberAuthRes.body,
       ).accessToken;
+
+      // A paid tier first: this organization is about to take on a second member, and the free
+      // plan is one seat — the owner's. Seat enforcement is covered by subscriptions.e2e-spec.ts.
+      await putOrganizationOnPlan(connection, organizationId);
 
       const rolesRes = await request(server)
         .get('/api/v1/roles')

@@ -19,6 +19,7 @@ import {
   RECONCILIATION_SCHEDULER_ID,
   ReconciliationSchedulerService,
 } from '../src/finance/payments/reconciliation-scheduler.service';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -110,6 +111,7 @@ describe('Payment/Refund reconciliation scheduler (e2e)', () => {
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

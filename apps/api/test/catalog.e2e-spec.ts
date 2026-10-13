@@ -5,6 +5,7 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -129,6 +130,11 @@ describe('Catalog module (e2e)', () => {
       .set('X-Organization-Id', organizationId)
       .send({ enabledModules: ['catalog'] })
       .expect(200);
+
+    // Paid tier, for two reasons this spec does not itself test: it adds STAFF members (the
+    // free plan is one seat, the owner's) and registerOrgWithModules below enables `finance`
+    // to reach quotes and invoices. Both gates are covered by subscriptions.e2e-spec.ts.
+    await putOrganizationOnPlan(connection, organizationId);
 
     return { accessToken, organizationId };
   }

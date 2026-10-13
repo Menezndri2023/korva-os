@@ -13,6 +13,7 @@ import {
   type AiChatResult,
 } from '../src/ai/providers/ai-provider.interface';
 import { EventBusService } from '../src/core/events/event-bus.service';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -189,6 +190,7 @@ describe('AI ↔ Decision Engine tools (e2e)', () => {
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

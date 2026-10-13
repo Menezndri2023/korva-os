@@ -7,6 +7,7 @@ import { App } from 'supertest/types';
 import { Types } from 'mongoose';
 import { AppModule } from './../src/app.module';
 import { RecurringBillingSchedulerService } from '../src/finance/recurring-billing/recurring-billing-scheduler.service';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -87,6 +88,7 @@ describe('Recurring billing (e2e)', () => {
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

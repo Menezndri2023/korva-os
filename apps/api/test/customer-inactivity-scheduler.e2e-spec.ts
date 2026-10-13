@@ -12,6 +12,7 @@ import {
   CUSTOMER_INACTIVITY_SCHEDULER_ID,
   CustomerInactivitySchedulerService,
 } from '../src/crm/contacts/customer-inactivity-scheduler.service';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -119,6 +120,7 @@ describe('Customer inactivity scheduler (e2e)', () => {
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
 
+    await putOrganizationOnPlan(connection, organizationId);
     await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)

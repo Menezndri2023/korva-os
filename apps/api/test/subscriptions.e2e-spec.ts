@@ -12,6 +12,9 @@ import {
   SUBSCRIPTION_PERIOD_QUEUE_NAME,
   SUBSCRIPTION_PERIOD_SCHEDULER_ID,
 } from '../src/subscriptions/subscription-period-scheduler.service';
+import { putOrganizationOnPlan } from './support/plan-tier';
+import { UsageRepository } from '../src/subscriptions/usage.repository';
+import { PLAN_LIMITS, PLAN_PRICES } from '@korva/types';
 
 interface ApiSuccess<T> {
   success: true;
@@ -188,7 +191,7 @@ describe('Subscriptions module (e2e)', () => {
   });
 
   describe('module gating driven by the active plan', () => {
-    it('rejects enabling a module the current plan does not include, after downgrading to "starter"', async () => {
+    it('rejects enabling a module the current plan does not include, after moving to "starter"', async () => {
       const { accessToken, organizationId } = await registerOrgAndToken(
         'module-gate@korva.test',
         'Module Gate Org',
@@ -205,7 +208,11 @@ describe('Subscriptions module (e2e)', () => {
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ enabledModules: ['crm', 'workflow'] })
+        // `ai` is a Pro module, so starter does not grant it. This sent `workflow` until
+        // 2026-10-13: the old demonstration catalog gave `free` all eleven modules and
+        // `starter` only nine, making free -> starter a downgrade that stripped `workflow`.
+        // The real ladder is monotonic, so `workflow` is now legitimately allowed on starter.
+        .send({ enabledModules: ['crm', 'ai'] })
         .expect(403);
       expect(asError(res.body).code).toBe('MODULE_NOT_IN_PLAN');
 
@@ -234,6 +241,11 @@ describe('Subscriptions module (e2e)', () => {
       });
       expect(staffRole).not.toBeNull();
 
+      // Starter, for its five seats: the free plan is one seat and this test needs a staff
+      // member to exist before it can check that a staff member may not change the plan.
+      // The seat limit itself is asserted in "seat limit enforcement" below.
+      await putOrganizationOnPlan(connection, owner.organizationId, 'starter');
+
       await request(server)
         .post('/api/v1/organizations/me/members')
         .set('Authorization', `Bearer ${owner.accessToken}`)
@@ -255,7 +267,18 @@ describe('Subscriptions module (e2e)', () => {
   });
 
   describe('seat limit enforcement', () => {
-    it('rejects inviting a member beyond the "free" plan seat limit (3, owner included)', async () => {
+    /**
+     * The seat limit comes from the active plan, and the free plan is a single seat — the
+     * owner's. This test asserted a free limit of three until 2026-10-13, a number that came
+     * from the demonstration catalog; the real one is PLAN_LIMITS.free.seats. Both halves are
+     * asserted here on purpose: that the free plan refuses the second member, and that moving
+     * to starter lets exactly the same invitation through. Together they prove the number is
+     * read from the plan rather than hardcoded anywhere in the seat check.
+     */
+    it('refuses the second member on "free" (one seat) and accepts it on "starter"', async () => {
+      expect(PLAN_LIMITS.free.seats).toBe(1);
+      expect(PLAN_LIMITS.starter.seats).toBeGreaterThan(1);
+
       const owner = await registerOrgAndToken(
         'seat-limit-owner@korva.test',
         'Seat Limit Org',
@@ -266,39 +289,58 @@ describe('Subscriptions module (e2e)', () => {
         systemKey: 'STAFF',
       });
 
-      for (const email of ['seat-2@korva.test', 'seat-3@korva.test']) {
-        await request(server)
-          .post('/api/v1/auth/register')
-          .send({ email, password: 'password123' })
-          .expect(201);
-        await request(server)
+      await request(server)
+        .post('/api/v1/auth/register')
+        .send({ email: 'seat-2@korva.test', password: 'password123' })
+        .expect(201);
+
+      function invite() {
+        return request(server)
           .post('/api/v1/organizations/me/members')
           .set('Authorization', `Bearer ${owner.accessToken}`)
           .set('X-Organization-Id', owner.organizationId)
-          .send({ email, roleId: String(staffRole?._id) })
-          .expect(201);
+          .send({ email: 'seat-2@korva.test', roleId: String(staffRole?._id) });
       }
 
-      await request(server)
-        .post('/api/v1/auth/register')
-        .send({ email: 'seat-4@korva.test', password: 'password123' })
-        .expect(201);
-      const res = await request(server)
-        .post('/api/v1/organizations/me/members')
+      const refused = await invite().expect(403);
+      expect(asError(refused.body).code).toBe('SEAT_LIMIT_REACHED');
+
+      // No membership may have been created by the refused invitation.
+      const afterRefusal = await request(server)
+        .get('/api/v1/subscriptions/me')
         .set('Authorization', `Bearer ${owner.accessToken}`)
         .set('X-Organization-Id', owner.organizationId)
-        .send({ email: 'seat-4@korva.test', roleId: String(staffRole?._id) })
-        .expect(403);
-      expect(asError(res.body).code).toBe('SEAT_LIMIT_REACHED');
+        .expect(200);
+      const seatsUsed = asSuccess<SubscriptionSummaryPayload>(
+        afterRefusal.body,
+      ).usage.find((u) => u.metric === 'seats');
+      expect(seatsUsed?.used).toBe(1);
+      expect(seatsUsed?.limit).toBe(PLAN_LIMITS.free.seats);
+
+      await putOrganizationOnPlan(connection, owner.organizationId, 'starter');
+      await invite().expect(201);
     });
   });
 
   describe('AI usage quota enforcement', () => {
-    it('allows up to the "free" plan limit (5 messages/month) then rejects the next one', async () => {
+    /**
+     * This ran on the free plan with a five-message quota until 2026-10-13. Neither half of
+     * that is true any more: `ai` is a Pro module, and PLAN_LIMITS.free.ai_messages_per_month
+     * is 0 — a free organization cannot send one message, let alone five. The quota that can
+     * actually be reached is Pro's, so the test runs there.
+     *
+     * Pro allows 500 messages a month, and sending 500 HTTP requests to assert one boundary
+     * would add minutes to the suite for nothing. The counter is seeded to one below the limit
+     * through the application's own UsageRepository — the same object EntitlementsService
+     * reads — so the last two requests still exercise the real gate end to end: the message
+     * at the limit is accepted, the one past it is refused.
+     */
+    it('accepts the last message inside the plan quota and refuses the one past it', async () => {
       const { accessToken, organizationId } = await registerOrgAndToken(
         'ai-quota@korva.test',
         'AI Quota Org',
       );
+      await putOrganizationOnPlan(connection, organizationId, 'pro');
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
@@ -306,14 +348,23 @@ describe('Subscriptions module (e2e)', () => {
         .send({ enabledModules: ['ai'] })
         .expect(200);
 
-      for (let i = 0; i < 5; i++) {
-        await request(server)
-          .post('/api/v1/ai/chat')
-          .set('Authorization', `Bearer ${accessToken}`)
-          .set('X-Organization-Id', organizationId)
-          .send({ message: `Bonjour ${i}` })
-          .expect(201);
-      }
+      // `?? 0` for noUncheckedIndexedAccess: PLAN_LIMITS values are Record<string, number>,
+      // because each tier declares only the metrics it actually caps. The assertion right
+      // below is what makes the fallback safe to read — a Pro tier with no AI quota is a
+      // catalog bug, and this test should say so rather than silently seed nothing.
+      const limit = PLAN_LIMITS.pro.ai_messages_per_month ?? 0;
+      expect(limit).toBeGreaterThan(0);
+      const period = new Date().toISOString().slice(0, 7); // "YYYY-MM", as EntitlementsService
+      await app
+        .get(UsageRepository)
+        .increment(organizationId, 'ai_messages_per_month', period, limit - 1);
+
+      await request(server)
+        .post('/api/v1/ai/chat')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ message: 'Le dernier message autorise' })
+        .expect(201);
 
       const res = await request(server)
         .post('/api/v1/ai/chat')
@@ -517,6 +568,9 @@ describe('Subscriptions module (e2e)', () => {
         systemKey: 'STAFF',
       });
 
+      // Starter, for its five seats — see "seat limit enforcement" for the limit itself.
+      await putOrganizationOnPlan(connection, owner.organizationId, 'starter');
+
       await request(server)
         .post('/api/v1/organizations/me/members')
         .set('Authorization', `Bearer ${owner.accessToken}`)
@@ -633,6 +687,9 @@ describe('Subscriptions module (e2e)', () => {
         'lockout-ai@korva.test',
         'Lockout AI Org',
       );
+      // Pro, because `ai` is a Pro module: the point of this test is that cancellation beats
+      // an otherwise-valid entitlement, which needs the entitlement to be valid first.
+      await putOrganizationOnPlan(connection, organizationId, 'pro');
       await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
@@ -699,9 +756,13 @@ describe('Subscriptions module (e2e)', () => {
       >(res.body);
       // A brand-new "free" subscription's period just started (createDefaultSubscription runs
       // moments before this request in the same test), so there is a full month remaining —
-      // proration should be close to the full price delta (free=0 -> pro=99).
+      // proration should be close to the full price delta (free=0 -> pro).
+      //
+      // Derived from PLAN_PRICES rather than written out: this read `> 90` against a Pro price
+      // of 99 until 2026-10-13, and silently became a failing test the moment the catalog was
+      // repriced. Expressed as a fraction of the real price, it follows the catalog instead.
       expect(body.prorationCurrency).toBe('EUR');
-      expect(body.prorationAmount).toBeGreaterThan(90);
+      expect(body.prorationAmount).toBeGreaterThan(PLAN_PRICES.EUR.pro * 0.9);
     });
   });
 
