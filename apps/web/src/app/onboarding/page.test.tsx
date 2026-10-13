@@ -261,10 +261,38 @@ describe("OnboardingPage — timezone field (WAVE 2 AGENT E)", () => {
     patchMock.mockResolvedValue({ id: "org-1" });
   });
 
-  it("pre-selects the browser's own resolved timezone", () => {
+  it("pre-selects a timezone that is actually one of the options, never an empty field", () => {
     renderWithProviders(<OnboardingPage />);
     const select = screen.getByLabelText("Fuseau horaire") as HTMLSelectElement;
-    expect(select).toHaveValue(Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+    // Asserting equality with resolvedOptions().timeZone is what this test used to do, and it
+    // failed on every UTC machine — including every CI runner — because "UTC" is not in
+    // Intl.supportedValuesOf("timeZone") and so matched no option. The property that matters is
+    // that the field is never blank: a required field with no selection blocks onboarding.
+    expect(select.value).not.toBe("");
+    expect(Intl.supportedValuesOf("timeZone")).toContain(select.value);
+  });
+
+  it("falls back to a zone with the same UTC offset when the browser reports an unlisted one", () => {
+    // Firefox with privacy.resistFingerprinting reports "UTC", which is absent from the
+    // canonical IANA list. The fallback must still land on a zone showing the same time.
+    renderWithProviders(<OnboardingPage />);
+    const select = screen.getByLabelText("Fuseau horaire") as HTMLSelectElement;
+
+    const offsetOf = (timeZone: string) => {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        timeZoneName: "longOffset",
+      }).formatToParts(new Date());
+      const name =
+        parts.find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+      const match = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+      if (!match) return 0;
+      return (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]));
+    };
+    expect(offsetOf(select.value)).toBe(
+      offsetOf(Intl.DateTimeFormat().resolvedOptions().timeZone),
+    );
   });
 
   it("lists real IANA timezone identifiers as options, not a hardcoded stand-in list", () => {

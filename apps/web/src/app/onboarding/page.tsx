@@ -57,6 +57,45 @@ const CURRENCIES = [...SUPPORTED_BILLING_CURRENCIES];
 // per the repo's engines field, and all evergreen browsers).
 const TIMEZONES = Intl.supportedValuesOf("timeZone");
 
+/** Current UTC offset of a zone, in minutes. Read from Intl rather than a table so it follows
+ *  daylight saving automatically. */
+function timezoneOffsetMinutes(timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    timeZoneName: "longOffset",
+  }).formatToParts(new Date());
+  const name = parts.find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  const match = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+  if (!match) return 0;
+  return (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]));
+}
+
+/**
+ * The browser's own zone, guaranteed to be one of the options actually rendered.
+ *
+ * `resolvedOptions().timeZone` and `supportedValuesOf("timeZone")` do not agree: the former
+ * returns whatever the system reports, the latter lists only canonical IANA names. A machine set
+ * to UTC reports "UTC", which appears in neither list — not even as "Etc/UTC". The select then
+ * had a default value matching no option at all, so the field rendered empty and the form could
+ * be submitted with no timezone.
+ *
+ * Not a CI-only curiosity: every CI runner is UTC, and so is any browser with fingerprint
+ * resistance enabled (Firefox's `privacy.resistFingerprinting` always reports UTC). Those users
+ * reached onboarding with a blank, required field.
+ *
+ * Falls back by matching the real UTC offset rather than hardcoding an alias, so any unlisted
+ * zone — not just UTC — resolves to a listed zone showing the same time.
+ */
+function resolveDefaultTimezone(): string {
+  const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (TIMEZONES.includes(resolved)) return resolved;
+  const target = timezoneOffsetMinutes(resolved);
+  return (
+    TIMEZONES.find((zone) => timezoneOffsetMinutes(zone) === target) ??
+    TIMEZONES[0]
+  );
+}
+
 interface ImportPreview {
   name?: string;
   tagline?: string;
@@ -84,7 +123,7 @@ export default function OnboardingPage() {
     defaultValues: {
       country: "FR",
       currency: "EUR",
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timezone: resolveDefaultTimezone(),
       language: "fr",
     },
   });
