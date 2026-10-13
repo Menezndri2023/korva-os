@@ -10,6 +10,7 @@ import type { Organization } from "@korva/types";
 import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
+import { AuthShell } from "@/components/landing/auth-shell";
 
 interface LoginResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
@@ -44,63 +45,67 @@ export default function LoginPage() {
   });
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold">KORVA OS</h1>
-          <p className="mt-1 text-sm text-zinc-500">Connectez-vous à votre espace.</p>
-        </div>
-
-        <form className="space-y-4" onSubmit={handleSubmit((data) => mutation.mutate(data))}>
-          <div>
-            <label className="block text-sm font-medium" htmlFor="email">
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              className="mt-1 w-full"
-              error={!!errors.email}
-              {...register("email")}
-            />
-            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium" htmlFor="password">
-              Mot de passe
-            </label>
-            <Input
-              id="password"
-              type="password"
-              className="mt-1 w-full"
-              error={!!errors.password}
-              {...register("password")}
-            />
-            {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
-            <Link href="/forgot-password" className="mt-1 inline-block text-xs text-zinc-500 underline">
-              Mot de passe oublié ?
-            </Link>
-          </div>
-
-          {mutation.isError && (
-            <p className="text-sm text-red-600">
-              {mutation.error instanceof ApiError ? mutation.error.message : "Une erreur est survenue."}
-            </p>
-          )}
-
-          <Button type="submit" loading={mutation.isPending} className="w-full">
-            {mutation.isPending ? "Connexion..." : "Se connecter"}
-          </Button>
-        </form>
-
-        <p className="text-center text-sm text-zinc-500">
+    <AuthShell
+      title="Se connecter"
+      intro="Retrouvez vos clients, vos réservations et vos factures."
+      footer={
+        <>
           Pas encore de compte ?{" "}
-          <Link href="/register" className="font-medium text-zinc-900 underline">
+          <Link href="/register" className="font-medium text-text underline">
             Créer un compte
           </Link>
-        </p>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <form className="space-y-4" onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+        <div>
+          <label className="block text-sm font-medium" htmlFor="email">
+            Email
+          </label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            className="mt-1 w-full"
+            error={!!errors.email}
+            {...register("email")}
+          />
+          {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email.message}</p>}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium" htmlFor="password">
+            Mot de passe
+          </label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            className="mt-1 w-full"
+            error={!!errors.password}
+            {...register("password")}
+          />
+          {errors.password && (
+            <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>
+          )}
+          <Link
+            href="/forgot-password"
+            className="mt-1.5 inline-block text-xs text-text-muted underline"
+          >
+            Mot de passe oublié ?
+          </Link>
+        </div>
+
+        {mutation.isError && (
+          <p className="text-sm text-destructive">
+            {mutation.error instanceof ApiError ? mutation.error.message : "Une erreur est survenue."}
+          </p>
+        )}
+
+        <Button type="submit" loading={mutation.isPending} size="lg" className="w-full">
+          {mutation.isPending ? "Connexion..." : "Se connecter"}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

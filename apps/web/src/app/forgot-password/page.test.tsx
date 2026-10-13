@@ -46,7 +46,7 @@ describe("ForgotPasswordPage", () => {
     await waitFor(() => {
       const errorParagraph = screen
         .getByLabelText("Email")
-        .parentElement?.querySelector("p.text-red-600");
+        .parentElement?.querySelector("p.text-destructive");
       expect(errorParagraph).toBeInTheDocument();
     });
   });

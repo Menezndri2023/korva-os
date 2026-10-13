@@ -10,6 +10,7 @@ import { z } from "zod";
 import { resetPasswordSchema, type ResetPasswordInput } from "@korva/validation";
 import { Button, Input } from "@korva/ui";
 import { ApiError, apiClient } from "@/lib/api-client";
+import { AuthShell } from "@/components/landing/auth-shell";
 
 interface ResetPasswordResponse {
   success: boolean;
@@ -53,39 +54,54 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <div className="w-full max-w-sm space-y-4 text-center">
-        <h1 className="text-2xl font-semibold">Lien invalide</h1>
-        <p className="text-sm text-zinc-500">
-          Ce lien de réinitialisation est incomplet ou invalide.
+      <AuthShell
+        // "Lien invalide" is asserted by page.test.tsx through getByText, which requires exactly
+        // one match — so neither the intro below nor the form's error message may repeat that
+        // exact pair of words.
+        title="Lien invalide"
+        intro="Ce lien de réinitialisation est incomplet ou invalide."
+        footer={
+          <Link href="/forgot-password" className="font-medium text-text underline">
+            Redemander un lien
+          </Link>
+        }
+      >
+        <p className="text-sm text-text-muted">
+          Un lien de réinitialisation ne sert qu&apos;une fois et expire. Demandez-en un nouveau
+          depuis la page mot de passe oublié.
         </p>
-        <Link href="/forgot-password" className="font-medium text-zinc-900 underline">
-          Redemander un lien
-        </Link>
-      </div>
+      </AuthShell>
     );
   }
 
   if (mutation.isSuccess) {
     return (
-      <div className="w-full max-w-sm space-y-4 text-center">
-        <h1 className="text-2xl font-semibold">Mot de passe réinitialisé</h1>
-        <p className="text-sm text-zinc-500">
-          Votre mot de passe a été réinitialisé avec succès.
+      <AuthShell
+        title="Mot de passe réinitialisé"
+        intro="Votre mot de passe a été réinitialisé avec succès."
+        footer={
+          <Link href="/login" className="font-medium text-text underline">
+            Se connecter
+          </Link>
+        }
+      >
+        <p className="text-sm text-text-muted">
+          Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.
         </p>
-        <Link href="/login" className="font-medium text-zinc-900 underline">
-          Se connecter
-        </Link>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="w-full max-w-sm space-y-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold">Nouveau mot de passe</h1>
-        <p className="mt-1 text-sm text-zinc-500">Choisissez un nouveau mot de passe.</p>
-      </div>
-
+    <AuthShell
+      title="Nouveau mot de passe"
+      intro="Choisissez un nouveau mot de passe."
+      footer={
+        <Link href="/login" className="font-medium text-text underline">
+          Retour à la connexion
+        </Link>
+      }
+    >
       <form
         className="space-y-4"
         // Same reasoning as the forgot-password form: Zod stays the single source of truth.
@@ -103,7 +119,7 @@ function ResetPasswordForm() {
             error={!!errors.password}
             {...register("password")}
           />
-          {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
+          {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>}
         </div>
 
         <div>
@@ -118,32 +134,33 @@ function ResetPasswordForm() {
             {...register("confirmPassword")}
           />
           {errors.confirmPassword && (
-            <p className="mt-1 text-xs text-red-600">{errors.confirmPassword.message}</p>
+            <p className="mt-1 text-xs text-destructive">{errors.confirmPassword.message}</p>
           )}
         </div>
 
         {mutation.isError && (
-          <p className="text-sm text-red-600">
+          <p className="text-sm text-destructive">
             {mutation.error instanceof ApiError && mutation.error.code === "INVALID_RESET_TOKEN"
               ? "Ce lien de réinitialisation est invalide ou a expiré."
               : "Une erreur est survenue. Veuillez réessayer."}
           </p>
         )}
 
-        <Button type="submit" loading={mutation.isPending} className="w-full">
+        <Button type="submit" loading={mutation.isPending} size="lg" className="w-full">
           {mutation.isPending ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
         </Button>
       </form>
-    </div>
+    </AuthShell>
   );
 }
 
 export default function ResetPasswordPage() {
+  // The centring wrapper that used to live here is gone: AuthShell is itself the full-height
+  // two-column layout, so keeping a flex-centred min-h-screen box around it would nest one
+  // viewport-height container inside another.
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Suspense fallback={null}>
-        <ResetPasswordForm />
-      </Suspense>
-    </div>
+    <Suspense fallback={null}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

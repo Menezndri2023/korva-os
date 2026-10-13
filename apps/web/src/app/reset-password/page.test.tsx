@@ -65,7 +65,7 @@ describe("ResetPasswordPage", () => {
     await waitFor(() => {
       const errorParagraph = screen
         .getByLabelText("Nouveau mot de passe")
-        .parentElement?.querySelector("p.text-red-600");
+        .parentElement?.querySelector("p.text-destructive");
       expect(errorParagraph).toBeInTheDocument();
     });
   });

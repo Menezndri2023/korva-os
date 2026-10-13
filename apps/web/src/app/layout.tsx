@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
@@ -16,19 +16,64 @@ import { Providers } from "./providers";
  */
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('korva-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+/**
+ * Archivo, not Geist. Geist ships with `create-next-app`, so it was never a typographic choice
+ * here — it was the absence of one, and it is the single most recognisable tell that a product's
+ * front end has not been designed. Archivo is a grotesque with actual character (sturdy, tight
+ * apertures, a real heavy weight), which suits a tool people run a business on. It is a variable
+ * font on Google Fonts, so no `weight` array: the whole 100-900 axis ships in one file.
+ *
+ * `latin-ext` is not optional for a French-language product: the `latin` subset alone omits the
+ * oe ligature in "oeuvre"/"voeux", which would silently fall back to a different face mid-word.
+ *
+ * Deliberately NOT changed: apps/storefront's fonts. All five tenant font pairings in
+ * packages/types/src/storefront-themes.ts hardcode `bodyFont: "geistSans"`, so swapping the face
+ * there would restyle every tenant site already published. KORVA's own identity stops at KORVA's
+ * own pages.
+ */
+const archivo = Archivo({
+  variable: "--font-archivo",
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+/**
+ * Figures only — prices, counts, anything that belongs in an aligned column, where proportional
+ * digits make rows fail to line up. Never used for labels or headings: a monospace face applied
+ * to small text as decoration is its own cliche, and it is slower to read than the body face.
+ * Unlike Archivo this is not a variable font, so the two weights actually used are declared.
+ */
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
 });
 
+/**
+ * `/` is a public marketing page now, not a redirect, so this metadata is what search results
+ * and link previews actually show. The description is written for the owner who would buy this
+ * ("Business Operating System pour PME et indépendants" was written for an investor), and
+ * `template` keeps the brand on every nested route's title without repeating it per page.
+ */
 export const metadata: Metadata = {
-  title: "KORVA OS",
-  description: "Business Operating System pour PME et indépendants.",
+  title: {
+    default: "KORVA OS, la gestion de votre entreprise au même endroit",
+    template: "%s · KORVA OS",
+  },
+  description:
+    "Clients, réservations, commandes, stock, factures et site public dans un seul compte, " +
+    "configuré pour votre métier. Gratuit pour commencer, sans carte bancaire.",
+  applicationName: "KORVA OS",
+  openGraph: {
+    type: "website",
+    siteName: "KORVA OS",
+    locale: "fr_FR",
+    title: "KORVA OS, la gestion de votre entreprise au même endroit",
+    description:
+      "Votre cahier, votre carnet de rendez-vous et votre caisse au même endroit. " +
+      "Choisissez votre métier, votre espace est déjà configuré.",
+  },
 };
 
 // Every route in this app is force-dynamic for one reason: middleware.ts issues a fresh CSP
@@ -48,7 +93,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${archivo.variable} ${plexMono.variable} h-full antialiased`}
       // data-theme is set by THEME_INIT_SCRIPT below, outside React's own render — without this,
       // React would warn (or in dev, error) about a server/client attribute mismatch on <html>.
       suppressHydrationWarning

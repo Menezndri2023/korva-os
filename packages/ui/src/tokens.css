@@ -173,3 +173,54 @@
   --color-warning: var(--color-amber-400);
   --color-focus: var(--color-zinc-100);
 }
+
+/*
+ * KORVA's OWN brand palette — deliberately separate from the semantic tokens above.
+ *
+ * The tokens above describe the *application chrome* (surface, border, text, ...) and flip with
+ * the light/dark theme. These do not: they are fixed brand surfaces, used on the pre-auth
+ * pages (landing, login, register, forgot/reset password) where KORVA is presenting itself
+ * rather than hosting a tenant's data. A marketing surface that inverts with the visitor's OS
+ * preference is not a brand, so none of these appear in the two dark-mode blocks above.
+ *
+ * HUE CHOICE IS A CONSTRAINT, NOT A PREFERENCE. packages/types/src/storefront-themes.ts ships
+ * 8 palettes that tenants apply to their own public site, and their accents already occupy:
+ * near-black (graphite #1C1917), gold (ardoise #D4A94A), burnt orange (terracotta #C1622D),
+ * olive green (sauge #4B6A45), coral (corail #E1604A), navy (marine #1F3A5F), violet-blue
+ * (indigo #4338CA) and mustard (ocre #B08A2E). Deep petrol (a dark blue-GREEN, ~190°) is the
+ * one serious dark hue none of them claims, so KORVA's own identity never reads as one of the
+ * themes it sells. Picking navy here would have made KORVA indistinguishable from any tenant
+ * who chose "Marine".
+ *
+ * --color-mark is never a button or a filled surface. It is a *mark*, used the way red ink is
+ * used in a ledger: to flag and to total. It also cannot be a button, literally — against
+ * --color-ink-deep it contrasts at only 2:1, and --color-destructive (red-600) already means
+ * "this failed" everywhere inside the app.
+ */
+@theme {
+  /* Hero/footer field. Contrast with --color-paper is ~18:1. */
+  --color-ink-deep: #082a30;
+
+  /* Primary brand fill: buttons, headlines on paper. ~13:1 on --color-paper. */
+  --color-ink: #0f3b42;
+
+  /* Hover state for an --color-ink fill, and rules drawn on the ink field. */
+  --color-ink-soft: #1c5c66;
+
+  /* Secondary text ON the ink field — 7.3:1 against --color-ink-deep. --color-text-muted
+     (zinc-500) is unreadable there, which is why this exists rather than reusing it. */
+  --color-ink-muted: #9bb8bd;
+
+  /* Page background for pre-auth surfaces. Warm, but close enough to white that it reads as
+     paper stock rather than as a tinted "cream" background. */
+  --color-paper: #fbfaf7;
+
+  /* Alternating/ruled band on paper, for a row that needs separating without a border. */
+  --color-paper-shade: #f1eee7;
+
+  /* Hairline rule on paper — warm, so it sits on --color-paper without going grey-blue. */
+  --color-rule: #d6d1c5;
+
+  /* Ledger-red mark. Flags and totals only. See the note above: never a fill, never a button. */
+  --color-mark: #c1121f;
+}

@@ -19,7 +19,7 @@ const apiOrigin = new URL(
  *    only to <style>/<link> elements, so this is the only viable option short of removing that
  *    React pattern. Tailwind's own CSS ships as an external stylesheet, unaffected either way.
  *  - img-src: 'self' + data: only — no next/image usage, no external image host is loaded today.
- *  - font-src: 'self' only — next/font/google self-hosts Geist/Geist Mono at build time, no
+ *  - font-src: 'self' only — next/font/google self-hosts Archivo/IBM Plex Mono at build time, no
  *    runtime request to fonts.googleapis.com/fonts.gstatic.com.
  *  - connect-src: 'self' + the configured API origin — every fetch() call in this app targets
  *    apps/api (NEXT_PUBLIC_API_URL), nothing else.

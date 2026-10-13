@@ -106,7 +106,7 @@ describe("RegisterPage (migrated to @korva/ui Button/Input in F2-B.4)", () => {
     expect(await screen.findByText(/une erreur est survenue/i)).toBeInTheDocument();
   });
 
-  it("shows a field error under Mot de passe for a too-short password, via the same p.text-red-600 pattern as the other auth forms", async () => {
+  it("shows a field error under Mot de passe for a too-short password, via the same p.text-destructive pattern as the other auth forms", async () => {
     // Uses the password field rather than email: register.tsx's <form> has no `noValidate`
     // (unlike forgot-password/reset-password), so an <input type="email"> value that fails the
     // browser's own constraint validation never reaches RHF/zod at all in a real browser or
@@ -124,7 +124,7 @@ describe("RegisterPage (migrated to @korva/ui Button/Input in F2-B.4)", () => {
     await waitFor(() => {
       const errorParagraph = screen
         .getByLabelText("Mot de passe")
-        .parentElement?.querySelector("p.text-red-600");
+        .parentElement?.querySelector("p.text-destructive");
       expect(errorParagraph).toBeInTheDocument();
     });
   });
