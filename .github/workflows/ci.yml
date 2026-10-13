@@ -173,6 +173,23 @@ jobs:
   # pnpm-workspace.yaml's `auditConfig.ignoreGhsas`, each of which carries a written
   # reachability argument. Independent of build-and-test (no `needs:`) so a dependency advisory
   # is reported even when a test is failing for an unrelated reason.
+  #
+  # THIS IS THE REPOSITORY'S ONLY AUTOMATED SECURITY GATE, and that is deliberate. A CodeQL
+  # workflow lived in .github/workflows/codeql.yml until 2026-10-13 and failed on every single
+  # push from the day it was added. The scan itself always worked — 973 TypeScript files, SARIF
+  # exported — but the upload had nowhere to go: GitHub Code Scanning is not enabled on this
+  # repository, and cannot be. Code scanning on a PRIVATE repository requires GitHub Advanced
+  # Security, which a personal account cannot buy, so `GET /code-scanning/alerts` answers 403
+  # "Code scanning is not enabled for this repository" and every result was discarded.
+  #
+  # It was removed rather than silenced. A workflow that scans and throws the answer away buys
+  # nothing, costs five minutes of CI per push, and — worse — it taught everyone reading this
+  # repository that a red X on main is normal, which is how a real failure gets missed.
+  #
+  # To bring it back, either make the repository public (code scanning is free there) or move it
+  # to an organisation with Advanced Security; then restore the workflow with `security-events:
+  # write` AND `actions: read` on the job — the second was also missing, and its absence produced
+  # a separate "Resource not accessible by integration" failure that masked this one.
   dependency-audit:
     runs-on: ubuntu-latest
 
