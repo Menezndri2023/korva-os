@@ -23,14 +23,18 @@ apt-get install -y -qq ca-certificates curl gnupg ufw fail2ban unattended-upgrad
 log "Unprivileged user: ${DEPLOY_USER}"
 # The application is never operated as root. Compose, logs and .env.production all live under
 # this user, so a mistake in a deploy command cannot touch the rest of the system.
+KEY_COPIED=no
 if ! id -u "$DEPLOY_USER" >/dev/null 2>&1; then
   adduser --disabled-password --gecos "" "$DEPLOY_USER"
-  # Copy root's authorized_keys so the key you already used to log in keeps working.
-  if [ -f /root/.ssh/authorized_keys ]; then
-    install -d -m 700 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh"
-    install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_USER" \
-      /root/.ssh/authorized_keys "/home/$DEPLOY_USER/.ssh/authorized_keys"
-  fi
+fi
+# Copy root's authorized_keys so the key you already used to log in keeps working. Outside the
+# creation branch on purpose: a re-run after adding a key to root must propagate it, which it
+# did not when the copy only happened the first time.
+if [ -s /root/.ssh/authorized_keys ]; then
+  install -d -m 700 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh"
+  install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_USER" \
+    /root/.ssh/authorized_keys "/home/$DEPLOY_USER/.ssh/authorized_keys"
+  KEY_COPIED=yes
 fi
 
 log "Docker Engine + Compose plugin"
@@ -122,6 +126,33 @@ printf '  overcommit      : %s (attendu 1)\n' "$(cat /proc/sys/vm/overcommit_mem
 printf '  THP             : %s\n' "$(cat /sys/kernel/mm/transparent_hugepage/enabled 2>/dev/null || echo n/a)"
 printf '  swap            : %s\n' "$(swapon --show=NAME,SIZE --noheadings | tr '\n' ' ')"
 printf '  RAM             : %s\n' "$(free -h | awk '/^Mem:/{print $2}')"
+
+if [ "$KEY_COPIED" = "no" ]; then
+  # A host that hands out a root PASSWORD instead of installing a key (Contabo's default) leaves
+  # root with no authorized_keys to copy. The user above is created with --disabled-password, so
+  # without this warning it would exist with no way to log in at all — silently, discovered only
+  # at the next ssh, after the operator has already closed the root session.
+  cat <<WARN
+
+==> ATTENTION : aucune cle SSH trouvee dans /root/.ssh/authorized_keys
+
+L'utilisateur "${DEPLOY_USER}" existe mais ne peut pas encore se connecter en SSH.
+Deux remedes, au choix :
+
+  A. Donner un mot de passe a cet utilisateur, puis pousser ta cle depuis ton poste :
+       passwd ${DEPLOY_USER}
+       # puis, depuis ton Mac :
+       ssh-copy-id ${DEPLOY_USER}@<IP>
+
+  B. Ou coller directement ta cle publique, depuis cette session root :
+       install -d -m 700 -o ${DEPLOY_USER} -g ${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh
+       echo '<TA_CLE_PUBLIQUE>' > /home/${DEPLOY_USER}/.ssh/authorized_keys
+       chmod 600 /home/${DEPLOY_USER}/.ssh/authorized_keys
+       chown ${DEPLOY_USER}:${DEPLOY_USER} /home/${DEPLOY_USER}/.ssh/authorized_keys
+
+En attendant, "su - ${DEPLOY_USER}" depuis root fonctionne.
+WARN
+fi
 
 cat <<NEXT
 
