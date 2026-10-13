@@ -12,6 +12,7 @@ import {
 } from "@korva/validation";
 import {
   BILLABLE_COUNTRIES,
+  MODULE_MIN_PLAN,
   PLAN_NAMES,
   VERTICAL_TEMPLATES,
   currencyForCountry,
@@ -425,10 +426,13 @@ export default function OnboardingPage() {
                 </div>
               )}
             />
+            {/* Names the tiers from MODULE_MIN_PLAN rather than hardcoding which module sits
+                where: this sentence was already wrong once, claiming automations were a paid
+                feature after `workflow` moved to the free plan. */}
             <p className="mt-1 text-xs text-text-muted">
-              Vous pourrez en activer d&apos;autres plus tard. Les devis et factures arrivent avec
-              la formule {PLAN_NAMES.starter} ; les automatisations, les campagnes et
-              l&apos;assistant IA avec la formule {PLAN_NAMES.pro}.
+              Vous pourrez en activer d&apos;autres plus tard. Les devis, factures et campagnes
+              arrivent avec la formule {PLAN_NAMES[MODULE_MIN_PLAN.finance]} ; l&apos;assistant IA
+              avec la formule {PLAN_NAMES[MODULE_MIN_PLAN.ai]}.
             </p>
           </div>
 

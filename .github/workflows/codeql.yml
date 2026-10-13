@@ -19,12 +19,23 @@ jobs:
       # Scoped to this job only — required so codeql-action/analyze can upload results to the
       # repo's Security tab. Not granted at the workflow level (see permissions: above).
       security-events: write
+      # Why this workflow failed on EVERY push since it was added, while the analysis itself
+      # succeeded: analyze finishes the scan, exports SARIF, and then calls
+      # GET /repos/{owner}/{repo}/actions/runs/{run_id} to attach run metadata. That endpoint
+      # needs `actions: read`, which was absent, so the step ended with
+      # "Resource not accessible by integration" and the job reported
+      # "CodeQL job status was configuration error" — a red X on a scan that had actually worked.
+      actions: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
 
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
+
+# checkout@v5 and codeql-action@v4 rather than v4/v3: the previous majors run on Node 20, which
+# GitHub has deprecated and already force-runs on Node 24 with a warning on every run. Only this
+# workflow is bumped — ci.yml is a separate, much larger surface and is not failing.

@@ -50,9 +50,9 @@ export const PLAN_NAMES: Record<PlanKey, string> = {
  * The tiers tell one story each:
  *   free     — run the business: clients, catalogue, bookings, orders, a public site, the
  *              numbers, and the one automation its trade was configured with
- *   starter  — get paid: quotes and invoices (and, via PLAN_RANK, a real domain and a sector
- *              storefront template — see storefront-themes.ts and assertCustomDomainAllowed)
- *   pro      — reach customers at scale: campaigns, AI, a styled site
+ *   starter  — get paid and bring people back: quotes, invoices and campaigns (and, via
+ *              PLAN_RANK, a real domain — see assertCustomDomainAllowed)
+ *   pro      — the assistant and a styled site: AI, and a free choice of palette and fonts
  *   business — run a network: unlimited seats, your own brand colour
  *
  * `communication` is free on purpose, not as generosity. BookingReminderSchedulerService has no
@@ -77,7 +77,12 @@ export const MODULE_MIN_PLAN: Record<KorvaModule, PlanKey> = {
   // The cost is that automations are uncapped on free until a workflow-count limit exists;
   // paid differentiation sits on `finance` (Starter) and `marketing`/`ai` (Pro) instead.
   workflow: "free",
-  marketing: "pro",
+  // Starter, not Pro. Starter otherwise added exactly ONE module (finance) over the free plan,
+  // which reads as thin on a pricing page next to Pro's two modules plus the palette and font
+  // choice. Moving campaigns down gives Starter a two-part promise — get paid, and bring
+  // customers back — and leaves Pro selling the AI assistant and the refined storefront, which
+  // are the two things that genuinely cost more to serve.
+  marketing: "starter",
   ai: "pro",
 };
 
