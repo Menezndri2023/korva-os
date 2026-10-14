@@ -22,15 +22,21 @@ ENV_FILE="${KORVA_ENV_FILE:-$HOME/korva-os/.env.production}"
 COMPOSE_DIR="${KORVA_COMPOSE_DIR:-$HOME/korva-os}"
 COMPOSE=(docker compose -f docker-compose.prod.yml --env-file .env.production)
 
-# The health check runs INSIDE the api container, with node's own fetch. No app service in
-# docker-compose.prod.yml publishes a host port — only Caddy binds one — so a curl from the host
-# to 127.0.0.1:4000 can never connect, and a check written that way would report failure after
-# every rotation, including the successful ones, and then roll back a change that had worked.
-# Going through Caddy would work but would make this depend on public DNS and TLS to answer a
-# question about a container.
+# `/health/database`, NOT `/health`. This asked for `/health` first, which returns
+# `{status:"ok"}` without touching Mongo at all (see health.controller.ts) — so it proved only
+# that the Node process had booted, and would have called a rotation successful even with a
+# wrong password, right up until the first real query failed in front of a user. The
+# `/health/database` route runs `db.admin().ping()`, which is the question this script is
+# actually asking.
+#
+# It runs INSIDE the api container. No app service in docker-compose.prod.yml publishes a host
+# port — only Caddy binds one — so a curl from the host to 127.0.0.1:4000 can never connect, and
+# a check written that way would report failure after every rotation, including the successful
+# ones, and then roll back a change that had worked. Going through Caddy would work but would
+# make this depend on public DNS and TLS to answer a question about a container.
 api_healthy() {
   "${COMPOSE[@]}" exec -T api node -e '
-    fetch("http://127.0.0.1:4000/api/v1/health")
+    fetch("http://127.0.0.1:4000/api/v1/health/database")
       .then((r) => process.exit(r.ok ? 0 : 1))
       .catch(() => process.exit(1));
   ' >/dev/null 2>&1
