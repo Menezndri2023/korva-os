@@ -120,6 +120,19 @@ services:
       STOREFRONT_DOMAIN: ${STOREFRONT_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
     volumes:
+      # A SINGLE-FILE bind mount, which means a Caddyfile change does NOT reach the container
+      # just because it reached the host. Docker binds the inode, and `git pull` does not edit a
+      # file in place — it writes a new one and renames it — so the container keeps serving the
+      # old content. `caddy reload` cannot help: it re-reads the same stale inode and reports
+      # success.
+      #
+      # After any Caddyfile change the container has to be RECREATED:
+      #   docker compose -f docker-compose.prod.yml --env-file .env.production \
+      #     up -d --no-build --force-recreate caddy
+      #
+      # Plain `up -d` is not enough either, since the service definition itself has not changed.
+      # Cost of learning this: an edge rule that validated, reloaded cleanly, and did nothing.
+      # The certificates are safe across a recreate — they live in the named volumes below.
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Issued certificates live here. Losing this volume means re-requesting every certificate
       # on the next boot, which is the fastest way to hit Let's Encrypt's rate limits.
