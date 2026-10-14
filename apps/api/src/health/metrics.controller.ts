@@ -1,6 +1,5 @@
 import {
   Controller,
-  ForbiddenException,
   Get,
   Header,
   Headers,
@@ -11,6 +10,7 @@ import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Public } from '../common/decorators/public.decorator';
 import { QueueMetricsService } from './queue-metrics.service';
+import { assertOperationalAccess } from './operational-access';
 
 /**
  * Prometheus scrape endpoint — closes the "Metrics (Prometheus): NOT_IMPLEMENTED" finding in
@@ -24,10 +24,11 @@ import { QueueMetricsService } from './queue-metrics.service';
  * QueueMetricsService's own doc comment on why getJobCounts() is the only call it makes).
  *
  * ACCESS: `@Public()` because a Prometheus scraper cannot present a tenant JWT, matching the
- * other /health/* routes. Set METRICS_TOKEN to require `Authorization: Bearer <token>` on top of
- * that; leave it unset and this behaves exactly like /health/queues. Either way, operational
- * state is still state — restrict this route at the ingress/network layer in production rather
- * than relying on the token alone.
+ * other /health/* routes. METRICS_TOKEN then requires `Authorization: Bearer <token>`, and in
+ * production an UNSET token denies the route rather than opening it — see
+ * operational-access.ts, which holds that rule for this endpoint and for /health/queues
+ * together. Either way, operational state is still state: keep the ingress rule too, so a
+ * misconfigured token cannot expose it.
  */
 @Controller()
 export class MetricsController {
@@ -94,14 +95,11 @@ export class MetricsController {
   }
 
   private assertAuthorized(authorization?: string): void {
-    const expected = this.configService.get<string>('METRICS_TOKEN');
-    if (!expected) return;
-    if (authorization !== `Bearer ${expected}`) {
-      throw new ForbiddenException({
-        code: 'METRICS_FORBIDDEN',
-        message: 'Invalid metrics token',
-      });
-    }
+    assertOperationalAccess(
+      this.configService.get<string>('METRICS_TOKEN'),
+      authorization,
+      this.configService.get<string>('NODE_ENV'),
+    );
   }
 }
 

@@ -7,6 +7,12 @@ import IORedis from 'ioredis';
 import { HealthController } from './health.controller';
 import type { QueueMetricsService } from './queue-metrics.service';
 
+/** A ConfigService that knows nothing — every key reads as unset. GET /health/queues now
+ *  consults METRICS_TOKEN and NODE_ENV (see operational-access.ts), so a bare `{}` no longer
+ *  satisfies the constructor. With NODE_ENV unset the guard stays open, which is what these
+ *  tests are about. */
+const EMPTY_CONFIG = { get: () => undefined };
+
 function buildController(
   mongooseConnection: unknown,
   configService: unknown,
@@ -118,7 +124,7 @@ describe('HealthController — public endpoints never leak internal error detail
     const queueMetricsService = {
       getMetrics: jest.fn().mockRejectedValue(new Error(internalMessage)),
     };
-    const controller = buildController({}, {}, queueMetricsService);
+    const controller = buildController({}, EMPTY_CONFIG, queueMetricsService);
 
     let caught: ServiceUnavailableException | undefined;
     try {
@@ -166,7 +172,7 @@ describe('HealthController — GET /health/queues', () => {
     const queueMetricsService = {
       getMetrics: jest.fn().mockResolvedValue(metrics),
     };
-    const controller = buildController({}, {}, queueMetricsService);
+    const controller = buildController({}, EMPTY_CONFIG, queueMetricsService);
 
     const result = await controller.queues();
 
@@ -196,7 +202,7 @@ describe('HealthController — GET /health/queues', () => {
     const queueMetricsService = {
       getMetrics: jest.fn().mockResolvedValue(metrics),
     };
-    const controller = buildController({}, {}, queueMetricsService);
+    const controller = buildController({}, EMPTY_CONFIG, queueMetricsService);
 
     const result = (await controller.queues()) as unknown as Record<
       string,
@@ -231,5 +237,51 @@ describe('HealthController — GET /health/queues', () => {
     ]) {
       expect(serialized).not.toContain(forbidden);
     }
+  });
+
+  /**
+   * The route's content was always operational rather than tenant data, and it was public for
+   * that reason. That reasoning was wrong about the consequence: in production it named all
+   * thirteen queues and their volumes to anyone, and each unauthenticated call fanned out to a
+   * getJobCounts per queue. These assert the guard at the controller, not just in
+   * operational-access.spec.ts, so the wiring itself cannot be removed unnoticed.
+   */
+  describe('METRICS_TOKEN guard', () => {
+    function configWith(values: Record<string, string | undefined>) {
+      return { get: (key: string) => values[key] };
+    }
+
+    it('refuses in production when no token is configured, without touching the queues', async () => {
+      const getMetrics = jest.fn();
+      const controller = buildController(
+        {},
+        configWith({ NODE_ENV: 'production', METRICS_TOKEN: undefined }),
+        { getMetrics },
+      );
+
+      await expect(controller.queues()).rejects.toMatchObject({
+        response: { code: 'METRICS_NOT_CONFIGURED' },
+      });
+      // The point of refusing early: no Redis round-trip per queue for an anonymous caller.
+      expect(getMetrics).not.toHaveBeenCalled();
+    });
+
+    it('refuses a wrong bearer token and allows the right one', async () => {
+      const metrics = { events: { waiting: 0 } };
+      const getMetrics = jest.fn().mockResolvedValue(metrics);
+      const controller = buildController(
+        {},
+        configWith({ NODE_ENV: 'production', METRICS_TOKEN: 'tok' }),
+        { getMetrics },
+      );
+
+      await expect(controller.queues('Bearer nope')).rejects.toMatchObject({
+        response: { code: 'METRICS_FORBIDDEN' },
+      });
+      expect(getMetrics).not.toHaveBeenCalled();
+
+      await expect(controller.queues('Bearer tok')).resolves.toEqual(metrics);
+      expect(getMetrics).toHaveBeenCalledTimes(1);
+    });
   });
 });

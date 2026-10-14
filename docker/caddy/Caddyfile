@@ -34,13 +34,24 @@
 	encode zstd gzip
 	reverse_proxy api:4000
 
-	# /metrics exposes operational state and is @Public() because a Prometheus scraper cannot
-	# present a tenant JWT (see MetricsController). METRICS_TOKEN guards it at the application
-	# level; this blocks it at the edge as well, so a misconfigured token cannot expose it to the
-	# internet. Delete this block only if the scraper genuinely lives outside the private network,
-	# and set METRICS_TOKEN if you do.
-	@metrics path /api/v1/metrics
-	respond @metrics 404
+	# Both of these expose the same thing — every queue's name and its job counts — and both are
+	# @Public() because a scraper cannot present a tenant JWT. METRICS_TOKEN guards them at the
+	# application level (operational-access.ts, which in production denies the route when the
+	# token is unset rather than opening it); this blocks them at the edge as well, so a
+	# misconfigured token cannot expose them to the internet.
+	#
+	# /api/v1/health/queues was missing here until 2026-10-14 and answered 200 to anyone, which
+	# made this block decorative: it named all thirteen queues and their volumes, and every
+	# anonymous request fanned out to one getJobCounts per queue. If you add a route that returns
+	# operational state, it belongs in this list.
+	#
+	# /health, /health/database and /health/redis stay reachable on purpose — an uptime monitor
+	# needs them and each reveals a single bit.
+	#
+	# Delete these only if a scraper genuinely lives outside the private network, and set
+	# METRICS_TOKEN if you do.
+	@operational path /api/v1/metrics /api/v1/health/queues
+	respond @operational 404
 
 	# The on-demand-TLS `ask` endpoint is called by Caddy over the internal network and must never
 	# be reachable from outside: a public caller could enumerate which custom domains are

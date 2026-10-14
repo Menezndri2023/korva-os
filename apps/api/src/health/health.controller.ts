@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Headers,
   Logger,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import IORedis from 'ioredis';
 import { Public } from '../common/decorators/public.decorator';
 import { QueueMetricsService } from './queue-metrics.service';
+import { assertOperationalAccess } from './operational-access';
 
 @ApiTags('health')
 @Controller('health')
@@ -70,15 +72,29 @@ export class HealthController {
   }
 
   /**
-   * Aggregate BullMQ job counts only (waiting/active/completed/failed/delayed/paused) for the
-   * 'events' and 'payment-reconciliation' queues — never an individual job, so there is no
-   * organizationId, entityId, eventKey, jobId, or payload to leak. Public like the other
-   * /health/* endpoints for the same reason /health/redis already is: it reveals operational
-   * state, not tenant data, matching this endpoint's own content exactly.
+   * Aggregate BullMQ job counts only (waiting/active/completed/failed/delayed/paused) — never an
+   * individual job, so there is no organizationId, entityId, eventKey, jobId or payload to leak.
+   *
+   * GUARDED BY METRICS_TOKEN since 2026-10-14, the same rule as `GET /metrics`
+   * (operational-access.ts). It was plainly public before, on the reasoning that it reveals
+   * operational state rather than tenant data — which is true of the content and was still the
+   * wrong conclusion. In production it answered 200 to anyone, naming all thirteen queues and
+   * their volumes, which is a map of the system and a usable read on business activity; and
+   * because every call fans out to a `getJobCounts` per queue, an unauthenticated request turned
+   * into thirteen-plus Redis commands, which makes a cheap amplifier. The Caddyfile had already
+   * reached the opposite conclusion for `/api/v1/metrics`, which returns the same numbers.
+   *
+   * `/health`, `/health/database` and `/health/redis` stay public — an uptime monitor needs
+   * those and they reveal one bit each.
    */
   @Public()
   @Get('queues')
-  async queues() {
+  async queues(@Headers('authorization') authorization?: string) {
+    assertOperationalAccess(
+      this.configService.get<string>('METRICS_TOKEN'),
+      authorization,
+      this.configService.get<string>('NODE_ENV'),
+    );
     try {
       return await this.queueMetricsService.getMetrics();
     } catch (error) {

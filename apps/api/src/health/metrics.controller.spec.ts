@@ -74,7 +74,15 @@ describe('MetricsController', () => {
     expect(body).not.toMatch(/[0-9a-f]{24}/);
   });
 
-  it('is open when METRICS_TOKEN is unset, matching /health/queues', async () => {
+  it('is open when METRICS_TOKEN is unset OUTSIDE production — the local-development case', async () => {
+    // `build()` leaves NODE_ENV unset. In production an unset token denies the route instead
+    // (operational-access.spec.ts covers that branch and this spec's build() cannot reach it),
+    // which is the opposite of what shipped: production ran with METRICS_TOKEN empty and the
+    // old `if (!expected) return;` made the blankest configuration the most open one.
+    //
+    // The name of this test used to end "matching /health/queues". That is no longer true in
+    // the sense it meant: /health/queues now runs the same guard, so the two match by both
+    // being closed in production rather than by both being open.
     await expect(build().metrics()).resolves.toContain('korva_queue_jobs');
   });
 
