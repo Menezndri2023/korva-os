@@ -36,7 +36,10 @@ chmod 700 "$BACKUP_DIR"
 FILES="$(docker run --rm -v "$VOLUME:/data:ro" "$TAR_IMAGE" \
   sh -c 'find /data -type f 2>/dev/null | wc -l' | tr -d '[:space:]')"
 if [[ "${FILES:-0}" -eq 0 ]]; then
-  log "volume $VOLUME is empty — skipping (this is expected while STORAGE_PROVIDER=s3)"
+  # Normal in two cases: STORAGE_PROVIDER is not `local`, or it is and no customer has uploaded
+  # anything yet. Either way an archive of nothing is worse than no archive — it would push a
+  # real one out of the retention window.
+  log "volume $VOLUME holds no files — skipping"
   exit 0
 fi
 

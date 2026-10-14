@@ -65,6 +65,14 @@ COPY --from=prod-deps --chown=node:node /app/apps/api/node_modules ./apps/api/no
 COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=node:node /app/apps/api/package.json ./apps/api/package.json
 
+# The uploads directory has to exist IN THE IMAGE, owned by `node`, even though a named volume
+# is mounted over it in production. Docker initialises an empty named volume from whatever is at
+# the mount path in the image — contents and ownership both — but if the path does not exist it
+# creates the directory as root:root, and the container runs as `node` (uid 1000), so every
+# upload then fails with EACCES. Found the hard way: adding the volume without this line turned
+# a broken-by-misconfiguration upload path into a broken-by-permissions one.
+RUN mkdir -p /app/apps/api/uploads && chown node:node /app/apps/api/uploads
+
 WORKDIR /app/apps/api
 USER node
 EXPOSE 4000
