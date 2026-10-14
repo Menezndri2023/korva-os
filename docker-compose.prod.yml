@@ -68,6 +68,15 @@ services:
       - "4000"
     # No `ports:` on any app service on purpose — only Caddy binds a host port. An API reachable
     # directly on :4000 would bypass TLS termination and the proxy's rate limiting.
+    volumes:
+      # Tenant uploads — logos, hero images, product photos. The path is not arbitrary: with
+      # STORAGE_PROVIDER=local the backend writes to `join(process.cwd(), 'uploads')`
+      # (storage.constants.ts) and the image's working directory is /app/apps/api, so this is
+      # the directory the code already uses. Mounting it is what makes local storage survive a
+      # deploy — without this volume every `docker compose up -d --build` would discard every
+      # image a customer had uploaded, silently, because the files live in the container's
+      # writable layer. Harmless when STORAGE_PROVIDER=s3: the directory simply stays empty.
+      - korva_uploads:/app/apps/api/uploads
     depends_on:
       redis:
         condition: service_healthy
@@ -125,6 +134,7 @@ services:
       - storefront
 
 volumes:
+  korva_uploads:
   korva_redis_data:
   korva_caddy_data:
   korva_caddy_config:

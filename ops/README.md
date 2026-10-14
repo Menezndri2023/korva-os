@@ -32,6 +32,20 @@ this: it still needs a server to connect to.
 **Run this after any change to the backup path.** An archive nobody has restored is a file, not
 a backup.
 
+## backup-uploads.sh and backup-all.sh
+
+`backup-all.sh` is what cron runs: the database **and** the tenant uploads, in that order, both
+attempted even if the first fails, with the exit code reflecting the worst outcome.
+
+They are useless apart. With `STORAGE_PROVIDER=local` the images live in the `korva_uploads`
+Docker volume; Mongo holds only the `/api/v1/uploads/:orgId/:filename` URL that points at them.
+A restored database with no uploads archive gives every customer a storefront full of broken
+images.
+
+`backup-uploads.sh` skips silently when the volume is empty, so it is safe to schedule before
+`STORAGE_PROVIDER=local` is actually in use — a nightly 0-byte archive would only make the real
+ones harder to find.
+
 ## install-backup-cron.sh
 
 Installs the nightly dump at 03:17 UTC in the invoking user's crontab, appending to

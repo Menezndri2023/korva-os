@@ -8,7 +8,8 @@
 #
 set -euo pipefail
 
-SCRIPT="${KORVA_BACKUP_SCRIPT:-$HOME/ops/backup-mongo.sh}"
+# backup-all.sh, not backup-mongo.sh: the uploads archive is half of a usable restore.
+SCRIPT="${KORVA_BACKUP_SCRIPT:-$HOME/ops/backup-all.sh}"
 LOG="${KORVA_BACKUP_LOG:-$HOME/backups/backup.log}"
 # 03:17 rather than 03:00 — a whole-hour schedule is when every other cron on every other host
 # fires, and Atlas's free tier shares its hardware.
