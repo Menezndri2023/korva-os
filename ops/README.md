@@ -76,11 +76,22 @@ only Caddy binds one — so a `curl` from the host to `127.0.0.1:4000` can never
 check written that way would report failure after every rotation, including the successful ones,
 and then roll back a change that had worked.
 
-## Two gaps these scripts do NOT close
+## pull-backups.sh
 
-1. **The archives live on the machine they back up.** That protects against a bad migration or a
-   mistaken delete inside Mongo, and not at all against losing the VPS. Copying them to object
-   storage needs credentials that do not exist yet.
+Run this one **from your own computer**, not the server. It copies the newest archives of each
+kind into `~/korva-backups` (0600 in a 0700 directory), skips what it already has, and runs
+`gzip -t` over every local file — arrival is not integrity, and a silently half-copied archive is
+the one failure this script could otherwise introduce.
+
+It needs no new account, and it is the weakest form of off-host backup, because it only runs when
+somebody remembers to run it: a sleeping laptop copies nothing. Object storage with a scheduled
+push is the real answer once that account exists.
+
+## What is still NOT covered
+
+1. **Off-host copies depend on someone running `pull-backups.sh`.** The nightly cron writes only
+   to the VPS. Until a scheduled push to storage outside this machine exists, losing the VPS
+   loses everything written since the last manual pull.
 2. **Atlas is still the free M0 tier, which has no backups of its own.** M10 is the first tier
-   with continuous backups and point-in-time restore. Until then, the nightly archive is the
-   only copy of every invoice and payment that exists.
+   with continuous backups and point-in-time restore — the difference between going back to
+   14:32 today and going back to last night.
