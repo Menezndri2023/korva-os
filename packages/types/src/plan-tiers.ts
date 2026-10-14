@@ -59,6 +59,17 @@ export const PLAN_NAMES: Record<PlanKey, string> = {
  * channel without it, and twelve of the seventeen vertical templates suggest `booking` — so
  * putting it behind a paid tier would ship a booking product that cannot confirm a booking.
  */
+/**
+ * The lowest plan that may connect a custom domain.
+ *
+ * Shared, not written out at each site, because this gate has to hold in TWO places that are
+ * easy to let drift: `EntitlementsService.assertCustomDomainAllowed` when the domain is SAVED,
+ * and `PublicService.resolveDomain` every time it is READ — the latter also being Caddy's
+ * on-demand-TLS `ask`. The read-time check was missing until 2026-10-14, so one month of Starter
+ * bought a custom domain for good.
+ */
+export const CUSTOM_DOMAIN_MIN_PLAN: PlanKey = "starter";
+
 export const MODULE_MIN_PLAN: Record<KorvaModule, PlanKey> = {
   crm: "free",
   catalog: "free",

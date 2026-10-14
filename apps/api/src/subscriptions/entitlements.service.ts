@@ -7,6 +7,7 @@ import type {
   UsageSummaryItem,
 } from '@korva/types';
 import {
+  CUSTOM_DOMAIN_MIN_PLAN,
   getStorefrontTemplate,
   planMeetsMinimum,
   resolveEffectiveModules,
@@ -192,7 +193,7 @@ export class EntitlementsService {
   async assertCustomDomainAllowed(organizationId: string): Promise<void> {
     await this.assertSubscriptionActive(organizationId);
     const plan = await this.subscriptionsService.getActivePlan(organizationId);
-    if (!planMeetsMinimum(plan.key, 'starter')) {
+    if (!planMeetsMinimum(plan.key, CUSTOM_DOMAIN_MIN_PLAN)) {
       throw new ForbiddenException({
         code: 'CUSTOM_DOMAIN_NOT_IN_PLAN',
         message: `Your plan ("${plan.name}") does not include a custom domain — upgrade to Starter or higher`,

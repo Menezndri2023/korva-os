@@ -8,6 +8,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
+  CUSTOM_DOMAIN_MIN_PLAN,
   STOREFRONT_SECTIONS,
   verticalForOrganizationType,
   getStorefrontTemplate,
@@ -135,16 +136,37 @@ export class PublicService {
   }
 
   /**
-   * Phase E3 — backs PublicSitesController's `GET /public-sites/resolve-domain`. Only resolves
-   * when the org both owns this exact custom domain AND has `website` enabled — a custom
-   * domain must obey the same product-activation gate as the shared `{STOREFRONT_URL}/{slug}`
-   * URL (see getOrganization's own `assertModuleEnabled(organization, 'website')`), otherwise
-   * disabling Website would leave a stale custom domain still serving the storefront.
+   * Phase E3 — backs PublicSitesController's `GET /public-sites/resolve-domain` and, through the
+   * same call, Caddy's on-demand-TLS `ask` at `GET /public-sites/domain-allowed`. Resolves only
+   * when the organization owns this exact custom domain, has `website` enabled, AND is on a plan
+   * that includes a custom domain.
+   *
+   * The `website` gate is the product-activation one: a custom domain must obey the same rule as
+   * the shared `{STOREFRONT_URL}/{slug}` URL (see getOrganization's own
+   * `assertModuleEnabled(organization, 'website')`), otherwise disabling Website would leave a
+   * stale custom domain still serving the storefront.
+   *
+   * THE PLAN GATE WAS MISSING UNTIL 2026-10-14, and its absence was a monetization hole of
+   * exactly the kind assertOverridesWithinPlan exists to close. `assertCustomDomainAllowed`
+   * runs in OrganizationsService.update — at SAVE time only. Nothing re-read it and nothing
+   * clamped `customDomain` on a downgrade, so one month of Starter bought a custom domain
+   * permanently: the domain kept resolving, Caddy kept renewing its certificate, and the free
+   * plan kept a Starter feature. This is the same read-time clamp resolveStorefrontTheme and
+   * computeVisibleSections already apply for the same reason, and it degrades rather than
+   * erases — the stored `customDomain` is untouched, the organization's storefront stays
+   * reachable at `{STOREFRONT_URL}/{slug}`, and re-subscribing restores the domain with no
+   * data lost.
    */
   async resolveDomain(hostname: string): Promise<{ slug: string } | null> {
     const organization =
       await this.organizationsService.getByCustomDomain(hostname);
     if (!organization || !organization.enabledModules.includes('website')) {
+      return null;
+    }
+    const plan = await this.subscriptionsService.getActivePlan(
+      organization.id as string,
+    );
+    if (!planMeetsMinimum(plan.key, CUSTOM_DOMAIN_MIN_PLAN)) {
       return null;
     }
     return { slug: organization.slug };

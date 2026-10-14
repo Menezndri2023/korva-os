@@ -276,6 +276,94 @@ describe('Website custom domain (Phase E3, e2e)', () => {
   });
 
   /**
+   * The downgrade path, missing until 2026-10-14. assertCustomDomainAllowed runs only when the
+   * domain is SAVED; nothing re-read the plan and nothing clamped `customDomain`, so one month
+   * of Starter bought a custom domain for good — it kept resolving, and Caddy kept renewing its
+   * certificate, on the free plan. Both routes are asserted because Caddy only ever calls the
+   * second one, so a regression there would be invisible from the first.
+   */
+  describe('plan downgrade revokes a custom domain at read time', () => {
+    async function connectedThenDowngraded(email: string, domain: string) {
+      const { accessToken, organizationId, slug } = await setupOrg(
+        email,
+        'Domain Downgrade Org',
+        ['website'],
+      );
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ customDomain: domain })
+        .expect(200);
+
+      // It resolves while the plan still covers it — otherwise the assertion after the
+      // downgrade would pass for the wrong reason.
+      await request(server)
+        .get('/api/v1/public-sites/resolve-domain')
+        .query({ host: domain })
+        .expect(200);
+
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'free' })
+        .expect(201);
+
+      return { accessToken, organizationId, slug };
+    }
+
+    it('stops resolving the domain once the organization is back on free', async () => {
+      await connectedThenDowngraded(
+        'domain-downgrade-resolve@korva.test',
+        'www.downgrade-resolve-test.com',
+      );
+
+      const res = await request(server)
+        .get('/api/v1/public-sites/resolve-domain')
+        .query({ host: 'www.downgrade-resolve-test.com' })
+        .expect(404);
+      expect(asError(res.body).code).toBe('CUSTOM_DOMAIN_NOT_FOUND');
+    });
+
+    it('refuses the certificate for it, so Caddy stops renewing', async () => {
+      await connectedThenDowngraded(
+        'domain-downgrade-allowed@korva.test',
+        'www.downgrade-allowed-test.com',
+      );
+
+      await request(server)
+        .get('/api/v1/public-sites/domain-allowed')
+        .query({ domain: 'www.downgrade-allowed-test.com' })
+        .expect(404);
+    });
+
+    it('degrades rather than erases: the domain is still stored and the shared URL still works', async () => {
+      const { accessToken, organizationId, slug } =
+        await connectedThenDowngraded(
+          'domain-downgrade-keep@korva.test',
+          'www.downgrade-keep-test.com',
+        );
+
+      // The owner's own setting is untouched, so re-subscribing restores the domain with no
+      // data lost — the same "read-time projection, not a destructive write" rule the
+      // storefront theme clamp follows.
+      const me = await request(server)
+        .get('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+      expect(asSuccess<OrganizationPayload>(me.body).customDomain).toBe(
+        'www.downgrade-keep-test.com',
+      );
+
+      // And losing the custom domain must never take the storefront itself offline: `website`
+      // is a free module, so the shared URL keeps serving.
+      await request(server).get(`/api/v1/public/${slug}`).expect(200);
+    });
+  });
+
+  /**
    * GET /public-sites/domain-allowed — the `ask` endpoint for Caddy's on-demand TLS (see
    * docker/caddy/Caddyfile). Caddy reads the STATUS CODE only, so these tests assert the status
    * and the absence of a body rather than a payload shape.
