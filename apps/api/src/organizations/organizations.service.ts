@@ -362,6 +362,42 @@ export class OrganizationsService {
       });
     }
 
+    // Placed AFTER the hierarchy checks on purpose: reactivating somebody is granting them a
+    // role, so it has to pass exactly the same rank rules as granting it for the first time.
+    //
+    // Without this branch, re-hiring a removed member returned a 500 — `create` always inserts
+    // and the unique index on (userId, organizationId) rejected it as a duplicate key, which
+    // nothing in the stack maps to an HTTP status. Adding somebody who is already an active
+    // member had the same ending, for the same reason.
+    const existing = await this.membershipsService.findByUserAndOrganization(
+      user.id as string,
+      organizationId,
+    );
+    if (existing) {
+      if (existing.status !== 'suspended') {
+        throw new ConflictException({
+          code: 'ALREADY_A_MEMBER',
+          message: 'This user already belongs to the organization',
+        });
+      }
+      const reactivated = await this.membershipsService.reactivate(
+        existing.id as string,
+        input.roleId,
+      );
+      await this.auditService.record({
+        organizationId,
+        userId: actorUserId,
+        action: 'UPDATE',
+        entity: 'membership',
+        entityId: existing.id as string,
+        metadata: {
+          reactivatedUserId: user.id,
+          roleId: input.roleId,
+        },
+      });
+      return reactivated;
+    }
+
     const membership = await this.membershipsService.create(
       user.id as string,
       organizationId,

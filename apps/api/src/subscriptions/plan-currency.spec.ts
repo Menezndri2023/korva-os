@@ -195,6 +195,12 @@ describe('SubscriptionsService — product overrides stay within the plan', () =
         }),
       } as never,
       { publish: jest.fn() } as never,
+      // A seat count of 1 (the owner alone) keeps changePlan's new seat guard out of the way:
+      // these tests are about pricing, proration and module clamping, not seats. The guard
+      // itself is covered by test/seat-lifecycle.e2e-spec.ts.
+      {
+        countSeatsForOrganization: jest.fn().mockResolvedValue(1),
+      } as never,
     );
     return { service, update };
   }

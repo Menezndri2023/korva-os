@@ -52,8 +52,9 @@ export class MembershipsService {
     return this.membershipsRepository.findAllForOrganization(organizationId);
   }
 
-  countForOrganization(organizationId: string): Promise<number> {
-    return this.membershipsRepository.countForOrganization(organizationId);
+  /** Memberships that occupy a seat — suspended ones do not. See the repository method. */
+  countSeatsForOrganization(organizationId: string): Promise<number> {
+    return this.membershipsRepository.countSeatsForOrganization(organizationId);
   }
 
   listActiveUserIdsForOrganization(organizationId: string): Promise<string[]> {
@@ -101,6 +102,11 @@ export class MembershipsService {
     status: MembershipDocument['status'],
   ): Promise<MembershipDocument | null> {
     return this.membershipsRepository.updateStatus(id, status);
+  }
+
+  /** Brings a suspended membership back as active with the given role — see the repository. */
+  reactivate(id: string, roleId: string): Promise<MembershipDocument | null> {
+    return this.membershipsRepository.reactivate(id, roleId);
   }
 
   countActiveByRole(organizationId: string, roleId: string): Promise<number> {

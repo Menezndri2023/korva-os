@@ -209,7 +209,7 @@ export class EntitlementsService {
     if (limit === -1) return;
 
     const count =
-      await this.membershipsService.countForOrganization(organizationId);
+      await this.membershipsService.countSeatsForOrganization(organizationId);
     if (count >= limit) {
       throw new ForbiddenException({
         code: 'SEAT_LIMIT_REACHED',
@@ -265,7 +265,9 @@ export class EntitlementsService {
         limit,
         used:
           metric === 'seats'
-            ? await this.membershipsService.countForOrganization(organizationId)
+            ? await this.membershipsService.countSeatsForOrganization(
+                organizationId,
+              )
             : await this.usageRepository.getCount(
                 organizationId,
                 metric,

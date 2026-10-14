@@ -37,9 +37,9 @@ describe('EntitlementsService — subscription status enforcement', () => {
       increment,
     } as unknown as UsageRepository;
 
-    const countForOrganization = jest.fn().mockResolvedValue(1);
+    const countSeatsForOrganization = jest.fn().mockResolvedValue(1);
     const membershipsService = {
-      countForOrganization,
+      countSeatsForOrganization,
     } as unknown as MembershipsService;
 
     const service = new EntitlementsService(
@@ -48,7 +48,7 @@ describe('EntitlementsService — subscription status enforcement', () => {
       membershipsService,
     );
 
-    return { service, getActivePlan, increment, countForOrganization };
+    return { service, getActivePlan, increment, countSeatsForOrganization };
   }
 
   /** Awaits `promise`, asserting it rejects with a ForbiddenException carrying `code`. */
@@ -97,14 +97,14 @@ describe('EntitlementsService — subscription status enforcement', () => {
 
   describe('assertSeatAvailable', () => {
     it('rejects with SUBSCRIPTION_CANCELED when canceled, even with seats free under the plan limit', async () => {
-      const { service, countForOrganization } = buildService('canceled');
+      const { service, countSeatsForOrganization } = buildService('canceled');
 
       await expectForbiddenCode(
         service.assertSeatAvailable(ORG_ID),
         'SUBSCRIPTION_CANCELED',
       );
       // Never even needs to count members — the subscription check short-circuits first.
-      expect(countForOrganization).not.toHaveBeenCalled();
+      expect(countSeatsForOrganization).not.toHaveBeenCalled();
     });
 
     it('still allows adding a seat when active and under the limit', async () => {

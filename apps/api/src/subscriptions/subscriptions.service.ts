@@ -22,6 +22,7 @@ import {
   OrganizationDocument,
 } from '../organizations/schemas/organization.schema';
 import { EventBusService } from '../core/events/event-bus.service';
+import { MembershipsService } from '../identity/memberships/memberships.service';
 
 function addOneMonth(date: Date): Date {
   const result = new Date(date);
@@ -68,6 +69,9 @@ export class SubscriptionsService {
     @InjectModel(Organization.name)
     private readonly organizationModel: Model<OrganizationDocument>,
     private readonly eventBus: EventBusService,
+    // IdentityModule is already imported by SubscriptionsModule (EntitlementsService needs it),
+    // so this adds no new module edge and no cycle.
+    private readonly membershipsService: MembershipsService,
   ) {}
 
   /**
@@ -188,6 +192,26 @@ export class SubscriptionsService {
 
     const existing =
       await this.subscriptionsRepository.findForOrganization(organizationId);
+
+    // Seats are the one entitlement that cannot be clamped silently, because clamping them means
+    // locking real people out of their own work — so the plan change is REFUSED instead, and the
+    // owner is told exactly how many members to remove first. Without this, nothing checked
+    // seats on a plan change at all: assertSeatAvailable guards only addMember, so an
+    // organization could go from Business (unlimited) to free (one seat) and keep every member
+    // indefinitely. `-1` means unlimited and must not be read as a limit of minus one, which
+    // would refuse every upgrade to the top tier.
+    const seatLimit = plan.limits?.seats ?? -1;
+    if (seatLimit !== -1) {
+      const seatsUsed =
+        await this.membershipsService.countSeatsForOrganization(organizationId);
+      if (seatsUsed > seatLimit) {
+        throw new ConflictException({
+          code: 'SEAT_LIMIT_EXCEEDED_BY_PLAN',
+          message: `The "${plan.name}" plan includes ${seatLimit} seat(s) and this organization uses ${seatsUsed}. Remove ${seatsUsed - seatLimit} member(s) before changing plan.`,
+          details: { plan: plan.key, seatLimit, seatsUsed },
+        });
+      }
+    }
 
     // A downgrade must never leave enabledModules claiming access to a module the new plan (plus
     // any still-active product overrides) no longer grants — drop exactly those, keep everything

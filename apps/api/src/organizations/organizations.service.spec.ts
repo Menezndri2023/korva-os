@@ -110,7 +110,14 @@ describe('OrganizationsService.addMember — role-hierarchy enforcement', () => 
     const rolesService = { getRoleById } as unknown as RolesService;
 
     const create = jest.fn().mockResolvedValue({ id: 'membership-1' });
-    const membershipsService = { create } as unknown as MembershipsService;
+    // addMember now checks for an existing membership before inserting, so that re-hiring a
+    // removed member reactivates their row instead of hitting the unique index and returning a
+    // 500. `null` is the "nobody by that name here yet" case these hierarchy tests exercise.
+    const findByUserAndOrganization = jest.fn().mockResolvedValue(null);
+    const membershipsService = {
+      create,
+      findByUserAndOrganization,
+    } as unknown as MembershipsService;
 
     const findByEmail = jest
       .fn()
@@ -273,6 +280,7 @@ describe('OrganizationsService.createForOwner — default enabledModules (P0-ORG
       .mockResolvedValue({ id: 'membership-1' });
     const membershipsService = {
       create: membershipCreate,
+      findByUserAndOrganization: jest.fn().mockResolvedValue(null),
     } as unknown as MembershipsService;
 
     const usersService = {} as unknown as UsersService;

@@ -81,6 +81,12 @@ describe('SubscriptionsService.changePlan — enabledModules synchronization', (
       auditService,
       organizationModel,
       eventBus,
+      // A seat count of 1 (the owner alone) keeps changePlan's new seat guard out of the way:
+      // these tests are about pricing, proration and module clamping, not seats. The guard
+      // itself is covered by test/seat-lifecycle.e2e-spec.ts.
+      {
+        countSeatsForOrganization: jest.fn().mockResolvedValue(1),
+      } as never,
     );
 
     return { service, update };
@@ -219,6 +225,12 @@ describe('SubscriptionsService.changePlan — proration', () => {
       auditService,
       organizationModel,
       eventBus,
+      // A seat count of 1 (the owner alone) keeps changePlan's new seat guard out of the way:
+      // these tests are about pricing, proration and module clamping, not seats. The guard
+      // itself is covered by test/seat-lifecycle.e2e-spec.ts.
+      {
+        countSeatsForOrganization: jest.fn().mockResolvedValue(1),
+      } as never,
     );
 
     return { service, update };
@@ -307,6 +319,12 @@ describe('SubscriptionsService.cancel / reactivate', () => {
       auditService,
       {} as Model<OrganizationDocument>,
       { publish: jest.fn() } as unknown as EventBusService,
+      // A seat count of 1 (the owner alone) keeps changePlan's new seat guard out of the way:
+      // these tests are about pricing, proration and module clamping, not seats. The guard
+      // itself is covered by test/seat-lifecycle.e2e-spec.ts.
+      {
+        countSeatsForOrganization: jest.fn().mockResolvedValue(1),
+      } as never,
     );
 
     return {

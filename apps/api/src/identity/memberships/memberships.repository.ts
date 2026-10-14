@@ -49,9 +49,25 @@ export class MembershipsRepository {
       .exec();
   }
 
-  countForOrganization(organizationId: string): Promise<number> {
+  /**
+   * Counts the memberships that OCCUPY A SEAT, which is not the same as counting membership
+   * documents — the distinction this method exists to make.
+   *
+   * `removeMember` suspends rather than deletes, deliberately: the audit trail and anything
+   * attributed to that person must survive them leaving. But this count is what
+   * EntitlementsService compares to `plan.limits.seats`, and it used to count every document
+   * regardless of status — so removing a member never freed their seat, and a Starter customer
+   * who let someone go was still told their plan was full.
+   *
+   * `invited` DOES occupy a seat. An outstanding invitation is a seat promised to someone, and
+   * excluding it would let one seat invite a hundred people.
+   */
+  countSeatsForOrganization(organizationId: string): Promise<number> {
     return this.membershipModel
-      .countDocuments({ organizationId: new Types.ObjectId(organizationId) })
+      .countDocuments({
+        organizationId: new Types.ObjectId(organizationId),
+        status: { $ne: 'suspended' },
+      })
       .exec();
   }
 
@@ -75,6 +91,27 @@ export class MembershipsRepository {
         _id: new Types.ObjectId(id),
         organizationId: new Types.ObjectId(organizationId),
       })
+      .populate('userId', 'email firstName lastName')
+      .populate('roleId', 'name systemKey')
+      .exec();
+  }
+
+  /**
+   * Brings a suspended membership back as `active` with a (possibly new) role, in one update.
+   *
+   * Re-hiring somebody used to return a 500: `create` always inserts and the unique index on
+   * (userId, organizationId) rejected the second document, surfacing as an unhandled
+   * MongoServerError because nothing maps duplicate keys. Reusing the SAME document is also the
+   * better answer on its own terms — the audit trail and anything attributed to that membership
+   * stay attached to it instead of being orphaned beside a new row.
+   */
+  reactivate(id: string, roleId: string): Promise<MembershipDocument | null> {
+    return this.membershipModel
+      .findByIdAndUpdate(
+        id,
+        { status: 'active', roleId: new Types.ObjectId(roleId) },
+        { new: true },
+      )
       .populate('userId', 'email firstName lastName')
       .populate('roleId', 'name systemKey')
       .exec();
