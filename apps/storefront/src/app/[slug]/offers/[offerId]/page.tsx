@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import OfferDetailClient from "./offer-detail-client";
 import { publicApiClient } from "@/lib/public-api-client";
+import {
+  classifyLookupFailure,
+  unresolvedStorefrontMetadata,
+  type OrganizationLookup,
+} from "@/lib/organization-lookup";
 import type { PublicOrganization } from "@/lib/public-types";
 
 // Server-side only — see the same note in ../page.tsx.
@@ -10,18 +15,23 @@ interface OfferDetailPageProps {
   params: Promise<{ slug: string; offerId: string }>;
 }
 
-async function fetchOrganization(slug: string): Promise<PublicOrganization | null> {
+async function fetchOrganization(
+  slug: string,
+): Promise<OrganizationLookup<PublicOrganization>> {
   try {
-    return await publicApiClient.get<PublicOrganization>(`/public/${slug}`);
-  } catch {
-    return null;
+    const organization = await publicApiClient.get<PublicOrganization>(
+      `/public/${slug}`,
+    );
+    return { kind: "found", organization };
+  } catch (error) {
+    return { kind: classifyLookupFailure(error) };
   }
 }
 
 export async function generateMetadata({ params }: OfferDetailPageProps): Promise<Metadata> {
   const { slug, offerId } = await params;
   const canonicalUrl = `${SITE_URL}/${slug}/offers/${offerId}`;
-  const organization = await fetchOrganization(slug);
+  const lookup = await fetchOrganization(slug);
 
   const notFoundMetadata: Metadata = {
     title: "Offre introuvable — KORVA OS",
@@ -29,9 +39,23 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
     alternates: { canonical: canonicalUrl },
     robots: { index: false, follow: false },
   };
-  if (!organization || !organization.enabledModules.includes("catalog")) {
+  // An unreachable API is not a missing offer. Only the SHOP lookup is split here; the offer
+  // lookup below keeps its single answer on purpose, because PublicService#getOffer makes
+  // "never existed" and "draft/archived" deliberately indistinguishable.
+  if (lookup.kind === "unavailable") {
+    return {
+      ...unresolvedStorefrontMetadata("unavailable"),
+      alternates: { canonical: canonicalUrl },
+      robots: { index: false, follow: false },
+    };
+  }
+  if (
+    lookup.kind === "absent" ||
+    !lookup.organization.enabledModules.includes("catalog")
+  ) {
     return notFoundMetadata;
   }
+  const { organization } = lookup;
 
   let offer;
   try {

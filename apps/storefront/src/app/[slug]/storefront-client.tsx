@@ -138,10 +138,16 @@ export default function StorefrontClient({
   if (orgQuery.isLoading) {
     return <StorefrontSkeleton />;
   }
+  // "Could not load" is not "does not exist", and this branch used to say the second for both.
+  // The server now answers a genuinely unknown slug with notFound() before this component ever
+  // renders (see page.tsx), so everything reaching here is a failure we could not diagnose —
+  // most often the API being unreachable while this container is fine. A real shop's customers
+  // must not be told the business is gone because of that, and the retry button only makes
+  // sense for something that might succeed on a second try.
   if (orgQuery.isError || !orgQuery.data) {
     return (
       <CenteredMessage>
-        <p>Cette boutique n&apos;existe pas.</p>
+        <p>Cette boutique est momentanément indisponible.</p>
         <button onClick={() => orgQuery.refetch()} className="mt-2 text-sm font-medium text-zinc-900 underline">
           Réessayer
         </button>

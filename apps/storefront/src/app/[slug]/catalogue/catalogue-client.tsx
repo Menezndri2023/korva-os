@@ -99,7 +99,10 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
   if (orgQuery.isError || !orgQuery.data) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-app-background text-sm text-text-muted">
-        <p>Cette boutique n&apos;existe pas.</p>
+        {/* Not "n'existe pas": this branch is reached for any failed load, most often an
+            unreachable API, and a real shop's customers must not be told the business is gone.
+            See classifyLookupFailure in @/lib/organization-lookup. */}
+        <p>Cette boutique est momentanément indisponible.</p>
       </div>
     );
   }

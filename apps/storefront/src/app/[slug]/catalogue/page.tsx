@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import CatalogueClient from "./catalogue-client";
 import { publicApiClient } from "@/lib/public-api-client";
+import {
+  classifyLookupFailure,
+  unresolvedStorefrontMetadata,
+  type OrganizationLookup,
+} from "@/lib/organization-lookup";
 import type { PublicOrganization } from "@/lib/public-types";
 
 const SITE_URL = (process.env.STOREFRONT_URL ?? "http://localhost:3001").replace(/\/$/, "");
@@ -10,11 +15,18 @@ interface CataloguePageProps {
   params: Promise<{ slug: string }>;
 }
 
-async function fetchOrganization(slug: string): Promise<PublicOrganization | null> {
+async function fetchOrganization(
+  slug: string,
+): Promise<OrganizationLookup<PublicOrganization>> {
   try {
-    return await publicApiClient.get<PublicOrganization>(`/public/${slug}`);
-  } catch {
-    return null;
+    const organization = await publicApiClient.get<PublicOrganization>(
+      `/public/${slug}`,
+    );
+    return { kind: "found", organization };
+  } catch (error) {
+    // Same reasoning as the storefront page: an unreachable API must not render as "this shop
+    // does not exist". See classifyLookupFailure.
+    return { kind: classifyLookupFailure(error) };
   }
 }
 
@@ -40,14 +52,15 @@ function catalogueTitle(template: string): string {
 export async function generateMetadata({ params }: CataloguePageProps): Promise<Metadata> {
   const { slug } = await params;
   const canonicalUrl = `${SITE_URL}/${slug}/catalogue`;
-  const organization = await fetchOrganization(slug);
+  const lookup = await fetchOrganization(slug);
 
-  if (!organization) {
+  if (lookup.kind !== "found") {
     return {
-      title: "Boutique introuvable — KORVA OS",
+      ...unresolvedStorefrontMetadata(lookup.kind),
       robots: { index: false, follow: false },
     };
   }
+  const { organization } = lookup;
 
   const title = `${catalogueTitle(organization.storefrontTheme.template)} — ${organization.name}`;
   const description = `Parcourez l'ensemble du catalogue de ${organization.name}, avec recherche, filtres par catégorie et tri.`;

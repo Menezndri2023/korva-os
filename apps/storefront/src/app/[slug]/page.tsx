@@ -1,9 +1,16 @@
 import { cache } from "react";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { notFound } from "next/navigation";
 import StorefrontClient from "./storefront-client";
 import { publicApiClient } from "@/lib/public-api-client";
+import {
+  classifyLookupFailure,
+  unresolvedStorefrontMetadata,
+  type OrganizationLookup,
+} from "@/lib/organization-lookup";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
+
 
 // Server-side only (not NEXT_PUBLIC_*): generateMetadata and sitemap/robots run in the Node
 // runtime, never in the browser bundle, so there's no need to expose this to client code.
@@ -20,13 +27,16 @@ interface StorefrontPageProps {
  * page started fetching it for the initial render below.
  */
 const fetchOrganization = cache(
-  async (slug: string): Promise<PublicOrganization | null> => {
+  async (slug: string): Promise<OrganizationLookup<PublicOrganization>> => {
     try {
-      return await publicApiClient.get<PublicOrganization>(`/public/${slug}`);
-    } catch {
-      // Unknown/unavailable slug — the client component renders its own "boutique introuvable"
-      // state; here we just fall back to non-indexable metadata for that same case.
-      return null;
+      const organization = await publicApiClient.get<PublicOrganization>(
+        `/public/${slug}`,
+      );
+      return { kind: "found", organization };
+    } catch (error) {
+      // See classifyLookupFailure: "the API said no" and "we could not ask" must not collapse
+      // into one answer, because the second one used to render as the first.
+      return { kind: classifyLookupFailure(error) };
     }
   },
 );
@@ -57,16 +67,20 @@ const fetchOfferSample = cache(
 export async function generateMetadata({ params }: StorefrontPageProps): Promise<Metadata> {
   const { slug } = await params;
   const canonicalUrl = `${SITE_URL}/${slug}`;
-  const organization = await fetchOrganization(slug);
+  const lookup = await fetchOrganization(slug);
 
-  if (!organization) {
+  if (lookup.kind !== "found") {
+    // Two different titles for two different facts. "Introuvable" when the API confirmed there
+    // is nothing here; "momentanément indisponible" when we could not reach it — a shop whose
+    // API is down has not stopped existing, and saying so to its customers is a lie that costs
+    // the business, not us. `noindex` either way: neither state is worth recording.
     return {
-      title: "Boutique introuvable — KORVA OS",
-      description: "Cette boutique n'existe pas ou n'est plus disponible.",
+      ...unresolvedStorefrontMetadata(lookup.kind),
       alternates: { canonical: canonicalUrl },
       robots: { index: false, follow: false },
     };
   }
+  const { organization } = lookup;
 
   const offers = await fetchOfferSample(
     slug,
@@ -137,7 +151,21 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
   // Same nonce middleware.ts put on the CSP's `style-src` for this request — see
   // templates/storefront-theme-style.tsx for why StorefrontClient needs it.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
-  const organization = await fetchOrganization(slug);
+  const lookup = await fetchOrganization(slug);
+
+  // Called outside any try/catch, and in the render path, as notFound() requires: it works by
+  // throwing NEXT_HTTP_ERROR_FALLBACK;404, which a catch would swallow.
+  //
+  // One honest caveat, from Next's own not-found.js reference: a 404 status is returned only for
+  // NON-streamed responses — a streamed one has already sent 200 before this throws. So this
+  // guarantees the right PAGE and an automatic `noindex`, and the status code depends on whether
+  // this route streams. Which is why the user-visible message, not the status, is the part of
+  // this change that actually matters.
+  if (lookup.kind === "absent") {
+    notFound();
+  }
+
+  const organization = lookup.kind === "found" ? lookup.organization : undefined;
   const offers = organization
     ? await fetchOfferSample(
         slug,
@@ -149,10 +177,9 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
     <StorefrontClient
       slug={slug}
       nonce={nonce}
-      // Null (unknown slug) is passed as undefined, never as initial data: react-query would
-      // treat null as a successful empty result and StorefrontClient would render its
-      // "boutique introuvable" state permanently instead of retrying.
-      initialOrganization={organization ?? undefined}
+      // Never passed as initial data when absent: react-query would treat it as a successful
+      // empty result and StorefrontClient would stop retrying.
+      initialOrganization={organization}
       initialOffers={offers}
     />
   );
