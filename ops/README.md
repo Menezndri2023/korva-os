@@ -147,14 +147,24 @@ window covered 03:17 the nightly backup would simply not have happened — no er
 and a cron log still ending in "complete" from the night before.
 
 Create a check on healthchecks.io (free, no card) with period **1 day** and a grace of a couple
-of hours, then put its ping URL in `~/ops/backup.env`:
+of hours, then:
 
 ```
-KORVA_BACKUP_PING_URL=https://hc-ping.com/<uuid>
+ssh -t korva@13.140.174.3 '~/ops/set-backup-ping.sh'
 ```
 
-`chmod 600` it — the URL is a capability, which is also why it does not go in the crontab, where
-`crontab -l` would print it. No cron change is needed; `backup-all.sh` sources the file itself.
+It asks for the URL, **pings it before writing it**, and refuses to write one that does not
+answer — leaving any previous configuration untouched. It also rejects a pasted placeholder by
+name, because that is the mistake that actually happened: the first version of this instruction
+was a one-liner containing `TON-UUID`, and it was pasted verbatim. healthchecks.io returned 400
+and the nightly job would have warned every night while the alarm stayed disarmed.
+
+A misconfigured switch is worse than an absent one: the absent one is obvious, the misconfigured
+one looks installed. Hence no placeholder in anything meant to be copied, and no URL written
+until it has been proven to work.
+
+The file is 0600, which is also why the URL does not go in the crontab, where `crontab -l` would
+print it. No cron change is needed; `backup-all.sh` sources the file itself.
 
 The ping can never affect the outcome: it runs after the backup has already succeeded or failed,
 it is capped at 10 s, and an unreachable monitoring service logs a warning and leaves the exit
