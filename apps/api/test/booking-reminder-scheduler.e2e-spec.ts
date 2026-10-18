@@ -48,6 +48,9 @@ const ALL_DAY_EVERY_DAY = [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
 }));
 
 describe('Booking reminder scheduler (e2e)', () => {
+  /** The organization's timezone — the one isWithinWeeklyWindows resolves wall-clock hours in. */
+  const ORG_TIME_ZONE = 'Europe/Paris';
+
   let app: INestApplication<App>;
   let server: App;
   let connection: Connection;
@@ -94,7 +97,9 @@ describe('Booking reminder scheduler (e2e)', () => {
         type: 'beauté',
         country: 'FR',
         currency: 'EUR',
-        timezone: 'Europe/Paris',
+        // The const, not a second literal: avoidCrossingLocalMidnight resolves wall-clock
+        // hours in this same zone, and two copies could drift apart silently.
+        timezone: ORG_TIME_ZONE,
         language: 'fr',
       })
       .expect(201);
@@ -147,6 +152,38 @@ describe('Booking reminder scheduler (e2e)', () => {
     return { accessToken, organizationId, contactId, offerId, resourceId };
   }
 
+  /**
+   * Pulls a start time back out of the last hour of the local day.
+   *
+   * WHY. `isWithinWeeklyWindows` (availability.service.ts) opens with
+   * `if (start.dayKey !== end.dayKey) return false` — a booking may not cross local midnight,
+   * whatever the resource's window says, because weekly availability is expressed per day. The
+   * resource here is open 00:00-23:59 every day, so the only way to fail it is to straddle
+   * midnight: a one-hour booking starting at 23:xx ends on the following day.
+   *
+   * `Date.now() + N hours` lands there for two hours out of every twenty-four, which made this
+   * suite fail roughly 8% of runs for reasons having nothing to do with reminders. It failed in
+   * CI at 20:44 Paris (the +3h booking reaching 23:44) and locally at 23:45 Paris (the +48h one,
+   * since +48h preserves the hour) — two arms of the same cause, which is why it looked like an
+   * environmental flake the first time.
+   *
+   * Pulling back 2 hours keeps `+3h` at least an hour in the future and well inside the 24h
+   * reminder window, and keeps `+48h` at 46h, well outside it — so neither assertion changes
+   * meaning. Shifting rather than skipping, so the test runs at every hour of the day.
+   */
+  function avoidCrossingLocalMidnight(startAt: Date): Date {
+    const localHour = Number(
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: ORG_TIME_ZONE,
+        hour: 'numeric',
+        hour12: false,
+      }).format(startAt),
+    );
+    return localHour === 23
+      ? new Date(startAt.getTime() - 2 * 60 * 60 * 1000)
+      : startAt;
+  }
+
   async function createBookingInHours(
     accessToken: string,
     organizationId: string,
@@ -155,7 +192,9 @@ describe('Booking reminder scheduler (e2e)', () => {
     contactId: string,
     hoursFromNow: number,
   ): Promise<BookingPayload> {
-    const startAt = new Date(Date.now() + hoursFromNow * 60 * 60 * 1000);
+    const startAt = avoidCrossingLocalMidnight(
+      new Date(Date.now() + hoursFromNow * 60 * 60 * 1000),
+    );
     const endAt = new Date(startAt.getTime() + 60 * 60 * 1000);
     const res = await request(server)
       .post('/api/v1/bookings')
