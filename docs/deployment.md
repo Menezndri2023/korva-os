@@ -220,7 +220,24 @@ curl -fsS -o /dev/null -w '%{http_code}\n' https://$DASHBOARD_DOMAIN/login
 
 `/health/database` et `/health/redis` renvoient un message générique en cas de panne — le détail réel est dans les logs du conteneur, jamais dans la réponse HTTP (volontaire, voir §27.4 D4-F de PRODUCTION_READINESS.md). En cas de 503, lire `docker compose -f docker-compose.prod.yml logs api`.
 
-**8. Créer les comptes d'intégration de paiement.** Les clés PSP ne sont pas des variables d'environnement : elles sont chiffrées en base par marché. Voir `scripts/create-platform-integration-account.ts` et `docs/architecture/integrations-platform.md` §4. Il en faut au minimum deux : `role: subscription-billing` (facturation des abonnements KORVA) et un `role: merchant-of-record` par marché de locataire. Sans le premier, `POST /subscriptions/invoices/:id/checkout` renvoie `PAYMENT_PROVIDER_NOT_CONFIGURED` — volontairement, plutôt que de retomber silencieusement sur le fournisseur manuel.
+**8. Créer les comptes d'intégration de paiement.** Les clés PSP ne sont pas des variables d'environnement : elles sont chiffrées en base par marché. Il en faut au minimum deux : `role: subscription-billing` **sans `--market`** (facturation des abonnements KORVA — Flow A, indépendant du marché car sa géographie est celle de KORVA, pas celle du locataire) et un `role: merchant-of-record --market <PAYS>` **par pays vendu** (Flow B, résolu depuis `Organization.country` : un locataire dans un pays sans compte ne peut pas être payé du tout). Voir `docs/architecture/integrations-platform.md` §4.
+
+Essai à blanc d'abord — il valide les paramètres et n'écrit rien :
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production \
+  run --rm --no-deps api node dist/create-platform-integration-account.js \
+  --domain payment --provider flutterwave --role merchant-of-record --market CI \
+  --secret "<la clé>"
+```
+
+Puis `--apply --activate`. **`--activate` n'est pas optionnel en pratique** : le résolveur exige `status === 'active'`, donc un compte créé sans lui se comporte exactement comme un compte absent.
+
+Ce fichier vivait dans `scripts/` jusqu'au 2026-10-18, ce qui rendait cette étape **inexécutable** : l'image ne contient que `dist/`, `packages/` et les `node_modules` de production, donc ni le script ni `ts-node` n'y étaient — et la liste d'autorisation Atlas ne contient que l'IP du VPS, donc le lancer depuis un poste de travail ne marche pas non plus. Il est désormais sous `src/`, compilé dans l'image, pour la même raison que `src/migrate.ts`.
+
+Clés de fournisseur enregistrées : `manual`, `flutterwave`, `paystack` (`payment-provider.registry.ts`). `manual` n'appelle aucune API et n'a pas besoin de secret ; les deux autres échouent en `PAYMENT_PROVIDER_CREDENTIAL_MISSING` sans lui.
+
+Sans le compte `subscription-billing`, `POST /subscriptions/invoices/:id/checkout` renvoie `PAYMENT_PROVIDER_NOT_CONFIGURED` — volontairement, plutôt que de retomber silencieusement sur le fournisseur manuel.
 
 **9. Vérifier un domaine personnalisé de bout en bout**, avec un domaine jetable avant le premier vrai client : le rattacher à une organisation ayant le module `website`, faire pointer son DNS vers l'hôte, puis confirmer que Caddy émet bien un certificat et que le storefront résout le locataire. Un 404 sur le domaine signifie que l'organisation n'a pas `website` activé, pas un problème de proxy.
 

@@ -34,9 +34,17 @@ export interface ResolvePaymentProviderInput {
  *
  * If no active platform account is configured for the requested (role, market), this throws a
  * typed `PAYMENT_PROVIDER_NOT_CONFIGURED` error rather than silently falling back to
- * `ManualPaymentProvider` — per the Wave 4 mandate, no fake completeness. Wiring this resolver
- * into the real payment flow (`PaymentsService`/`FinanceModule`) is explicitly out of scope for
- * Stage 1; this service is standalone and exercised only by its own unit tests until then.
+ * `ManualPaymentProvider` — per the Wave 4 mandate, no fake completeness. `status !== 'active'`
+ * counts as not configured, which is why `create-platform-integration-account.js` needs
+ * `--activate`: a created-but-inactive account behaves exactly like a missing one.
+ *
+ * NO LONGER STANDALONE. This comment said the resolver was "explicitly out of scope for Stage 1"
+ * and "exercised only by its own unit tests" until 2026-10-18, by which point it had been wired
+ * into eight real call sites — storefront checkout (PublicService), KORVA's own plan billing and
+ * auto-charge (SubscriptionBillingService, SubscriptionAutoChargeSchedulerService),
+ * PaymentsService and the integrations controller's connectivity checks. A stale "this is inert"
+ * note on a live payment path is worse than no note: it invites the next reader to assume
+ * nothing here can take money.
  */
 @Injectable()
 export class PaymentProviderResolverService {
