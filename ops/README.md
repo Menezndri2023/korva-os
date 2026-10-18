@@ -87,6 +87,33 @@ It needs no new account, and it is the weakest form of off-host backup, because 
 somebody remembers to run it: a sleeping laptop copies nothing. Object storage with a scheduled
 push is the real answer once that account exists.
 
+## set-secret.sh
+
+`~/ops/set-secret.sh SENTRY_DSN` — prompts for one value without echoing it, writes it, recreates
+the api container, verifies `/health/database`, and rolls back if the API does not come back.
+
+It **refuses a variable name that is not already in `.env.production`**. Every name the
+application reads is in that file (blank when unset), so a missing name is a typo — and a typo
+would add a dead variable that looks set while the real one stays empty. That failure is silent
+and can survive for months.
+
+The rewrite goes through Python with a lambda replacement, not `sed`: a Sentry DSN contains `/`
+and `@`, and an API key can contain `&`, `#` or a backslash, any of which corrupts a `sed`
+substitution or gets re-escaped by a regex replacement string.
+
+## verify-sentry.sh
+
+Sends one deliberate test event and waits for `Sentry.flush()` to confirm the transport took it.
+
+"The DSN is set" and "errors arrive in Sentry" are different claims and only the second is worth
+anything: a DSN with a wrong project id, a revoked key or a region mismatch is accepted by
+`Sentry.init()` without complaint and then drops everything, because the SDK is built never to
+break its host application. Flushing is what makes this meaningful — without it the process
+exits before the event leaves, and the check reports success having proved nothing.
+
+Even so, the transport accepting an event is not the project accepting it. **Look in the Sentry
+UI for the message.**
+
 ## What is still NOT covered
 
 1. **Off-host copies depend on someone running `pull-backups.sh`.** The nightly cron writes only
