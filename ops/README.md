@@ -114,6 +114,53 @@ exits before the event leaves, and the check reports success having proved nothi
 Even so, the transport accepting an event is not the project accepting it. **Look in the Sentry
 UI for the message.**
 
+## Knowing when things are down
+
+Two different absences, and neither is covered by Sentry — it reports errors from inside a
+running application and has nothing to say when the machine is gone, because there is nobody
+left to send the event.
+
+### 1. The site is down — needs an external monitor
+
+Sign up anywhere free (UptimeRobot, Better Stack, Healthchecks.io) and add these:
+
+| URL | what it proves |
+|---|---|
+| `https://api.korvasuite.com/api/v1/health/database` | the API is up **and** Mongo answers |
+| `https://api.korvasuite.com/api/v1/health/redis` | Redis answers — BullMQ's 13 queues depend on it |
+| `https://app.korvasuite.com` | the dashboard renders |
+| `https://sites.korvasuite.com` | tenant storefronts render through Caddy |
+
+**Do not monitor `/api/v1/health`.** It answers `{status:"ok"}` from a literal and never touches
+Mongo or Redis, so it stays green through a total database outage. That is the right behaviour
+for a liveness probe and makes it useless as the thing you get paged on.
+
+A tenant URL such as `https://sites.korvasuite.com/freeworld` is the truest end-to-end check —
+Caddy, SSR and the API in one request — but it breaks if that organization is ever removed, so
+treat it as a bonus rather than the primary.
+
+### 2. The backup never ran — needs a dead man's switch
+
+`backup-all.sh` detects a backup that FAILED. Nothing on this machine can detect one that never
+RAN, which is the likelier accident: this host was off for 37 minutes on 2026-10-18, and had that
+window covered 03:17 the nightly backup would simply not have happened — no error, no log line,
+and a cron log still ending in "complete" from the night before.
+
+Create a check on healthchecks.io (free, no card) with period **1 day** and a grace of a couple
+of hours, then put its ping URL in `~/ops/backup.env`:
+
+```
+KORVA_BACKUP_PING_URL=https://hc-ping.com/<uuid>
+```
+
+`chmod 600` it — the URL is a capability, which is also why it does not go in the crontab, where
+`crontab -l` would print it. No cron change is needed; `backup-all.sh` sources the file itself.
+
+The ping can never affect the outcome: it runs after the backup has already succeeded or failed,
+it is capped at 10 s, and an unreachable monitoring service logs a warning and leaves the exit
+code alone. A failed night pings `<url>/fail` so the alert is immediate instead of waiting for
+the grace period to expire.
+
 ## What is still NOT covered
 
 1. **Off-host copies depend on someone running `pull-backups.sh`.** The nightly cron writes only
