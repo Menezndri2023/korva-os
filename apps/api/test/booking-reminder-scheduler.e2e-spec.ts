@@ -333,7 +333,13 @@ describe('Booking reminder scheduler (e2e)', () => {
     const reminded = await getBooking(accessToken, organizationId, booking.id);
     expect(reminded.reminderSentAt).toBeDefined();
 
-    const newStartAt = new Date(Date.now() + 5 * 60 * 60 * 1000);
+    // Through the same guard as createBookingInHours: this was the one booking time in the file
+    // that bypassed it, and it failed CI at 18:18 Paris (+5h = 23:18, ending past midnight).
+    // Shifted, it lands at +3h — still inside the 24h reminder window, so the re-sweep below
+    // keeps its meaning.
+    const newStartAt = avoidCrossingLocalMidnight(
+      new Date(Date.now() + 5 * 60 * 60 * 1000),
+    );
     const newEndAt = new Date(newStartAt.getTime() + 60 * 60 * 1000);
     const rescheduleRes = await request(server)
       .post(`/api/v1/bookings/${booking.id}/reschedule`)
