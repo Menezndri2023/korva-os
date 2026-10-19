@@ -330,6 +330,25 @@ describe("SettingsPage — Organization profile edit", () => {
     );
   });
 
+  it("lets the owner set the type of activity, which an older organization does not have", async () => {
+    patchMock.mockResolvedValue({ ...organization });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    expect(screen.getByText("Non défini")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    await user.selectOptions(screen.getByLabelText("Type d'activité"), "appointments");
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith(
+        "/organizations/me",
+        expect.objectContaining({ businessModel: "appointments" }),
+      ),
+    );
+  });
+
   it("rejects an invalid brand color and never calls the API", async () => {
     const user = userEvent.setup();
     renderWithProviders(<SettingsPage />);

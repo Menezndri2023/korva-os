@@ -1,3 +1,4 @@
+import type { BusinessModel } from "./business-models.ts";
 import type {
   StorefrontFontPairingKey,
   StorefrontPaletteKey,
@@ -98,6 +99,9 @@ export interface Organization {
   slug: string;
   legalName?: string;
   type: string;
+  /** Type of activity — see business-models.ts. Absent for an organization created before it
+   *  existed whose trade could not be recognised; every reader then keeps the older behaviour. */
+  businessModel?: BusinessModel;
   country: string;
   currency: string;
   timezone: string;

@@ -8,6 +8,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
+  BUSINESS_MODEL_DEFINITIONS,
   CUSTOM_DOMAIN_MIN_PLAN,
   STOREFRONT_SECTIONS,
   verticalForOrganizationType,
@@ -287,9 +288,16 @@ export class PublicService {
     planKey: string,
   ): StorefrontTheme {
     const vertical = verticalForOrganizationType(organization.type);
+    // Owner's explicit choice, then the trade's own template, then the type of activity's — the
+    // last one covers an owner whose trade was "Autre" or whose free-text `type` was edited, who
+    // used to fall all the way back to the generic "essentiel" page.
     const requestedKey =
       organization.storefrontTemplate ??
       vertical?.defaultStorefrontTemplate ??
+      (organization.businessModel
+        ? BUSINESS_MODEL_DEFINITIONS[organization.businessModel]
+            .defaultStorefrontTemplate
+        : undefined) ??
       'essentiel';
     let templateDef = getStorefrontTemplate(requestedKey);
     if (!planMeetsMinimum(planKey, templateDef.minPlan)) {

@@ -10,7 +10,7 @@ import type {
   CreateOrganizationInput,
   UpdateOrganizationInput,
 } from '@korva/validation';
-import { SYSTEM_ROLE_RANK } from '@korva/types';
+import { SYSTEM_ROLE_RANK, verticalForOrganizationType } from '@korva/types';
 import { OrganizationsRepository } from './organizations.repository';
 import { OrganizationDocument } from './schemas/organization.schema';
 import {
@@ -125,6 +125,9 @@ export class OrganizationsService {
       name: input.name,
       slug,
       type: input.type,
+      businessModel:
+        input.businessModel ??
+        verticalForOrganizationType(input.type)?.businessModel,
       country: input.country,
       currency: input.currency,
       timezone: input.timezone,

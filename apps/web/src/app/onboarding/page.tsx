@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
+import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -12,11 +13,14 @@ import {
 } from "@korva/validation";
 import {
   BILLABLE_COUNTRIES,
+  BUSINESS_MODELS,
+  BUSINESS_MODEL_DEFINITIONS,
   MODULE_MIN_PLAN,
   PLAN_NAMES,
   VERTICAL_TEMPLATES,
   currencyForCountry,
   modulesForPlan,
+  type BusinessModel,
   type KorvaModule,
   type Organization,
   type Workflow,
@@ -101,6 +105,15 @@ function resolveDefaultTimezone(): string {
   );
 }
 
+/**
+ * The API keeps businessModel optional (organizations created through it before the field
+ * existed, scripts, tests), but a new owner must choose one: it decides their kind of site and the
+ * tools they see (docs/KORVA_OS_V3_STRUCTURE_PRODUIT.md §2.1). Picking a trade fills it in.
+ */
+const onboardingSchema = createOrganizationSchema.extend({
+  businessModel: z.enum(BUSINESS_MODELS, { message: "Choisissez votre type d'activité." }),
+});
+
 interface ImportPreview {
   name?: string;
   tagline?: string;
@@ -127,9 +140,10 @@ export default function OnboardingPage() {
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors },
   } = useForm<CreateOrganizationInput>({
-    resolver: zodResolver(createOrganizationSchema),
+    resolver: zodResolver(onboardingSchema),
     defaultValues: {
       country: "FR",
       currency: currencyForCountry("FR"),
@@ -137,6 +151,8 @@ export default function OnboardingPage() {
       language: "fr",
     },
   });
+
+  const businessModel = useWatch({ control, name: "businessModel" }) as BusinessModel | undefined;
 
   // Registered once and spread manually below so the select can run register()'s own onChange
   // AND derive the billing currency from the same event.
@@ -160,6 +176,7 @@ export default function OnboardingPage() {
     if (!template) return;
     setSelectedVertical(key);
     setValue("type", template.suggestedType);
+    setValue("businessModel", template.businessModel, { shouldValidate: true });
     // Clamped to the free plan: a template's suggestedModules describe the vertical in full
     // (they include `workflow`, and `marketing` for some), but a brand-new organization is on
     // free, and PATCH /organizations/me rejects the whole update if it names a module the plan
@@ -320,6 +337,38 @@ export default function OnboardingPage() {
               {...register("type")}
             />
             {errors.type && <p className="mt-1 text-xs text-red-600">{errors.type.message}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium" htmlFor="business-model">
+              Type d&apos;activité
+            </label>
+            <Select
+              id="business-model"
+              className="mt-1 w-full"
+              defaultValue=""
+              {...register("businessModel", {
+                setValueAs: (v: string) => (v === "" ? undefined : v),
+              })}
+            >
+              <option value="" disabled>
+                Choisir votre type d&apos;activité
+              </option>
+              {BUSINESS_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {BUSINESS_MODEL_DEFINITIONS[model].label} —{" "}
+                  {BUSINESS_MODEL_DEFINITIONS[model].description}
+                </option>
+              ))}
+            </Select>
+            {businessModel ? (
+              <p className="mt-1 text-xs text-zinc-500">
+                Votre site : {BUSINESS_MODEL_DEFINITIONS[businessModel].siteKind}.
+              </p>
+            ) : null}
+            {errors.businessModel && (
+              <p className="mt-1 text-xs text-red-600">{errors.businessModel.message}</p>
+            )}
           </div>
 
           <div>

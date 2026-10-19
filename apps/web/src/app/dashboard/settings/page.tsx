@@ -5,6 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BUSINESS_MODELS,
+  BUSINESS_MODEL_DEFINITIONS,
   CORE_PERMISSIONS,
   CUSTOM_FIELD_ENTITIES,
   CUSTOM_FIELD_TYPES,
@@ -395,6 +397,7 @@ export default function SettingsPage() {
       name: organization.name,
       legalName: organization.legalName,
       type: organization.type,
+      businessModel: organization.businessModel,
       country: organization.country,
       currency: organization.currency,
       timezone: organization.timezone,
@@ -666,6 +669,14 @@ export default function SettingsPage() {
               <dd className="mt-0.5">{organization?.type ?? "—"}</dd>
             </div>
             <div>
+              <dt className="text-text-muted">Type d&apos;activité</dt>
+              <dd className="mt-0.5">
+                {organization?.businessModel
+                  ? `${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].label} · ${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].siteKind}`
+                  : "Non défini"}
+              </dd>
+            </div>
+            <div>
               <dt className="text-text-muted">Pays</dt>
               <dd className="mt-0.5">{organization?.country ?? "—"}</dd>
             </div>
@@ -782,6 +793,26 @@ export default function SettingsPage() {
                 error={!!orgErrors.type}
                 {...registerOrg("type")}
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-business-model">
+                Type d&apos;activité
+              </label>
+              <Select
+                id="org-business-model"
+                className="w-full"
+                {...registerOrg("businessModel", {
+                  // Left unchosen on an older organization: send nothing rather than "".
+                  setValueAs: (v: string | undefined) => (v ? v : undefined),
+                })}
+              >
+                <option value="">Non défini</option>
+                {BUSINESS_MODELS.map((model) => (
+                  <option key={model} value={model}>
+                    {BUSINESS_MODEL_DEFINITIONS[model].label} — {BUSINESS_MODEL_DEFINITIONS[model].siteKind}
+                  </option>
+                ))}
+              </Select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-country">

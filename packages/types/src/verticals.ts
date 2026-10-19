@@ -2,6 +2,7 @@ import type { KorvaModule } from "./organization.ts";
 import type { OfferType } from "./catalog.ts";
 import type { SystemEvent, WorkflowAction } from "./workflow.ts";
 import type { StorefrontTemplateKey } from "./storefront-themes.ts";
+import type { BusinessModel } from "./business-models.ts";
 
 /**
  * Onboarding templates for common business verticals (Business OS brief §13-14,
@@ -64,6 +65,9 @@ export interface VerticalTemplate {
   label: string;
   description: string;
   suggestedType: string;
+  /** The type of activity this trade belongs to — see business-models.ts. Stored on the
+   *  organization at onboarding, so it survives an edit of the free-text `type`. */
+  businessModel: BusinessModel;
   suggestedModules: KorvaModule[];
   starterWorkflow?: VerticalStarterWorkflow;
   /** Storefront visual template pre-selected for this vertical — see storefront-themes.ts.
@@ -80,6 +84,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Salon & bien-être",
     description: "Coiffure, esthétique, spa — réservations et suivi client.",
     suggestedType: "beauté",
+    businessModel: "appointments",
     suggestedModules: [
       "crm",
       "catalog",
@@ -117,6 +122,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Restaurant",
     description: "Commandes, préparation et suivi client.",
     suggestedType: "restauration",
+    businessModel: "restaurant",
     suggestedModules: [
       "crm",
       "catalog",
@@ -153,6 +159,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Services professionnels",
     description: "Conseil, coaching, agences — suivi commercial et facturation.",
     suggestedType: "services professionnels",
+    businessModel: "quotes",
     suggestedModules: [
       "crm",
       "catalog",
@@ -182,6 +189,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Formation",
     description: "Sessions, ateliers et formations — réservations de places.",
     suggestedType: "formation",
+    businessModel: "training",
     suggestedModules: [
       "crm",
       "catalog",
@@ -217,6 +225,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Commerce & e-commerce",
     description: "Vente de produits, en boutique ou en ligne.",
     suggestedType: "commerce",
+    businessModel: "retail",
     suggestedModules: [
       "crm",
       "catalog",
@@ -245,6 +254,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Santé & bien-être (non médical)",
     description: "Kinésithérapie, ostéopathie, coaching santé, nutrition — rendez-vous et suivi.",
     suggestedType: "santé",
+    businessModel: "appointments",
     suggestedModules: [
       "crm",
       "catalog",
@@ -276,6 +286,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Artisanat & BTP",
     description: "Plomberie, électricité, menuiserie, peinture — devis et interventions.",
     suggestedType: "artisanat",
+    businessModel: "quotes",
     suggestedModules: [
       "crm",
       "catalog",
@@ -304,6 +315,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Immobilier",
     description: "Agences immobilières, syndics, gestion locative — suivi des dossiers.",
     suggestedType: "immobilier",
+    businessModel: "real_estate",
     suggestedModules: [
       "crm",
       "catalog",
@@ -327,6 +339,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Hôtellerie & tourisme",
     description: "Gîtes, chambres d'hôtes, hébergements — réservations de séjours.",
     suggestedType: "hôtellerie",
+    businessModel: "lodging",
     suggestedModules: [
       "crm",
       "catalog",
@@ -358,6 +371,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Mode & habillement",
     description: "Prêt-à-porter, accessoires, chaussures — vente en boutique ou en ligne.",
     suggestedType: "mode",
+    businessModel: "retail",
     suggestedModules: [
       "crm",
       "catalog",
@@ -383,6 +397,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Épicerie & alimentation",
     description: "Épiceries, primeurs, boulangeries — vente au détail et sur commande.",
     suggestedType: "alimentation",
+    businessModel: "retail",
     suggestedModules: [
       "crm",
       "catalog",
@@ -413,6 +428,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Sport & fitness",
     description: "Salles de sport, coachs sportifs, cours collectifs — réservations de séances.",
     suggestedType: "sport",
+    businessModel: "appointments",
     suggestedModules: [
       "crm",
       "catalog",
@@ -445,6 +461,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Informatique & agence digitale",
     description: "Développement, marketing, design — suivi commercial et facturation de projets.",
     suggestedType: "agence digitale",
+    businessModel: "quotes",
     suggestedModules: [
       "crm",
       "catalog",
@@ -473,6 +490,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Événementiel & création",
     description: "Photographes, traiteurs événementiels, DJ, décorateurs — devis et prestations.",
     suggestedType: "événementiel",
+    businessModel: "quotes",
     suggestedModules: [
       "crm",
       "catalog",
@@ -504,6 +522,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Association & ONG",
     description: "Associations, ONG — adhésions, dons et suivi des membres.",
     suggestedType: "association",
+    businessModel: "association",
     suggestedModules: [
       "crm",
       "catalog",
@@ -534,6 +553,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Garde d'enfants & services à la personne",
     description: "Garde d'enfants, aide à domicile, ménage — planification d'interventions.",
     suggestedType: "services à la personne",
+    businessModel: "appointments",
     suggestedModules: [
       "crm",
       "catalog",
@@ -565,6 +585,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
     label: "Agriculture & vente directe",
     description: "Producteurs, fermes, vente directe — commandes et paniers.",
     suggestedType: "agriculture",
+    businessModel: "retail",
     suggestedModules: [
       "crm",
       "catalog",

@@ -45,8 +45,9 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 const getMock = vi.mocked(apiClient.get);
 
 let enabledModules: string[] = [];
+let businessModel: string | undefined;
 vi.mock("@/lib/use-active-organization", () => ({
-  useActiveOrganization: () => ({ data: { name: "Org de test", enabledModules } }),
+  useActiveOrganization: () => ({ data: { name: "Org de test", enabledModules, businessModel } }),
 }));
 
 const orgA = { id: "org-1", name: "Org A" };
@@ -57,6 +58,39 @@ describe("DashboardLayout", () => {
     getMock.mockReset();
     getMock.mockResolvedValue([]);
     document.body.style.overflow = "";
+    businessModel = undefined;
+  });
+
+  function navHrefs() {
+    return screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+  }
+
+  it("shows the kitchen screen only to a restaurant, and training only to a training business", () => {
+    // Both used to follow a module alone: every shop saw "Cuisine", every salon "Formations".
+    enabledModules = ["commerce", "booking"];
+
+    businessModel = "retail";
+    const { unmount } = renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(navHrefs()).not.toContain("/dashboard/kitchen");
+    expect(navHrefs()).not.toContain("/dashboard/formation/courses");
+    unmount();
+
+    businessModel = "restaurant";
+    const restaurant = renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(navHrefs()).toContain("/dashboard/kitchen");
+    restaurant.unmount();
+
+    businessModel = "training";
+    renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(navHrefs()).toContain("/dashboard/formation/courses");
+    expect(navHrefs()).not.toContain("/dashboard/kitchen");
+  });
+
+  it("keeps both screens for an organization with no type of activity, as before", () => {
+    enabledModules = ["commerce", "booking"];
+    renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(navHrefs()).toContain("/dashboard/kitchen");
+    expect(navHrefs()).toContain("/dashboard/formation/courses");
   });
 
   it("links to /dashboard/analytics once the module is enabled for the organization", () => {

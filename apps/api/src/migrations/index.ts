@@ -3,6 +3,7 @@ import { migration as m0001 } from './0001-sync-indexes';
 import { migration as m0002 } from './0002-plan-currency-index';
 import { migration as m0003 } from './0003-plan-catalog-realignment';
 import { migration as m0004 } from './0004-marketing-to-starter';
+import { migration as m0005 } from './0005-business-model-backfill';
 
 /**
  * Every migration, registered explicitly.
@@ -18,4 +19,10 @@ import { migration as m0004 } from './0004-marketing-to-starter';
  * ADDING ONE: create the file, then add it here. Order in this array is irrelevant — the runner
  * sorts by each migration's own `name`, which is what gets recorded.
  */
-export const MIGRATIONS: MigrationDefinition[] = [m0001, m0002, m0003, m0004];
+export const MIGRATIONS: MigrationDefinition[] = [
+  m0001,
+  m0002,
+  m0003,
+  m0004,
+  m0005,
+];

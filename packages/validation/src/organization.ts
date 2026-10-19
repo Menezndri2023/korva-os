@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  BUSINESS_MODELS,
   KORVA_MODULES,
   PAYMENT_METHODS,
   STOREFRONT_SECTIONS,
@@ -11,6 +12,9 @@ import {
 export const createOrganizationSchema = z.object({
   name: z.string().min(1).max(200),
   type: z.string().min(1).max(60),
+  /** Type of activity (business-models.ts). Optional: when omitted at creation the API derives
+   *  it from a recognised trade in `type`, and leaves it unset otherwise. */
+  businessModel: z.enum(BUSINESS_MODELS).optional(),
   country: z.string().length(2),
   currency: z.string().length(3),
   timezone: z.string().min(1),

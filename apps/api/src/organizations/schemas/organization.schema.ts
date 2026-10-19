@@ -1,6 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
+import { BUSINESS_MODELS } from '@korva/types';
 import type {
+  BusinessModel,
   FaqItem,
   GalleryImage,
   KorvaModule,
@@ -37,6 +39,11 @@ export class Organization {
   /** Free-form on purpose — organizations must not be limited to a fixed set of business types. */
   @Prop({ required: true })
   type!: string;
+
+  /** See BUSINESS_MODELS in @korva/types. Stored so the type of activity no longer depends on
+   *  the free-text `type` above matching a trade. */
+  @Prop({ type: String, enum: BUSINESS_MODELS })
+  businessModel?: BusinessModel;
 
   @Prop({ required: true })
   country!: string;

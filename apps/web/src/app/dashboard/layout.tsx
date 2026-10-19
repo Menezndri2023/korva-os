@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { KorvaModule, Organization } from "@korva/types";
+import { BUSINESS_MODEL_DEFINITIONS, type KorvaModule, type Organization } from "@korva/types";
 import { Button, ThemeToggle } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
@@ -80,6 +80,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [sidebarOpen]);
 
   const enabledModules = new Set(organization?.enabledModules ?? []);
+  // Trade-specific screens follow the type of activity: every shop used to see "Cuisine" and
+  // every salon "Formations", because both only checked a module. An organization without a
+  // type of activity keeps exactly that older behaviour.
+  const screens = organization?.businessModel
+    ? BUSINESS_MODEL_DEFINITIONS[organization.businessModel].screens
+    : { kitchen: true, training: true };
 
   async function logout() {
     try {
@@ -162,7 +168,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setSidebarOpen(false)}
             />
           )}
-          {enabledModules.has("booking") && (
+          {enabledModules.has("booking") && screens.training && (
             <NavLink
               href="/dashboard/formation/courses"
               label="Formations"
@@ -170,7 +176,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setSidebarOpen(false)}
             />
           )}
-          {enabledModules.has("commerce") && (
+          {enabledModules.has("commerce") && screens.kitchen && (
             <NavLink
               href="/dashboard/kitchen"
               label="Cuisine"

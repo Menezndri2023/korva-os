@@ -12,6 +12,7 @@ import {
   type CreateOfferInput,
 } from "@korva/validation";
 import {
+  BUSINESS_MODEL_DEFINITIONS,
   OFFER_TYPES,
   verticalForOrganizationType,
   type CustomFieldValues,
@@ -59,6 +60,14 @@ export default function CatalogPage() {
   // Best-effort: `Organization.type` is free-form, so an owner who typed their own sector simply
   // gets no suggestions rather than the wrong trade's.
   const vertical = verticalForOrganizationType(organization?.type);
+  // The type of activity puts its own offer types first and picks the first one by default; the
+  // others stay one click away (a salon may sell products too). Without one, every type is listed
+  // in the usual order, as before.
+  const businessModel = organization?.businessModel
+    ? BUSINESS_MODEL_DEFINITIONS[organization.businessModel]
+    : undefined;
+  const recommendedOfferTypes = businessModel?.offerTypes ?? [...OFFER_TYPES];
+  const otherOfferTypes = OFFER_TYPES.filter((type) => !recommendedOfferTypes.includes(type));
 
   const { data: offersPage, isLoading } = useQuery({
     queryKey: ["offers", typeFilter, page],
@@ -101,7 +110,7 @@ export default function CatalogPage() {
    */
   function openForm(prefill?: { name: string; type: OfferType }) {
     reset({
-      type: prefill?.type ?? "product",
+      type: prefill?.type ?? recommendedOfferTypes[0] ?? "product",
       name: prefill?.name ?? "",
       images: [],
       categories: [],
@@ -185,11 +194,30 @@ export default function CatalogPage() {
             className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             {...register("type")}
           >
-            {OFFER_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {TYPE_LABELS[type]}
-              </option>
-            ))}
+            {otherOfferTypes.length === 0 ? (
+              recommendedOfferTypes.map((type) => (
+                <option key={type} value={type}>
+                  {TYPE_LABELS[type]}
+                </option>
+              ))
+            ) : (
+              <>
+                <optgroup label="Pour votre activité">
+                  {recommendedOfferTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Autres types">
+                  {otherOfferTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {TYPE_LABELS[type]}
+                    </option>
+                  ))}
+                </optgroup>
+              </>
+            )}
           </select>
           <Input placeholder="Nom" className="col-span-2" {...register("name")} />
           {errors.name && <p className="col-span-2 text-xs text-destructive">{errors.name.message}</p>}

@@ -20,7 +20,9 @@ vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
 // rely on there being NO organization (and therefore no trade suggestions), so this cannot be a
 // fixed module-level mock.
 const orgMock = vi.hoisted(() => ({
-  current: undefined as { type?: string; currency?: string } | undefined,
+  current: undefined as
+    | { type?: string; currency?: string; businessModel?: string }
+    | undefined,
 }));
 vi.mock("@/lib/use-active-organization", () => ({
   useActiveOrganization: () => ({ data: orgMock.current }),
@@ -317,6 +319,25 @@ describe("CatalogPage — trade suggestions and currency", () => {
       expect(screen.getByPlaceholderText("Nom")).toHaveValue("Coupe femme");
     });
     expect(postMock).not.toHaveBeenCalled();
+  });
+
+  it("proposes the type of activity's offer types first and defaults to the first one", async () => {
+    orgMock.current = { type: "quelque chose", currency: "EUR", businessModel: "appointments" };
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Nouvelle offre" }));
+
+    const select = screen.getByLabelText("Type d'offre");
+    expect(select).toHaveValue("booking");
+    const groups = Array.from(select.querySelectorAll("optgroup")).map((group) => ({
+      label: group.label,
+      options: Array.from(group.querySelectorAll("option")).map((option) => option.value),
+    }));
+    expect(groups).toEqual([
+      { label: "Pour votre activité", options: ["booking", "package", "subscription", "product"] },
+      { label: "Autres types", options: ["service", "digital_product"] },
+    ]);
   });
 
   it("prices a new offer in the organization's own currency, not EUR", async () => {

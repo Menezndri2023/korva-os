@@ -28,6 +28,9 @@ function fillRequiredFields() {
   fireEvent.input(screen.getByLabelText("Secteur d'activité"), {
     target: { value: "audit" },
   });
+  fireEvent.change(screen.getByLabelText("Type d'activité"), {
+    target: { value: "quotes" },
+  });
 }
 
 describe("OnboardingPage — module selection (Bug #4)", () => {
@@ -224,6 +227,7 @@ describe("OnboardingPage — importer mon entreprise", () => {
     );
 
     fireEvent.input(screen.getByLabelText("Secteur d'activité"), { target: { value: "commerce" } });
+    fireEvent.change(screen.getByLabelText("Type d'activité"), { target: { value: "retail" } });
     fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
 
     await waitFor(() => expect(patchMock).toHaveBeenCalled());
@@ -348,5 +352,42 @@ describe("OnboardingPage — business description field (Phase E2)", () => {
     await waitFor(() => expect(postMock).toHaveBeenCalled());
     const [, body] = postMock.mock.calls[0]!;
     expect((body as { businessDescription?: string }).businessDescription).toBeUndefined();
+  });
+});
+
+describe("OnboardingPage — type of activity", () => {
+  beforeEach(() => {
+    postMock.mockReset();
+    patchMock.mockReset();
+    postMock.mockResolvedValue({ id: "org-1" });
+    patchMock.mockResolvedValue({ id: "org-1" });
+  });
+
+  it("refuses to create the organization until a type of activity is chosen", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fireEvent.input(screen.getByLabelText("Nom de l'entreprise"), { target: { value: "Sans type" } });
+    fireEvent.input(screen.getByLabelText("Secteur d'activité"), { target: { value: "divers" } });
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    expect(await screen.findByText("Choisissez votre type d'activité.")).toBeInTheDocument();
+    expect(postMock).not.toHaveBeenCalledWith("/organizations", expect.anything(), expect.anything());
+  });
+
+  it("fills the type of activity from the chosen trade, names the kind of site, and sends it", async () => {
+    renderWithProviders(<OnboardingPage />);
+    fireEvent.input(screen.getByLabelText("Nom de l'entreprise"), { target: { value: "Chez Awa" } });
+    fireEvent.click(screen.getByRole("button", { name: /Restaurant/ }));
+
+    expect(screen.getByLabelText("Type d'activité")).toHaveValue("restaurant");
+    expect(screen.getByText("Votre site : Menu en ligne et commande.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/organizations",
+        expect.objectContaining({ businessModel: "restaurant", type: "restauration" }),
+        expect.anything(),
+      ),
+    );
   });
 });
