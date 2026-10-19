@@ -7,9 +7,10 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addOrderItemSchema, type AddOrderItemInput } from "@korva/validation";
-import type { Contact, Offer, Order, Resource } from "@korva/types";
+import { FULFILLMENT_MODE_LABELS, type Contact, type Offer, type Order, type Resource } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
 
@@ -23,6 +24,7 @@ const STATUS_LABELS: Record<Order["status"], string> = {
 
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { data: organization } = useActiveOrganization();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
@@ -261,6 +263,49 @@ export default function OrderDetailPage() {
             <div>
               <dt className="text-text-muted">Table</dt>
               <dd className="mt-0.5">{resourceName(order.resourceId)}</dd>
+            </div>
+          )}
+          {order.fulfillmentMode && (
+            <div>
+              <dt className="text-text-muted">Réception</dt>
+              <dd className="mt-0.5">
+                {FULFILLMENT_MODE_LABELS[order.fulfillmentMode]}
+                {order.deliveryZoneName && ` · ${order.deliveryZoneName}`}
+                {order.tableLabel && ` · ${order.tableLabel}`}
+              </dd>
+            </div>
+          )}
+          {order.fulfillmentMode && (
+            <div>
+              <dt className="text-text-muted">Pour</dt>
+              <dd className="mt-0.5">
+                {order.requestedFor
+                  ? // In the business's own timezone: the customer chose this hour on its clock.
+                    new Date(order.requestedFor).toLocaleString("fr-FR", {
+                      timeZone: organization?.timezone,
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })
+                  : "Dès que possible"}
+              </dd>
+            </div>
+          )}
+          {order.shippingAddress && (
+            <div>
+              <dt className="text-text-muted">Adresse de livraison</dt>
+              <dd className="mt-0.5">
+                {order.shippingAddress.line1}
+                {order.shippingAddress.line2 && `, ${order.shippingAddress.line2}`},{" "}
+                {order.shippingAddress.postalCode} {order.shippingAddress.city}
+              </dd>
+            </div>
+          )}
+          {order.shippingCost > 0 && (
+            <div>
+              <dt className="text-text-muted">Frais de livraison</dt>
+              <dd className="mt-0.5">
+                {order.shippingCost} {order.currency}
+              </dd>
             </div>
           )}
           {order.invoiceId && (

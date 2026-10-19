@@ -28,6 +28,29 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const ORDER_SOURCES = ["cart", "booking", "manual", "storefront"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
 
+/**
+ * How a storefront customer receives an order. Chosen per order among the modes the business
+ * offers (Organization.fulfillmentModes). An organization that has configured none keeps the
+ * older behaviour: one flat shipping rate on every order, address optional.
+ */
+export const FULFILLMENT_MODES = ["delivery", "pickup", "dine_in"] as const;
+export type FulfillmentMode = (typeof FULFILLMENT_MODES)[number];
+
+export const FULFILLMENT_MODE_LABELS: Record<FulfillmentMode, string> = {
+  delivery: "Livraison",
+  pickup: "Retrait sur place",
+  dine_in: "Sur place",
+};
+
+/** A delivery area with its own fee and optional minimum basket. `id` is generated client-side
+ *  (crypto.randomUUID()), like the storefront content sections. */
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  fee: number;
+  minimumOrder?: number;
+}
+
 export interface Order {
   id: string;
   organizationId: string;
@@ -54,6 +77,15 @@ export interface Order {
   };
   total: number;
   notes?: string;
+  /** Set on storefront orders of an organization that offers fulfillment modes. */
+  fulfillmentMode?: FulfillmentMode;
+  /** Snapshot of the delivery zone's name, kept even if the zone is later renamed or removed. */
+  deliveryZoneName?: string;
+  /** When the customer wants it, as an instant (computed in the business's timezone).
+   *  Absent means "as soon as possible". */
+  requestedFor?: string;
+  /** Table or seat named by a dine-in customer. */
+  tableLabel?: string;
   createdAt: string;
   updatedAt: string;
 }

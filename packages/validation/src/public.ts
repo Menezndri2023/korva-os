@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OFFER_TYPES } from "@korva/types";
+import { FULFILLMENT_MODES, OFFER_TYPES } from "@korva/types";
 import { OFFER_SORT_OPTIONS } from "./catalog.ts";
 
 export const publicContactSchema = z.object({
@@ -89,6 +89,18 @@ export const createPublicOrderSchema = z.object({
   contact: publicContactSchema,
   discountCode: z.string().max(40).optional(),
   shippingAddress: publicShippingAddressSchema.optional(),
+  /** Required by the API when the organization offers fulfillment modes; ignored otherwise. */
+  fulfillmentMode: z.enum(FULFILLMENT_MODES).optional(),
+  deliveryZoneId: z.string().min(1).max(64).optional(),
+  /** Wall-clock date and time in the BUSINESS's timezone, converted by the API — never an ISO
+   *  instant built in the browser, which is how the booking form once shifted 14:00 to 16:00. */
+  requestedFor: z
+    .object({
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
+      time: z.string().regex(/^\d{2}:\d{2}$/, "expected HH:mm"),
+    })
+    .optional(),
+  tableLabel: z.string().max(40).optional(),
 });
 export type CreatePublicOrderInput = z.infer<typeof createPublicOrderSchema>;
 

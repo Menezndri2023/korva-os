@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BookingPanel } from "./commerce-panels";
+import { BookingPanel, CheckoutPanel } from "./commerce-panels";
 import { publicApiClient } from "@/lib/public-api-client";
 import type { PublicOffer } from "@/lib/public-types";
 
@@ -129,5 +129,103 @@ describe("BookingPanel", () => {
 
     expect(await screen.findByText("Aucun créneau disponible ce jour-là.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirmer la réservation" })).toBeDisabled();
+  });
+});
+
+describe("CheckoutPanel — fulfillment", () => {
+  const cart = [
+    { offerId: "offer-1", name: "Garba", unitPrice: 2500, quantity: 1 },
+  ] as unknown as Parameters<typeof CheckoutPanel>[0]["cart"];
+  const reception = {
+    fulfillmentModes: ["delivery", "pickup"] as ("delivery" | "pickup")[],
+    deliveryZones: [
+      { id: "cocody", name: "Cocody", fee: 1000, minimumOrder: 5000 },
+      { id: "plateau", name: "Plateau", fee: 1500 },
+    ],
+    pickupInstructions: "Comptoir à gauche",
+  };
+
+  function renderCheckout(props: Partial<Parameters<typeof CheckoutPanel>[0]> = {}) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <CheckoutPanel
+          slug="maquis"
+          cart={cart}
+          currency="XOF"
+          shippingFlatRate={2000}
+          acceptedPaymentMethods={["cash"]}
+          onClose={() => {}}
+          onSuccess={() => {}}
+          {...props}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    postMock.mockReset();
+    postMock.mockResolvedValue({ id: "order-1", number: "CMD-1" });
+  });
+
+  it("keeps the old checkout when the shop configured no mode: flat rate, optional address", () => {
+    renderCheckout();
+    expect(screen.queryByRole("radiogroup", { name: "Mode de réception" })).not.toBeInTheDocument();
+    expect(screen.getByText("Adresse de livraison (optionnel)")).toBeInTheDocument();
+    expect(screen.getByText(/Livraison : 2000.00 XOF/)).toBeInTheDocument();
+  });
+
+  it("charges nothing and asks for no address for pickup, and sends the mode", async () => {
+    const user = userEvent.setup();
+    renderCheckout({ reception });
+
+    await user.click(screen.getByRole("radio", { name: "Retrait sur place" }));
+    expect(screen.queryByLabelText("Adresse")).not.toBeInTheDocument();
+    expect(screen.getByText("Comptoir à gauche")).toBeInTheDocument();
+    expect(screen.queryByText(/Livraison :/)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Adresse e-mail"), "kofi@client.ci");
+    await user.click(screen.getByRole("button", { name: "Confirmer la commande" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/public/maquis/orders",
+        expect.objectContaining({ fulfillmentMode: "pickup", shippingAddress: undefined }),
+      ),
+    );
+  });
+
+  it("shows the zone's fee and blocks a basket under the zone's minimum", async () => {
+    const user = userEvent.setup();
+    renderCheckout({ reception });
+
+    // Delivery is the first mode, selected by default; no zone chosen yet.
+    expect(screen.getByRole("button", { name: "Confirmer la commande" })).toBeDisabled();
+
+    await user.selectOptions(screen.getByLabelText("Zone de livraison"), "cocody");
+    expect(screen.getByText(/Commande minimum pour Cocody/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmer la commande" })).toBeDisabled();
+
+    await user.selectOptions(screen.getByLabelText("Zone de livraison"), "plateau");
+    expect(screen.getByText(/Livraison : 1500.00 XOF/)).toBeInTheDocument();
+    expect(screen.getByText(/Total : 4000.00 XOF/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmer la commande" })).toBeEnabled();
+  });
+
+  it("sends a chosen time as the shop's wall-clock date and time, never as a browser instant", async () => {
+    const user = userEvent.setup();
+    renderCheckout({ reception: { ...reception, fulfillmentModes: ["pickup"] } });
+
+    await user.click(screen.getByRole("radio", { name: "Choisir une heure" }));
+    const date = screen.getByLabelText("Date souhaitée") as HTMLInputElement;
+    await user.type(screen.getByLabelText("Heure souhaitée"), "12:30");
+    await user.type(screen.getByLabelText("Adresse e-mail"), "kofi@client.ci");
+    await user.click(screen.getByRole("button", { name: "Confirmer la commande" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/public/maquis/orders",
+        expect.objectContaining({ requestedFor: { date: date.value, time: "12:30" } }),
+      ),
+    );
   });
 });

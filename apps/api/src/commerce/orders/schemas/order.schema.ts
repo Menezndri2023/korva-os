@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import type { OrderSource, OrderStatus } from '@korva/types';
-import { ORDER_SOURCES, ORDER_STATUSES } from '@korva/types';
+import type { FulfillmentMode, OrderSource, OrderStatus } from '@korva/types';
+import { FULFILLMENT_MODES, ORDER_SOURCES, ORDER_STATUSES } from '@korva/types';
 import { idToJson } from '../../../core/mongoose/schema-options';
 import { LineItem, LineItemSchema } from '../../../shared/line-item.schema';
 
@@ -93,6 +93,19 @@ export class Order {
 
   @Prop()
   notes?: string;
+
+  /** See Order.fulfillmentMode in @korva/types. */
+  @Prop({ type: String, enum: FULFILLMENT_MODES })
+  fulfillmentMode?: FulfillmentMode;
+
+  @Prop()
+  deliveryZoneName?: string;
+
+  @Prop()
+  requestedFor?: Date;
+
+  @Prop()
+  tableLabel?: string;
 }
 
 export const OrderSchema = SchemaFactory.createForClass(Order);

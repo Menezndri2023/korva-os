@@ -64,6 +64,7 @@ import {
 import { Badge, Button, Dialog, Input, Select } from "@korva/ui";
 import type { BadgeVariant } from "@korva/ui";
 import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
+import { OrderReceptionSettings } from "@/components/order-reception-settings";
 import { formatCurrency } from "@/lib/analytics-format";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthStore } from "@/lib/auth-store";
@@ -1161,6 +1162,10 @@ export default function SettingsPage() {
           previewPalette={orgEditOpen ? watchedStorefrontPalette : undefined}
           previewFontPairing={orgEditOpen ? watchedStorefrontFontPairing : undefined}
         />
+      )}
+
+      {organization?.enabledModules.includes("commerce") && (
+        <OrderReceptionSettings key={organization.id} organization={organization} />
       )}
 
       <section className="rounded-lg border border-border bg-surface p-6">

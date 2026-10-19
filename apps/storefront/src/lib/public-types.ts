@@ -1,6 +1,8 @@
 import type {
   BookingStatus,
+  DeliveryZone,
   FaqItem,
+  FulfillmentMode,
   GalleryImage,
   LineItem,
   OfferPricing,
@@ -34,6 +36,12 @@ export interface PublicOrganization {
   visibleSections: string[];
   /** Flat shipping rate charged at checkout — undefined means no shipping cost. */
   shippingFlatRate?: number;
+  /** Mirrors Organization's fulfillment settings. `fulfillmentModes` undefined means the shop
+   *  never configured them: the flat rate applies to every order, as before. */
+  fulfillmentModes?: FulfillmentMode[];
+  deliveryZones?: DeliveryZone[];
+  pickupInstructions?: string;
+  orderLeadTimeMinutes?: number;
   /** Resolved storefront visual template/palette/font-pairing — already clamped to the org's
    *  plan server-side. See @/app/[slug]/storefront-client.tsx's `renderTemplate`. */
   storefrontTheme: StorefrontTheme;

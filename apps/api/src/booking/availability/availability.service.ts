@@ -81,7 +81,7 @@ function localDateParts(
  * difference between those two readings IS the UTC offset for that specific date (DST-correct,
  * since it's computed for this exact date rather than a fixed offset).
  */
-function zonedTimeToUtc(
+export function zonedTimeToUtc(
   dateStr: string,
   timeStr: string,
   timeZone: string,

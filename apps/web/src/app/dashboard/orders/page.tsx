@@ -11,7 +11,7 @@ import {
   type CreateOpenOrderInput,
   type CreateOrderInput,
 } from "@korva/validation";
-import type { Contact, Order, Resource } from "@korva/types";
+import { FULFILLMENT_MODE_LABELS, type Contact, type Order, type Resource } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -298,7 +298,14 @@ export default function OrdersPage() {
                   </td>
                   <td className="px-4 py-2 text-text-muted">{contactName(order.contactId)}</td>
                   <td className="px-4 py-2 text-text-muted">{resourceName(order.resourceId)}</td>
-                  <td className="px-4 py-2 text-text-muted">{order.source}</td>
+                  <td className="px-4 py-2 text-text-muted">
+                    {order.source}
+                    {order.fulfillmentMode && (
+                      <span className="block text-xs">
+                        {FULFILLMENT_MODE_LABELS[order.fulfillmentMode]}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-text-muted">
                     {order.total} {order.currency}
                   </td>

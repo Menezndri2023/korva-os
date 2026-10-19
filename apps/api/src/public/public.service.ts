@@ -47,6 +47,7 @@ import {
   type EmailProvider,
 } from '../communication/providers/email-provider.interface';
 import { interpolate } from '../shared/template';
+import { resolveStorefrontFulfillment } from './storefront-fulfillment';
 import { ContactsService } from '../crm/contacts/contacts.service';
 import { LeadsService } from '../crm/leads/leads.service';
 import { NotesService } from '../crm/notes/notes.service';
@@ -215,6 +216,10 @@ export class PublicService {
       enabledModules: organization.enabledModules,
       visibleSections: this.computeVisibleSections(organization),
       shippingFlatRate: organization.shippingFlatRate,
+      fulfillmentModes: organization.fulfillmentModes,
+      deliveryZones: organization.deliveryZones,
+      pickupInstructions: organization.pickupInstructions,
+      orderLeadTimeMinutes: organization.orderLeadTimeMinutes,
       storefrontTheme: this.resolveStorefrontTheme(organization, plan.key),
       acceptedPaymentMethods:
         await this.resolveAvailablePaymentMethods(organization),
@@ -634,10 +639,12 @@ export class PublicService {
       input.contact,
     );
 
-    // Price/description are always re-resolved from the real Offer — never trusted from the public client.
+    // Price/description are always re-resolved from the real Offer — never trusted from the public
+    // client. Only an offer for sale can be ordered: a draft or archived one used to be orderable
+    // by anyone who had its id.
     const offers = await Promise.all(
       input.items.map((item) =>
-        this.offersService.getById(organizationId, item.offerId),
+        this.findActiveOffer(organizationId, item.offerId),
       ),
     );
     const items = input.items.map((item, index) => {
@@ -668,17 +675,11 @@ export class PublicService {
       };
     });
 
-    const address = input.shippingAddress;
-    const shippingAddress =
-      address?.line1 && address.city && address.postalCode && address.country
-        ? {
-            line1: address.line1,
-            line2: address.line2,
-            city: address.city,
-            postalCode: address.postalCode,
-            country: address.country,
-          }
-        : undefined;
+    const fulfillment = resolveStorefrontFulfillment(
+      organization,
+      input,
+      items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
+    );
 
     const order = await this.ordersService.createFromStorefront(
       organizationId,
@@ -688,8 +689,7 @@ export class PublicService {
         currency: input.currency,
         notes: input.notes,
         discountCode: input.discountCode,
-        shippingCost: organization.shippingFlatRate,
-        shippingAddress,
+        ...fulfillment,
       },
     );
 

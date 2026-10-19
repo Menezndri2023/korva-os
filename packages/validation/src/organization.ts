@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   BUSINESS_MODELS,
+  FULFILLMENT_MODES,
   KORVA_MODULES,
   PAYMENT_METHODS,
   STOREFRONT_SECTIONS,
@@ -38,6 +39,13 @@ export const importOrganizationPreviewSchema = z.object({
 export type ImportOrganizationPreviewInput = z.infer<
   typeof importOrganizationPreviewSchema
 >;
+
+const deliveryZoneSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(80),
+  fee: z.number().nonnegative(),
+  minimumOrder: z.number().nonnegative().optional(),
+});
 
 /** e.g. "#1a73e8" or "#fff" — a single storefront accent color, deliberately not a full theme. */
 const hexColorSchema = z
@@ -91,6 +99,13 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   storefrontFontPairing: z.enum(STOREFRONT_FONT_PAIRING_KEYS).optional(),
   /** Flat shipping rate applied to every storefront order at checkout. */
   shippingFlatRate: z.number().nonnegative().optional(),
+  /** Whole-array replace. Must stay non-empty once set: a shop offering no way to receive an
+   *  order cannot take one. */
+  fulfillmentModes: z.array(z.enum(FULFILLMENT_MODES)).min(1).optional(),
+  deliveryZones: z.array(deliveryZoneSchema).max(30).optional(),
+  pickupInstructions: z.string().max(500).optional(),
+  /** Up to a week. */
+  orderLeadTimeMinutes: z.number().int().min(0).max(10080).optional(),
   /** Omit to accept cash only (today's universal default). Must stay non-empty — a storefront
    *  offering no payment method at all isn't a valid checkout configuration. */
   acceptedPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).min(1).optional(),

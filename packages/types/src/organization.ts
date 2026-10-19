@@ -1,3 +1,4 @@
+import type { DeliveryZone, FulfillmentMode } from "./commerce.ts";
 import type { BusinessModel } from "./business-models.ts";
 import type {
   StorefrontFontPairingKey,
@@ -124,6 +125,16 @@ export interface Organization {
   storefrontFontPairing?: StorefrontFontPairingKey;
   /** Flat shipping rate applied to every storefront order at checkout — undefined charges none. */
   shippingFlatRate?: number;
+  /** How storefront orders can be received. Undefined keeps the older behaviour (the flat rate
+   *  above on every order); once set, delivery fees apply to delivery only. */
+  fulfillmentModes?: FulfillmentMode[];
+  /** Delivery areas. When present, a delivery order must name one and pays its fee instead of
+   *  shippingFlatRate. */
+  deliveryZones?: DeliveryZone[];
+  /** Shown to a customer who chooses pickup (address, opening hours, where to ask). */
+  pickupInstructions?: string;
+  /** Minimum time between ordering and a requested pickup/delivery time. */
+  orderLeadTimeMinutes?: number;
   /** Never empty in practice — the schema defaults new organizations to `["cash"]`. See
    *  PAYMENT_METHODS' own doc comment. */
   acceptedPaymentMethods?: PaymentMethod[];

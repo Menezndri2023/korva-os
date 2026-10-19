@@ -11,10 +11,16 @@ import {
   type CreatePublicOrderInput,
   type TrackCartCheckoutStartedInput,
 } from "@korva/validation";
-import type { PaymentMethod } from "@korva/types";
+import { FULFILLMENT_MODE_LABELS, type FulfillmentMode, type PaymentMethod } from "@korva/types";
 import { Button, Dialog, Input, Select } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
-import type { CartLine, PublicOffer, PublicResource, PublicSlots } from "@/lib/public-types";
+import type {
+  CartLine,
+  PublicOffer,
+  PublicOrganization,
+  PublicResource,
+  PublicSlots,
+} from "@/lib/public-types";
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "Espèces / à la livraison ou au retrait",
@@ -275,6 +281,7 @@ export function CheckoutPanel({
   cart,
   currency,
   shippingFlatRate,
+  reception,
   acceptedPaymentMethods,
   customer,
   onClose,
@@ -284,6 +291,12 @@ export function CheckoutPanel({
   cart: CartLine[];
   currency: string;
   shippingFlatRate?: number;
+  /** The shop's fulfillment settings — usually the PublicOrganization itself. No modes means the
+   *  older checkout: flat rate on every order, optional address. */
+  reception?: Pick<
+    PublicOrganization,
+    "fulfillmentModes" | "deliveryZones" | "pickupInstructions" | "orderLeadTimeMinutes"
+  >;
   /** Never empty — see PublicOrganization's own doc comment. A single entry renders no choice
    *  at all (today's exact pre-existing behavior when it's `["cash"]`). */
   acceptedPaymentMethods: PaymentMethod[];
@@ -294,8 +307,29 @@ export function CheckoutPanel({
   onSuccess: (orderNumber: string) => void;
 }) {
   const itemsTotal = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
-  const shippingCost = shippingFlatRate ?? 0;
+  const modes = reception?.fulfillmentModes ?? [];
+  const zones = reception?.deliveryZones ?? [];
+  const configured = modes.length > 0;
+  const [mode, setMode] = useState<FulfillmentMode | undefined>(modes[0]);
+  const [zoneId, setZoneId] = useState("");
+  const [when, setWhen] = useState<"asap" | "later">("asap");
+  const [requestedDate, setRequestedDate] = useState(localToday);
+  const [requestedTime, setRequestedTime] = useState("");
+  const [tableLabel, setTableLabel] = useState("");
+  const zone = zones.find((candidate) => candidate.id === zoneId);
+  // Mirrors resolveStorefrontFulfillment in the API, which stays the authority on the amount.
+  const shippingCost = !configured
+    ? (shippingFlatRate ?? 0)
+    : mode === "delivery"
+      ? zones.length > 0
+        ? (zone?.fee ?? 0)
+        : (shippingFlatRate ?? 0)
+      : 0;
   const total = itemsTotal + shippingCost;
+  const belowMinimum =
+    mode === "delivery" && zone?.minimumOrder != null && itemsTotal < zone.minimumOrder;
+  const needsZone = configured && mode === "delivery" && zones.length > 0 && !zone;
+  const showAddress = !configured || mode === "delivery";
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     acceptedPaymentMethods[0] ?? "cash",
   );
@@ -358,7 +392,18 @@ export function CheckoutPanel({
           phone: values.contact.phone || undefined,
         },
         discountCode: values.discountCode || undefined,
-        shippingAddress: values.shippingAddress,
+        shippingAddress: showAddress ? values.shippingAddress : undefined,
+        ...(configured
+          ? {
+              fulfillmentMode: mode,
+              deliveryZoneId: mode === "delivery" && zone ? zone.id : undefined,
+              requestedFor:
+                when === "later" && requestedTime
+                  ? { date: requestedDate, time: requestedTime }
+                  : undefined,
+              tableLabel: mode === "dine_in" ? tableLabel.trim() || undefined : undefined,
+            }
+          : {}),
       }),
     onSuccess: (order, values) => {
       if (paymentMethod === "online") {
@@ -436,8 +481,107 @@ export function CheckoutPanel({
           error={!!errors.contact?.phone}
         />
 
+        {configured && (
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-xs font-medium text-text-muted">Réception</p>
+            <div role="radiogroup" aria-label="Mode de réception" className="flex flex-wrap gap-3">
+              {modes.map((candidate) => (
+                <label key={candidate} className="flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="radio"
+                    name="fulfillmentMode"
+                    value={candidate}
+                    checked={mode === candidate}
+                    onChange={() => setMode(candidate)}
+                  />
+                  {FULFILLMENT_MODE_LABELS[candidate]}
+                </label>
+              ))}
+            </div>
+
+            {mode === "delivery" && zones.length > 0 && (
+              <Select
+                aria-label="Zone de livraison"
+                value={zoneId}
+                onChange={(e) => setZoneId(e.target.value)}
+                className="w-full"
+              >
+                <option value="">Choisir votre zone</option>
+                {zones.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name} — {candidate.fee.toFixed(2)} {currency}
+                    {candidate.minimumOrder != null
+                      ? ` (minimum ${candidate.minimumOrder.toFixed(2)} ${currency})`
+                      : ""}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {belowMinimum && zone?.minimumOrder != null && (
+              <p className="text-xs text-destructive">
+                Commande minimum pour {zone.name} : {zone.minimumOrder.toFixed(2)} {currency}.
+              </p>
+            )}
+
+            {mode === "pickup" && reception?.pickupInstructions && (
+              <p className="text-xs text-text-muted">{reception.pickupInstructions}</p>
+            )}
+
+            {mode === "dine_in" && (
+              <Input
+                placeholder="Table (optionnel)"
+                aria-label="Table"
+                value={tableLabel}
+                onChange={(e) => setTableLabel(e.target.value)}
+              />
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-text">
+                <input
+                  type="radio"
+                  name="when"
+                  checked={when === "asap"}
+                  onChange={() => setWhen("asap")}
+                />
+                Dès que possible
+              </label>
+              <label className="flex items-center gap-2 text-sm text-text">
+                <input
+                  type="radio"
+                  name="when"
+                  checked={when === "later"}
+                  onChange={() => setWhen("later")}
+                />
+                Choisir une heure
+              </label>
+            </div>
+            {when === "later" && (
+              <div className="flex gap-2">
+                <Input
+                  type="date"
+                  aria-label="Date souhaitée"
+                  value={requestedDate}
+                  min={localToday()}
+                  onChange={(e) => setRequestedDate(e.target.value)}
+                  className="flex-1"
+                />
+                <Input
+                  type="time"
+                  aria-label="Heure souhaitée"
+                  value={requestedTime}
+                  onChange={(e) => setRequestedTime(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {showAddress && (
         <div className="space-y-2 border-t border-border pt-3">
-          <p className="text-xs font-medium text-text-muted">Adresse de livraison (optionnel)</p>
+          <p className="text-xs font-medium text-text-muted">
+            {configured ? "Adresse de livraison" : "Adresse de livraison (optionnel)"}
+          </p>
           <Input
             placeholder="Adresse"
             aria-label="Adresse"
@@ -468,6 +612,7 @@ export function CheckoutPanel({
             {...register("shippingAddress.country")}
           />
         </div>
+        )}
 
         {acceptedPaymentMethods.length > 1 && (
           <div className="space-y-1 border-t border-border pt-3">
@@ -503,7 +648,12 @@ export function CheckoutPanel({
         <Button
           type="submit"
           loading={orderMutation.isPending || payMutation.isPending || redirecting}
-          disabled={cart.length === 0}
+          disabled={
+            cart.length === 0 ||
+            belowMinimum ||
+            needsZone ||
+            (configured && when === "later" && !requestedTime)
+          }
           className="w-full"
         >
           {redirecting

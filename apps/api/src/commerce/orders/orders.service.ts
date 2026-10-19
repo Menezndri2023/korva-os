@@ -9,7 +9,7 @@ import {
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
 import type { CreateOrderInput, LineItemInput } from '@korva/validation';
-import type { Pagination } from '@korva/types';
+import type { FulfillmentMode, Pagination } from '@korva/types';
 import { OrdersRepository, FindOrdersOptions } from './orders.repository';
 import { OrderDocument } from './schemas/order.schema';
 import { CartsRepository } from '../carts/carts.repository';
@@ -696,6 +696,10 @@ export class OrdersService {
         postalCode: string;
         country: string;
       };
+      fulfillmentMode?: FulfillmentMode;
+      deliveryZoneName?: string;
+      requestedFor?: Date;
+      tableLabel?: string;
     },
   ): Promise<OrderDocument> {
     return this.createOrderRecord(organizationId, undefined, {
@@ -707,6 +711,10 @@ export class OrdersService {
       discountCode: input.discountCode,
       shippingCost: input.shippingCost,
       shippingAddress: input.shippingAddress,
+      fulfillmentMode: input.fulfillmentMode,
+      deliveryZoneName: input.deliveryZoneName,
+      requestedFor: input.requestedFor,
+      tableLabel: input.tableLabel,
     });
   }
 
@@ -741,6 +749,10 @@ export class OrdersService {
         postalCode: string;
         country: string;
       };
+      fulfillmentMode?: FulfillmentMode;
+      deliveryZoneName?: string;
+      requestedFor?: Date;
+      tableLabel?: string;
     },
   ): Promise<OrderDocument> {
     const session = await this.connection.startSession();
@@ -794,6 +806,10 @@ export class OrdersService {
             total: totals.total + (input.shippingCost ?? 0),
             shippingCost: input.shippingCost ?? 0,
             shippingAddress: input.shippingAddress,
+            fulfillmentMode: input.fulfillmentMode,
+            deliveryZoneName: input.deliveryZoneName,
+            requestedFor: input.requestedFor,
+            tableLabel: input.tableLabel,
             discountCodeId: reservation
               ? new Types.ObjectId(reservation.discountCodeId)
               : undefined,

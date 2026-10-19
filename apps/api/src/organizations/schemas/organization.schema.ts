@@ -1,8 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import { BUSINESS_MODELS } from '@korva/types';
+import { BUSINESS_MODELS, FULFILLMENT_MODES } from '@korva/types';
 import type {
   BusinessModel,
+  DeliveryZone,
+  FulfillmentMode,
   FaqItem,
   GalleryImage,
   KorvaModule,
@@ -101,6 +103,20 @@ export class Organization {
    *  allowed; a per-method rate table is a fast-follow if a real need for it comes up. */
   @Prop()
   shippingFlatRate?: number;
+
+  /** See Organization.fulfillmentModes in @korva/types. `default: undefined` keeps "never
+   *  configured" distinguishable from an empty array — Mongoose otherwise fills array paths. */
+  @Prop({ type: [String], enum: FULFILLMENT_MODES, default: undefined })
+  fulfillmentModes?: FulfillmentMode[];
+
+  @Prop({ type: [Object], default: undefined })
+  deliveryZones?: DeliveryZone[];
+
+  @Prop()
+  pickupInstructions?: string;
+
+  @Prop({ min: 0 })
+  orderLeadTimeMinutes?: number;
 
   /** Undefined means "cash only" (see PublicService's `?? ['cash']` fallback) — `default:
    *  undefined` opts out of Mongoose's array-path auto-`[]`-init, same reasoning as

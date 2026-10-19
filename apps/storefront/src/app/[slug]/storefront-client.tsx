@@ -205,6 +205,7 @@ export default function StorefrontClient({
           cart={cart}
           currency={organization.currency}
           shippingFlatRate={organization.shippingFlatRate}
+          reception={organization}
           acceptedPaymentMethods={organization.acceptedPaymentMethods}
           customer={isAuthenticated && customer ? customer : undefined}
           onClose={() => setShowCheckout(false)}
