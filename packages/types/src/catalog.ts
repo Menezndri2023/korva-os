@@ -88,7 +88,10 @@ export interface Offer {
    *  when present, the storefront offers ready-made slots of exactly this length and the API
    *  computes a public booking's end from it. Unset keeps the older behaviour (the booking form
    *  asks for a duration). Only meaningful for `booking` offers. */
-  durationMinutes?: number;
+  durationMinutes?: number | null;
+  /** Price before a promotion, shown struck through next to `pricing.amount`. Always higher than
+   *  it (enforced by the API). Unset or null means no promotion is displayed. */
+  compareAtPrice?: number | null;
   createdAt: string;
   updatedAt: string;
 }

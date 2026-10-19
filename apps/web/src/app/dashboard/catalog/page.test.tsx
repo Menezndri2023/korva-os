@@ -187,6 +187,79 @@ describe("CatalogPage — pagination", () => {
     );
   });
 
+  it("shows product fields for a product and hides them for a booking", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    expect(screen.getByPlaceholderText("Référence (SKU)")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Code-barres (EAN/UPC)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ajouter une variante" })).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Type d'offre"), "booking");
+    expect(screen.queryByPlaceholderText("Référence (SKU)")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Code-barres (EAN/UPC)")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ajouter une variante" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Suivre le stock pour cette offre")).not.toBeInTheDocument();
+  });
+
+  it("never sends a product-only value typed before the type was switched", async () => {
+    postMock.mockResolvedValue({ ...offer, id: "offer-4" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Référence (SKU)"), "REF-1");
+    await user.selectOptions(screen.getByLabelText("Type d'offre"), "booking");
+    await user.type(screen.getByPlaceholderText("Nom"), "Massage");
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalled());
+    const payload = postMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(payload.sku).toBeUndefined();
+    expect(payload.variants).toEqual([]);
+  });
+
+  it("creates a product with variants, characteristics and a price before promotion", async () => {
+    postMock.mockResolvedValue({ ...offer, id: "offer-5" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Robe wax");
+    await user.clear(screen.getByLabelText("Prix"));
+    await user.type(screen.getByLabelText("Prix"), "40");
+    await user.type(screen.getByLabelText("Prix avant promotion"), "55");
+
+    await user.click(screen.getByRole("button", { name: "Ajouter une variante" }));
+    await user.type(screen.getByLabelText("Nom de la variante 1"), "M");
+    await user.click(screen.getByRole("button", { name: "Ajouter une variante" }));
+    await user.type(screen.getByLabelText("Nom de la variante 2"), "L");
+    await user.type(screen.getByLabelText("Prix de la variante 2"), "45");
+
+    await user.click(screen.getByRole("button", { name: "Ajouter une caractéristique" }));
+    await user.type(screen.getByLabelText("Caractéristique 1"), "Matière");
+    await user.type(screen.getByLabelText("Valeur de la caractéristique 1"), "Coton");
+
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({
+          name: "Robe wax",
+          pricing: expect.objectContaining({ amount: 40 }),
+          compareAtPrice: 55,
+          variants: [
+            expect.objectContaining({ name: "M" }),
+            expect.objectContaining({ name: "L", priceOverride: 45 }),
+          ],
+          attributes: { Matière: "Coton" },
+        }),
+      ),
+    );
+  });
+
   it("shows each offer's main photo in the list", async () => {
     mockOffersPage([{ ...offer, images: ["https://api.test/u/main.png", "https://api.test/u/2.png"] }]);
     const { container } = renderWithProviders(<CatalogPage />);

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@korva/ui";
-import { formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
@@ -14,6 +13,7 @@ import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
 import { SectionHeading } from "../sections/SectionHeading";
+import { OfferPrice } from "@/templates/sections/OfferPrice";
 
 /** Beauty & wellness, non-medical health, fitness, hospitality, personal services — booking is
  *  the primary call to action everywhere, well above cart/commerce. */
@@ -174,7 +174,7 @@ function ServiceCard({
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>
         {offer.description && <p className={`mt-1 text-sm ${KT.textMuted}`}>{offer.description}</p>}
-        <p className="mt-1 text-sm font-medium">{formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}</p>
+        <p className="mt-1 text-sm font-medium"><OfferPrice offer={offer} /></p>
       </div>
       {primary && onBook && (
         <Button onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>

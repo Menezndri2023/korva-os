@@ -76,6 +76,10 @@ export interface PublicOffer {
   variants: OfferVariant[];
   /** Fixed length of one booking, set by the business — see Offer.durationMinutes. */
   durationMinutes?: number;
+  /** Price before a promotion, always higher than pricing.amount — see Offer.compareAtPrice. */
+  compareAtPrice?: number;
+  /** Characteristics set by the business (matière, origine, équipements...) — Offer.attributes. */
+  attributes?: Record<string, string>;
 }
 
 /** Mirrors PublicService#getOfferReviews exactly. */

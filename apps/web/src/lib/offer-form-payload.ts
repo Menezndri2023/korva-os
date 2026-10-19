@@ -1,0 +1,49 @@
+import type { CreateOfferInput, UpdateOfferInput } from "@korva/validation";
+import {
+  OFFER_TYPE_FIELDS,
+  type BundleItemDraft,
+  type VariantDraft,
+} from "@/components/offer-editors";
+
+/**
+ * The offer payload restricted to what the chosen type uses (OFFER_TYPE_FIELDS).
+ *
+ * react-hook-form keeps a value typed into a field even after that field is hidden, so an owner
+ * who typed a SKU, switched the type to "Réservation" and saved would otherwise store a SKU on a
+ * haircut. On creation a field that does not apply is simply left out; on edit (`clear: true`) it
+ * is cleared, because leaving the key out would keep whatever was stored before the type changed.
+ *
+ * Variants, attributes and bundle items live in the editors' own state rather than in the form,
+ * and are merged in here.
+ */
+export function pruneForType<T extends CreateOfferInput | UpdateOfferInput>(
+  values: T,
+  drafts: {
+    variants: VariantDraft[];
+    attributes: Record<string, string>;
+    bundleItems: BundleItemDraft[];
+  },
+  { clear = false }: { clear?: boolean } = {},
+): T {
+  const fields = OFFER_TYPE_FIELDS[values.type ?? "product"];
+  const gone = clear ? null : undefined;
+  const variants = fields.variants
+    ? drafts.variants
+        .filter((variant) => variant.name.trim() !== "")
+        .map((variant) => ({ ...variant, name: variant.name.trim() }))
+    : [];
+  const bundleItems = fields.bundle ? drafts.bundleItems : [];
+
+  return {
+    ...values,
+    sku: fields.reference ? values.sku : clear ? "" : undefined,
+    barcode: fields.barcode ? values.barcode : clear ? "" : undefined,
+    trackStock: fields.stock ? values.trackStock : false,
+    stockOnHand: fields.stock && variants.length === 0 ? values.stockOnHand : undefined,
+    variants,
+    attributes: fields.attributes ? drafts.attributes : {},
+    isBundle: bundleItems.length > 0,
+    bundleItems,
+    durationMinutes: fields.duration ? values.durationMinutes : gone,
+  };
+}

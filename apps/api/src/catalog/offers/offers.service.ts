@@ -25,6 +25,72 @@ import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
 
+type VariantInput = NonNullable<UpdateOfferInput['variants']>[number];
+
+/** A promotion shows a struck-through "before" price; one that is not above the real price would
+ *  advertise a discount that does not exist. */
+function assertCompareAtPriceHigher(
+  compareAtPrice: number | null | undefined,
+  amount: number,
+): void {
+  if (compareAtPrice != null && compareAtPrice <= amount) {
+    throw new BadRequestException({
+      code: 'COMPARE_AT_PRICE_NOT_HIGHER',
+      message: 'The price before promotion must be higher than the price',
+    });
+  }
+}
+
+/**
+ * Applies an edited variant list onto the stored one WITHOUT reissuing ids.
+ *
+ * `variants` is a whole-array replacement, and Mongoose gives every array entry without an `_id`
+ * a fresh one — so before this, saving an offer re-created all of its variants under new ids,
+ * orphaning the order lines, carts, wishlists and per-warehouse StockLevel rows that pointed at
+ * the old ones. Entries that carry an `id` now keep it.
+ *
+ * They also keep their stored stock: stock moves through adjustStock/recordStockMovement and
+ * order reservations, which leave a ledger entry; a catalogue edit must not silently overwrite a
+ * count. Only a NEW variant takes the stock given with it. A variant left out of the list is
+ * removed, as before.
+ */
+function mergeVariants(current: OfferDocument, input: VariantInput[]) {
+  const stored = new Map(
+    current.variants.map((variant) => [
+      String((variant as unknown as { _id: Types.ObjectId })._id),
+      variant,
+    ]),
+  );
+  const seen = new Set<string>();
+  return input.map((variant) => {
+    if (!variant.id) {
+      return {
+        name: variant.name,
+        sku: variant.sku,
+        barcode: variant.barcode,
+        priceOverride: variant.priceOverride,
+        stockOnHand: variant.stockOnHand,
+      };
+    }
+    const existing = stored.get(variant.id);
+    if (!existing || seen.has(variant.id)) {
+      throw new BadRequestException({
+        code: 'VARIANT_NOT_FOUND',
+        message: `Variant ${variant.id} does not belong to this offer`,
+      });
+    }
+    seen.add(variant.id);
+    return {
+      _id: new Types.ObjectId(variant.id),
+      name: variant.name,
+      sku: variant.sku,
+      barcode: variant.barcode,
+      priceOverride: variant.priceOverride,
+      stockOnHand: existing.stockOnHand,
+    };
+  });
+}
+
 @Injectable()
 export class OffersService {
   constructor(
@@ -43,6 +109,13 @@ export class OffersService {
     userId: string,
     input: CreateOfferInput,
   ): Promise<OfferDocument> {
+    assertCompareAtPriceHigher(input.compareAtPrice, input.pricing.amount);
+    if (input.variants.some((variant) => variant.id)) {
+      throw new BadRequestException({
+        code: 'VARIANT_NOT_FOUND',
+        message: 'A new offer cannot refer to existing variant ids',
+      });
+    }
     const customFields = await this.customFieldsService.validateValues(
       organizationId,
       'offers',
@@ -72,6 +145,7 @@ export class OffersService {
       stockOnHand: input.stockOnHand,
       lowStockThreshold: input.lowStockThreshold,
       durationMinutes: input.durationMinutes,
+      compareAtPrice: input.compareAtPrice,
     });
 
     await this.auditService.record({
@@ -185,12 +259,33 @@ export class OffersService {
           )
         : undefined;
 
+    // Both checks need the stored offer: the price rule may compare a new compare-at price with
+    // the stored price (or the reverse), and variants are merged onto the stored ones.
+    const needsCurrent =
+      input.variants !== undefined ||
+      input.compareAtPrice != null ||
+      input.pricing !== undefined;
+    const current = needsCurrent
+      ? await this.getById(organizationId, id)
+      : undefined;
+    if (current) {
+      assertCompareAtPriceHigher(
+        input.compareAtPrice === undefined
+          ? current.compareAtPrice
+          : input.compareAtPrice,
+        input.pricing?.amount ?? current.pricing.amount,
+      );
+    }
+
     const updated = await this.offersRepository.update(organizationId, id, {
       ...input,
       bundleItems: input.bundleItems?.map((item) => ({
         offerId: new Types.ObjectId(item.offerId),
         quantity: item.quantity,
       })),
+      ...(input.variants !== undefined && current
+        ? { variants: mergeVariants(current, input.variants) }
+        : {}),
       ...(customFields !== undefined ? { customFields } : {}),
     });
     if (!updated) {

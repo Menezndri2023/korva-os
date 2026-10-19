@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card } from "@korva/ui";
-import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
+import { OFFER_TYPE_LABELS } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
@@ -13,6 +13,7 @@ import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
+import { OfferPrice } from "@/templates/sections/OfferPrice";
 
 /** The original, sector-agnostic storefront layout — always available regardless of plan, and
  *  the fallback whenever a plan no longer covers the org's chosen template (see
@@ -170,7 +171,7 @@ function OfferCard({
       </div>
       {offer.description && <p className={`mt-2 text-sm ${KT.textMuted}`}>{offer.description}</p>}
       <p className={`mt-2 text-sm font-medium ${KT.text}`}>
-        {formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}
+        <OfferPrice offer={offer} />
       </p>
       <div className="mt-3 flex gap-2">
         {offer.type === "booking" && bookingEnabled && (

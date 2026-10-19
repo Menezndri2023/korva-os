@@ -9,6 +9,7 @@ import { useCart } from "@/lib/use-cart";
 import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOfferReviewSummary, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "../../commerce-panels";
+import { OfferPrice } from "@/templates/sections/OfferPrice";
 
 export default function OfferDetailClient({ slug, offerId }: { slug: string; offerId: string }) {
   const queryClient = useQueryClient();
@@ -176,7 +177,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
             )}
 
             <p className="mt-3 text-lg font-medium text-text">
-              {formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}
+              <OfferPrice offer={offer} />
               {offer.pricing.taxRate != null && (
                 <span className="ml-1 text-sm font-normal text-text-muted">
                   (TVA {offer.pricing.taxRate}%)
@@ -185,6 +186,17 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
             </p>
 
             {offer.description && <p className="mt-3 text-sm text-text-muted">{offer.description}</p>}
+
+            {offer.attributes && Object.keys(offer.attributes).length > 0 && (
+              <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                {Object.entries(offer.attributes).map(([key, value]) => (
+                  <div key={key} className="contents">
+                    <dt className="text-text-muted">{key}</dt>
+                    <dd className="text-text">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
 
             <div className="mt-4 flex gap-2">
               {offer.type === "booking" && bookingEnabled && (

@@ -25,6 +25,9 @@ export const offerPricingSchema = z.object({
 });
 
 export const offerVariantInputSchema = z.object({
+  /** An existing variant's id, to edit it in place. Without it the variant is new. Keeping ids
+   *  across edits matters: orders, carts, wishlists and per-warehouse stock refer to them. */
+  id: z.string().min(1).optional(),
   name: z.string().min(1).max(120),
   sku: z.string().max(80).optional(),
   barcode: z.string().max(64).optional(),
@@ -64,7 +67,17 @@ export const createOfferSchema = z.object({
   trackStock: z.boolean().default(false),
   stockOnHand: z.number().int().min(0).optional(),
   lowStockThreshold: z.number().int().min(0).optional(),
-  durationMinutes: z.number().int().min(OFFER_MIN_DURATION_MINUTES).max(OFFER_MAX_DURATION_MINUTES).optional(),
+  // null clears the value on update (an omitted key leaves it unchanged).
+  durationMinutes: z
+    .number()
+    .int()
+    .min(OFFER_MIN_DURATION_MINUTES)
+    .max(OFFER_MAX_DURATION_MINUTES)
+    .nullable()
+    .optional(),
+  /** The "before" price shown struck through next to pricing.amount. Must be higher than it —
+   *  checked in OffersService, since an update may change either side alone. */
+  compareAtPrice: z.number().positive().nullable().optional(),
 });
 export type CreateOfferInput = z.infer<typeof createOfferSchema>;
 

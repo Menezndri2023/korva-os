@@ -33,6 +33,15 @@ import { formatCurrency } from "@/lib/analytics-format";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 import { OfferImagesEditor } from "@/components/offer-images-editor";
+import {
+  AttributesEditor,
+  BundleItemsEditor,
+  OFFER_TYPE_FIELDS,
+  VariantsEditor,
+  type BundleItemDraft,
+  type VariantDraft,
+} from "@/components/offer-editors";
+import { pruneForType } from "@/lib/offer-form-payload";
 
 const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
   received: "Réception",
@@ -96,11 +105,29 @@ export default function OfferDetailPage() {
   const trackStock = watch("trackStock");
   const images = watch("images") ?? [];
   const offerType = watch("type");
+  const fields = OFFER_TYPE_FIELDS[offerType ?? "product"];
+  const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
+  const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
+  const [bundleDrafts, setBundleDrafts] = useState<BundleItemDraft[]>([]);
   const [editCustomFields, setEditCustomFields] = useState<CustomFieldValues>({});
 
   function startEdit(offer: Offer) {
     setIsEditing(true);
     setEditCustomFields(offer.customFields ?? {});
+    setVariantDrafts(
+      offer.variants.map((variant) => ({
+        id: variant.id,
+        name: variant.name,
+        sku: variant.sku,
+        barcode: variant.barcode,
+        priceOverride: variant.priceOverride,
+        stockOnHand: variant.stockOnHand,
+      })),
+    );
+    setAttributeDrafts(offer.attributes ?? {});
+    setBundleDrafts(
+      (offer.bundleItems ?? []).map((item) => ({ offerId: item.offerId, quantity: item.quantity })),
+    );
     reset({
       type: offer.type,
       sku: offer.sku,
@@ -113,7 +140,8 @@ export default function OfferDetailPage() {
       trackStock: offer.trackStock,
       stockOnHand: offer.stockOnHand,
       lowStockThreshold: offer.lowStockThreshold,
-      durationMinutes: offer.durationMinutes,
+      durationMinutes: offer.durationMinutes ?? null,
+      compareAtPrice: offer.compareAtPrice ?? null,
     });
   }
   function cancelEdit() {
@@ -285,6 +313,21 @@ export default function OfferDetailPage() {
                   <dd className="mt-0.5">{offer.pricing.taxRate}%</dd>
                 </div>
               )}
+              {offer.compareAtPrice != null && (
+                <div>
+                  <dt className="text-text-muted">Prix avant promotion</dt>
+                  <dd className="mt-0.5 line-through">
+                    {formatCurrency(offer.compareAtPrice, offer.pricing.currency)}
+                  </dd>
+                </div>
+              )}
+              {offer.attributes &&
+                Object.entries(offer.attributes).map(([key, value]) => (
+                  <div key={key}>
+                    <dt className="text-text-muted">{key}</dt>
+                    <dd className="mt-0.5">{value}</dd>
+                  </div>
+                ))}
               {offer.durationMinutes != null && (
                 <div>
                   <dt className="text-text-muted">Durée</dt>
@@ -366,7 +409,18 @@ export default function OfferDetailPage() {
         ) : (
           <form
             onSubmit={handleSubmit((values) =>
-              updateMutation.mutate({ ...values, customFields: editCustomFields }),
+              updateMutation.mutate({
+                ...pruneForType(
+                  values,
+                  {
+                    variants: variantDrafts,
+                    attributes: attributeDrafts,
+                    bundleItems: bundleDrafts,
+                  },
+                  { clear: true },
+                ),
+                customFields: editCustomFields,
+              }),
             )}
             className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
           >
@@ -384,8 +438,6 @@ export default function OfferDetailPage() {
                 </option>
               ))}
             </Select>
-            <Input placeholder="SKU" {...register("sku")} />
-            <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />
             <Input placeholder="Nom" className="col-span-2" {...register("name")} />
             {errors.name && (
               <p className="col-span-2 text-xs text-destructive">{errors.name.message}</p>
@@ -404,6 +456,7 @@ export default function OfferDetailPage() {
               type="number"
               step="0.01"
               placeholder="Prix"
+              aria-label="Prix"
               {...register("pricing.amount", { valueAsNumber: true })}
             />
             <Input placeholder="Devise (EUR)" {...register("pricing.currency")} />
@@ -412,7 +465,23 @@ export default function OfferDetailPage() {
                 {errors.pricing.currency.message}
               </p>
             )}
-            {offerType === "booking" && (
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Prix avant promotion (optionnel)"
+              aria-label="Prix avant promotion"
+              className="col-span-2"
+              {...register("compareAtPrice", {
+                // Emptied on edit means "remove the promotion", hence null rather than undefined.
+                setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
+              })}
+            />
+            {fields.reference && <Input placeholder="Référence (SKU)" {...register("sku")} />}
+            {fields.barcode && (
+              <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />
+            )}
+            {fields.duration && (
               <Input
                 type="number"
                 step="5"
@@ -422,7 +491,8 @@ export default function OfferDetailPage() {
                 placeholder="Durée de la prestation (minutes)"
                 className="col-span-2"
                 {...register("durationMinutes", {
-                  setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+                  setValueAs: (v: string | number | null) =>
+                    v === "" || v == null ? null : Number(v),
                 })}
               />
             )}
@@ -431,11 +501,13 @@ export default function OfferDetailPage() {
                 Durée entre {OFFER_MIN_DURATION_MINUTES} et {OFFER_MAX_DURATION_MINUTES} minutes.
               </p>
             )}
-            <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
-              <input type="checkbox" {...register("trackStock")} />
-              Suivre le stock pour cette offre
-            </label>
-            {trackStock && (
+            {fields.stock && (
+              <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
+                <input type="checkbox" {...register("trackStock")} />
+                Suivre le stock pour cette offre
+              </label>
+            )}
+            {fields.stock && trackStock && variantDrafts.length === 0 && (
               <Input
                 type="number"
                 step="1"
@@ -446,7 +518,7 @@ export default function OfferDetailPage() {
                 })}
               />
             )}
-            {trackStock && (
+            {fields.stock && trackStock && (
               <Input
                 type="number"
                 step="1"
@@ -457,6 +529,23 @@ export default function OfferDetailPage() {
                   setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
                 })}
               />
+            )}
+            {fields.variants && (
+              <VariantsEditor
+                variants={variantDrafts}
+                onChange={setVariantDrafts}
+                trackStock={!!trackStock}
+              />
+            )}
+            {fields.bundle && (
+              <BundleItemsEditor
+                items={bundleDrafts}
+                onChange={setBundleDrafts}
+                excludeOfferId={id}
+              />
+            )}
+            {fields.attributes && (
+              <AttributesEditor attributes={attributeDrafts} onChange={setAttributeDrafts} />
             )}
 
             <CustomFieldsFieldset

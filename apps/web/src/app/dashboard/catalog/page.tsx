@@ -24,6 +24,15 @@ import { useAuthReady } from "@/lib/use-auth-ready";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 import { OfferImagesEditor } from "@/components/offer-images-editor";
+import {
+  AttributesEditor,
+  BundleItemsEditor,
+  OFFER_TYPE_FIELDS,
+  VariantsEditor,
+  type BundleItemDraft,
+  type VariantDraft,
+} from "@/components/offer-editors";
+import { pruneForType } from "@/lib/offer-form-payload";
 
 const TYPE_LABELS: Record<OfferType, string> = {
   product: "Produit",
@@ -102,11 +111,21 @@ export default function CatalogPage() {
       trackStock: false,
     });
     setCreateCustomFields({});
+    setVariantDrafts([]);
+    setAttributeDrafts({});
+    setBundleDrafts([]);
+    setFormKey((key) => key + 1);
     setShowForm(true);
   }
   const trackStock = watch("trackStock");
   const images = watch("images") ?? [];
   const offerType = watch("type");
+  const fields = OFFER_TYPE_FIELDS[offerType ?? "product"];
+  const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
+  const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
+  const [bundleDrafts, setBundleDrafts] = useState<BundleItemDraft[]>([]);
+  // Remounts the attributes editor (which keeps its own rows) each time the form is reopened.
+  const [formKey, setFormKey] = useState(0);
 
   const [createCustomFields, setCreateCustomFields] = useState<CustomFieldValues>({});
   const createMutation = useMutation({
@@ -147,7 +166,14 @@ export default function CatalogPage() {
       {showForm && (
         <form
           onSubmit={handleSubmit((values) =>
-            createMutation.mutate({ ...values, customFields: createCustomFields }),
+            createMutation.mutate({
+              ...pruneForType(values, {
+                variants: variantDrafts,
+                attributes: attributeDrafts,
+                bundleItems: bundleDrafts,
+              }),
+              customFields: createCustomFields,
+            }),
           )}
           // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
           // onSubmit), and Card renders a <div> — same exclusion already documented on the
@@ -155,7 +181,8 @@ export default function CatalogPage() {
           className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
         >
           <select
-            className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            aria-label="Type d'offre"
+            className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             {...register("type")}
           >
             {OFFER_TYPES.map((type) => (
@@ -164,8 +191,6 @@ export default function CatalogPage() {
               </option>
             ))}
           </select>
-          <Input placeholder="SKU" {...register("sku")} />
-          <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />
           <Input placeholder="Nom" className="col-span-2" {...register("name")} />
           {errors.name && <p className="col-span-2 text-xs text-destructive">{errors.name.message}</p>}
           <textarea
@@ -182,13 +207,27 @@ export default function CatalogPage() {
             type="number"
             step="0.01"
             placeholder="Prix"
+            aria-label="Prix"
             {...register("pricing.amount", { valueAsNumber: true })}
           />
           <Input placeholder="Devise (EUR)" {...register("pricing.currency")} />
           {errors.pricing?.currency && (
             <p className="col-span-2 text-xs text-destructive">{errors.pricing.currency.message}</p>
           )}
-          {offerType === "booking" && (
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Prix avant promotion (optionnel)"
+            aria-label="Prix avant promotion"
+            className="col-span-2"
+            {...register("compareAtPrice", {
+              setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+            })}
+          />
+          {fields.reference && <Input placeholder="Référence (SKU)" {...register("sku")} />}
+          {fields.barcode && <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />}
+          {fields.duration && (
             <Input
               type="number"
               step="5"
@@ -207,11 +246,13 @@ export default function CatalogPage() {
               Durée entre {OFFER_MIN_DURATION_MINUTES} et {OFFER_MAX_DURATION_MINUTES} minutes.
             </p>
           )}
-          <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
-            <input type="checkbox" {...register("trackStock")} />
-            Suivre le stock pour cette offre
-          </label>
-          {trackStock && (
+          {fields.stock && (
+            <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
+              <input type="checkbox" {...register("trackStock")} />
+              Suivre le stock pour cette offre
+            </label>
+          )}
+          {fields.stock && trackStock && variantDrafts.length === 0 && (
             <Input
               type="number"
               step="1"
@@ -220,6 +261,23 @@ export default function CatalogPage() {
               {...register("stockOnHand", {
                 setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
               })}
+            />
+          )}
+          {fields.variants && (
+            <VariantsEditor
+              variants={variantDrafts}
+              onChange={setVariantDrafts}
+              trackStock={!!trackStock}
+            />
+          )}
+          {fields.bundle && (
+            <BundleItemsEditor items={bundleDrafts} onChange={setBundleDrafts} />
+          )}
+          {fields.attributes && (
+            <AttributesEditor
+              key={formKey}
+              attributes={attributeDrafts}
+              onChange={setAttributeDrafts}
             />
           )}
 

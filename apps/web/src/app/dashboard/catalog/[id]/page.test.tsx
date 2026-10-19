@@ -173,6 +173,23 @@ describe("OfferDetailPage", () => {
         stockOnHand: undefined,
         lowStockThreshold: undefined,
         customFields: {},
+        compareAtPrice: null,
+        durationMinutes: null,
+        attributes: {},
+        isBundle: false,
+        bundleItems: [],
+        // The existing variant is sent back WITH its id, so the API edits it in place instead of
+        // re-creating it under a new id.
+        variants: [
+          {
+            id: "var-1",
+            name: "Rouge",
+            sku: "CH-1-R",
+            barcode: undefined,
+            priceOverride: 55,
+            stockOnHand: undefined,
+          },
+        ],
       }),
     );
   });

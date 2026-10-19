@@ -8,12 +8,12 @@ import { publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
-import { formatOfferPrice } from "@/lib/offer-labels";
 import { resolveStorefrontStyle } from "@/templates/palette";
 import { StorefrontThemeStyle } from "@/templates/storefront-theme-style";
 import { KT } from "@/templates/kt-classes";
 import { BookingPanel, CheckoutPanel } from "../commerce-panels";
 import { WishlistButton } from "../wishlist-button";
+import { OfferPrice } from "@/templates/sections/OfferPrice";
 
 const PAGE_SIZE = 24;
 const ALL_CATEGORIES = "__all__";
@@ -309,7 +309,7 @@ function CatalogueCard({
           {offer.name}
         </Link>
         <p className={`mt-1 text-sm font-semibold ${KT.accentText}`}>
-          {formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}
+          <OfferPrice offer={offer} />
         </p>
         <div className="mt-2">
           {offer.type === "booking" && bookingEnabled && (

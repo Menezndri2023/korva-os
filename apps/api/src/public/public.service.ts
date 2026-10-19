@@ -365,7 +365,9 @@ export class PublicService {
       categories: offer.categories,
       pricing: offer.pricing,
       variants: offer.variants,
-      durationMinutes: offer.durationMinutes,
+      durationMinutes: offer.durationMinutes ?? undefined,
+      compareAtPrice: offer.compareAtPrice ?? undefined,
+      attributes: offer.attributes,
     };
   }
 

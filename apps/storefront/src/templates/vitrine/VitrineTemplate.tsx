@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@korva/ui";
-import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
+import { OFFER_TYPE_LABELS } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
@@ -14,6 +14,7 @@ import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
 import { SectionHeading } from "../sections/SectionHeading";
+import { OfferPrice } from "@/templates/sections/OfferPrice";
 
 /**
  * Services vitrine — professional services, trades/construction, real estate, digital
@@ -183,7 +184,7 @@ function ServiceRow({
         <p className={`mt-1 text-xs uppercase tracking-wide ${KT.textMuted}`}>{OFFER_TYPE_LABELS[offer.type]}</p>
         {offer.description && <p className={`mt-2 text-sm ${KT.textMuted}`}>{offer.description}</p>}
         <div className="mt-3 flex items-center gap-3">
-          <span className="text-sm font-medium">{formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}</span>
+          <span className="text-sm font-medium"><OfferPrice offer={offer} /></span>
           {offer.type === "booking" && bookingEnabled && (
             <Button variant="secondary" size="sm" onClick={onBook}>Réserver</Button>
           )}

@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@korva/ui";
-import { formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
@@ -13,6 +12,7 @@ import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
+import { OfferPrice } from "@/templates/sections/OfferPrice";
 
 const ALL_CATEGORY = "Tout";
 
@@ -202,7 +202,7 @@ function ProductCard({
           {offer.name}
         </Link>
         <p className={`mt-1 text-base font-semibold ${KT.accentText}`}>
-          {formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}
+          <OfferPrice offer={offer} />
         </p>
         <div className="mt-2">
           {offer.type === "booking" && bookingEnabled && (

@@ -200,6 +200,117 @@ describe('Catalog module (e2e)', () => {
       expect(offer.customFields.material).toBe('cotton');
     });
 
+    it('keeps variant ids and their stock across an edit, adds new ones and removes omitted ones', async () => {
+      // Saving an offer used to re-create every variant under a new id (whole-array $set with no
+      // ids in the input), orphaning orders, carts and per-warehouse stock that referred to them.
+      const createRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Robe',
+          pricing: { amount: 40, currency: 'EUR' },
+          trackStock: true,
+          variants: [
+            { name: 'S', stockOnHand: 4 },
+            { name: 'M', stockOnHand: 7 },
+          ],
+        })
+        .expect(201);
+      const created = asSuccess<{
+        id: string;
+        variants: { id: string; name: string; stockOnHand?: number }[];
+      }>(createRes.body);
+      const [small, medium] = created.variants;
+
+      const updateRes = await request(server)
+        .patch(`/api/v1/offers/${created.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          variants: [
+            // Renamed, and a stock value that must be ignored for an existing variant.
+            { id: medium!.id, name: 'M (38)', stockOnHand: 999 },
+            { name: 'L', stockOnHand: 2 },
+          ],
+        })
+        .expect(200);
+      const updated = asSuccess<{
+        variants: { id: string; name: string; stockOnHand?: number }[];
+      }>(updateRes.body).variants;
+
+      expect(updated).toHaveLength(2);
+      expect(updated[0]).toMatchObject({
+        id: medium!.id,
+        name: 'M (38)',
+        stockOnHand: 7,
+      });
+      expect(updated[1]!.name).toBe('L');
+      expect(updated[1]!.stockOnHand).toBe(2);
+      expect(updated[1]!.id).not.toBe(small!.id);
+      expect(updated.some((variant) => variant.id === small!.id)).toBe(false);
+
+      const foreign = await request(server)
+        .patch(`/api/v1/offers/${created.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ variants: [{ id: small!.id, name: 'S' }] })
+        .expect(400);
+      expect(asError(foreign.body).code).toBe('VARIANT_NOT_FOUND');
+    });
+
+    it('only accepts a price before promotion that is higher than the price, and lets it be cleared', async () => {
+      const lower = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Sac',
+          pricing: { amount: 50, currency: 'EUR' },
+          compareAtPrice: 50,
+        })
+        .expect(400);
+      expect(asError(lower.body).code).toBe('COMPARE_AT_PRICE_NOT_HIGHER');
+
+      const createRes = await request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name: 'Sac',
+          pricing: { amount: 50, currency: 'EUR' },
+          compareAtPrice: 70,
+        })
+        .expect(201);
+      const sac = asSuccess<{ id: string; compareAtPrice?: number | null }>(
+        createRes.body,
+      );
+      expect(sac.compareAtPrice).toBe(70);
+
+      // Raising the price alone above the stored compare-at price is refused too.
+      const raised = await request(server)
+        .patch(`/api/v1/offers/${sac.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ pricing: { amount: 80, currency: 'EUR' } })
+        .expect(400);
+      expect(asError(raised.body).code).toBe('COMPARE_AT_PRICE_NOT_HIGHER');
+
+      const cleared = await request(server)
+        .patch(`/api/v1/offers/${sac.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ compareAtPrice: null })
+        .expect(200);
+      expect(
+        asSuccess<{ compareAtPrice?: number | null }>(cleared.body)
+          .compareAtPrice ?? null,
+      ).toBeNull();
+    });
+
     it('creates a bundle offer referencing another offer, and stores a barcode + free-form attributes (Phase C1)', async () => {
       const componentRes = await request(server)
         .post('/api/v1/offers')

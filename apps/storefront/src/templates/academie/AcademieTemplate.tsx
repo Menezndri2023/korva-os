@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@korva/ui";
-import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
+import { OFFER_TYPE_LABELS } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
@@ -13,6 +13,7 @@ import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
+import { OfferPrice } from "@/templates/sections/OfferPrice";
 
 /** Training/coaching — offers presented as course cards (accent top bar, type badge, price,
  *  enrolment CTA) in a catalog grid, closer to an academy/course-platform look. */
@@ -151,7 +152,7 @@ function CourseCard({
         </span>
         {offer.description && <p className={`mt-2 text-sm ${KT.textMuted}`}>{offer.description}</p>}
         <div className="mt-3 flex items-center justify-between">
-          <span className="font-medium">{formatOfferPrice(offer.pricing.amount, offer.pricing.currency)}</span>
+          <span className="font-medium"><OfferPrice offer={offer} /></span>
           {offer.type === "booking" && bookingEnabled && (
             <Button size="sm" onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>
               S&apos;inscrire
