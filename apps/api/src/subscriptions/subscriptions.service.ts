@@ -3,13 +3,17 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import type { KorvaProduct } from '@korva/types';
 import {
   KORVA_PRODUCTS,
   PRODUCT_MODULES,
+  isCurrencyChargeable,
+  parseChargeableCurrencies,
   resolveEffectiveModules,
 } from '@korva/types';
 import { PlansService } from './plans.service';
@@ -72,6 +76,10 @@ export class SubscriptionsService {
     // IdentityModule is already imported by SubscriptionsModule (EntitlementsService needs it),
     // so this adds no new module edge and no cycle.
     private readonly membershipsService: MembershipsService,
+    // BILLING_CHARGEABLE_CURRENCIES — which currencies the configured Flow A provider can
+    // actually collect. Read through ConfigService rather than process.env because DI genuinely
+    // exists here, unlike storage.constants.ts which runs before Nest's config layer.
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -189,6 +197,31 @@ export class SubscriptionsService {
       planKey,
       await this.organizationCurrency(organizationId),
     );
+
+    // Refused here, before an invoice exists, rather than at the hosted checkout. Flow A resolves
+    // ONE market-independent provider for every tenant, and the configured provider cannot charge
+    // every currency this catalog is priced in (see CHARGEABLE_BILLING_CURRENCIES). Without this,
+    // an owner in France would click through to a payment page and be rejected there by the
+    // provider, with an opaque error and an unpaid invoice already issued in their name.
+    //
+    // Paid tiers only: the free plan involves no provider at all, so an organization in a
+    // currency KORVA cannot yet collect still gets the whole free tier. Restricting the taking of
+    // money, not the use of the product, is the honest shape of this limitation — and it means
+    // DOWNGRADING to free is never blocked, which matters most for an organization whose currency
+    // stopped being chargeable after it subscribed.
+    const chargeable = parseChargeableCurrencies(
+      this.configService.get<string>('BILLING_CHARGEABLE_CURRENCIES'),
+    );
+    if (
+      plan.priceAmount > 0 &&
+      !isCurrencyChargeable(plan.priceCurrency, chargeable)
+    ) {
+      throw new UnprocessableEntityException({
+        code: 'CURRENCY_NOT_CHARGEABLE',
+        message: `KORVA cannot yet collect subscription payments in ${plan.priceCurrency}. Paid plans are available in ${chargeable.join(', ')} for now; the free plan is available everywhere.`,
+        details: { currency: plan.priceCurrency, chargeable },
+      });
+    }
 
     const existing =
       await this.subscriptionsRepository.findForOrganization(organizationId);

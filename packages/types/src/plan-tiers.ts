@@ -165,6 +165,74 @@ export const PLAN_PRICES: Record<BillingCurrency, Record<PlanKey, number>> = {
 };
 
 /**
+ * Which currencies KORVA can ACTUALLY collect a subscription payment in — narrower than
+ * SUPPORTED_BILLING_CURRENCIES, and the distinction is the point: that list is what the catalog
+ * is PRICED in, this is what the configured payment provider can CHARGE.
+ *
+ * DEPLOYMENT CONFIGURATION, NOT A SOURCE CONSTANT. Flow A resolves a SINGLE, market-independent
+ * platform account (see PaymentProviderResolverService), so the answer is a property of whichever
+ * provider that deployment configured — it changes when the provider changes, and two
+ * environments can legitimately differ. Hardcoding it in the catalog would be wrong the first
+ * time either happens. Set `BILLING_CHARGEABLE_CURRENCIES` (comma-separated) in the environment:
+ *
+ *     BILLING_CHARGEABLE_CURRENCIES=XOF,USD
+ *
+ * UNSET MEANS NO KNOWN RESTRICTION — every supported currency is treated as chargeable. That is
+ * deliberately fail-OPEN, unlike METRICS_TOKEN, and for a different reason: unset here restores
+ * the behaviour that existed before this guard, whereas failing closed would refuse every paid
+ * plan on every deployment that had not yet set the variable. The cost of fail-open is the old
+ * failure mode (the provider rejects the currency at checkout); the cost of fail-closed would be
+ * a platform that cannot sell anything.
+ *
+ * Why it exists: as of 2026-10-19 the candidate provider is GeniusPay, whose documented
+ * currencies are XOF, XAF, CDF, USD, KES, RWF, SLE, UGX and ZMW — no EUR, no MAD, no CAD, all
+ * three of which this catalog prices. A tenant billed in one of those has a priced plan nobody
+ * can collect, and without a guard that surfaces when an owner clicks "pay", reaches a hosted
+ * checkout and is rejected there — with an invoice already issued in their name.
+ *
+ * The free plan is never gated on this: it costs nothing, so no provider is involved. An
+ * organization in France uses KORVA fully at the free tier. Restricting the taking of money
+ * rather than the use of the product is the honest shape of the limitation.
+ */
+/** Every currency this catalog actually prices. Derived from PLAN_PRICES rather than imported
+ *  from SUPPORTED_BILLING_CURRENCIES, because the header of this file makes its imports
+ *  type-only to keep a require cycle closed — and because deriving it here means the sellable
+ *  set and the priced set cannot drift apart. `Record<BillingCurrency, ...>` already guarantees
+ *  the keys are exhaustive. */
+function pricedCurrencies(): ReadonlyArray<BillingCurrency> {
+  return Object.keys(PLAN_PRICES) as BillingCurrency[];
+}
+
+export function parseChargeableCurrencies(
+  configured: string | undefined,
+): ReadonlyArray<BillingCurrency> {
+  const raw = (configured ?? "").trim();
+  if (raw === "") return pricedCurrencies();
+
+  const priced = pricedCurrencies() as readonly string[];
+  const parsed = raw
+    .split(",")
+    .map((entry) => entry.trim().toUpperCase())
+    .filter((entry): entry is BillingCurrency => priced.includes(entry));
+
+  // A value that names only currencies this catalog does not price leaves nothing sellable at
+  // all. Treating that as "no restriction" rather than "sell nothing" keeps a typo in an env var
+  // from silently closing the business; the guard's own error message and this catalog are then
+  // still consistent with each other.
+  return parsed.length > 0 ? parsed : pricedCurrencies();
+}
+
+/** Whether KORVA can collect in this currency, given the deployment's configured set. Exact
+ *  match on purpose: a lowercase or unknown code is not chargeable, because guessing here means
+ *  issuing an invoice nobody can pay. */
+export function isCurrencyChargeable(
+  currency: string,
+  chargeable: ReadonlyArray<BillingCurrency>,
+): boolean {
+  return (chargeable as readonly string[]).includes(currency);
+}
+
+/**
  * The billing currency for each country KORVA sells in — the six offered by onboarding's country
  * field, and no others. A mapping for a country nobody can select is unreachable code that rots;
  * adding a country means adding it in both places, which is the point.

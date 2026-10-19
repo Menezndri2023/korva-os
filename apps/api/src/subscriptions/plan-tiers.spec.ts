@@ -1,4 +1,5 @@
 import {
+  BILLABLE_COUNTRIES,
   KORVA_MODULES,
   MODULE_MIN_PLAN,
   PLAN_KEYS,
@@ -7,7 +8,9 @@ import {
   SUPPORTED_BILLING_CURRENCIES,
   COUNTRY_CURRENCY,
   currencyForCountry,
+  isCurrencyChargeable,
   modulesForPlan,
+  parseChargeableCurrencies,
   planMeetsMinimum,
 } from '@korva/types';
 import type { PlanKey } from '@korva/types';
@@ -138,6 +141,85 @@ describe('plan tiers — commercial catalog', () => {
     // An unmapped country must not end up with `undefined` as an organization's currency:
     // a Subscription is bound for good to the currency it was sold in.
     expect(currencyForCountry('ZZ')).toBe('EUR');
+  });
+
+  /**
+   * BILLING_CHARGEABLE_CURRENCIES narrows what the catalog is priced in to what the configured
+   * Flow A provider can actually collect. Flow A resolves ONE market-independent provider for
+   * every tenant, so a currency it cannot charge is a priced plan nobody can pay for — and
+   * without the guard in SubscriptionsService.changePlan that surfaces as an opaque provider
+   * rejection on a hosted checkout, after an invoice has been issued.
+   */
+  describe('currencies KORVA can actually collect in', () => {
+    it('derives its universe from PLAN_PRICES, which must match the billed currencies', () => {
+      // parseChargeableCurrencies reads PLAN_PRICES' keys rather than importing
+      // SUPPORTED_BILLING_CURRENCIES, because plan-tiers.ts keeps its imports type-only to hold
+      // a require cycle closed. That substitution is only safe while the two agree, so the
+      // agreement is asserted here rather than assumed.
+      expect([...Object.keys(PLAN_PRICES)].sort()).toEqual(
+        [...SUPPORTED_BILLING_CURRENCIES].sort(),
+      );
+    });
+
+    it('treats an unset variable as no restriction, not as "sell nothing"', () => {
+      // Fail-open on purpose, unlike METRICS_TOKEN: unset restores the behaviour that existed
+      // before this guard, whereas failing closed would refuse every paid plan on every
+      // deployment that had not set the variable yet.
+      for (const unset of [undefined, '', '   ']) {
+        expect([...parseChargeableCurrencies(unset)].sort()).toEqual(
+          [...SUPPORTED_BILLING_CURRENCIES].sort(),
+        );
+      }
+    });
+
+    it('parses a configured list, tolerating spacing and case', () => {
+      expect(parseChargeableCurrencies('XOF,USD')).toEqual(['XOF', 'USD']);
+      expect(parseChargeableCurrencies(' xof , usd ')).toEqual(['XOF', 'USD']);
+    });
+
+    it('ignores a currency the catalog does not price', () => {
+      // Narrowing to something unpriced would leave the guard and the catalog disagreeing.
+      expect(parseChargeableCurrencies('XOF,BTC,NGN')).toEqual(['XOF']);
+    });
+
+    it('falls back to no restriction when the value names nothing sellable', () => {
+      // A typo that matched nothing would otherwise close the business silently.
+      expect([...parseChargeableCurrencies('BTC,NGN')].sort()).toEqual(
+        [...SUPPORTED_BILLING_CURRENCIES].sort(),
+      );
+    });
+
+    it('matches exactly, so an unexpected code is never assumed chargeable', () => {
+      const chargeable = parseChargeableCurrencies('XOF,USD');
+      expect(isCurrencyChargeable('XOF', chargeable)).toBe(true);
+      expect(isCurrencyChargeable('EUR', chargeable)).toBe(false);
+      expect(isCurrencyChargeable('xof', chargeable)).toBe(false);
+      expect(isCurrencyChargeable('', chargeable)).toBe(false);
+    });
+
+    it('leaves at least one billable country able to buy, for the live configuration', () => {
+      // The failure this catches is total: narrow the set to a currency no country maps to and
+      // every upgrade on the platform is refused while the catalog still advertises prices.
+      // An empty revenue funnel should fail a test, not a quarter.
+      const chargeable = parseChargeableCurrencies('XOF,USD');
+      const reachable = BILLABLE_COUNTRIES.filter((country) =>
+        isCurrencyChargeable(country.currency, chargeable),
+      );
+      expect(reachable.length).toBeGreaterThan(0);
+    });
+
+    it('keeps every tier free of charge in a currency it cannot collect', () => {
+      // The guard only refuses PAID tiers, so this is what makes "the free plan is available
+      // everywhere" true rather than aspirational: a zero price involves no provider at all.
+      const chargeable = parseChargeableCurrencies('XOF,USD');
+      const uncollectable = SUPPORTED_BILLING_CURRENCIES.filter(
+        (currency) => !isCurrencyChargeable(currency, chargeable),
+      );
+      expect(uncollectable.length).toBeGreaterThan(0);
+      for (const currency of uncollectable) {
+        expect(PLAN_PRICES[currency].free).toBe(0);
+      }
+    });
   });
 
   it('keeps PLAN_KEYS ordered from cheapest to dearest', () => {
