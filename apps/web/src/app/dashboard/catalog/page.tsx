@@ -5,7 +5,12 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createOfferSchema, type CreateOfferInput } from "@korva/validation";
+import {
+  createOfferSchema,
+  OFFER_MAX_DURATION_MINUTES,
+  OFFER_MIN_DURATION_MINUTES,
+  type CreateOfferInput,
+} from "@korva/validation";
 import {
   OFFER_TYPES,
   verticalForOrganizationType,
@@ -101,6 +106,7 @@ export default function CatalogPage() {
   }
   const trackStock = watch("trackStock");
   const images = watch("images") ?? [];
+  const offerType = watch("type");
 
   const [createCustomFields, setCreateCustomFields] = useState<CustomFieldValues>({});
   const createMutation = useMutation({
@@ -181,6 +187,25 @@ export default function CatalogPage() {
           <Input placeholder="Devise (EUR)" {...register("pricing.currency")} />
           {errors.pricing?.currency && (
             <p className="col-span-2 text-xs text-destructive">{errors.pricing.currency.message}</p>
+          )}
+          {offerType === "booking" && (
+            <Input
+              type="number"
+              step="5"
+              min={OFFER_MIN_DURATION_MINUTES}
+              max={OFFER_MAX_DURATION_MINUTES}
+              aria-label="Durée de la prestation (minutes)"
+              placeholder="Durée de la prestation (minutes)"
+              className="col-span-2"
+              {...register("durationMinutes", {
+                setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+              })}
+            />
+          )}
+          {errors.durationMinutes && (
+            <p className="col-span-2 text-xs text-destructive">
+              Durée entre {OFFER_MIN_DURATION_MINUTES} et {OFFER_MAX_DURATION_MINUTES} minutes.
+            </p>
           )}
           <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
             <input type="checkbox" {...register("trackStock")} />

@@ -41,6 +41,11 @@ export const bundleItemInputSchema = z.object({
  *  list show. Enforced here so the API refuses an 11th photo, not just the dashboard. */
 export const OFFER_MAX_IMAGES = 10;
 
+/** Bounds of Offer.durationMinutes. The upper bound is a working day, not a calendar day: a
+ *  booking may not cross the organization's local midnight (isWithinWeeklyWindows). */
+export const OFFER_MIN_DURATION_MINUTES = 5;
+export const OFFER_MAX_DURATION_MINUTES = 720;
+
 export const createOfferSchema = z.object({
   type: z.enum(OFFER_TYPES),
   name: z.string().min(1).max(200),
@@ -59,6 +64,7 @@ export const createOfferSchema = z.object({
   trackStock: z.boolean().default(false),
   stockOnHand: z.number().int().min(0).optional(),
   lowStockThreshold: z.number().int().min(0).optional(),
+  durationMinutes: z.number().int().min(OFFER_MIN_DURATION_MINUTES).max(OFFER_MAX_DURATION_MINUTES).optional(),
 });
 export type CreateOfferInput = z.infer<typeof createOfferSchema>;
 

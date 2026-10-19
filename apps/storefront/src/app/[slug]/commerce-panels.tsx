@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   createPublicBookingSchema,
@@ -14,19 +14,35 @@ import {
 import type { PaymentMethod } from "@korva/types";
 import { Button, Dialog, Input, Select } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
-import type { CartLine, PublicAvailability, PublicOffer, PublicResource } from "@/lib/public-types";
+import type { CartLine, PublicOffer, PublicResource, PublicSlots } from "@/lib/public-types";
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "Espèces / à la livraison ou au retrait",
   online: "Paiement en ligne",
 };
 
+/** Lengths a visitor may pick for an offer with no duration of its own. An offer that has one
+ *  (Offer.durationMinutes) never shows this choice — its length is the business's decision. */
 const DURATIONS = [
   { label: "30 min", minutes: 30 },
   { label: "1h", minutes: 60 },
   { label: "1h30", minutes: 90 },
   { label: "2h", minutes: 120 },
 ];
+
+function formatDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} min`;
+  return rest === 0 ? `${hours}h` : `${hours}h${String(rest).padStart(2, "0")}`;
+}
+
+/** Today's date as the visitor's own calendar shows it — `toISOString()` would give the UTC
+ *  date, which is already tomorrow for an evening visitor in Montréal. */
+function localToday(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
 
 // Close control for the two panels below: @korva/ui's Dialog closes on Escape/backdrop click,
 // but (per its own docstring) expects the caller to render any explicit close affordance inside
@@ -55,15 +71,15 @@ export function BookingPanel({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [startTime, setStartTime] = useState("");
-  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [date, setDate] = useState(localToday);
+  const [chosenDuration, setChosenDuration] = useState(60);
+  const fixedDuration = offer.durationMinutes;
 
   const {
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<CreatePublicBookingInput>({
     resolver: zodResolver(createPublicBookingSchema),
@@ -75,31 +91,37 @@ export function BookingPanel({
       contact: { email: "", firstName: "", phone: "" },
     },
   });
-  const resourceId = watch("resourceId");
-
-  // startAt/endAt are the fields the backend actually validates (createPublicBookingSchema
-  // requires full ISO datetimes) — derived here from the friendlier date/time/duration pickers
-  // and kept in sync so handleSubmit validates against the exact same schema the API enforces.
-  useEffect(() => {
-    if (!startTime) return;
-    const startAtDate = new Date(`${date}T${startTime}:00.000Z`);
-    const endAtDate = new Date(startAtDate.getTime() + durationMinutes * 60_000);
-    setValue("startAt", startAtDate.toISOString());
-    setValue("endAt", endAtDate.toISOString());
-  }, [date, startTime, durationMinutes, setValue]);
+  // useWatch rather than watch(): watch() makes the React Compiler skip this whole component.
+  const [resourceId, startAt] = useWatch({ control, name: ["resourceId", "startAt"] });
 
   const resourcesQuery = useQuery({
     queryKey: ["public-resources", slug],
     queryFn: () => publicApiClient.get<PublicResource[]>(`/public/${slug}/resources`),
   });
-  const availabilityQuery = useQuery({
-    queryKey: ["public-availability", slug, resourceId, date],
+
+  // Slots come from the API, already expressed in the business's own timezone. The panel used to
+  // build startAt from the typed hour as `${date}T${time}:00.000Z` — UTC — so a 14:00 booking in
+  // a Paris salon landed at 16:00, and the visitor also chose how long a fixed service lasted.
+  const durationParam = fixedDuration ? "" : `&durationMinutes=${chosenDuration}`;
+  const slotsQuery = useQuery({
+    queryKey: ["public-slots", slug, offer.id, resourceId, date, fixedDuration ?? chosenDuration],
     queryFn: () =>
-      publicApiClient.get<PublicAvailability>(
-        `/public/${slug}/availability?resourceId=${resourceId}&date=${date}`,
+      publicApiClient.get<PublicSlots>(
+        `/public/${slug}/slots?resourceId=${resourceId}&offerId=${offer.id}&date=${date}${durationParam}`,
       ),
-    enabled: !!resourceId,
+    enabled: !!resourceId && !!date,
   });
+
+  // Any change to what the slots depend on invalidates the one already picked.
+  useEffect(() => {
+    setValue("startAt", "");
+    setValue("endAt", "");
+  }, [resourceId, date, chosenDuration, setValue]);
+
+  function pickSlot(slot: { startAt: string; endAt: string }) {
+    setValue("startAt", slot.startAt);
+    setValue("endAt", slot.endAt);
+  }
 
   const bookMutation = useMutation({
     mutationFn: (values: CreatePublicBookingInput) =>
@@ -145,57 +167,70 @@ export function BookingPanel({
           {errors.resourceId && <p className="mt-1 text-xs text-destructive">{errors.resourceId.message}</p>}
         </div>
 
-        <Input
-          type="date"
-          aria-label="Date de réservation"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="w-full"
-        />
+        <div className="flex gap-2">
+          <Input
+            type="date"
+            aria-label="Date de réservation"
+            value={date}
+            min={localToday()}
+            onChange={(e) => setDate(e.target.value)}
+            className="flex-1"
+          />
+          {fixedDuration ? (
+            <p className="self-center text-xs text-text-muted">Durée : {formatDuration(fixedDuration)}</p>
+          ) : (
+            <Select
+              aria-label="Durée"
+              value={chosenDuration}
+              onChange={(e) => setChosenDuration(Number(e.target.value))}
+            >
+              {DURATIONS.map((d) => (
+                <option key={d.minutes} value={d.minutes}>
+                  {d.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </div>
 
         {resourceId && (
-          <div className="text-xs text-text-muted">
-            {availabilityQuery.isLoading && <p>Chargement des créneaux...</p>}
-            {availabilityQuery.isError && (
-              <p className="text-destructive">
-                Impossible de charger les disponibilités.{" "}
-                <button type="button" onClick={() => availabilityQuery.refetch()} className="underline">
+          <div>
+            {slotsQuery.isLoading && <p className="text-xs text-text-muted">Chargement des créneaux...</p>}
+            {slotsQuery.isError && (
+              <p className="text-xs text-destructive">
+                Impossible de charger les créneaux.{" "}
+                <button type="button" onClick={() => slotsQuery.refetch()} className="underline">
                   Réessayer
                 </button>
               </p>
             )}
-            {availabilityQuery.data &&
-              (availabilityQuery.data.windows.length ? (
-                <p>
-                  Horaires :{" "}
-                  {availabilityQuery.data.windows.map((w) => `${w.startTime}–${w.endTime}`).join(", ")}
-                </p>
+            {slotsQuery.data &&
+              (slotsQuery.data.slots.length ? (
+                <div role="group" aria-label="Créneaux disponibles" className="flex flex-wrap gap-2">
+                  {slotsQuery.data.slots.map((slot) => {
+                    const selected = slot.startAt === startAt;
+                    return (
+                      <button
+                        key={slot.startAt}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => pickSlot(slot)}
+                        className={`rounded-md border px-3 py-1.5 text-xs ${
+                          selected
+                            ? "border-text bg-text text-surface"
+                            : "border-border-input text-text hover:bg-surface-muted"
+                        }`}
+                      >
+                        {slot.time}
+                      </button>
+                    );
+                  })}
+                </div>
               ) : (
-                <p>Aucun créneau ce jour-là.</p>
+                <p className="text-xs text-text-muted">Aucun créneau disponible ce jour-là.</p>
               ))}
           </div>
         )}
-
-        <div className="flex gap-2">
-          <Input
-            type="time"
-            aria-label="Heure de début"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            className="flex-1"
-          />
-          <Select
-            aria-label="Durée"
-            value={durationMinutes}
-            onChange={(e) => setDurationMinutes(Number(e.target.value))}
-          >
-            {DURATIONS.map((d) => (
-              <option key={d.minutes} value={d.minutes}>
-                {d.label}
-              </option>
-            ))}
-          </Select>
-        </div>
 
         <Input
           placeholder="Prénom"
@@ -227,7 +262,7 @@ export function BookingPanel({
             {bookMutation.error instanceof PublicApiError ? bookMutation.error.message : "Erreur"}
           </p>
         )}
-        <Button type="submit" loading={bookMutation.isPending} disabled={!startTime} className="w-full">
+        <Button type="submit" loading={bookMutation.isPending} disabled={!startAt} className="w-full">
           {bookMutation.isPending ? "Envoi..." : "Confirmer la réservation"}
         </Button>
       </form>

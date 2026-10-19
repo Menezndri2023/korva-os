@@ -165,6 +165,28 @@ describe("CatalogPage — pagination", () => {
     );
   });
 
+  it("asks for a duration only for a booking offer, and sends it", async () => {
+    // Without it the storefront asked the customer how long a "Coupe femme" should last.
+    postMock.mockResolvedValue({ ...offer, id: "offer-3" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    expect(screen.queryByLabelText("Durée de la prestation (minutes)")).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByDisplayValue("Produit"), "booking");
+    await user.type(screen.getByPlaceholderText("Nom"), "Coupe femme");
+    await user.type(screen.getByLabelText("Durée de la prestation (minutes)"), "45");
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({ type: "booking", durationMinutes: 45 }),
+      ),
+    );
+  });
+
   it("shows each offer's main photo in the list", async () => {
     mockOffersPage([{ ...offer, images: ["https://api.test/u/main.png", "https://api.test/u/2.png"] }]);
     const { container } = renderWithProviders(<CatalogPage />);

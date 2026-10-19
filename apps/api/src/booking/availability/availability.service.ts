@@ -18,6 +18,14 @@ function timeToMinutes(time: string): number {
   return (hours ?? 0) * 60 + (minutes ?? 0);
 }
 
+function minutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/** Spacing between the start times getDaySlots offers. See its doc comment. */
+const SLOT_STEP_MINUTES = 30;
+
 const WEEKDAY_TO_INDEX: Record<string, number> = {
   Sun: 0,
   Mon: 1,
@@ -269,5 +277,87 @@ export class AvailabilityService {
       bookings,
       capacity: resource.capacity,
     };
+  }
+
+  /**
+   * The start times a customer can actually book on `date` (a calendar day in the organization's
+   * own timezone) for a booking lasting `durationMinutes`, as absolute instants plus their local
+   * "HH:mm" label.
+   *
+   * Exists so the storefront never does timezone arithmetic: it used to build `startAt` from the
+   * typed hour as if it were UTC, which booked a 14:00 Paris appointment at 16:00. Every rule here
+   * mirrors assertSlotAvailable — same window check, same blocked-slot check, same capacity count
+   * — so a slot offered here is one create() accepts, barring a race with another customer, which
+   * create() still guards against inside its transaction.
+   *
+   * Candidates start on each window's opening time and step by SLOT_STEP_MINUTES (or by the
+   * duration itself when it is shorter), which keeps a 9:00-19:00 day to about twenty choices.
+   * A resource with no weekly hours is bookable all day, matching isWithinWeeklyWindows.
+   */
+  async getDaySlots(
+    organizationId: string,
+    resourceId: string,
+    date: string,
+    durationMinutes: number,
+    now: Date = new Date(),
+  ): Promise<{ startAt: string; endAt: string; time: string }[]> {
+    const resource = await this.resourcesRepository.findById(
+      organizationId,
+      resourceId,
+    );
+    if (!resource) {
+      throw new NotFoundException({
+        code: 'RESOURCE_NOT_FOUND',
+        message: 'Resource not found',
+      });
+    }
+    if (!resource.active) return [];
+    const { timezone } =
+      await this.organizationsService.getById(organizationId);
+
+    const dayStart = zonedTimeToUtc(date, '00:00', timezone);
+    const dayEnd = zonedTimeToUtc(date, '23:59', timezone);
+    const dayOfWeek = localDateParts(dayStart, timezone).dayOfWeek;
+    const windows =
+      resource.weeklyAvailability.length === 0
+        ? [{ startTime: '00:00', endTime: '23:59' }]
+        : resource.weeklyAvailability.filter((w) => w.dayOfWeek === dayOfWeek);
+
+    const bookings = await this.bookingsRepository.findForResourceOnDay(
+      organizationId,
+      resourceId,
+      dayStart,
+      dayEnd,
+    );
+    const step = Math.min(SLOT_STEP_MINUTES, durationMinutes);
+    const slots: { startAt: string; endAt: string; time: string }[] = [];
+
+    for (const window of windows) {
+      const open = timeToMinutes(window.startTime);
+      const close = timeToMinutes(window.endTime);
+      for (
+        let minute = open;
+        minute + durationMinutes <= close;
+        minute += step
+      ) {
+        const time = minutesToTime(minute);
+        const startAt = zonedTimeToUtc(date, time, timezone);
+        const endAt = new Date(startAt.getTime() + durationMinutes * 60_000);
+        if (startAt <= now) continue;
+        if (!isWithinWeeklyWindows(resource, startAt, endAt, timezone))
+          continue;
+        if (overlapsBlockedSlot(resource, startAt, endAt)) continue;
+        const overlapping = bookings.filter(
+          (b) => b.startAt < endAt && startAt < b.endAt,
+        ).length;
+        if (overlapping >= resource.capacity) continue;
+        slots.push({
+          startAt: startAt.toISOString(),
+          endAt: endAt.toISOString(),
+          time,
+        });
+      }
+    }
+    return slots.sort((a, b) => a.startAt.localeCompare(b.startAt));
   }
 }

@@ -84,6 +84,11 @@ export interface Offer {
    *  exactly 0 (which always alerts regardless of this field). Unset means no low-stock alert
    *  beyond the zero case. Applies per-variant when the offer has variants. */
   lowStockThreshold?: number;
+  /** How long one booking of this offer lasts. Set by the business, never chosen by its customer:
+   *  when present, the storefront offers ready-made slots of exactly this length and the API
+   *  computes a public booking's end from it. Unset keeps the older behaviour (the booking form
+   *  asks for a duration). Only meaningful for `booking` offers. */
+  durationMinutes?: number;
   createdAt: string;
   updatedAt: string;
 }

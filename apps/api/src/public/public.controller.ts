@@ -17,6 +17,7 @@ import {
   createPublicOrderSchema,
   listPublicOffersQuerySchema,
   publicAvailabilityQuerySchema,
+  publicSlotsQuerySchema,
   publicOfferReviewsQuerySchema,
   resolveDomainQuerySchema,
   searchPublicOffersQuerySchema,
@@ -28,6 +29,7 @@ import {
   type DomainAllowedQuery,
   type ListPublicOffersQuery,
   type PublicAvailabilityQuery,
+  type PublicSlotsQuery,
   type PublicOfferReviewsQuery,
   type ResolveDomainQuery,
   type SearchPublicOffersQuery,
@@ -200,6 +202,15 @@ export class PublicController {
       query.resourceId,
       query.date,
     );
+  }
+
+  @Get('slots')
+  getSlots(
+    @Param('organizationSlug') slug: string,
+    @Query(new ZodValidationPipe(publicSlotsQuerySchema))
+    query: PublicSlotsQuery,
+  ) {
+    return this.publicService.getSlots(slug, query);
   }
 
   @Throttle(PUBLIC_BOOKING_THROTTLE)

@@ -71,6 +71,7 @@ export class OffersService {
       trackStock: input.trackStock,
       stockOnHand: input.stockOnHand,
       lowStockThreshold: input.lowStockThreshold,
+      durationMinutes: input.durationMinutes,
     });
 
     await this.auditService.record({

@@ -139,6 +139,10 @@ export class Offer {
   /** See Offer.lowStockThreshold in @korva/types for the field-level rationale. */
   @Prop({ min: 0 })
   lowStockThreshold?: number;
+
+  /** See Offer.durationMinutes in @korva/types. */
+  @Prop({ min: 1 })
+  durationMinutes?: number;
 }
 
 export const OfferSchema = SchemaFactory.createForClass(Offer);

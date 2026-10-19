@@ -21,6 +21,7 @@ import {
 } from '@korva/types';
 import type {
   CreatePublicBookingInput,
+  PublicSlotsQuery,
   CreatePublicLeadInput,
   CreatePublicOrderInput,
   ListPublicOffersQuery,
@@ -58,6 +59,10 @@ import {
   Contact,
   ContactDocument,
 } from '../crm/contacts/schemas/contact.schema';
+
+/** Slot length offered for an offer with no duration of its own when the visitor has not picked
+ *  one — the booking form's own default before durations moved onto the offer. */
+const DEFAULT_SLOT_DURATION_MINUTES = 60;
 
 /**
  * Same generic 404 for every reason a lookup can fail: unknown order/booking number, an
@@ -360,6 +365,7 @@ export class PublicService {
       categories: offer.categories,
       pricing: offer.pricing,
       variants: offer.variants,
+      durationMinutes: offer.durationMinutes,
     };
   }
 
@@ -419,13 +425,18 @@ export class PublicService {
   async getOffer(slug: string, offerId: string) {
     const organization = await this.resolveOrganization(slug);
     this.assertModuleEnabled(organization, 'catalog');
+    return this.toPublicOffer(
+      await this.findActiveOffer(organization.id as string, offerId),
+    );
+  }
 
+  private async findActiveOffer(
+    organizationId: string,
+    offerId: string,
+  ): Promise<OfferDocument> {
     let offer: OfferDocument;
     try {
-      offer = await this.offersService.getById(
-        organization.id as string,
-        offerId,
-      );
+      offer = await this.offersService.getById(organizationId, offerId);
     } catch {
       throw new NotFoundException({
         code: 'OFFER_NOT_FOUND',
@@ -438,7 +449,7 @@ export class PublicService {
         message: 'Offer not found',
       });
     }
-    return this.toPublicOffer(offer);
+    return offer;
   }
 
   /** Reuses getOffer's own existence/active/module checks so a review summary can never leak
@@ -511,10 +522,44 @@ export class PublicService {
     };
   }
 
+  /**
+   * Bookable start times for one offer on one resource and day — see
+   * AvailabilityService#getDaySlots. The offer's own duration wins over the one in the query.
+   */
+  async getSlots(slug: string, query: PublicSlotsQuery) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'booking');
+    const organizationId = organization.id as string;
+    const offer = await this.findActiveOffer(organizationId, query.offerId);
+    const durationMinutes =
+      offer.durationMinutes ??
+      query.durationMinutes ??
+      DEFAULT_SLOT_DURATION_MINUTES;
+
+    return {
+      date: query.date,
+      durationMinutes,
+      slots: await this.availabilityService.getDaySlots(
+        organizationId,
+        query.resourceId,
+        query.date,
+        durationMinutes,
+      ),
+    };
+  }
+
   async createBooking(slug: string, input: CreatePublicBookingInput) {
     const organization = await this.resolveOrganization(slug);
     this.assertModuleEnabled(organization, 'booking');
     const organizationId = organization.id as string;
+    const offer = await this.findActiveOffer(organizationId, input.offerId);
+    // A fixed-length offer's end is the business's decision, not the customer's: whatever endAt
+    // the public client sends is replaced, so a 45-minute service can never be booked for 15.
+    const endAt = offer.durationMinutes
+      ? new Date(
+          new Date(input.startAt).getTime() + offer.durationMinutes * 60_000,
+        ).toISOString()
+      : input.endAt;
 
     const contact = await this.contactsService.findOrCreateByEmail(
       organizationId,
@@ -527,7 +572,7 @@ export class PublicService {
         resourceId: input.resourceId,
         offerId: input.offerId,
         startAt: input.startAt,
-        endAt: input.endAt,
+        endAt,
         contactId: contact.id as string,
         notes: input.notes,
       },

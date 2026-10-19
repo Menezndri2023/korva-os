@@ -7,6 +7,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  OFFER_MAX_DURATION_MINUTES,
+  OFFER_MIN_DURATION_MINUTES,
   recordStockMovementSchema,
   updateOfferSchema,
   type RecordStockMovementInput,
@@ -93,6 +95,7 @@ export default function OfferDetailPage() {
   } = useForm<UpdateOfferInput>({ resolver: zodResolver(updateOfferSchema) });
   const trackStock = watch("trackStock");
   const images = watch("images") ?? [];
+  const offerType = watch("type");
   const [editCustomFields, setEditCustomFields] = useState<CustomFieldValues>({});
 
   function startEdit(offer: Offer) {
@@ -110,6 +113,7 @@ export default function OfferDetailPage() {
       trackStock: offer.trackStock,
       stockOnHand: offer.stockOnHand,
       lowStockThreshold: offer.lowStockThreshold,
+      durationMinutes: offer.durationMinutes,
     });
   }
   function cancelEdit() {
@@ -281,6 +285,12 @@ export default function OfferDetailPage() {
                   <dd className="mt-0.5">{offer.pricing.taxRate}%</dd>
                 </div>
               )}
+              {offer.durationMinutes != null && (
+                <div>
+                  <dt className="text-text-muted">Durée</dt>
+                  <dd className="mt-0.5">{offer.durationMinutes} min</dd>
+                </div>
+              )}
               {offer.variants.length === 0 && (
                 <div>
                   <dt className="text-text-muted">Stock</dt>
@@ -400,6 +410,25 @@ export default function OfferDetailPage() {
             {errors.pricing?.currency && (
               <p className="col-span-2 text-xs text-destructive">
                 {errors.pricing.currency.message}
+              </p>
+            )}
+            {offerType === "booking" && (
+              <Input
+                type="number"
+                step="5"
+                min={OFFER_MIN_DURATION_MINUTES}
+                max={OFFER_MAX_DURATION_MINUTES}
+                aria-label="Durée de la prestation (minutes)"
+                placeholder="Durée de la prestation (minutes)"
+                className="col-span-2"
+                {...register("durationMinutes", {
+                  setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+                })}
+              />
+            )}
+            {errors.durationMinutes && (
+              <p className="col-span-2 text-xs text-destructive">
+                Durée entre {OFFER_MIN_DURATION_MINUTES} et {OFFER_MAX_DURATION_MINUTES} minutes.
               </p>
             )}
             <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">

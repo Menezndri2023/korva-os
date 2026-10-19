@@ -41,7 +41,7 @@ function buildService(resource: ResourceDocument, timezone: string) {
     organizationsService,
     resourceModel,
   );
-  return { service, findOverlapping };
+  return { service, findOverlapping, findForResourceOnDay };
 }
 
 describe('AvailabilityService — timezone-aware weekly windows (ADR-004 fix)', () => {
@@ -189,5 +189,196 @@ describe('AvailabilityService.getDayAvailability — local calendar day resoluti
     );
 
     expect(result.windows).toEqual([{ startTime: '09:00', endTime: '17:00' }]);
+  });
+});
+
+describe('AvailabilityService — getDaySlots', () => {
+  // 2026-07-06 is a Monday; Paris is UTC+2 in July, Abidjan is UTC+0 all year.
+  const DATE = '2026-07-06';
+  const MONDAY = new Date('2026-07-06T12:00:00.000Z').getUTCDay();
+  const BEFORE_THAT_DAY = new Date('2026-07-01T00:00:00.000Z');
+
+  function mondayResource(
+    startTime: string,
+    endTime: string,
+    overrides: Partial<ResourceDocument> = {},
+  ) {
+    return buildResource({
+      weeklyAvailability: [{ dayOfWeek: MONDAY, startTime, endTime }],
+      ...overrides,
+    });
+  }
+
+  it("labels slots in the organization's local time and returns the matching UTC instants", async () => {
+    // The bug this exists to fix: the storefront built startAt from the typed hour as if it were
+    // UTC, so a customer choosing 14:00 in a Paris salon was booked at 16:00 Paris.
+    const { service } = buildService(
+      mondayResource('14:00', '16:00'),
+      'Europe/Paris',
+    );
+
+    const slots = await service.getDaySlots(
+      ORG_ID,
+      RESOURCE_ID,
+      DATE,
+      60,
+      BEFORE_THAT_DAY,
+    );
+
+    expect(slots).toEqual([
+      {
+        time: '14:00',
+        startAt: '2026-07-06T12:00:00.000Z',
+        endAt: '2026-07-06T13:00:00.000Z',
+      },
+      {
+        time: '14:30',
+        startAt: '2026-07-06T12:30:00.000Z',
+        endAt: '2026-07-06T13:30:00.000Z',
+      },
+      {
+        time: '15:00',
+        startAt: '2026-07-06T13:00:00.000Z',
+        endAt: '2026-07-06T14:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('is unaffected by the offset in a UTC+0 timezone', async () => {
+    const { service } = buildService(
+      mondayResource('09:00', '10:00'),
+      'Africa/Abidjan',
+    );
+
+    const slots = await service.getDaySlots(
+      ORG_ID,
+      RESOURCE_ID,
+      DATE,
+      60,
+      BEFORE_THAT_DAY,
+    );
+
+    expect(slots).toEqual([
+      {
+        time: '09:00',
+        startAt: '2026-07-06T09:00:00.000Z',
+        endAt: '2026-07-06T10:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('never offers a slot that would run past the window, and steps by the duration when it is shorter than 30 minutes', async () => {
+    const { service } = buildService(
+      mondayResource('09:00', '10:00'),
+      'Africa/Abidjan',
+    );
+
+    const slots = await service.getDaySlots(
+      ORG_ID,
+      RESOURCE_ID,
+      DATE,
+      20,
+      BEFORE_THAT_DAY,
+    );
+
+    expect(slots.map((s) => s.time)).toEqual(['09:00', '09:20', '09:40']);
+  });
+
+  it('drops slots taken up to capacity, and keeps them while a place is left', async () => {
+    const booking = {
+      startAt: new Date('2026-07-06T09:00:00.000Z'),
+      endAt: new Date('2026-07-06T10:00:00.000Z'),
+    };
+    const full = buildService(
+      mondayResource('09:00', '11:00'),
+      'Africa/Abidjan',
+    );
+    full.findForResourceOnDay.mockResolvedValue([booking]);
+    expect(
+      (
+        await full.service.getDaySlots(
+          ORG_ID,
+          RESOURCE_ID,
+          DATE,
+          60,
+          BEFORE_THAT_DAY,
+        )
+      ).map((s) => s.time),
+    ).toEqual(['10:00']);
+
+    const group = buildService(
+      mondayResource('09:00', '11:00', { capacity: 2 }),
+      'Africa/Abidjan',
+    );
+    group.findForResourceOnDay.mockResolvedValue([booking]);
+    expect(
+      (
+        await group.service.getDaySlots(
+          ORG_ID,
+          RESOURCE_ID,
+          DATE,
+          60,
+          BEFORE_THAT_DAY,
+        )
+      ).map((s) => s.time),
+    ).toEqual(['09:00', '09:30', '10:00']);
+  });
+
+  it('drops slots overlapping a blocked period and slots already in the past', async () => {
+    const { service } = buildService(
+      mondayResource('09:00', '12:00', {
+        blockedSlots: [
+          {
+            startAt: new Date('2026-07-06T10:00:00.000Z'),
+            endAt: new Date('2026-07-06T11:00:00.000Z'),
+          },
+        ] as unknown as ResourceDocument['blockedSlots'],
+      }),
+      'Africa/Abidjan',
+    );
+
+    const slots = await service.getDaySlots(
+      ORG_ID,
+      RESOURCE_ID,
+      DATE,
+      60,
+      new Date('2026-07-06T09:15:00.000Z'),
+    );
+
+    expect(slots.map((s) => s.time)).toEqual(['11:00']);
+  });
+
+  it('offers nothing on a day with no opening hours, and nothing for an inactive resource', async () => {
+    const closed = buildService(
+      buildResource({
+        weeklyAvailability: [
+          { dayOfWeek: (MONDAY + 1) % 7, startTime: '09:00', endTime: '18:00' },
+        ],
+      }),
+      'Europe/Paris',
+    );
+    expect(
+      await closed.service.getDaySlots(
+        ORG_ID,
+        RESOURCE_ID,
+        DATE,
+        60,
+        BEFORE_THAT_DAY,
+      ),
+    ).toEqual([]);
+
+    const inactive = buildService(
+      mondayResource('09:00', '18:00', { active: false }),
+      'Europe/Paris',
+    );
+    expect(
+      await inactive.service.getDaySlots(
+        ORG_ID,
+        RESOURCE_ID,
+        DATE,
+        60,
+        BEFORE_THAT_DAY,
+      ),
+    ).toEqual([]);
   });
 });

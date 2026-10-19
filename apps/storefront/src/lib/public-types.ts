@@ -74,6 +74,8 @@ export interface PublicOffer {
   categories: string[];
   pricing: OfferPricing;
   variants: OfferVariant[];
+  /** Fixed length of one booking, set by the business — see Offer.durationMinutes. */
+  durationMinutes?: number;
 }
 
 /** Mirrors PublicService#getOfferReviews exactly. */
@@ -89,6 +91,14 @@ export interface PublicResource {
   name: string;
   type: string;
   capacity?: number;
+}
+
+/** Mirrors PublicService#getSlots exactly. `time` is the slot's start as read on the business's
+ *  own wall clock, computed by the API — the storefront never converts timezones itself. */
+export interface PublicSlots {
+  date: string;
+  durationMinutes: number;
+  slots: { startAt: string; endAt: string; time: string }[];
 }
 
 /** Mirrors PublicService#getAvailability exactly. */

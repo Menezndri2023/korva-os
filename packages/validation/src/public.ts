@@ -38,6 +38,19 @@ export const publicAvailabilityQuerySchema = z.object({
 });
 export type PublicAvailabilityQuery = z.infer<typeof publicAvailabilityQuerySchema>;
 
+/**
+ * GET /public/:slug/slots. `durationMinutes` is only read for an offer that has no duration of
+ * its own (Offer.durationMinutes): an offer's fixed duration always wins, so a customer cannot
+ * book a shorter "Coupe femme" than the salon set.
+ */
+export const publicSlotsQuerySchema = z.object({
+  resourceId: z.string().min(1),
+  offerId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
+  durationMinutes: z.coerce.number().int().min(15).max(480).optional(),
+});
+export type PublicSlotsQuery = z.infer<typeof publicSlotsQuerySchema>;
+
 export const createPublicBookingSchema = z.object({
   resourceId: z.string().min(1),
   offerId: z.string().min(1),
