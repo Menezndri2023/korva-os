@@ -262,6 +262,43 @@ describe("CatalogPage — pagination", () => {
     );
   });
 
+  it("creates a dish with a required single-choice group and a paid extra", async () => {
+    postMock.mockResolvedValue({ ...offer, id: "offer-6" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Garba");
+    await user.click(screen.getByRole("button", { name: "Ajouter un groupe d'options" }));
+    await user.type(screen.getByLabelText("Nom du groupe 1"), "Taille");
+    await user.click(screen.getByRole("checkbox", { name: "Obligatoire" }));
+    await user.type(screen.getByLabelText("Option 1 du groupe 1"), "Petit");
+    await user.click(screen.getByRole("button", { name: "+ Ajouter une option" }));
+    await user.type(screen.getByLabelText("Option 2 du groupe 1"), "Grand");
+    await user.clear(screen.getByLabelText("Supplément de l'option 2 du groupe 1"));
+    await user.type(screen.getByLabelText("Supplément de l'option 2 du groupe 1"), "500");
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({
+          optionGroups: [
+            expect.objectContaining({
+              name: "Taille",
+              required: true,
+              maxChoices: 1,
+              options: [
+                expect.objectContaining({ name: "Petit", priceDelta: 0 }),
+                expect.objectContaining({ name: "Grand", priceDelta: 500 }),
+              ],
+            }),
+          ],
+        }),
+      ),
+    );
+  });
+
   it("shows each offer's main photo in the list", async () => {
     mockOffersPage([{ ...offer, images: ["https://api.test/u/main.png", "https://api.test/u/2.png"] }]);
     const { container } = renderWithProviders(<CatalogPage />);

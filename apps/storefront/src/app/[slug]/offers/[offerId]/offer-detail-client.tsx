@@ -10,6 +10,11 @@ import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOfferReviewSummary, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "../../commerce-panels";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
+import {
+  missingRequiredGroups,
+  OfferOptionsPicker,
+  summarizeOptions,
+} from "@/templates/sections/OfferOptionsPicker";
 
 export default function OfferDetailClient({ slug, offerId }: { slug: string; offerId: string }) {
   const queryClient = useQueryClient();
@@ -35,6 +40,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
   const [activeImage, setActiveImage] = useState(0);
   const [imageFailed, setImageFailed] = useState(false);
   const [selectedVariantId, setSelectedVariantId] = useState("");
+  const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
 
   if (orgQuery.isLoading || (orgQuery.data && offerQuery.isLoading)) {
     return <DetailSkeleton slug={slug} />;
@@ -97,6 +103,8 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
   const images = offer.images;
   const selectedVariant =
     offer.variants.find((v) => v.id === selectedVariantId) ?? offer.variants[0];
+  const optionGroups = offer.optionGroups ?? [];
+  const missingOptions = missingRequiredGroups(optionGroups, selectedOptionIds);
 
   return (
     <div className="min-h-screen bg-app-background">
@@ -198,14 +206,36 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
               </dl>
             )}
 
-            <div className="mt-4 flex gap-2">
+            {optionGroups.length > 0 && offer.type !== "booking" && commerceEnabled && (
+              <OfferOptionsPicker
+                groups={optionGroups}
+                selected={selectedOptionIds}
+                onChange={setSelectedOptionIds}
+                currency={offer.pricing.currency}
+              />
+            )}
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               {offer.type === "booking" && bookingEnabled && (
                 <Button onClick={() => setShowBooking(true)}>Réserver</Button>
               )}
               {offer.type !== "booking" && commerceEnabled && (
-                <Button onClick={() => addToCart(offer, selectedVariant)}>
+                <Button
+                  disabled={missingOptions.length > 0}
+                  onClick={() => {
+                    addToCart(
+                      offer,
+                      selectedVariant,
+                      summarizeOptions(optionGroups, selectedOptionIds),
+                    );
+                    setSelectedOptionIds([]);
+                  }}
+                >
                   Ajouter au panier
                 </Button>
+              )}
+              {missingOptions.length > 0 && offer.type !== "booking" && commerceEnabled && (
+                <p className="text-xs text-text-muted">À choisir : {missingOptions.join(", ")}</p>
               )}
             </div>
 

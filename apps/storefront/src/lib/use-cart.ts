@@ -3,6 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CartLine } from "./public-types";
 
+/** The options chosen for one cart line, as the offer page resolved them. */
+export interface ChosenOptions {
+  ids: string[];
+  labels: string[];
+  priceDelta: number;
+}
+
+/** Identity of a set of options, independent of the order they were picked in. */
+export function optionKey(optionIds: string[] | undefined): string {
+  return optionIds ? [...optionIds].sort().join(",") : "";
+}
+
 function cartStorageKey(slug: string): string {
   return `korva-storefront-cart:${slug}`;
 }
@@ -54,25 +66,28 @@ export function useCart(slug: string) {
     (
       offer: { id: string; name: string; pricing: { amount: number } },
       variant?: { id: string; name: string; priceOverride?: number },
+      options?: ChosenOptions,
     ) => {
+      const optionIds = options?.ids.length ? [...options.ids].sort() : undefined;
+      const sameLine = (line: CartLine) =>
+        line.offerId === offer.id &&
+        line.variantId === variant?.id &&
+        optionKey(line.optionIds) === optionKey(optionIds);
       setCart((prev) => {
-        const existing = prev.find(
-          (line) => line.offerId === offer.id && line.variantId === variant?.id,
-        );
-        if (existing) {
+        if (prev.some(sameLine)) {
           return prev.map((line) =>
-            line.offerId === offer.id && line.variantId === variant?.id
-              ? { ...line, quantity: line.quantity + 1 }
-              : line,
+            sameLine(line) ? { ...line, quantity: line.quantity + 1 } : line,
           );
         }
+        const baseName = variant ? `${offer.name} — ${variant.name}` : offer.name;
         return [
           ...prev,
           {
             offerId: offer.id,
             variantId: variant?.id,
-            name: variant ? `${offer.name} — ${variant.name}` : offer.name,
-            unitPrice: variant?.priceOverride ?? offer.pricing.amount,
+            optionIds,
+            name: options?.labels.length ? `${baseName} (${options.labels.join(", ")})` : baseName,
+            unitPrice: (variant?.priceOverride ?? offer.pricing.amount) + (options?.priceDelta ?? 0),
             quantity: 1,
           },
         ];

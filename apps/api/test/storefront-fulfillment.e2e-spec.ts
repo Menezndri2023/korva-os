@@ -254,6 +254,96 @@ describe('Storefront fulfillment (e2e)', () => {
     });
   });
 
+  it('prices dish options from the stored offer, names them on the order line, and enforces required choices', async () => {
+    const shop = await setupShop('fulfillment-options@korva.test', {
+      fulfillmentModes: ['pickup'],
+    });
+    const invalidGroup = await shop
+      .auth(request(server).post('/api/v1/offers'))
+      .send({
+        type: 'product',
+        name: 'Invalide',
+        status: 'active',
+        pricing: { amount: 1000, currency: 'XOF' },
+        optionGroups: [
+          {
+            id: 'g',
+            name: 'Taille',
+            required: true,
+            maxChoices: 3,
+            options: [{ id: 'a', name: 'A', priceDelta: 0 }],
+          },
+        ],
+      });
+    expect(invalidGroup.status).toBe(400);
+
+    const offerRes = await shop
+      .auth(request(server).post('/api/v1/offers'))
+      .send({
+        type: 'product',
+        name: 'Garba',
+        status: 'active',
+        pricing: { amount: 2500, currency: 'XOF' },
+        optionGroups: [
+          {
+            id: 'size',
+            name: 'Taille',
+            required: true,
+            maxChoices: 1,
+            options: [
+              { id: 'small', name: 'Petit', priceDelta: 0 },
+              { id: 'large', name: 'Grand', priceDelta: 500 },
+            ],
+          },
+          {
+            id: 'extras',
+            name: 'Suppléments',
+            required: false,
+            maxChoices: 2,
+            options: [
+              { id: 'egg', name: 'Œuf', priceDelta: 200 },
+              { id: 'chili', name: 'Piment', priceDelta: 0 },
+            ],
+          },
+        ],
+      })
+      .expect(201);
+    const garbaId = asSuccess<{ id: string }>(offerRes.body).id;
+
+    const publicOffer = asSuccess<{ optionGroups?: unknown[] }>(
+      (
+        await request(server)
+          .get(`/api/v1/public/${shop.slug}/offers/${garbaId}`)
+          .expect(200)
+      ).body,
+    );
+    expect(publicOffer.optionGroups).toHaveLength(2);
+
+    const missing = await placeOrder(shop.slug, {
+      items: [{ offerId: garbaId, quantity: 1 }],
+      fulfillmentMode: 'pickup',
+    }).expect(400);
+    expect(asError(missing.body).code).toBe('INVALID_OFFER_OPTIONS');
+
+    const res = await placeOrder(shop.slug, {
+      items: [{ offerId: garbaId, quantity: 2, optionIds: ['large', 'egg'] }],
+      fulfillmentMode: 'pickup',
+    }).expect(201);
+    const { id } = asSuccess<{ id: string }>(res.body);
+    const order = asSuccess<{
+      total: number;
+      items: { description: string; unitPrice: number }[];
+    }>(
+      (await shop.auth(request(server).get(`/api/v1/orders/${id}`)).expect(200))
+        .body,
+    );
+    expect(order.items[0]).toMatchObject({
+      description: 'Garba (Grand, Œuf)',
+      unitPrice: 3200,
+    });
+    expect(order.total).toBe(6400);
+  });
+
   it('keeps the flat rate on every order for a shop that configured no mode', async () => {
     const shop = await setupShop('fulfillment-legacy@korva.test', {
       shippingFlatRate: 2000,

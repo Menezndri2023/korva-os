@@ -64,6 +64,8 @@ export type CreatePublicBookingInput = z.infer<typeof createPublicBookingSchema>
 const publicOrderLineItemSchema = z.object({
   offerId: z.string().min(1),
   variantId: z.string().min(1).optional(),
+  /** Ids of the chosen OfferOptions. Checked and priced by the API against the stored offer. */
+  optionIds: z.array(z.string().min(1).max(64)).max(50).optional(),
   quantity: z.number().positive(),
 });
 // All fields optional at this layer, even though a "complete" address needs all four — a

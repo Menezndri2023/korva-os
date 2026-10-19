@@ -5,6 +5,7 @@ import type {
   FulfillmentMode,
   GalleryImage,
   LineItem,
+  OfferOptionGroup,
   OfferPricing,
   OfferType,
   OfferVariant,
@@ -88,6 +89,8 @@ export interface PublicOffer {
   compareAtPrice?: number;
   /** Characteristics set by the business (matière, origine, équipements...) — Offer.attributes. */
   attributes?: Record<string, string>;
+  /** Choices made when ordering (cuisson, taille, suppléments) — see OfferOptionGroup. */
+  optionGroups?: OfferOptionGroup[];
 }
 
 /** Mirrors PublicService#getOfferReviews exactly. */
@@ -130,6 +133,9 @@ export interface ContactFormValues {
 export interface CartLine {
   offerId: string;
   variantId?: string;
+  /** Chosen OfferOption ids. Part of the line's identity: a large and a small garba are two
+   *  lines. The API re-checks and re-prices them; `unitPrice` here is only for display. */
+  optionIds?: string[];
   name: string;
   unitPrice: number;
   quantity: number;

@@ -20,6 +20,7 @@ import {
   STOCK_MOVEMENT_TYPES,
   type CustomFieldValues,
   type Offer,
+  type OfferOptionGroup,
   type OfferType,
   type StockLevel,
   type StockMovement,
@@ -37,6 +38,7 @@ import {
   AttributesEditor,
   BundleItemsEditor,
   OFFER_TYPE_FIELDS,
+  OptionGroupsEditor,
   VariantsEditor,
   type BundleItemDraft,
   type VariantDraft,
@@ -109,6 +111,7 @@ export default function OfferDetailPage() {
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
   const [bundleDrafts, setBundleDrafts] = useState<BundleItemDraft[]>([]);
+  const [optionGroupDrafts, setOptionGroupDrafts] = useState<OfferOptionGroup[]>([]);
   const [editCustomFields, setEditCustomFields] = useState<CustomFieldValues>({});
 
   function startEdit(offer: Offer) {
@@ -128,6 +131,7 @@ export default function OfferDetailPage() {
     setBundleDrafts(
       (offer.bundleItems ?? []).map((item) => ({ offerId: item.offerId, quantity: item.quantity })),
     );
+    setOptionGroupDrafts(offer.optionGroups ?? []);
     reset({
       type: offer.type,
       sku: offer.sku,
@@ -416,6 +420,7 @@ export default function OfferDetailPage() {
                     variants: variantDrafts,
                     attributes: attributeDrafts,
                     bundleItems: bundleDrafts,
+                    optionGroups: optionGroupDrafts,
                   },
                   { clear: true },
                 ),
@@ -543,6 +548,9 @@ export default function OfferDetailPage() {
                 onChange={setBundleDrafts}
                 excludeOfferId={id}
               />
+            )}
+            {fields.options && (
+              <OptionGroupsEditor groups={optionGroupDrafts} onChange={setOptionGroupDrafts} />
             )}
             {fields.attributes && (
               <AttributesEditor attributes={attributeDrafts} onChange={setAttributeDrafts} />

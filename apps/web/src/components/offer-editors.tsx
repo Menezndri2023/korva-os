@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Offer, OfferType } from "@korva/types";
+import type { Offer, OfferOptionGroup, OfferType } from "@korva/types";
 import { Button, Input, Select } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -24,14 +24,15 @@ export const OFFER_TYPE_FIELDS: Record<
     attributes: boolean;
     duration: boolean;
     bundle: boolean;
+    options: boolean;
   }
 > = {
-  product: { reference: true, barcode: true, stock: true, variants: true, attributes: true, duration: false, bundle: false },
-  digital_product: { reference: true, barcode: false, stock: false, variants: false, attributes: true, duration: false, bundle: false },
-  service: { reference: false, barcode: false, stock: false, variants: false, attributes: true, duration: false, bundle: false },
-  booking: { reference: false, barcode: false, stock: false, variants: false, attributes: true, duration: true, bundle: false },
-  subscription: { reference: false, barcode: false, stock: false, variants: false, attributes: true, duration: false, bundle: false },
-  package: { reference: true, barcode: false, stock: false, variants: false, attributes: true, duration: false, bundle: true },
+  product: { reference: true, barcode: true, stock: true, variants: true, attributes: true, duration: false, bundle: false, options: true },
+  digital_product: { reference: true, barcode: false, stock: false, variants: false, attributes: true, duration: false, bundle: false, options: false },
+  service: { reference: false, barcode: false, stock: false, variants: false, attributes: true, duration: false, bundle: false, options: false },
+  booking: { reference: false, barcode: false, stock: false, variants: false, attributes: true, duration: true, bundle: false, options: false },
+  subscription: { reference: false, barcode: false, stock: false, variants: false, attributes: true, duration: false, bundle: false, options: false },
+  package: { reference: true, barcode: false, stock: false, variants: false, attributes: true, duration: false, bundle: true, options: true },
 };
 
 const FIELD =
@@ -329,6 +330,165 @@ export function BundleItemsEditor({
         Le pack est vendu à son propre prix. Sa vente ne décompte pas encore le stock des offres
         qu&apos;il contient.
       </p>
+    </fieldset>
+  );
+}
+
+/**
+ * Choices made when ordering this offer (cuisson, taille, suppléments...). Each group is either a
+ * single choice or a multiple choice up to a maximum, and may be required. Prices added by an
+ * option are checked again by the API when the order is placed.
+ */
+export function OptionGroupsEditor({
+  groups,
+  onChange,
+}: {
+  groups: OfferOptionGroup[];
+  onChange: (next: OfferOptionGroup[]) => void;
+}) {
+  function updateGroup(index: number, patch: Partial<OfferOptionGroup>) {
+    onChange(groups.map((group, i) => (i === index ? { ...group, ...patch } : group)));
+  }
+
+  return (
+    <fieldset className="col-span-2 space-y-3">
+      <div className="flex items-center justify-between">
+        <legend className="text-sm font-medium text-text">Options et suppléments</legend>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() =>
+            onChange([
+              ...groups,
+              {
+                id: crypto.randomUUID(),
+                name: "",
+                required: false,
+                maxChoices: 1,
+                options: [{ id: crypto.randomUUID(), name: "", priceDelta: 0 }],
+              },
+            ])
+          }
+        >
+          Ajouter un groupe d&apos;options
+        </Button>
+      </div>
+      {groups.length === 0 && (
+        <p className="text-xs text-text-muted">
+          Par exemple : cuisson, taille, accompagnement, suppléments payants.
+        </p>
+      )}
+      {groups.map((group, groupIndex) => (
+        <div key={group.id} className="space-y-2 rounded-md border border-border p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              aria-label={`Nom du groupe ${groupIndex + 1}`}
+              placeholder="Nom du groupe (ex. Taille)"
+              className={`${FIELD} w-48`}
+              value={group.name}
+              onChange={(e) => updateGroup(groupIndex, { name: e.target.value })}
+            />
+            <label className="flex items-center gap-1 text-xs text-text">
+              <input
+                type="checkbox"
+                checked={group.required}
+                onChange={(e) => updateGroup(groupIndex, { required: e.target.checked })}
+              />
+              Obligatoire
+            </label>
+            <label className="flex items-center gap-1 text-xs text-text">
+              Choix maximum
+              <input
+                aria-label={`Choix maximum du groupe ${groupIndex + 1}`}
+                type="number"
+                min="1"
+                max={group.options.length}
+                className={`${FIELD} w-16`}
+                value={group.maxChoices}
+                onChange={(e) =>
+                  updateGroup(groupIndex, {
+                    maxChoices: Math.min(
+                      Math.max(1, Number(e.target.value) || 1),
+                      group.options.length,
+                    ),
+                  })
+                }
+              />
+            </label>
+            <button
+              type="button"
+              aria-label={`Retirer le groupe ${groupIndex + 1}`}
+              onClick={() => onChange(groups.filter((_, i) => i !== groupIndex))}
+              className="ml-auto text-xs text-destructive hover:underline"
+            >
+              Retirer le groupe
+            </button>
+          </div>
+          <ul className="space-y-1">
+            {group.options.map((option, optionIndex) => (
+              <li key={option.id} className="flex flex-wrap items-center gap-2">
+                <input
+                  aria-label={`Option ${optionIndex + 1} du groupe ${groupIndex + 1}`}
+                  placeholder="Option (ex. Grand)"
+                  className={`${FIELD} w-48`}
+                  value={option.name}
+                  onChange={(e) =>
+                    updateGroup(groupIndex, {
+                      options: group.options.map((o, i) =>
+                        i === optionIndex ? { ...o, name: e.target.value } : o,
+                      ),
+                    })
+                  }
+                />
+                <input
+                  aria-label={`Supplément de l'option ${optionIndex + 1} du groupe ${groupIndex + 1}`}
+                  placeholder="Supplément"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={`${FIELD} w-28`}
+                  value={option.priceDelta}
+                  onChange={(e) =>
+                    updateGroup(groupIndex, {
+                      options: group.options.map((o, i) =>
+                        i === optionIndex ? { ...o, priceDelta: Number(e.target.value) || 0 } : o,
+                      ),
+                    })
+                  }
+                />
+                {group.options.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={`Retirer l'option ${optionIndex + 1} du groupe ${groupIndex + 1}`}
+                    onClick={() => {
+                      const options = group.options.filter((_, i) => i !== optionIndex);
+                      updateGroup(groupIndex, {
+                        options,
+                        maxChoices: Math.min(group.maxChoices, options.length),
+                      });
+                    }}
+                    className="text-xs text-destructive hover:underline"
+                  >
+                    Retirer
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() =>
+              updateGroup(groupIndex, {
+                options: [...group.options, { id: crypto.randomUUID(), name: "", priceDelta: 0 }],
+              })
+            }
+            className="text-xs text-text hover:underline"
+          >
+            + Ajouter une option
+          </button>
+        </div>
+      ))}
     </fieldset>
   );
 }

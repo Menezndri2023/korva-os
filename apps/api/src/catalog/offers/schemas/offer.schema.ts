@@ -1,6 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import type { CustomFieldValues, OfferStatus, OfferType } from '@korva/types';
+import type {
+  CustomFieldValues,
+  OfferOptionGroup,
+  OfferStatus,
+  OfferType,
+} from '@korva/types';
 import { OFFER_STATUSES, OFFER_TYPES } from '@korva/types';
 
 export type OfferDocument = HydratedDocument<Offer>;
@@ -147,6 +152,11 @@ export class Offer {
   /** See Offer.compareAtPrice in @korva/types. Null once cleared. */
   @Prop({ type: Number, min: 0 })
   compareAtPrice?: number | null;
+
+  /** See OfferOptionGroup in @korva/types. Stored as plain objects with client-generated ids;
+   *  `default: undefined` so an offer without options stays without the key. */
+  @Prop({ type: [Object], default: undefined })
+  optionGroups?: OfferOptionGroup[];
 }
 
 export const OfferSchema = SchemaFactory.createForClass(Offer);

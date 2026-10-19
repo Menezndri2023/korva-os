@@ -146,6 +146,7 @@ export class OffersService {
       lowStockThreshold: input.lowStockThreshold,
       durationMinutes: input.durationMinutes,
       compareAtPrice: input.compareAtPrice,
+      optionGroups: input.optionGroups,
     });
 
     await this.auditService.record({

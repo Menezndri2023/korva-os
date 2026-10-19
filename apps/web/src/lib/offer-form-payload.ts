@@ -1,4 +1,5 @@
 import type { CreateOfferInput, UpdateOfferInput } from "@korva/validation";
+import type { OfferOptionGroup } from "@korva/types";
 import {
   OFFER_TYPE_FIELDS,
   type BundleItemDraft,
@@ -22,6 +23,7 @@ export function pruneForType<T extends CreateOfferInput | UpdateOfferInput>(
     variants: VariantDraft[];
     attributes: Record<string, string>;
     bundleItems: BundleItemDraft[];
+    optionGroups?: OfferOptionGroup[];
   },
   { clear = false }: { clear?: boolean } = {},
 ): T {
@@ -45,5 +47,21 @@ export function pruneForType<T extends CreateOfferInput | UpdateOfferInput>(
     isBundle: bundleItems.length > 0,
     bundleItems,
     durationMinutes: fields.duration ? values.durationMinutes : gone,
+    // Groups and options left without a name are dropped, then empty groups with them.
+    optionGroups: fields.options
+      ? (drafts.optionGroups ?? [])
+          .map((group) => ({
+            ...group,
+            name: group.name.trim(),
+            options: group.options
+              .filter((option) => option.name.trim() !== "")
+              .map((option) => ({ ...option, name: option.name.trim() })),
+          }))
+          .filter((group) => group.name !== "" && group.options.length > 0)
+          .map((group) => ({
+            ...group,
+            maxChoices: Math.min(group.maxChoices, group.options.length),
+          }))
+      : [],
   };
 }

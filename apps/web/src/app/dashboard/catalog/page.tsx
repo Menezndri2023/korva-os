@@ -17,6 +17,7 @@ import {
   verticalForOrganizationType,
   type CustomFieldValues,
   type Offer,
+  type OfferOptionGroup,
   type OfferType,
 } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
@@ -29,6 +30,7 @@ import {
   AttributesEditor,
   BundleItemsEditor,
   OFFER_TYPE_FIELDS,
+  OptionGroupsEditor,
   VariantsEditor,
   type BundleItemDraft,
   type VariantDraft,
@@ -123,6 +125,7 @@ export default function CatalogPage() {
     setVariantDrafts([]);
     setAttributeDrafts({});
     setBundleDrafts([]);
+    setOptionGroupDrafts([]);
     setFormKey((key) => key + 1);
     setShowForm(true);
   }
@@ -133,6 +136,7 @@ export default function CatalogPage() {
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
   const [bundleDrafts, setBundleDrafts] = useState<BundleItemDraft[]>([]);
+  const [optionGroupDrafts, setOptionGroupDrafts] = useState<OfferOptionGroup[]>([]);
   // Remounts the attributes editor (which keeps its own rows) each time the form is reopened.
   const [formKey, setFormKey] = useState(0);
 
@@ -180,6 +184,7 @@ export default function CatalogPage() {
                 variants: variantDrafts,
                 attributes: attributeDrafts,
                 bundleItems: bundleDrafts,
+                optionGroups: optionGroupDrafts,
               }),
               customFields: createCustomFields,
             }),
@@ -300,6 +305,9 @@ export default function CatalogPage() {
           )}
           {fields.bundle && (
             <BundleItemsEditor items={bundleDrafts} onChange={setBundleDrafts} />
+          )}
+          {fields.options && (
+            <OptionGroupsEditor groups={optionGroupDrafts} onChange={setOptionGroupDrafts} />
           )}
           {fields.attributes && (
             <AttributesEditor

@@ -32,6 +32,28 @@ export interface OfferVariant {
   stockOnHand?: number;
 }
 
+/** One choice inside an option group — "Grande", "Sans oignon", "Supplément fromage". */
+export interface OfferOption {
+  id: string;
+  name: string;
+  /** Added to the unit price when chosen; 0 for a free choice. Never negative. */
+  priceDelta: number;
+}
+
+/**
+ * A set of choices the customer makes when ordering an offer — cooking, size, extras. Mostly for
+ * restaurants, usable by any shop. `maxChoices` 1 is a single choice (radio buttons); more is a
+ * multiple choice. A `required` group must have at least one choice. Prices and validity are
+ * always re-checked by the API from the stored offer, never taken from the client.
+ */
+export interface OfferOptionGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  maxChoices: number;
+  options: OfferOption[];
+}
+
 export interface Category {
   id: string;
   organizationId: string;
@@ -92,6 +114,8 @@ export interface Offer {
   /** Price before a promotion, shown struck through next to `pricing.amount`. Always higher than
    *  it (enforced by the API). Unset or null means no promotion is displayed. */
   compareAtPrice?: number | null;
+  /** Choices made when ordering — see OfferOptionGroup. Absent means none. */
+  optionGroups?: OfferOptionGroup[];
   createdAt: string;
   updatedAt: string;
 }

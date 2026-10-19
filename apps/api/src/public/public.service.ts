@@ -48,6 +48,7 @@ import {
 } from '../communication/providers/email-provider.interface';
 import { interpolate } from '../shared/template';
 import { resolveStorefrontFulfillment } from './storefront-fulfillment';
+import { resolveChosenOptions } from '../catalog/offers/offer-options';
 import { ContactsService } from '../crm/contacts/contacts.service';
 import { LeadsService } from '../crm/leads/leads.service';
 import { NotesService } from '../crm/notes/notes.service';
@@ -381,6 +382,7 @@ export class PublicService {
       durationMinutes: offer.durationMinutes ?? undefined,
       compareAtPrice: offer.compareAtPrice ?? undefined,
       attributes: offer.attributes,
+      optionGroups: offer.optionGroups,
     };
   }
 
@@ -665,12 +667,19 @@ export class PublicService {
           message: 'Variant not found for this offer',
         });
       }
+      // Options are checked and priced from the stored offer (never from the client), and named
+      // in the description, which is what the order, the invoice and the kitchen ticket show.
+      const options = resolveChosenOptions(offer, item.optionIds);
+      const baseName = variant ? `${offer.name} — ${variant.name}` : offer.name;
       return {
         offerId: item.offerId,
         variantId: item.variantId,
-        description: variant ? `${offer.name} — ${variant.name}` : offer.name,
+        description: options.labels.length
+          ? `${baseName} (${options.labels.join(', ')})`
+          : baseName,
         quantity: item.quantity,
-        unitPrice: variant?.priceOverride ?? offer.pricing.amount,
+        unitPrice:
+          (variant?.priceOverride ?? offer.pricing.amount) + options.priceDelta,
         taxRate: offer.pricing.taxRate,
       };
     });

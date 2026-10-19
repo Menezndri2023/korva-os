@@ -14,6 +14,7 @@ import { KT } from "@/templates/kt-classes";
 import { BookingPanel, CheckoutPanel } from "../commerce-panels";
 import { WishlistButton } from "../wishlist-button";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
+import { useRouter } from "next/navigation";
 
 const PAGE_SIZE = 24;
 const ALL_CATEGORIES = "__all__";
@@ -87,6 +88,8 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
   });
 
   const { cart, addToCart, clearCart } = useCart(slug);
+
+  const router = useRouter();
   const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
   const [bookingOffer, setBookingOffer] = useState<PublicOffer | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -214,7 +217,12 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
                       bookingEnabled={bookingEnabled}
                       commerceEnabled={commerceEnabled}
                       onBook={() => setBookingOffer(offer)}
-                      onAddToCart={() => addToCart(offer)}
+                      onAddToCart={() =>
+                        // Offers with options are chosen on their own page — see storefront-client.
+                        offer.optionGroups?.length
+                          ? router.push(`/${slug}/offers/${offer.id}`)
+                          : addToCart(offer)
+                      }
                     />
                   ))}
                 </div>

@@ -17,6 +17,7 @@ import { TableTemplate } from "@/templates/table/TableTemplate";
 import { BoutiqueTemplate } from "@/templates/boutique/BoutiqueTemplate";
 import { AcademieTemplate } from "@/templates/academie/AcademieTemplate";
 import { SalonTemplate } from "@/templates/salon/SalonTemplate";
+import { useRouter } from "next/navigation";
 
 /**
  * Renders the concrete, statically-named template component for `props.style`'s template key.
@@ -116,6 +117,8 @@ export default function StorefrontClient({
   });
 
   const { cart, addToCart, clearCart } = useCart(slug);
+
+  const router = useRouter();
   const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
   const [bookingOffer, setBookingOffer] = useState<PublicOffer | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -173,7 +176,11 @@ export default function StorefrontClient({
     bookingEnabled,
     commerceEnabled,
     onBook: (offer) => setBookingOffer(offer),
-    onAddToCart: (offer) => addToCart(offer),
+    // An offer with options (cuisson, taille...) cannot be added without its choices: the card's
+    // button opens the offer page, where they are made, instead of adding a choiceless line the
+    // API would refuse at checkout.
+    onAddToCart: (offer) =>
+      offer.optionGroups?.length ? router.push(`/${slug}/offers/${offer.id}`) : addToCart(offer),
     cartCount,
     onOpenCheckout: () => setShowCheckout(true),
     confirmation,

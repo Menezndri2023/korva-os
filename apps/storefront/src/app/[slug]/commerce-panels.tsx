@@ -14,6 +14,7 @@ import {
 import { FULFILLMENT_MODE_LABELS, type FulfillmentMode, type PaymentMethod } from "@korva/types";
 import { Button, Dialog, Input, Select } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
+import { optionKey } from "@/lib/use-cart";
 import type {
   CartLine,
   PublicOffer,
@@ -345,6 +346,7 @@ export function CheckoutPanel({
       items: cart.map((line) => ({
         offerId: line.offerId,
         variantId: line.variantId,
+        optionIds: line.optionIds,
         quantity: line.quantity,
       })),
       currency,
@@ -420,7 +422,7 @@ export function CheckoutPanel({
       <form onSubmit={handleSubmit((values) => orderMutation.mutate(values))} className="space-y-3 text-sm">
         <ul className="divide-y divide-border rounded-md border border-border">
           {cart.map((line) => (
-            <li key={`${line.offerId}:${line.variantId ?? ""}`} className="flex justify-between px-3 py-2">
+            <li key={`${line.offerId}:${line.variantId ?? ""}:${optionKey(line.optionIds)}`} className="flex justify-between px-3 py-2">
               <span>
                 {line.name} × {line.quantity}
               </span>

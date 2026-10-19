@@ -35,6 +35,26 @@ export const offerVariantInputSchema = z.object({
   stockOnHand: z.number().int().min(0).optional(),
 });
 
+const offerOptionSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(80),
+  priceDelta: z.number().nonnegative(),
+});
+
+/** ids are generated client-side (crypto.randomUUID()), like delivery zones. */
+export const offerOptionGroupSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    name: z.string().min(1).max(80),
+    required: z.boolean(),
+    maxChoices: z.number().int().min(1).max(20),
+    options: z.array(offerOptionSchema).min(1).max(20),
+  })
+  .refine((group) => group.maxChoices <= group.options.length, {
+    message: "maxChoices cannot exceed the number of options",
+    path: ["maxChoices"],
+  });
+
 export const bundleItemInputSchema = z.object({
   offerId: z.string().min(1),
   quantity: z.number().int().min(1),
@@ -78,6 +98,7 @@ export const createOfferSchema = z.object({
   /** The "before" price shown struck through next to pricing.amount. Must be higher than it —
    *  checked in OffersService, since an update may change either side alone. */
   compareAtPrice: z.number().positive().nullable().optional(),
+  optionGroups: z.array(offerOptionGroupSchema).max(10).optional(),
 });
 export type CreateOfferInput = z.infer<typeof createOfferSchema>;
 

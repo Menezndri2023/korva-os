@@ -178,6 +178,7 @@ describe("OfferDetailPage", () => {
         attributes: {},
         isBundle: false,
         bundleItems: [],
+        optionGroups: [],
         // The existing variant is sent back WITH its id, so the API edits it in place instead of
         // re-creating it under a new id.
         variants: [
