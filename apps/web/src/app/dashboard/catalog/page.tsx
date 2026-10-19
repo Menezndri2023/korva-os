@@ -18,6 +18,7 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
+import { OfferImagesEditor } from "@/components/offer-images-editor";
 
 const TYPE_LABELS: Record<OfferType, string> = {
   product: "Produit",
@@ -60,6 +61,7 @@ export default function CatalogPage() {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<CreateOfferInput>({
     resolver: zodResolver(createOfferSchema),
@@ -98,6 +100,7 @@ export default function CatalogPage() {
     setShowForm(true);
   }
   const trackStock = watch("trackStock");
+  const images = watch("images") ?? [];
 
   const [createCustomFields, setCreateCustomFields] = useState<CustomFieldValues>({});
   const createMutation = useMutation({
@@ -164,6 +167,10 @@ export default function CatalogPage() {
             className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             {...register("description")}
+          />
+          <OfferImagesEditor
+            images={images}
+            onChange={(next) => setValue("images", next, { shouldDirty: true })}
           />
           <Input
             type="number"
@@ -268,12 +275,26 @@ export default function CatalogPage() {
               {data?.map((offer) => (
                 <tr key={offer.id}>
                   <td className="px-4 py-2 font-medium">
-                    <Link
-                      href={`/dashboard/catalog/${offer.id}`}
-                      className="text-text underline-offset-2 hover:underline"
-                    >
-                      {offer.name}
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      {/* The main photo, or an empty square so names stay aligned. Decorative
+                          (alt=""): the link next to it already names the offer. */}
+                      {offer.images[0] ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
+                        <img
+                          src={offer.images[0]}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                      ) : (
+                        <span className="h-10 w-10 shrink-0 rounded bg-surface-muted" />
+                      )}
+                      <Link
+                        href={`/dashboard/catalog/${offer.id}`}
+                        className="text-text underline-offset-2 hover:underline"
+                      >
+                        {offer.name}
+                      </Link>
+                    </div>
                   </td>
                   <td className="px-4 py-2 text-text-muted">{TYPE_LABELS[offer.type]}</td>
                   <td className="px-4 py-2 text-text-muted">

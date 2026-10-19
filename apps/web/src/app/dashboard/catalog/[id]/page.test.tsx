@@ -166,6 +166,7 @@ describe("OfferDetailPage", () => {
         barcode: "",
         name: "Chaise longue",
         description: "Une belle chaise",
+        images: [],
         pricing: { amount: 50, currency: "EUR" },
         status: "active",
         trackStock: false,
@@ -173,6 +174,33 @@ describe("OfferDetailPage", () => {
         lowStockThreshold: undefined,
         customFields: {},
       }),
+    );
+  });
+
+  it("shows the offer's photos and saves a new main photo from the edit form", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/offers/offer-1") {
+        return Promise.resolve({ ...offer, images: ["https://x/1.png", "https://x/2.png"] });
+      }
+      return Promise.resolve([]);
+    });
+    patchMock.mockResolvedValue(offer);
+    const user = userEvent.setup();
+    renderWithProviders(<OfferDetailPage />);
+    await screen.findByRole("heading", { name: "Chaise" });
+
+    expect(screen.getByRole("list", { name: "Photos de l'offre" })).toBeInTheDocument();
+    expect(screen.getByAltText("Photo 1")).toHaveAttribute("src", "https://x/1.png");
+
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    await user.click(screen.getByRole("button", { name: "Principale" }));
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith(
+        "/offers/offer-1",
+        expect.objectContaining({ images: ["https://x/2.png", "https://x/1.png"] }),
+      ),
     );
   });
 

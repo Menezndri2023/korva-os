@@ -1099,9 +1099,27 @@ describe('Catalog module (e2e)', () => {
           pricing: { amount: 15, currency: 'EUR' },
         })
         .expect(201);
-      expect(asSuccess<{ images: string[] }>(offerRes.body).images).toEqual([
-        upload.url,
-      ]);
+      const created = asSuccess<{ id: string; images: string[] }>(offerRes.body);
+      expect(created.images).toEqual([upload.url]);
+
+      // Ten photos per offer, enforced by the API rather than only by the dashboard. The same URL
+      // repeated is enough: the cap counts entries, it does not deduplicate.
+      const offerPath = `/api/v1/offers/${created.id}`;
+      const tooMany = await request(server)
+        .patch(offerPath)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ images: Array.from({ length: 11 }, () => upload.url) })
+        .expect(400);
+      expect(asError(tooMany.body).code).toBe('VALIDATION_ERROR');
+
+      const atLimit = await request(server)
+        .patch(offerPath)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ images: Array.from({ length: 10 }, () => upload.url) })
+        .expect(200);
+      expect(asSuccess<{ images: string[] }>(atLimit.body).images).toHaveLength(10);
     });
 
     it('rejects an upload with no file attached', async () => {

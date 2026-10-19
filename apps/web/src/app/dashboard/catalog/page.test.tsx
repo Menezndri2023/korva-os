@@ -3,13 +3,14 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import CatalogPage from "./page";
 import { renderWithProviders } from "@/test/render";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, uploadFile } from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
   return {
     ...actual,
     apiClient: { ...actual.apiClient, get: vi.fn(), getList: vi.fn(), post: vi.fn() },
+    uploadFile: vi.fn(),
   };
 });
 
@@ -28,6 +29,7 @@ vi.mock("@/lib/use-active-organization", () => ({
 const getMock = vi.mocked(apiClient.get);
 const getListMock = vi.mocked(apiClient.getList);
 const postMock = vi.mocked(apiClient.post);
+const uploadMock = vi.mocked(uploadFile);
 
 const offer = {
   id: "offer-1",
@@ -132,6 +134,44 @@ describe("CatalogPage — pagination", () => {
         expect.objectContaining({ customFields: { warranty_months: 24 } }),
       ),
     );
+  });
+
+  it("sends the uploaded photos with the new offer, main photo first", async () => {
+    // The creation form used to send `images: []` unconditionally, while the storefront displays
+    // images[0] — so no owner could ever put a photo on their public site.
+    uploadMock
+      .mockResolvedValueOnce({ url: "https://api.test/u/1.png", filename: "1.png", mimeType: "image/png", size: 1 })
+      .mockResolvedValueOnce({ url: "https://api.test/u/2.png", filename: "2.png", mimeType: "image/png", size: 1 });
+    postMock.mockResolvedValue({ ...offer, id: "offer-2" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Robe");
+    await user.upload(screen.getByLabelText("Choisir des photos"), [
+      new File(["a"], "a.png", { type: "image/png" }),
+      new File(["b"], "b.png", { type: "image/png" }),
+    ]);
+    await user.click(await screen.findByRole("button", { name: "Principale" }));
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({
+          images: ["https://api.test/u/2.png", "https://api.test/u/1.png"],
+        }),
+      ),
+    );
+  });
+
+  it("shows each offer's main photo in the list", async () => {
+    mockOffersPage([{ ...offer, images: ["https://api.test/u/main.png", "https://api.test/u/2.png"] }]);
+    const { container } = renderWithProviders(<CatalogPage />);
+
+    await screen.findByRole("link", { name: "Chaise" });
+    expect(container.querySelector('img[src="https://api.test/u/main.png"]')).not.toBeNull();
+    expect(container.querySelector('img[src="https://api.test/u/2.png"]')).toBeNull();
   });
 });
 

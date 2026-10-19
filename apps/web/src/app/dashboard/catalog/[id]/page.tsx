@@ -30,6 +30,7 @@ import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
+import { OfferImagesEditor } from "@/components/offer-images-editor";
 
 const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
   received: "Réception",
@@ -87,9 +88,11 @@ export default function OfferDetailPage() {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<UpdateOfferInput>({ resolver: zodResolver(updateOfferSchema) });
   const trackStock = watch("trackStock");
+  const images = watch("images") ?? [];
   const [editCustomFields, setEditCustomFields] = useState<CustomFieldValues>({});
 
   function startEdit(offer: Offer) {
@@ -101,6 +104,7 @@ export default function OfferDetailPage() {
       barcode: offer.barcode,
       name: offer.name,
       description: offer.description,
+      images: offer.images,
       pricing: offer.pricing,
       status: offer.status,
       trackStock: offer.trackStock,
@@ -233,6 +237,29 @@ export default function OfferDetailPage() {
 
         {!isEditing ? (
           <>
+            {offer.images.length > 0 ? (
+              <ul className="mt-4 flex flex-wrap gap-2" aria-label="Photos de l'offre">
+                {offer.images.map((url, index) => (
+                  <li key={url} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset */}
+                    <img
+                      src={url}
+                      alt={`Photo ${index + 1}`}
+                      className="h-24 w-24 rounded-md border border-border object-cover"
+                    />
+                    {index === 0 && (
+                      <span className="absolute left-1 top-1 rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-text">
+                        Principale
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-text-muted">
+                Aucune photo — cliquez sur « Modifier » pour en ajouter.
+              </p>
+            )}
             <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
               <div>
                 <dt className="text-text-muted">SKU</dt>
@@ -358,6 +385,10 @@ export default function OfferDetailPage() {
               className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               rows={2}
               {...register("description")}
+            />
+            <OfferImagesEditor
+              images={images}
+              onChange={(next) => setValue("images", next, { shouldDirty: true })}
             />
             <Input
               type="number"

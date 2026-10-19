@@ -37,11 +37,15 @@ export const bundleItemInputSchema = z.object({
   quantity: z.number().int().min(1),
 });
 
+/** Photos per offer. The first one is the main photo — the one storefront cards and the catalogue
+ *  list show. Enforced here so the API refuses an 11th photo, not just the dashboard. */
+export const OFFER_MAX_IMAGES = 10;
+
 export const createOfferSchema = z.object({
   type: z.enum(OFFER_TYPES),
   name: z.string().min(1).max(200),
   description: z.string().max(5000).optional(),
-  images: z.array(z.string().url()).default([]),
+  images: z.array(z.string().url()).max(OFFER_MAX_IMAGES).default([]),
   categories: z.array(z.string().min(1).max(80)).default([]),
   pricing: offerPricingSchema,
   sku: z.string().max(80).optional(),
