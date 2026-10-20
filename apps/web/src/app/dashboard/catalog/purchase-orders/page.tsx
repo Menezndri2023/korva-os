@@ -14,6 +14,8 @@ import { Badge, Button, Card, Dialog, Input, Pagination, Select } from "@korva/u
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
+import { PlanLock } from "@/components/plan-lock";
+import { usePlanFeatures } from "@/lib/use-plan-features";
 
 const STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   draft: "Brouillon",
@@ -32,6 +34,7 @@ function actionErrorMessage(error: unknown): string {
 }
 
 export default function PurchaseOrdersPage() {
+  const planFeatures = usePlanFeatures();
   const [statusFilter, setStatusFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
@@ -157,9 +160,14 @@ export default function PurchaseOrdersPage() {
             </option>
           ))}
         </select>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouvelle commande fournisseur"}
-        </Button>
+        {/* Creating needs the plan; what already exists stays listed and usable. */}
+        {planFeatures.has("suppliers") ? (
+          <Button onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Annuler" : "Nouvelle commande fournisseur"}
+          </Button>
+        ) : (
+          <PlanLock feature="suppliers" />
+        )}
       </div>
 
       {showForm && (

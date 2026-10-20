@@ -65,6 +65,8 @@ import { Badge, Button, Dialog, Input, Select } from "@korva/ui";
 import type { BadgeVariant } from "@korva/ui";
 import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
 import { OrderReceptionSettings } from "@/components/order-reception-settings";
+import { PlanLock } from "@/components/plan-lock";
+import { usePlanFeatures } from "@/lib/use-plan-features";
 import { formatCurrency } from "@/lib/analytics-format";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthStore } from "@/lib/auth-store";
@@ -231,6 +233,7 @@ interface PaymentPayoutFormValues {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: organization } = useActiveOrganization();
+  const planFeatures = usePlanFeatures();
   // Phase E3 — the bare host a custom domain's CNAME record must target, derived from the same
   // NEXT_PUBLIC_STOREFRONT_URL already used elsewhere on this page (storefrontPageUrl etc).
   const storefrontDomainCnameTarget = new URL(
@@ -1128,9 +1131,15 @@ export default function SettingsPage() {
                     <input
                       type="checkbox"
                       value="online"
+                      // Turning it on needs a paid plan; one already on stays as it is.
+                      disabled={
+                        !planFeatures.has("online_payment") &&
+                        !organization?.acceptedPaymentMethods?.includes("online")
+                      }
                       {...registerOrg("acceptedPaymentMethods")}
                     />
                     Paiement en ligne
+                    {!planFeatures.has("online_payment") && <PlanLock feature="online_payment" />}
                   </label>
                 </div>
               </div>
@@ -1395,7 +1404,16 @@ export default function SettingsPage() {
                 subscription.plan.modules,
                 subscription.subscription.productOverrides,
               ).includes(module);
-              const disabled = !isAllowedByPlan || modulesMutation.isPending;
+              // One sales channel on Free: the second of bookings/orders is locked until the
+              // plan includes both (an organization already running both keeps them).
+              const otherChannel =
+                module === "booking" ? "commerce" : module === "commerce" ? "booking" : null;
+              const channelLocked =
+                otherChannel !== null &&
+                !isEnabled &&
+                organization.enabledModules.includes(otherChannel) &&
+                !planFeatures.has("both_channels");
+              const disabled = !isAllowedByPlan || channelLocked || modulesMutation.isPending;
               return (
                 <label
                   key={module}
@@ -1415,6 +1433,7 @@ export default function SettingsPage() {
                     {MODULE_LABELS[module]}
                   </span>
                   {!isAllowedByPlan && <Badge>Non inclus dans le plan</Badge>}
+                  {isAllowedByPlan && channelLocked && <PlanLock feature="both_channels" />}
                 </label>
               );
             })}

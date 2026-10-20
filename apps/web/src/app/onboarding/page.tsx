@@ -451,6 +451,10 @@ export default function OnboardingPage() {
 
           <div>
             <p className="block text-sm font-medium">Que souhaitez-vous gérer ?</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              En formule Gratuite, choisissez un seul mode de vente : réservations ou commandes.
+              Les deux ensemble sont inclus à partir de la formule Starter.
+            </p>
             <Controller
               control={enabledModulesControl.control}
               name="modules"
@@ -462,11 +466,19 @@ export default function OnboardingPage() {
                         type="checkbox"
                         checked={field.value.includes(module)}
                         onChange={(event) => {
-                          field.onChange(
-                            event.target.checked
-                              ? [...field.value, module]
-                              : field.value.filter((m) => m !== module),
-                          );
+                          if (!event.target.checked) {
+                            field.onChange(field.value.filter((m) => m !== module));
+                            return;
+                          }
+                          // One sales channel on the free plan (PLAN_FEATURE_MIN_PLAN
+                          // .both_channels): ticking bookings unticks orders and the reverse,
+                          // rather than letting the last step of onboarding be refused.
+                          const other =
+                            module === "booking" ? "commerce" : module === "commerce" ? "booking" : null;
+                          field.onChange([
+                            ...field.value.filter((m) => m !== other),
+                            module,
+                          ]);
                         }}
                       />
                       {MODULE_LABELS[module]}

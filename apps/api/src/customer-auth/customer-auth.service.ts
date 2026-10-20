@@ -55,6 +55,7 @@ import { CustomerPasswordResetRepository } from './customer-password-reset.repos
 import { hashToken } from '../identity/auth/token-hash.util';
 import { CustomerAccountDocument } from './schemas/customer-account.schema';
 import type { AuthenticatedCustomer } from './strategies/customer-jwt.strategy';
+import { EntitlementsService } from '../subscriptions/entitlements.service';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
@@ -127,6 +128,7 @@ export class CustomerAuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
+    private readonly entitlementsService: EntitlementsService,
   ) {
     this.refreshTtlMs = this.parseTtlToMs(
       this.configService.get<string>('CUSTOMER_JWT_REFRESH_TTL') ?? '30d',
@@ -156,6 +158,12 @@ export class CustomerAuthService {
   async register(slug: string, input: CustomerRegisterInput) {
     const organization = await this.resolveOrganization(slug);
     const organizationId = organization.id as string;
+    // Customer accounts are a paid feature for NEW accounts only: customers who already have one
+    // keep signing in after their shop moves to the free plan.
+    await this.entitlementsService.assertFeature(
+      organizationId,
+      'customer_accounts',
+    );
 
     const existing = await this.customerAccountRepository.findByOrgAndEmail(
       organizationId,

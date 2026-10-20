@@ -14,6 +14,8 @@ import type { Supplier } from "@korva/types";
 import { Button, Card, Dialog, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { PlanLock } from "@/components/plan-lock";
+import { usePlanFeatures } from "@/lib/use-plan-features";
 
 function deleteErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -26,6 +28,7 @@ function deleteErrorMessage(error: unknown): string {
 }
 
 export default function SuppliersPage() {
+  const planFeatures = usePlanFeatures();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [search, setSearch] = useState("");
@@ -110,7 +113,12 @@ export default function SuppliersPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-64"
         />
-        <Button onClick={() => setIsCreateOpen(true)}>Nouveau fournisseur</Button>
+        {/* Creating needs the plan; what already exists stays listed and usable. */}
+        {planFeatures.has("suppliers") ? (
+          <Button onClick={() => setIsCreateOpen(true)}>Nouveau fournisseur</Button>
+        ) : (
+          <PlanLock feature="suppliers" />
+        )}
       </div>
 
       {deleteMutation.isError && (

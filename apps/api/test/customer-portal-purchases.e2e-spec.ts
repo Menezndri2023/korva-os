@@ -119,6 +119,8 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
         })
         .expect(201);
       const organization = asSuccess<OrganizationPayload>(orgRes.body);
+      // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
+      await putOrganizationOnPlan(connection, organization.id, 'business');
       slug = organization.slug;
       organizationId = organization.id;
 
@@ -440,6 +442,8 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
         })
         .expect(201);
       const organization = asSuccess<OrganizationPayload>(orgRes.body);
+      // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
+      await putOrganizationOnPlan(connection, organization.id, 'business');
       slug = organization.slug;
       organizationId = organization.id;
 
@@ -608,6 +612,8 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
         })
         .expect(201);
       const organization = asSuccess<OrganizationPayload>(orgRes.body);
+      // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
+      await putOrganizationOnPlan(connection, organization.id, 'business');
       slug = organization.slug;
       organizationId = organization.id;
 
@@ -786,6 +792,8 @@ describe('Customer portal — order/booking/quote purchases (e2e)', () => {
         })
         .expect(201);
       const organization = asSuccess<OrganizationPayload>(orgRes.body);
+      // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
+      await putOrganizationOnPlan(connection, organization.id, 'business');
       slug = organization.slug;
       const organizationId = organization.id;
 

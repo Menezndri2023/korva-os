@@ -253,7 +253,9 @@ describe('OrganizationsService.createForOwner — default enabledModules (P0-ORG
     language: 'fr',
   };
 
-  function buildService(planModules: KorvaModule[]) {
+  // A paid key by default: these tests are about "every module the plan grants", which only holds
+  // where both sales channels are allowed. The free plan's one-channel rule has its own test.
+  function buildService(planModules: KorvaModule[], planKey = 'business') {
     const created = { id: ORG_ID, name: CREATE_INPUT.name, enabledModules: [] };
     const countBySlugPrefix = jest.fn().mockResolvedValue(0);
     const create = jest.fn().mockResolvedValue(created);
@@ -292,7 +294,7 @@ describe('OrganizationsService.createForOwner — default enabledModules (P0-ORG
       .fn()
       .mockResolvedValue({ id: 'sub-1' });
     const getActivePlan = jest.fn().mockResolvedValue({
-      key: 'free',
+      key: planKey,
       name: 'Free',
       modules: planModules,
       limits: { seats: 3 },
@@ -362,5 +364,33 @@ describe('OrganizationsService.createForOwner — default enabledModules (P0-ORG
     });
     expect(result.enabledModules).not.toContain('workflow');
     expect(result.enabledModules).not.toContain('ai');
+  });
+
+  it('gives a new free organization one sales channel, the one its type of activity sells through', async () => {
+    const freeModules: KorvaModule[] = [
+      'crm',
+      'catalog',
+      'booking',
+      'commerce',
+      'website',
+    ];
+
+    const salon = buildService(freeModules, 'free');
+    await salon.service.createForOwner(OWNER_USER_ID, {
+      ...CREATE_INPUT,
+      type: 'beauté',
+    });
+    expect(salon.update).toHaveBeenCalledWith(ORG_ID, {
+      enabledModules: ['crm', 'catalog', 'booking', 'website'],
+    });
+
+    const shop = buildService(freeModules, 'free');
+    await shop.service.createForOwner(OWNER_USER_ID, {
+      ...CREATE_INPUT,
+      type: 'commerce',
+    });
+    expect(shop.update).toHaveBeenCalledWith(ORG_ID, {
+      enabledModules: ['crm', 'catalog', 'commerce', 'website'],
+    });
   });
 });

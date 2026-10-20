@@ -70,6 +70,59 @@ export const PLAN_NAMES: Record<PlanKey, string> = {
  */
 export const CUSTOM_DOMAIN_MIN_PLAN: PlanKey = "starter";
 
+/**
+ * Capabilities that are not a whole module but still belong to a tier — the V3 grid validated on
+ * 2026-10-19 (docs/KORVA_OS_V3_STRUCTURE_PRODUIT.md §8). Free is for being seen and receiving
+ * requests; getting paid, organising and bringing customers back are paid.
+ *
+ * ONE TABLE, read by the API (PlanFeatureGuard and the service checks named below), by the
+ * dashboard to lock the matching controls, and by the pricing page — so the three cannot drift.
+ * Every entry is enforced by the API; the comment names where.
+ *
+ *   online_payment     -> OrganizationsService.update (saving "online"), PublicService
+ *                         (never offered on the storefront, payment link refused)
+ *   no_korva_branding  -> PublicService#getOrganization (`poweredByKorva`)
+ *   customer_accounts  -> CustomerAuthService.register (new accounts; existing ones still log in)
+ *   kitchen_display    -> KitchenController (PlanFeatureGuard)
+ *   offer_variants     -> OffersService (adding a variant; existing ones are kept)
+ *   compare_at_price   -> OffersService (setting one; clearing is always allowed)
+ *   both_channels      -> EntitlementsService.assertModulesAllowed (booking AND commerce)
+ *   warehouses         -> WarehousesController writes (PlanFeatureGuard)
+ *   suppliers          -> SuppliersController / PurchaseOrdersController writes (PlanFeatureGuard)
+ *
+ * Downgrading never deletes: data created under a higher plan stays readable, and only the act
+ * of adding more is refused.
+ */
+export const PLAN_FEATURE_MIN_PLAN = {
+  online_payment: "starter",
+  no_korva_branding: "starter",
+  customer_accounts: "starter",
+  kitchen_display: "starter",
+  offer_variants: "starter",
+  compare_at_price: "starter",
+  both_channels: "starter",
+  warehouses: "pro",
+  suppliers: "pro",
+} as const satisfies Record<string, PlanKey>;
+export type PlanFeature = keyof typeof PLAN_FEATURE_MIN_PLAN;
+
+/** Owner-facing name of each feature, for locks in the dashboard and the pricing page. */
+export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
+  online_payment: "Paiement en ligne",
+  no_korva_branding: "Site sans la mention « Propulsé par KORVA »",
+  customer_accounts: "Espace client sur votre site",
+  kitchen_display: "Écran cuisine",
+  offer_variants: "Variantes de produits",
+  compare_at_price: "Prix barré (promotions)",
+  both_channels: "Réservations et commandes en même temps",
+  warehouses: "Plusieurs entrepôts",
+  suppliers: "Fournisseurs et bons de commande",
+};
+
+export function planHasFeature(planKey: string, feature: PlanFeature): boolean {
+  return planMeetsMinimum(planKey, PLAN_FEATURE_MIN_PLAN[feature]);
+}
+
 export const MODULE_MIN_PLAN: Record<KorvaModule, PlanKey> = {
   crm: "free",
   catalog: "free",

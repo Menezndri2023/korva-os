@@ -193,6 +193,14 @@ export default function StorefrontClient({
     <>
       <StorefrontThemeStyle style={style} nonce={nonce} />
       {renderTemplate(effectiveTheme.template, templateProps)}
+      {organization.poweredByKorva && (
+        <p className="bg-app-background py-4 text-center text-xs text-text-muted">
+          Site propulsé par{" "}
+          <a href="https://korvasuite.com" className="font-medium underline-offset-2 hover:underline">
+            KORVA
+          </a>
+        </p>
+      )}
 
       {bookingOffer && (
         <BookingPanel

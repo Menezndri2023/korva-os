@@ -34,6 +34,8 @@ import { formatCurrency } from "@/lib/analytics-format";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 import { OfferImagesEditor } from "@/components/offer-images-editor";
+import { PlanLock } from "@/components/plan-lock";
+import { usePlanFeatures } from "@/lib/use-plan-features";
 import {
   AttributesEditor,
   BundleItemsEditor,
@@ -108,6 +110,10 @@ export default function OfferDetailPage() {
   const images = watch("images") ?? [];
   const offerType = watch("type");
   const fields = OFFER_TYPE_FIELDS[offerType ?? "product"];
+  const { has } = usePlanFeatures();
+  // A promotion already on the offer stays editable after a downgrade; adding one needs the plan.
+  const compareAtLocked =
+    !has("compare_at_price") && offerQuery.data?.compareAtPrice == null;
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
   const [bundleDrafts, setBundleDrafts] = useState<BundleItemDraft[]>([]);
@@ -470,18 +476,22 @@ export default function OfferDetailPage() {
                 {errors.pricing.currency.message}
               </p>
             )}
+            <div className="col-span-2 flex items-center gap-2">
             <Input
               type="number"
               step="0.01"
               min="0"
               placeholder="Prix avant promotion (optionnel)"
               aria-label="Prix avant promotion"
-              className="col-span-2"
+              disabled={compareAtLocked}
+              className="flex-1"
               {...register("compareAtPrice", {
                 // Emptied on edit means "remove the promotion", hence null rather than undefined.
                 setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
               })}
             />
+              {compareAtLocked && <PlanLock feature="compare_at_price" />}
+            </div>
             {fields.reference && <Input placeholder="Référence (SKU)" {...register("sku")} />}
             {fields.barcode && (
               <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />
@@ -540,6 +550,7 @@ export default function OfferDetailPage() {
                 variants={variantDrafts}
                 onChange={setVariantDrafts}
                 trackStock={!!trackStock}
+                canAdd={has("offer_variants")}
               />
             )}
             {fields.bundle && (

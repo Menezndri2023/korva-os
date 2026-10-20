@@ -103,7 +103,7 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
     return { accessToken, organization };
   }
 
-  it('gives a freshly created organization a non-empty enabledModules matching its "free" plan modules', async () => {
+  it('gives a freshly created organization its "free" plan modules, with one sales channel', async () => {
     const { accessToken, organization } = await registerOrgAndToken(
       'org-default-modules@korva.test',
       'Default Modules Org',
@@ -120,9 +120,13 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
     );
     expect(freePlan).toBeDefined();
 
-    expect([...organization.enabledModules].sort()).toEqual(
-      [...(freePlan?.modules ?? [])].sort(),
-    );
+    // Every module of the free plan except ONE of its two sales channels: Free sells through
+    // bookings OR orders (PLAN_FEATURE_MIN_PLAN.both_channels), and an organization whose type
+    // of activity is not a shop gets bookings.
+    const expectedModules = (freePlan?.modules ?? [])
+      .filter((module) => module !== 'commerce')
+      .sort();
+    expect([...organization.enabledModules].sort()).toEqual(expectedModules);
 
     // Re-fetch via GET to confirm the persisted value matches what creation returned.
     const meRes = await request(server)
@@ -131,9 +135,7 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
       .set('X-Organization-Id', organization.id)
       .expect(200);
     const persisted = asSuccess<OrganizationPayload>(meRes.body);
-    expect([...persisted.enabledModules].sort()).toEqual(
-      [...(freePlan?.modules ?? [])].sort(),
-    );
+    expect([...persisted.enabledModules].sort()).toEqual(expectedModules);
   });
 
   it('still rejects enabling a module outside the plan after a plan change (entitlement enforcement unchanged)', async () => {

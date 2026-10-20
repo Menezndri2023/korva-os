@@ -299,6 +299,19 @@ describe("CatalogPage — pagination", () => {
     );
   });
 
+  it("locks variants and the price before promotion on the free plan", async () => {
+    getMock.mockImplementation((path: string) =>
+      Promise.resolve(path === "/subscriptions/me" ? { plan: { key: "free" } } : []),
+    );
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    await waitFor(() => expect(screen.getByLabelText("Prix avant promotion")).toBeDisabled());
+    expect(screen.queryByRole("button", { name: "Ajouter une variante" })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Formule Starter/).length).toBe(2);
+  });
+
   it("shows each offer's main photo in the list", async () => {
     mockOffersPage([{ ...offer, images: ["https://api.test/u/main.png", "https://api.test/u/2.png"] }]);
     const { container } = renderWithProviders(<CatalogPage />);

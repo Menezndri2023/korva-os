@@ -9,6 +9,7 @@ import { Button, ThemeToggle } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { usePlanFeatures } from "@/lib/use-plan-features";
 import { useTheme } from "@/lib/theme-provider";
 
 const MODULE_NAV: { module: KorvaModule; label: string; href: string }[] = [
@@ -80,6 +81,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [sidebarOpen]);
 
   const enabledModules = new Set(organization?.enabledModules ?? []);
+  const planFeatures = usePlanFeatures();
   // Trade-specific screens follow the type of activity: every shop used to see "Cuisine" and
   // every salon "Formations", because both only checked a module. An organization without a
   // type of activity keeps exactly that older behaviour.
@@ -176,7 +178,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               onClick={() => setSidebarOpen(false)}
             />
           )}
-          {enabledModules.has("commerce") && screens.kitchen && (
+          {enabledModules.has("commerce") && screens.kitchen && planFeatures.has("kitchen_display") && (
             <NavLink
               href="/dashboard/kitchen"
               label="Cuisine"

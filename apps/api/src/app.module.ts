@@ -10,6 +10,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { JwtAuthGuard } from './core/guards/jwt-auth.guard';
 import { TenantGuard } from './core/guards/tenant.guard';
 import { ModuleGuard } from './core/guards/module.guard';
+import { PlanFeatureGuard } from './core/guards/plan-feature.guard';
 import { PermissionsGuard } from './core/guards/permissions.guard';
 
 import { IdentityModule } from './identity/identity.module';
@@ -101,6 +102,7 @@ import { CustomerServiceModule } from './customer-service/customer-service.modul
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: TenantGuard },
     { provide: APP_GUARD, useClass: ModuleGuard },
+    { provide: APP_GUARD, useClass: PlanFeatureGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })

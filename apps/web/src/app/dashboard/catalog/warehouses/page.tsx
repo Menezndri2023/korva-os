@@ -14,6 +14,8 @@ import type { Warehouse } from "@korva/types";
 import { Badge, Button, Card, Dialog, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { PlanLock } from "@/components/plan-lock";
+import { usePlanFeatures } from "@/lib/use-plan-features";
 
 function deleteErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -26,6 +28,7 @@ function deleteErrorMessage(error: unknown): string {
 }
 
 export default function WarehousesPage() {
+  const planFeatures = usePlanFeatures();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
@@ -101,7 +104,12 @@ export default function WarehousesPage() {
           Le stock d&apos;une offre peut être réparti entre plusieurs entrepôts — voir la fiche de
           chaque produit.
         </p>
-        <Button onClick={() => setIsCreateOpen(true)}>Nouvel entrepôt</Button>
+        {/* Creating needs the plan; what already exists stays listed and usable. */}
+        {planFeatures.has("warehouses") ? (
+          <Button onClick={() => setIsCreateOpen(true)}>Nouvel entrepôt</Button>
+        ) : (
+          <PlanLock feature="warehouses" />
+        )}
       </div>
 
       {deleteMutation.isError && (

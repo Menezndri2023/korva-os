@@ -12,9 +12,12 @@ import {
   PLAN_KEYS,
   PLAN_LIMITS,
   PLAN_NAMES,
+  PLAN_FEATURE_LABELS,
+  PLAN_FEATURE_MIN_PLAN,
   PLAN_PRICES,
   countryFromTimeZone,
   currencyForCountry,
+  type PlanFeature,
   type PlanKey,
 } from "@korva/types";
 import { MODULE_PROMISES, PLAN_AUDIENCE, PLAN_PERKS } from "@/lib/landing-content";
@@ -33,6 +36,13 @@ import { MODULE_PROMISES, PLAN_AUDIENCE, PLAN_PERKS } from "@/lib/landing-conten
  * landing-content.ts pairs each of those with the assertion in apps/api that enforces it. A tier
  * cannot advertise something it does not actually unlock.
  */
+
+/** The paid features whose threshold IS this tier — read from the same table the API enforces. */
+function featuresGainedAt(plan: PlanKey): string[] {
+  return (Object.keys(PLAN_FEATURE_MIN_PLAN) as PlanFeature[])
+    .filter((feature) => PLAN_FEATURE_MIN_PLAN[feature] === plan)
+    .map((feature) => PLAN_FEATURE_LABELS[feature]);
+}
 
 /** The modules whose threshold IS this tier — i.e. what you gain by moving up to it. */
 function modulesGainedAt(plan: PlanKey) {
@@ -170,7 +180,7 @@ export function PlanLadder() {
                     {MODULE_PROMISES[module]}
                   </li>
                 ))}
-                {(PLAN_PERKS[plan] ?? []).map((perk) => (
+                {[...featuresGainedAt(plan), ...(PLAN_PERKS[plan] ?? [])].map((perk) => (
                   <li key={perk} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
                     <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                       ✓

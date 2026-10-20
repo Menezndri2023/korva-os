@@ -38,6 +38,7 @@ import { CatalogModule } from '../catalog/catalog.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { ReviewsModule } from '../reviews/reviews.module';
 import { CustomerServiceModule } from '../customer-service/customer-service.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 /**
  * Top-level module (not nested under PublicModule) so it's independently testable/importable —
@@ -70,6 +71,7 @@ import { CustomerServiceModule } from '../customer-service/customer-service.modu
     DocumentsModule,
     ReviewsModule,
     CustomerServiceModule,
+    SubscriptionsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

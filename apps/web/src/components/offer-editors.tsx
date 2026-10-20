@@ -6,6 +6,7 @@ import type { Offer, OfferOptionGroup, OfferType } from "@korva/types";
 import { Button, Input, Select } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { PlanLock } from "@/components/plan-lock";
 
 /**
  * Which parts of the offer form apply to each offer type. One table, read by both the creation
@@ -61,10 +62,13 @@ export function VariantsEditor({
   variants,
   onChange,
   trackStock,
+  canAdd = true,
 }: {
   variants: VariantDraft[];
   onChange: (next: VariantDraft[]) => void;
   trackStock: boolean;
+  /** False when the plan does not include variants: existing ones stay editable, none added. */
+  canAdd?: boolean;
 }) {
   function update(index: number, patch: Partial<VariantDraft>) {
     onChange(variants.map((variant, i) => (i === index ? { ...variant, ...patch } : variant)));
@@ -74,14 +78,18 @@ export function VariantsEditor({
     <fieldset className="col-span-2 space-y-2">
       <div className="flex items-center justify-between">
         <legend className="text-sm font-medium text-text">Variantes</legend>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => onChange([...variants, { name: "" }])}
-        >
-          Ajouter une variante
-        </Button>
+        {canAdd ? (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onChange([...variants, { name: "" }])}
+          >
+            Ajouter une variante
+          </Button>
+        ) : (
+          <PlanLock feature="offer_variants" />
+        )}
       </div>
       {variants.length === 0 ? (
         <p className="text-xs text-text-muted">

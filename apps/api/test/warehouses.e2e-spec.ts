@@ -5,6 +5,7 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -102,6 +103,8 @@ describe('Warehouses and per-location stock levels (Phase C2, e2e)', () => {
       })
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+    // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
+    await putOrganizationOnPlan(connection, organizationId, 'business');
 
     await request(server)
       .patch('/api/v1/organizations/me')

@@ -13,6 +13,7 @@ import {
   STOREFRONT_SECTIONS,
   verticalForOrganizationType,
   getStorefrontTemplate,
+  planHasFeature,
   pickDeterministic,
   planMeetsMinimum,
   type KorvaModule,
@@ -222,6 +223,11 @@ export class PublicService {
       pickupInstructions: organization.pickupInstructions,
       orderLeadTimeMinutes: organization.orderLeadTimeMinutes,
       storefrontTheme: this.resolveStorefrontTheme(organization, plan.key),
+      // Free storefronts carry the KORVA mention; paid ones do not.
+      poweredByKorva: !planHasFeature(plan.key, 'no_korva_branding'),
+      // Whether a visitor can CREATE a customer account (CustomerAuthService.register checks
+      // the same thing); signing in to an existing one is never taken away.
+      customerAccountsEnabled: planHasFeature(plan.key, 'customer_accounts'),
       acceptedPaymentMethods:
         await this.resolveAvailablePaymentMethods(organization),
       // Unlike the content sections below, SEO overrides are never plan-gated — basic SEO
@@ -269,6 +275,11 @@ export class PublicService {
   private async isOnlinePaymentAvailable(
     organizationId: string,
   ): Promise<boolean> {
+    // A paid-plan feature (PLAN_FEATURE_MIN_PLAN.online_payment): a free organization's
+    // storefront offers cash only, and initiateOnlinePayment — which goes through here — is
+    // refused, even if "online" was saved while it was on a paid plan.
+    const plan = await this.subscriptionsService.getActivePlan(organizationId);
+    if (!planHasFeature(plan.key, 'online_payment')) return false;
     try {
       await this.paymentProviderResolver.resolve({
         flow: 'commerce',

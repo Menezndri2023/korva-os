@@ -7,11 +7,13 @@ import { useMutation } from "@tanstack/react-query";
 import { Button, Card, Input } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
+import { usePublicOrganization } from "@/lib/use-public-organization";
 import { AccountShell } from "../account-shell";
 
 export default function LoginClient({ slug }: { slug: string }) {
   const router = useRouter();
   const { login } = useCustomerAuth(slug);
+  const organizationQuery = usePublicOrganization(slug);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showForgot, setShowForgot] = useState(false);
@@ -86,9 +88,11 @@ export default function LoginClient({ slug }: { slug: string }) {
               >
                 Mot de passe oublié ?
               </button>
-              <Link href={`/${slug}/account/register`} className="text-text-muted hover:underline">
-                Créer un compte
-              </Link>
+              {organizationQuery.data?.customerAccountsEnabled !== false && (
+                <Link href={`/${slug}/account/register`} className="text-text-muted hover:underline">
+                  Créer un compte
+                </Link>
+              )}
             </div>
           </form>
         ) : forgotSent ? (

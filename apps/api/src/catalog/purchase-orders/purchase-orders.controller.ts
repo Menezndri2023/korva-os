@@ -16,6 +16,7 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
+import { RequirePlanFeature } from '../../common/decorators/require-plan-feature.decorator';
 
 @ApiTags('purchase-orders')
 @RequireModule('catalog')
@@ -24,6 +25,7 @@ export class PurchaseOrdersController {
   constructor(private readonly purchaseOrdersService: PurchaseOrdersService) {}
 
   @RequirePermissions('purchase_orders.create')
+  @RequirePlanFeature('suppliers')
   @Post()
   create(
     @CurrentTenant() tenant: TenantContext,
@@ -55,6 +57,7 @@ export class PurchaseOrdersController {
   }
 
   @RequirePermissions('purchase_orders.update')
+  @RequirePlanFeature('suppliers')
   @Post(':id/mark-ordered')
   markOrdered(
     @CurrentTenant() tenant: TenantContext,

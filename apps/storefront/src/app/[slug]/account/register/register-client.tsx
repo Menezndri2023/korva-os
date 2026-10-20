@@ -7,11 +7,13 @@ import { useMutation } from "@tanstack/react-query";
 import { Button, Card, Input } from "@korva/ui";
 import { PublicApiError } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
+import { usePublicOrganization } from "@/lib/use-public-organization";
 import { AccountShell } from "../account-shell";
 
 export default function RegisterClient({ slug }: { slug: string }) {
   const router = useRouter();
   const { register } = useCustomerAuth(slug);
+  const organizationQuery = usePublicOrganization(slug);
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,6 +26,26 @@ export default function RegisterClient({ slug }: { slug: string }) {
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     registerMutation.mutate();
+  }
+
+  if (organizationQuery.data?.customerAccountsEnabled === false) {
+    // The API refuses new accounts here (PLAN_FEATURE_MIN_PLAN.customer_accounts); say so
+    // instead of letting the visitor fill a form for nothing.
+    return (
+      <AccountShell slug={slug} title="Créer un compte">
+        <Card className="space-y-2 p-6 text-sm text-text-muted">
+          <p>Cette boutique ne propose pas encore de compte client.</p>
+          <p>
+            Vos commandes et réservations restent consultables avec votre adresse e-mail sur la
+            page{" "}
+            <Link href={`/${slug}/track`} className="font-medium text-text underline">
+              Suivre une commande
+            </Link>
+            .
+          </p>
+        </Card>
+      </AccountShell>
+    );
   }
 
   return (

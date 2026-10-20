@@ -6,6 +6,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { io, Socket } from 'socket.io-client';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -117,6 +118,8 @@ describe('Kitchen display (e2e)', () => {
       })
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+    // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
+    await putOrganizationOnPlan(connection, organizationId, 'business');
 
     await request(server)
       .patch('/api/v1/organizations/me')

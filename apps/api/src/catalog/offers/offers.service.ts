@@ -112,6 +112,18 @@ export class OffersService {
     input: CreateOfferInput,
   ): Promise<OfferDocument> {
     assertCompareAtPriceHigher(input.compareAtPrice, input.pricing.amount);
+    if (input.variants.length > 0) {
+      await this.entitlementsService.assertFeature(
+        organizationId,
+        'offer_variants',
+      );
+    }
+    if (input.compareAtPrice != null) {
+      await this.entitlementsService.assertFeature(
+        organizationId,
+        'compare_at_price',
+      );
+    }
     // An archived offer is outside the count, so creating one never needs room.
     if (input.status !== 'archived') {
       await this.entitlementsService.assertCountWithinLimit(
@@ -279,6 +291,23 @@ export class OffersService {
     const current = needsCurrent
       ? await this.getById(organizationId, id)
       : undefined;
+    // Paid features are checked on what is NEW only: an offer created under a higher plan keeps
+    // its variants and its promotion after a downgrade, and can still be edited.
+    if (input.variants?.some((variant) => !variant.id)) {
+      await this.entitlementsService.assertFeature(
+        organizationId,
+        'offer_variants',
+      );
+    }
+    if (
+      input.compareAtPrice != null &&
+      input.compareAtPrice !== current?.compareAtPrice
+    ) {
+      await this.entitlementsService.assertFeature(
+        organizationId,
+        'compare_at_price',
+      );
+    }
     // Un-archiving brings an offer back into the plan's count.
     if (
       current?.status === 'archived' &&

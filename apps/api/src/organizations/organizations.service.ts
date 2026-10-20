@@ -10,7 +10,14 @@ import type {
   CreateOrganizationInput,
   UpdateOrganizationInput,
 } from '@korva/validation';
-import { SYSTEM_ROLE_RANK, verticalForOrganizationType } from '@korva/types';
+import {
+  BUSINESS_MODEL_DEFINITIONS,
+  SYSTEM_ROLE_RANK,
+  planHasFeature,
+  verticalForOrganizationType,
+  type BusinessModel,
+  type KorvaModule,
+} from '@korva/types';
 import { OrganizationsRepository } from './organizations.repository';
 import { OrganizationDocument } from './schemas/organization.schema';
 import {
@@ -87,6 +94,29 @@ export function slugify(name: string): string {
     .replace(/(^-|-$)/g, '');
 }
 
+/**
+ * The modules a new organization starts with: everything its plan grants, except that a plan
+ * without `both_channels` (Free) gets ONE sales channel — the one its type of activity sells
+ * through. Without this, every new free organization would start with bookings AND orders, and
+ * assertModulesAllowed's "keep what you already have" rule would let it keep both for good.
+ *
+ * Orders for shops, restaurants and associations; bookings for everyone else, including
+ * services on quote (appointments) and real estate (visits), and an organization whose type of
+ * activity is unknown.
+ */
+function defaultModulesFor(
+  planModules: KorvaModule[],
+  planKey: string,
+  businessModel: BusinessModel | undefined,
+): KorvaModule[] {
+  if (planHasFeature(planKey, 'both_channels')) return planModules;
+  const sellsOrders =
+    businessModel !== undefined &&
+    BUSINESS_MODEL_DEFINITIONS[businessModel].primaryChannel === 'orders';
+  const dropped: KorvaModule = sellsOrders ? 'booking' : 'commerce';
+  return planModules.filter((module) => module !== dropped);
+}
+
 @Injectable()
 export class OrganizationsService {
   constructor(
@@ -121,13 +151,14 @@ export class OrganizationsService {
         }
       : {};
 
+    const businessModel =
+      input.businessModel ??
+      verticalForOrganizationType(input.type)?.businessModel;
     const organization = await this.organizationsRepository.create({
       name: input.name,
       slug,
       type: input.type,
-      businessModel:
-        input.businessModel ??
-        verticalForOrganizationType(input.type)?.businessModel,
+      businessModel,
       country: input.country,
       currency: input.currency,
       timezone: input.timezone,
@@ -166,7 +197,13 @@ export class OrganizationsService {
     );
     const withDefaultModules = await this.organizationsRepository.update(
       organization.id as string,
-      { enabledModules: plan.modules },
+      {
+        enabledModules: defaultModulesFor(
+          plan.modules,
+          plan.key,
+          businessModel,
+        ),
+      },
     );
     if (!withDefaultModules) {
       throw new Error('Failed to enable default modules for new organization');
@@ -238,6 +275,15 @@ export class OrganizationsService {
         id,
         input.enabledModules,
       );
+    }
+    // Offering online payment is a paid feature; checked only when it is being turned ON, so a
+    // downgraded organization can still save its settings with it already listed (the
+    // storefront stops offering it on its own — PublicService#isOnlinePaymentAvailable).
+    if (input.acceptedPaymentMethods?.includes('online')) {
+      const current = await this.organizationsRepository.findById(id);
+      if (!current?.acceptedPaymentMethods?.includes('online')) {
+        await this.entitlementsService.assertFeature(id, 'online_payment');
+      }
     }
     if (
       input.storefrontTemplate ||

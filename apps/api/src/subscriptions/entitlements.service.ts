@@ -3,6 +3,7 @@ import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
 import type {
   CountedMetric,
+  PlanFeature,
   KorvaModule,
   StorefrontFontPairingKey,
   StorefrontPaletteKey,
@@ -14,6 +15,9 @@ import {
   CUSTOM_DOMAIN_MIN_PLAN,
   EXTRA_SEAT_PRICES,
   EXTRA_SEAT_PURCHASABLE,
+  PLAN_FEATURE_LABELS,
+  PLAN_FEATURE_MIN_PLAN,
+  planHasFeature,
   getStorefrontTemplate,
   planMeetsMinimum,
   resolveEffectiveModules,
@@ -89,6 +93,35 @@ export class EntitlementsService {
     private readonly membershipsService: MembershipsService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
+
+  /** Whether the organization's active plan includes a feature — for read paths that degrade
+   *  (the storefront hiding online payment) rather than refuse. */
+  async hasFeature(
+    organizationId: string,
+    feature: PlanFeature,
+  ): Promise<boolean> {
+    const plan = await this.subscriptionsService.getActivePlan(organizationId);
+    return planHasFeature(plan.key, feature);
+  }
+
+  /** Refuses an action the active plan does not include. See PLAN_FEATURE_MIN_PLAN. */
+  async assertFeature(
+    organizationId: string,
+    feature: PlanFeature,
+  ): Promise<void> {
+    await this.assertSubscriptionActive(organizationId);
+    const plan = await this.subscriptionsService.getActivePlan(organizationId);
+    if (planHasFeature(plan.key, feature)) return;
+    const minPlan = PLAN_FEATURE_MIN_PLAN[feature];
+    throw new ForbiddenException({
+      code: 'PLAN_FEATURE_NOT_INCLUDED',
+      message: `Your plan ("${plan.name}") does not include "${PLAN_FEATURE_LABELS[feature]}" — upgrade to ${minPlan} or higher`,
+      // Top-level: HttpExceptionFilter gathers these into error.details.
+      feature,
+      minPlan,
+      plan: plan.key,
+    });
+  }
 
   /** Current count of a counted metric for one organization. */
   async countMetric(
@@ -179,6 +212,28 @@ export class EntitlementsService {
         message: `Your plan ("${plan.name}") does not include: ${notAllowed.join(', ')}`,
         details: { modules: notAllowed, plan: plan.key },
       });
+    }
+
+    // One sales channel on Free: bookings OR orders, the one its type of activity is built
+    // around (PLAN_FEATURE_MIN_PLAN.both_channels). Only refused when it would be NEW — an
+    // organization that already runs both, created before this rule or under a paid plan,
+    // keeps them.
+    if (
+      requestedModules.includes('booking') &&
+      requestedModules.includes('commerce') &&
+      !planHasFeature(plan.key, 'both_channels')
+    ) {
+      const organization = await this.connection
+        .collection('organizations')
+        .findOne(
+          { _id: new Types.ObjectId(organizationId) },
+          { projection: { enabledModules: 1 } },
+        );
+      const current =
+        (organization?.enabledModules as string[] | undefined) ?? [];
+      if (!(current.includes('booking') && current.includes('commerce'))) {
+        await this.assertFeature(organizationId, 'both_channels');
+      }
     }
   }
 

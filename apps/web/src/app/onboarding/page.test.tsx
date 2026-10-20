@@ -391,3 +391,18 @@ describe("OnboardingPage — type of activity", () => {
     );
   });
 });
+
+describe("OnboardingPage — one sales channel on the free plan", () => {
+  it("unticks orders when bookings is ticked, and the reverse", () => {
+    renderWithProviders(<OnboardingPage />);
+    const bookings = screen.getByRole("checkbox", { name: "Réservations" });
+    const orders = screen.getByRole("checkbox", { name: "Commandes & E-commerce" });
+
+    fireEvent.click(orders);
+    expect(orders).toBeChecked();
+    fireEvent.click(bookings);
+    expect(bookings).toBeChecked();
+    expect(orders).not.toBeChecked();
+    expect(screen.getByText(/choisissez un seul mode de vente/)).toBeInTheDocument();
+  });
+});

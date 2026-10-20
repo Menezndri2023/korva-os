@@ -21,6 +21,7 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { RequireModule } from '../../common/decorators/require-module.decorator';
+import { RequirePlanFeature } from '../../common/decorators/require-plan-feature.decorator';
 
 @ApiTags('warehouses')
 @RequireModule('catalog')
@@ -32,6 +33,7 @@ export class WarehousesController {
   ) {}
 
   @RequirePermissions('warehouses.create')
+  @RequirePlanFeature('warehouses')
   @Post()
   create(
     @CurrentTenant() tenant: TenantContext,
@@ -54,6 +56,7 @@ export class WarehousesController {
   }
 
   @RequirePermissions('warehouses.update')
+  @RequirePlanFeature('warehouses')
   @Patch(':id')
   update(
     @CurrentTenant() tenant: TenantContext,

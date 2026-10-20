@@ -35,6 +35,10 @@ export interface PublicOrganization {
    *  and the org's own storefrontSections choice server-side; render based on this, not
    *  enabledModules, for the offer grid and booking panel. */
   visibleSections: string[];
+  /** Free-plan storefronts carry a "Propulsé par KORVA" mention. */
+  poweredByKorva?: boolean;
+  /** Whether a visitor can CREATE a customer account here; signing in is never taken away. */
+  customerAccountsEnabled?: boolean;
   /** Flat shipping rate charged at checkout — undefined means no shipping cost. */
   shippingFlatRate?: number;
   /** Mirrors Organization's fulfillment settings. `fulfillmentModes` undefined means the shop

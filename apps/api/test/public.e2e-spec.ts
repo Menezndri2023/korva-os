@@ -207,6 +207,8 @@ describe('Public storefront API (e2e)', () => {
       })
       .expect(201);
     const organization = asSuccess<OrganizationPayload>(orgRes.body);
+    // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
+    await putOrganizationOnPlan(connection, organization.id, 'starter');
 
     await request(server)
       .patch('/api/v1/organizations/me')
@@ -738,6 +740,8 @@ describe('Public storefront API (e2e)', () => {
         })
         .expect(201);
       const organization = asSuccess<OrganizationPayload>(orgRes.body);
+      // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
+      await putOrganizationOnPlan(connection, organization.id, 'starter');
 
       await request(server)
         .post('/api/v1/subscriptions/change-plan')
