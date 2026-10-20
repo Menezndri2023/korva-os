@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { AvailabilityService } from './availability.service';
+import { AvailabilityService, nightsBetween } from './availability.service';
 import type { ResourcesRepository } from '../resources/resources.repository';
 import type { BookingsRepository } from '../bookings/bookings.repository';
 import type { OrganizationsService } from '../../organizations/organizations.service';
@@ -380,5 +380,40 @@ describe('AvailabilityService — getDaySlots', () => {
         BEFORE_THAT_DAY,
       ),
     ).toEqual([]);
+  });
+});
+
+describe('nightsBetween', () => {
+  it('counts calendar nights in the organization timezone, whatever the hours', () => {
+    // Monday 15:00 to Wednesday 11:00, Paris (UTC+2 in July): two nights.
+    expect(
+      nightsBetween(
+        new Date('2026-07-06T13:00:00.000Z'),
+        new Date('2026-07-08T09:00:00.000Z'),
+        'Europe/Paris',
+      ),
+    ).toBe(2);
+  });
+
+  it('is not thrown off by the autumn clock change', () => {
+    // Saturday 24 to Monday 26 October 2026, Paris: clocks go back on the 25th.
+    expect(
+      nightsBetween(
+        new Date('2026-10-24T13:00:00.000Z'),
+        new Date('2026-10-26T10:00:00.000Z'),
+        'Europe/Paris',
+      ),
+    ).toBe(2);
+  });
+
+  it('reads 23:30 UTC as the next day in Abidjan+1 zones, not in UTC', () => {
+    // 23:30 UTC on the 6th is 00:30 on the 7th in Lagos (UTC+1).
+    expect(
+      nightsBetween(
+        new Date('2026-07-06T23:30:00.000Z'),
+        new Date('2026-07-08T10:00:00.000Z'),
+        'Africa/Lagos',
+      ),
+    ).toBe(1);
   });
 });

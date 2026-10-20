@@ -51,6 +51,10 @@ export class Booking {
   @Prop({ type: String, enum: BOOKING_PAYMENT_STATUSES, default: 'unpaid' })
   paymentStatus!: BookingPaymentStatus;
 
+  /** See Booking.nights in @korva/types — set on a stay only. */
+  @Prop({ min: 1 })
+  nights?: number;
+
   @Prop()
   notes?: string;
 

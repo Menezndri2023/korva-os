@@ -141,6 +141,44 @@ describe("BookingPanel", () => {
     );
   });
 
+  it("books a stay with arrival and departure dates, priced by the API before confirming", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path.endsWith("/resources")) {
+        return Promise.resolve([{ id: "res-1", name: "Fauteuil 1", type: "room" }]);
+      }
+      if (path.includes("/stay-quote")) {
+        return Promise.resolve({
+          nights: 3,
+          pricePerNight: 60,
+          total: 180,
+          currency: "EUR",
+          minNights: 2,
+          available: true,
+          reason: null,
+        });
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const user = userEvent.setup();
+    renderPanel({ ...baseOffer, name: "Nuitée", bookingUnit: "night", minNights: 2 });
+
+    await pickResource(user);
+    expect(screen.queryByRole("group", { name: "Créneaux disponibles" })).not.toBeInTheDocument();
+    const departure = screen.getByLabelText("Date de départ");
+    await user.type(departure, "2099-01-04");
+    expect(await screen.findByText("3 nuits · 180.00 EUR")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Adresse e-mail"), "voyageur@client.test");
+    await user.click(screen.getByRole("button", { name: "Confirmer la réservation" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/public/salon/bookings",
+        expect.objectContaining({ checkOut: "2099-01-04", resourceId: "res-1" }),
+      ),
+    );
+    expect(getMock.mock.calls.some(([path]) => path.includes("/slots"))).toBe(false);
+  });
+
   it("cannot be submitted before a slot is picked, and says so when a day has none", async () => {
     getMock.mockImplementation((path: string) => {
       if (path.endsWith("/resources")) {

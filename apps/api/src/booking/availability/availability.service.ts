@@ -93,6 +93,28 @@ export function zonedTimeToUtc(
   return new Date(naiveUtc.getTime() + offsetMs);
 }
 
+/**
+ * Nights between a stay's start and end, counted on the organization's calendar: a stay from
+ * Monday 15:00 to Wednesday 11:00 is two nights, whatever the hours or a DST change in between.
+ */
+export function nightsBetween(
+  startAt: Date,
+  endAt: Date,
+  timeZone: string,
+): number {
+  const toDayNumber = (date: Date) => {
+    const { dayKey } = localDateParts(date, timeZone);
+    return (
+      Date.UTC(
+        Number(dayKey.slice(0, 4)),
+        Number(dayKey.slice(5, 7)) - 1,
+        Number(dayKey.slice(8, 10)),
+      ) / 86_400_000
+    );
+  };
+  return toDayNumber(endAt) - toDayNumber(startAt);
+}
+
 /** Times are compared in the organization's own timezone — see ADR-004 and localDateParts above. */
 function isWithinWeeklyWindows(
   resource: ResourceDocument,
@@ -151,6 +173,9 @@ export class AvailabilityService {
     endAt: Date,
     excludeBookingId?: string,
     session?: ClientSession,
+    /** A stay (per-night offer) spans several days: weekly opening hours are per day and do not
+     *  apply to it. Blocked periods, overlaps and capacity still do. */
+    options: { stay?: boolean } = {},
   ): Promise<ResourceDocument> {
     const resource = await this.resourcesRepository.findById(
       organizationId,
@@ -171,6 +196,7 @@ export class AvailabilityService {
     const organization =
       await this.organizationsService.getById(organizationId);
     if (
+      !options.stay &&
       !isWithinWeeklyWindows(resource, startAt, endAt, organization.timezone)
     ) {
       throw new BadRequestException({
@@ -218,6 +244,17 @@ export class AvailabilityService {
     }
 
     return resource;
+  }
+
+  /** Nights of a stay on this organization's calendar — see nightsBetween. */
+  async countNights(
+    organizationId: string,
+    startAt: Date,
+    endAt: Date,
+  ): Promise<number> {
+    const { timezone } =
+      await this.organizationsService.getById(organizationId);
+    return nightsBetween(startAt, endAt, timezone);
   }
 
   async getDayAvailability(

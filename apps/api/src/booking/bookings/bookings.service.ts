@@ -67,6 +67,7 @@ export class BookingsService {
 
     const startAt = new Date(input.startAt);
     const endAt = new Date(input.endAt);
+    const stay = await this.resolveStay(organizationId, offer, startAt, endAt);
 
     // The overlap-count read and the booking insert must be atomic w.r.t. any other concurrent
     // create() for the same resource, or two requests can both read "under capacity" before
@@ -88,6 +89,7 @@ export class BookingsService {
           endAt,
           undefined,
           session,
+          { stay: stay !== null },
         );
 
         return this.bookingsRepository.create(
@@ -98,10 +100,14 @@ export class BookingsService {
             contactId: new Types.ObjectId(input.contactId),
             startAt,
             endAt,
+            // A stay is priced per night; a slot at the offer's price.
             pricing: {
-              amount: offer.pricing.amount,
+              amount: stay
+                ? offer.pricing.amount * stay.nights
+                : offer.pricing.amount,
               currency: offer.pricing.currency,
             },
+            nights: stay?.nights,
             notes: input.notes,
             // Snapshot, not a live join — see Booking.staffMembershipId's own doc comment.
             staffMembershipId: resource.membershipId,
@@ -204,6 +210,40 @@ export class BookingsService {
     });
   }
 
+  /**
+   * For a per-night offer (bookingUnit "night"), the stay's nights on the organization's calendar
+   * — at least one, and at least the offer's minimum. Null for a slot offer.
+   */
+  private async resolveStay(
+    organizationId: string,
+    offer: { bookingUnit?: string | null; minNights?: number | null },
+    startAt: Date,
+    endAt: Date,
+    force = false,
+  ): Promise<{ nights: number } | null> {
+    if (!force && offer.bookingUnit !== 'night') return null;
+    const nights = await this.availabilityService.countNights(
+      organizationId,
+      startAt,
+      endAt,
+    );
+    if (nights < 1) {
+      throw new BadRequestException({
+        code: 'STAY_TOO_SHORT',
+        message: 'A stay must include at least one night',
+      });
+    }
+    if (offer.minNights && nights < offer.minNights) {
+      throw new BadRequestException({
+        code: 'STAY_BELOW_MINIMUM',
+        message: `This stay requires at least ${offer.minNights} nights`,
+        minNights: offer.minNights,
+        nights,
+      });
+    }
+    return { nights };
+  }
+
   async reschedule(
     organizationId: string,
     userId: string,
@@ -220,17 +260,47 @@ export class BookingsService {
 
     const startAt = new Date(input.startAt);
     const endAt = new Date(input.endAt);
+    // A stay keeps being a stay: re-counted, re-checked for its minimum, and re-priced at the
+    // same nightly rate it was booked at.
+    let stayUpdate:
+      | { nights: number; pricing: { amount: number; currency: string } }
+      | undefined;
+    if (booking.nights) {
+      const offer = await this.offersService.getById(
+        organizationId,
+        booking.offerId.toString(),
+      );
+      const stay = await this.resolveStay(
+        organizationId,
+        offer,
+        startAt,
+        endAt,
+        true,
+      );
+      if (stay) {
+        stayUpdate = {
+          nights: stay.nights,
+          pricing: {
+            amount: (booking.pricing.amount / booking.nights) * stay.nights,
+            currency: booking.pricing.currency,
+          },
+        };
+      }
+    }
     await this.availabilityService.assertSlotAvailable(
       organizationId,
       booking.resourceId.toString(),
       startAt,
       endAt,
       id,
+      undefined,
+      { stay: Boolean(booking.nights) },
     );
 
     const updated = await this.bookingsRepository.update(organizationId, id, {
       startAt,
       endAt,
+      ...stayUpdate,
     });
     if (!updated) {
       throw new NotFoundException({

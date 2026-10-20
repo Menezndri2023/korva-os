@@ -51,14 +51,37 @@ export const publicSlotsQuerySchema = z.object({
 });
 export type PublicSlotsQuery = z.infer<typeof publicSlotsQuerySchema>;
 
-export const createPublicBookingSchema = z.object({
-  resourceId: z.string().min(1),
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
+
+/**
+ * A public booking is either a time slot (startAt/endAt, from GET /slots) or a STAY for a
+ * per-night offer (checkIn/checkOut dates — the API applies the organization's check-in and
+ * check-out times in its timezone). Which one is required depends on the offer, which only the
+ * API knows; this schema only requires one complete pair.
+ */
+export const createPublicBookingSchema = z
+  .object({
+    resourceId: z.string().min(1),
+    offerId: z.string().min(1),
+    startAt: z.string().datetime().optional(),
+    endAt: z.string().datetime().optional(),
+    checkIn: isoDate.optional(),
+    checkOut: isoDate.optional(),
+    notes: z.string().max(2000).optional(),
+    contact: publicContactSchema,
+  })
+  .refine((b) => (b.startAt && b.endAt) || (b.checkIn && b.checkOut), {
+    message: "Either startAt/endAt or checkIn/checkOut is required",
+  });
+
+/** GET /public/:slug/stay-quote — nights, total and availability of one room for a stay. */
+export const publicStayQuoteSchema = z.object({
   offerId: z.string().min(1),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
-  notes: z.string().max(2000).optional(),
-  contact: publicContactSchema,
+  resourceId: z.string().min(1),
+  checkIn: isoDate,
+  checkOut: isoDate,
 });
+export type PublicStayQuoteQuery = z.infer<typeof publicStayQuoteSchema>;
 export type CreatePublicBookingInput = z.infer<typeof createPublicBookingSchema>;
 
 const publicOrderLineItemSchema = z.object({

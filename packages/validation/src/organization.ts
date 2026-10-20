@@ -106,6 +106,8 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   pickupInstructions: z.string().max(500).optional(),
   /** Up to a week. */
   orderLeadTimeMinutes: z.number().int().min(0).max(10080).optional(),
+  checkInTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:mm").optional(),
+  checkOutTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "expected HH:mm").optional(),
   /** Omit to accept cash only (today's universal default). Must stay non-empty — a storefront
    *  offering no payment method at all isn't a valid checkout configuration. */
   acceptedPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).min(1).optional(),

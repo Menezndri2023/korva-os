@@ -109,6 +109,7 @@ export default function OfferDetailPage() {
   const trackStock = watch("trackStock");
   const images = watch("images") ?? [];
   const offerType = watch("type");
+  const bookingUnit = watch("bookingUnit") ?? "slot";
   const fields = OFFER_TYPE_FIELDS[offerType ?? "product"];
   const { has } = usePlanFeatures();
   // A promotion already on the offer stays editable after a downgrade; adding one needs the plan.
@@ -152,6 +153,8 @@ export default function OfferDetailPage() {
       lowStockThreshold: offer.lowStockThreshold,
       durationMinutes: offer.durationMinutes ?? null,
       compareAtPrice: offer.compareAtPrice ?? null,
+      bookingUnit: offer.bookingUnit ?? "slot",
+      minNights: offer.minNights ?? null,
     });
   }
   function cancelEdit() {
@@ -497,6 +500,25 @@ export default function OfferDetailPage() {
               <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />
             )}
             {fields.duration && (
+              <Select aria-label="Vendu" className="col-span-2" {...register("bookingUnit")}>
+                <option value="slot">Par créneau (rendez-vous, séance, cours)</option>
+                <option value="night">Par nuit (séjour, de la date d&apos;arrivée à la date de départ)</option>
+              </Select>
+            )}
+            {fields.duration && bookingUnit === "night" && (
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                aria-label="Séjour minimum (nuits)"
+                placeholder="Séjour minimum en nuits (optionnel)"
+                className="col-span-2"
+                {...register("minNights", {
+                  setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
+                })}
+              />
+            )}
+            {fields.duration && bookingUnit !== "night" && (
               <Input
                 type="number"
                 step="5"

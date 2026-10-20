@@ -175,6 +175,7 @@ describe("OfferDetailPage", () => {
         customFields: {},
         compareAtPrice: null,
         durationMinutes: null,
+        minNights: null,
         attributes: {},
         isBundle: false,
         bundleItems: [],

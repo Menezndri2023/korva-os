@@ -18,6 +18,7 @@ import {
   listPublicOffersQuerySchema,
   publicAvailabilityQuerySchema,
   publicSlotsQuerySchema,
+  publicStayQuoteSchema,
   publicOfferReviewsQuerySchema,
   resolveDomainQuerySchema,
   searchPublicOffersQuerySchema,
@@ -30,6 +31,7 @@ import {
   type ListPublicOffersQuery,
   type PublicAvailabilityQuery,
   type PublicSlotsQuery,
+  type PublicStayQuoteQuery,
   type PublicOfferReviewsQuery,
   type ResolveDomainQuery,
   type SearchPublicOffersQuery,
@@ -202,6 +204,15 @@ export class PublicController {
       query.resourceId,
       query.date,
     );
+  }
+
+  @Get('stay-quote')
+  getStayQuote(
+    @Param('organizationSlug') slug: string,
+    @Query(new ZodValidationPipe(publicStayQuoteSchema))
+    query: PublicStayQuoteQuery,
+  ) {
+    return this.publicService.getStayQuote(slug, query);
   }
 
   @Get('slots')

@@ -93,6 +93,9 @@ export interface PublicOffer {
   compareAtPrice?: number;
   /** Characteristics set by the business (matière, origine, équipements...) — Offer.attributes. */
   attributes?: Record<string, string>;
+  /** "night" for a stay booked from an arrival to a departure date — see Offer.bookingUnit. */
+  bookingUnit?: "slot" | "night";
+  minNights?: number;
   /** Choices made when ordering (cuisson, taille, suppléments) — see OfferOptionGroup. */
   optionGroups?: OfferOptionGroup[];
 }
@@ -121,6 +124,18 @@ export interface PublicSlots {
   date: string;
   durationMinutes: number;
   slots: { startAt: string; endAt: string; time: string }[];
+}
+
+/** Mirrors PublicService#getStayQuote exactly. */
+export interface PublicStayQuote {
+  nights: number;
+  pricePerNight: number;
+  total: number;
+  currency: string;
+  minNights: number | null;
+  available: boolean;
+  /** Why it is not available: STAY_TOO_SHORT, STAY_BELOW_MINIMUM, SLOT_UNAVAILABLE, SLOT_BLOCKED... */
+  reason: string | null;
 }
 
 /** Mirrors PublicService#getAvailability exactly. */

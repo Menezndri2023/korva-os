@@ -135,6 +135,11 @@ export interface Organization {
   pickupInstructions?: string;
   /** Minimum time between ordering and a requested pickup/delivery time. */
   orderLeadTimeMinutes?: number;
+  /** Lodging: when a stay starts on its arrival date and ends on its departure date, in the
+   *  organization's timezone ("HH:mm"). DEFAULT_CHECK_IN_TIME / DEFAULT_CHECK_OUT_TIME apply
+   *  when unset. */
+  checkInTime?: string;
+  checkOutTime?: string;
   /** Never empty in practice — the schema defaults new organizations to `["cash"]`. See
    *  PAYMENT_METHODS' own doc comment. */
   acceptedPaymentMethods?: PaymentMethod[];

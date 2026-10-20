@@ -20,7 +20,7 @@ import {
   type OfferOptionGroup,
   type OfferType,
 } from "@korva/types";
-import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
+import { Badge, Button, Card, Input, Pagination, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useActiveOrganization } from "@/lib/use-active-organization";
@@ -115,6 +115,8 @@ export default function CatalogPage() {
   function openForm(prefill?: { name: string; type: OfferType }) {
     reset({
       type: prefill?.type ?? recommendedOfferTypes[0] ?? "product",
+      // A guesthouse sells nights; everyone else sells time slots.
+      bookingUnit: organization?.businessModel === "lodging" ? "night" : "slot",
       name: prefill?.name ?? "",
       images: [],
       categories: [],
@@ -134,6 +136,7 @@ export default function CatalogPage() {
   const trackStock = watch("trackStock");
   const images = watch("images") ?? [];
   const offerType = watch("type");
+  const bookingUnit = watch("bookingUnit") ?? "slot";
   const fields = OFFER_TYPE_FIELDS[offerType ?? "product"];
   const { has } = usePlanFeatures();
   // A promotion already on the offer stays editable after a downgrade; adding one needs the plan.
@@ -270,6 +273,25 @@ export default function CatalogPage() {
           {fields.reference && <Input placeholder="Référence (SKU)" {...register("sku")} />}
           {fields.barcode && <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />}
           {fields.duration && (
+            <Select aria-label="Vendu" className="col-span-2" {...register("bookingUnit")}>
+              <option value="slot">Par créneau (rendez-vous, séance, cours)</option>
+              <option value="night">Par nuit (séjour, de la date d&apos;arrivée à la date de départ)</option>
+            </Select>
+          )}
+          {fields.duration && bookingUnit === "night" && (
+            <Input
+              type="number"
+              min="1"
+              step="1"
+              aria-label="Séjour minimum (nuits)"
+              placeholder="Séjour minimum en nuits (optionnel)"
+              className="col-span-2"
+              {...register("minNights", {
+                setValueAs: (v: string | number | null) => (v === "" || v == null ? undefined : Number(v)),
+              })}
+            />
+          )}
+          {fields.duration && bookingUnit !== "night" && (
             <Input
               type="number"
               step="5"

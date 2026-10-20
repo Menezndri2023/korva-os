@@ -21,6 +21,7 @@ import type {
   PublicOrganization,
   PublicResource,
   PublicSlots,
+  PublicStayQuote,
 } from "@/lib/public-types";
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
@@ -67,6 +68,13 @@ function DialogCloseButton({ onClose }: { onClose: () => void }) {
   );
 }
 
+const STAY_UNAVAILABLE_LABELS: Record<string, string> = {
+  STAY_TOO_SHORT: "Choisissez une date de départ après la date d'arrivée.",
+  STAY_BELOW_MINIMUM: "Ce séjour est trop court pour cette offre.",
+  SLOT_UNAVAILABLE: "Déjà réservé à ces dates.",
+  SLOT_BLOCKED: "Fermé à ces dates.",
+};
+
 export function BookingPanel({
   slug,
   offer,
@@ -81,6 +89,9 @@ export function BookingPanel({
   const [date, setDate] = useState(localToday);
   const [chosenDuration, setChosenDuration] = useState(60);
   const fixedDuration = offer.durationMinutes;
+  const isStay = offer.bookingUnit === "night";
+  const [checkIn, setCheckIn] = useState(localToday);
+  const [checkOut, setCheckOut] = useState("");
 
   const {
     register,
@@ -93,8 +104,10 @@ export function BookingPanel({
     defaultValues: {
       offerId: offer.id,
       resourceId: "",
-      startAt: "",
-      endAt: "",
+      // Undefined, not "": both are optional in the schema (a stay sends dates instead), and an
+      // empty string fails its datetime format.
+      startAt: undefined,
+      endAt: undefined,
       contact: { email: "", firstName: "", phone: "" },
     },
   });
@@ -118,13 +131,29 @@ export function BookingPanel({
       publicApiClient.get<PublicSlots>(
         `/public/${slug}/slots?resourceId=${resourceId}&offerId=${offer.id}&date=${date}${durationParam}`,
       ),
-    enabled: !!resourceId && !!date,
+    enabled: !!resourceId && !!date && !isStay,
   });
+
+  // A stay is priced and checked by the API before the customer commits (GET /stay-quote).
+  const stayQuery = useQuery({
+    queryKey: ["public-stay-quote", slug, offer.id, resourceId, checkIn, checkOut],
+    queryFn: () =>
+      publicApiClient.get<PublicStayQuote>(
+        `/public/${slug}/stay-quote?offerId=${offer.id}&resourceId=${resourceId}&checkIn=${checkIn}&checkOut=${checkOut}`,
+      ),
+    enabled: isStay && !!resourceId && !!checkIn && !!checkOut,
+  });
+  useEffect(() => {
+    if (!isStay) return;
+    setValue("checkIn", checkIn);
+    setValue("checkOut", checkOut || undefined);
+  }, [isStay, checkIn, checkOut, setValue]);
+  const stayReady = isStay && stayQuery.data?.available === true;
 
   // Any change to what the slots depend on invalidates the one already picked.
   useEffect(() => {
-    setValue("startAt", "");
-    setValue("endAt", "");
+    setValue("startAt", undefined);
+    setValue("endAt", undefined);
   }, [resourceId, date, chosenDuration, setValue]);
 
   function pickSlot(slot: { startAt: string; endAt: string }) {
@@ -219,6 +248,45 @@ export function BookingPanel({
           {errors.resourceId && <p className="mt-1 text-xs text-destructive">{errors.resourceId.message}</p>}
         </div>
 
+        {isStay ? (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <label className="flex-1 text-xs text-text-muted">
+                Arrivée
+                <Input
+                  type="date"
+                  aria-label="Date d'arrivée"
+                  value={checkIn}
+                  min={localToday()}
+                  onChange={(e) => setCheckIn(e.target.value)}
+                  className="mt-1 w-full"
+                />
+              </label>
+              <label className="flex-1 text-xs text-text-muted">
+                Départ
+                <Input
+                  type="date"
+                  aria-label="Date de départ"
+                  value={checkOut}
+                  min={checkIn || localToday()}
+                  onChange={(e) => setCheckOut(e.target.value)}
+                  className="mt-1 w-full"
+                />
+              </label>
+            </div>
+            {stayQuery.data && (
+              <p className={`text-xs ${stayQuery.data.available ? "text-text" : "text-destructive"}`}>
+                {stayQuery.data.available
+                  ? `${stayQuery.data.nights} nuit${stayQuery.data.nights > 1 ? "s" : ""} · ${stayQuery.data.total.toFixed(2)} ${stayQuery.data.currency}`
+                  : STAY_UNAVAILABLE_LABELS[stayQuery.data.reason ?? ""] ?? "Indisponible à ces dates."}
+              </p>
+            )}
+            {offer.minNights && offer.minNights > 1 && (
+              <p className="text-xs text-text-muted">Séjour minimum : {offer.minNights} nuits.</p>
+            )}
+          </div>
+        ) : (
+          <>
         <div className="flex gap-2">
           <Input
             type="date"
@@ -284,6 +352,9 @@ export function BookingPanel({
           </div>
         )}
 
+          </>
+        )}
+
         <Input
           placeholder="Prénom"
           aria-label="Prénom"
@@ -314,7 +385,12 @@ export function BookingPanel({
             {bookMutation.error instanceof PublicApiError ? bookMutation.error.message : "Erreur"}
           </p>
         )}
-        <Button type="submit" loading={bookMutation.isPending} disabled={!startAt} className="w-full">
+        <Button
+          type="submit"
+          loading={bookMutation.isPending}
+          disabled={isStay ? !stayReady : !startAt}
+          className="w-full"
+        >
           {bookMutation.isPending ? "Envoi..." : "Confirmer la réservation"}
         </Button>
       </form>

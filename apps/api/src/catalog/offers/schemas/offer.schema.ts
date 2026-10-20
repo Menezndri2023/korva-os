@@ -149,6 +149,13 @@ export class Offer {
   @Prop({ type: Number, min: 1 })
   durationMinutes?: number | null;
 
+  /** See Offer.bookingUnit in @korva/types. Absent means "slot". */
+  @Prop({ type: String, enum: ['slot', 'night'] })
+  bookingUnit?: 'slot' | 'night';
+
+  @Prop({ type: Number, min: 1 })
+  minNights?: number | null;
+
   /** See Offer.compareAtPrice in @korva/types. Null once cleared. */
   @Prop({ type: Number, min: 0 })
   compareAtPrice?: number | null;

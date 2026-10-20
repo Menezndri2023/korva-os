@@ -46,7 +46,11 @@ export function pruneForType<T extends CreateOfferInput | UpdateOfferInput>(
     attributes: fields.attributes ? drafts.attributes : {},
     isBundle: bundleItems.length > 0,
     bundleItems,
-    durationMinutes: fields.duration ? values.durationMinutes : gone,
+    // A stay has no duration (it runs from check-in to check-out); a slot has no minimum stay.
+    durationMinutes:
+      fields.duration && values.bookingUnit !== "night" ? values.durationMinutes : gone,
+    bookingUnit: fields.duration ? values.bookingUnit : undefined,
+    minNights: fields.duration && values.bookingUnit === "night" ? values.minNights : gone,
     // Groups and options left without a name are dropped, then empty groups with them.
     optionGroups: fields.options
       ? (drafts.optionGroups ?? [])

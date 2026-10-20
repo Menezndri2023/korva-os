@@ -297,6 +297,96 @@ describe('Public booking slots and fixed-duration offers (e2e)', () => {
     });
   });
 
+  it('books a stay by the night: quoted, priced per night, at the check-in and check-out times, never twice', async () => {
+    const roomRes = await auth(request(server).post('/api/v1/resources'))
+      .send({ name: 'Chambre Baobab', type: 'room' })
+      .expect(201);
+    const roomId = asSuccess<{ id: string }>(roomRes.body).id;
+    const stayRes = await auth(request(server).post('/api/v1/offers'))
+      .send({
+        type: 'booking',
+        name: 'Nuitée',
+        status: 'active',
+        bookingUnit: 'night',
+        minNights: 2,
+        pricing: { amount: 60, currency: 'EUR' },
+      })
+      .expect(201);
+    const stayOfferId = asSuccess<{ id: string }>(stayRes.body).id;
+
+    const day = (offset: number) => {
+      const date = new Date(`${monday}T12:00:00.000Z`);
+      date.setUTCDate(date.getUTCDate() + offset);
+      return date.toISOString().slice(0, 10);
+    };
+    const quote = async (checkIn: string, checkOut: string) =>
+      asSuccess<{
+        nights: number;
+        total: number;
+        available: boolean;
+        reason: string | null;
+      }>(
+        (
+          await request(server)
+            .get(
+              `/api/v1/public/${slug}/stay-quote?offerId=${stayOfferId}&resourceId=${roomId}&checkIn=${checkIn}&checkOut=${checkOut}`,
+            )
+            .expect(200)
+        ).body,
+      );
+
+    expect(await quote(day(0), day(1))).toMatchObject({
+      nights: 1,
+      available: false,
+      reason: 'STAY_BELOW_MINIMUM',
+    });
+    expect(await quote(day(0), day(3))).toMatchObject({
+      nights: 3,
+      total: 180,
+      available: true,
+    });
+
+    const bookingRes = await request(server)
+      .post(`/api/v1/public/${slug}/bookings`)
+      .send({
+        resourceId: roomId,
+        offerId: stayOfferId,
+        checkIn: day(0),
+        checkOut: day(3),
+        contact: { email: 'voyageur@customer.test' },
+      })
+      .expect(201);
+    const booking = asSuccess<{ id: string; startAt: string; endAt: string }>(
+      bookingRes.body,
+    );
+    // 15:00 on arrival and 11:00 on departure, read on the Paris clock.
+    expect(parisTime(booking.startAt)).toBe('15:00');
+    expect(parisTime(booking.endAt)).toBe('11:00');
+
+    const stored = asSuccess<{ nights: number; pricing: { amount: number } }>(
+      (
+        await auth(
+          request(server).get(`/api/v1/bookings/${booking.id}`),
+        ).expect(200)
+      ).body,
+    );
+    expect(stored).toMatchObject({ nights: 3, pricing: { amount: 180 } });
+
+    // The room is taken for those nights; departing the day someone else arrives is fine.
+    expect(await quote(day(1), day(4))).toMatchObject({ available: false });
+    expect(await quote(day(3), day(5))).toMatchObject({ available: true });
+    await request(server)
+      .post(`/api/v1/public/${slug}/bookings`)
+      .send({
+        resourceId: roomId,
+        offerId: stayOfferId,
+        checkIn: day(2),
+        checkOut: day(4),
+        contact: { email: 'autre@customer.test' },
+      })
+      .expect(400);
+  });
+
   it('rejects a duration outside the allowed bounds', async () => {
     await auth(request(server).patch(`/api/v1/offers/${fixedOfferId}`))
       .send({ durationMinutes: 2 })

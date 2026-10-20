@@ -10,6 +10,8 @@ import { Model, Types } from 'mongoose';
 import {
   BUSINESS_MODEL_DEFINITIONS,
   CUSTOM_DOMAIN_MIN_PLAN,
+  DEFAULT_CHECK_IN_TIME,
+  DEFAULT_CHECK_OUT_TIME,
   STOREFRONT_SECTIONS,
   verticalForOrganizationType,
   getStorefrontTemplate,
@@ -24,6 +26,7 @@ import {
 import type {
   CreatePublicBookingInput,
   PublicSlotsQuery,
+  PublicStayQuoteQuery,
   CreatePublicLeadInput,
   CreatePublicOrderInput,
   ListPublicOffersQuery,
@@ -35,7 +38,11 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { OffersService } from '../catalog/offers/offers.service';
 import { ReviewsService } from '../reviews/reviews.service';
-import { AvailabilityService } from '../booking/availability/availability.service';
+import {
+  AvailabilityService,
+  nightsBetween,
+  zonedTimeToUtc,
+} from '../booking/availability/availability.service';
 import { BookingsService } from '../booking/bookings/bookings.service';
 import { ResourcesService } from '../booking/resources/resources.service';
 import { OrdersService } from '../commerce/orders/orders.service';
@@ -394,6 +401,8 @@ export class PublicService {
       compareAtPrice: offer.compareAtPrice ?? undefined,
       attributes: offer.attributes,
       optionGroups: offer.optionGroups,
+      bookingUnit: offer.bookingUnit ?? 'slot',
+      minNights: offer.minNights ?? undefined,
     };
   }
 
@@ -578,18 +587,123 @@ export class PublicService {
     };
   }
 
+  /**
+   * The instants a public booking occupies, decided by the API from the offer:
+   *  - a STAY (per-night offer) from its checkIn/checkOut dates, at the organization's check-in
+   *    and check-out times in its timezone — never browser-built instants;
+   *  - a SLOT from startAt, with a fixed-length offer's end replaced by start + duration (a
+   *    45-minute service can never be booked for 15).
+   */
+  private resolveBookingTimes(
+    organization: OrganizationDocument,
+    offer: OfferDocument,
+    input: Pick<
+      CreatePublicBookingInput,
+      'startAt' | 'endAt' | 'checkIn' | 'checkOut'
+    >,
+  ): { startAt: string; endAt: string } {
+    if (offer.bookingUnit === 'night') {
+      if (!input.checkIn || !input.checkOut) {
+        throw new BadRequestException({
+          code: 'STAY_DATES_REQUIRED',
+          message: 'Choose an arrival and a departure date',
+        });
+      }
+      return {
+        startAt: zonedTimeToUtc(
+          input.checkIn,
+          organization.checkInTime ?? DEFAULT_CHECK_IN_TIME,
+          organization.timezone,
+        ).toISOString(),
+        endAt: zonedTimeToUtc(
+          input.checkOut,
+          organization.checkOutTime ?? DEFAULT_CHECK_OUT_TIME,
+          organization.timezone,
+        ).toISOString(),
+      };
+    }
+    if (!input.startAt || !input.endAt) {
+      throw new BadRequestException({
+        code: 'SLOT_REQUIRED',
+        message: 'Choose a time slot',
+      });
+    }
+    return {
+      startAt: input.startAt,
+      endAt: offer.durationMinutes
+        ? new Date(
+            new Date(input.startAt).getTime() + offer.durationMinutes * 60_000,
+          ).toISOString()
+        : input.endAt,
+    };
+  }
+
+  /**
+   * What a stay would cost and whether the room is free, before the customer commits: the same
+   * rules as the booking itself (BookingsService/AvailabilityService), run without writing.
+   */
+  async getStayQuote(slug: string, query: PublicStayQuoteQuery) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'booking');
+    const organizationId = organization.id as string;
+    const offer = await this.findActiveOffer(organizationId, query.offerId);
+    if (offer.bookingUnit !== 'night') {
+      throw new BadRequestException({
+        code: 'NOT_A_STAY_OFFER',
+        message: 'This offer is not booked by the night',
+      });
+    }
+    const { startAt, endAt } = this.resolveBookingTimes(
+      organization,
+      offer,
+      query,
+    );
+    const nights = nightsBetween(
+      new Date(startAt),
+      new Date(endAt),
+      organization.timezone,
+    );
+    const base = {
+      nights,
+      pricePerNight: offer.pricing.amount,
+      total: Math.max(nights, 0) * offer.pricing.amount,
+      currency: offer.pricing.currency,
+      minNights: offer.minNights ?? null,
+    };
+    if (nights < 1)
+      return { ...base, available: false, reason: 'STAY_TOO_SHORT' };
+    if (offer.minNights && nights < offer.minNights) {
+      return { ...base, available: false, reason: 'STAY_BELOW_MINIMUM' };
+    }
+    try {
+      await this.availabilityService.assertSlotAvailable(
+        organizationId,
+        query.resourceId,
+        new Date(startAt),
+        new Date(endAt),
+        undefined,
+        undefined,
+        { stay: true },
+      );
+      return { ...base, available: true, reason: null };
+    } catch (error) {
+      const code =
+        (error as { getResponse?: () => { code?: string } }).getResponse?.()
+          ?.code ?? 'UNAVAILABLE';
+      return { ...base, available: false, reason: code };
+    }
+  }
+
   async createBooking(slug: string, input: CreatePublicBookingInput) {
     const organization = await this.resolveOrganization(slug);
     this.assertModuleEnabled(organization, 'booking');
     const organizationId = organization.id as string;
     const offer = await this.findActiveOffer(organizationId, input.offerId);
-    // A fixed-length offer's end is the business's decision, not the customer's: whatever endAt
-    // the public client sends is replaced, so a 45-minute service can never be booked for 15.
-    const endAt = offer.durationMinutes
-      ? new Date(
-          new Date(input.startAt).getTime() + offer.durationMinutes * 60_000,
-        ).toISOString()
-      : input.endAt;
+    const { startAt, endAt } = this.resolveBookingTimes(
+      organization,
+      offer,
+      input,
+    );
 
     const contact = await this.contactsService.findOrCreateByEmail(
       organizationId,
@@ -601,7 +715,7 @@ export class PublicService {
       {
         resourceId: input.resourceId,
         offerId: input.offerId,
-        startAt: input.startAt,
+        startAt,
         endAt,
         contactId: contact.id as string,
         notes: input.notes,

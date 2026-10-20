@@ -10,6 +10,9 @@ export const OFFER_TYPES = [
 ] as const;
 export type OfferType = (typeof OFFER_TYPES)[number];
 
+export const BOOKING_UNITS = ["slot", "night"] as const;
+export type BookingUnit = (typeof BOOKING_UNITS)[number];
+
 export const OFFER_STATUSES = ["draft", "active", "archived"] as const;
 export type OfferStatus = (typeof OFFER_STATUSES)[number];
 
@@ -111,6 +114,12 @@ export interface Offer {
    *  computes a public booking's end from it. Unset keeps the older behaviour (the booking form
    *  asks for a duration). Only meaningful for `booking` offers. */
   durationMinutes?: number | null;
+  /** How a `booking` offer is sold: by time slot (the default, `durationMinutes` long) or by the
+   *  night — a stay from a check-in date to a check-out date, priced `pricing.amount` per night,
+   *  for lodging. */
+  bookingUnit?: BookingUnit;
+  /** Shortest stay accepted for a per-night offer. */
+  minNights?: number | null;
   /** Price before a promotion, shown struck through next to `pricing.amount`. Always higher than
    *  it (enforced by the API). Unset or null means no promotion is displayed. */
   compareAtPrice?: number | null;

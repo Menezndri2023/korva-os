@@ -118,6 +118,13 @@ export class Organization {
   @Prop({ min: 0 })
   orderLeadTimeMinutes?: number;
 
+  /** See Organization.checkInTime / checkOutTime in @korva/types ("HH:mm"). */
+  @Prop()
+  checkInTime?: string;
+
+  @Prop()
+  checkOutTime?: string;
+
   /** Undefined means "cash only" (see PublicService's `?? ['cash']` fallback) — `default:
    *  undefined` opts out of Mongoose's array-path auto-`[]`-init, same reasoning as
    *  `storefrontSections` above; a real stored `[]` would otherwise be indistinguishable from

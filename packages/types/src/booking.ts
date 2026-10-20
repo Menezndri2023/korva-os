@@ -56,6 +56,10 @@ export interface Resource {
   updatedAt: string;
 }
 
+/** Arrival and departure times of a stay when the organization has not set its own. */
+export const DEFAULT_CHECK_IN_TIME = "15:00";
+export const DEFAULT_CHECK_OUT_TIME = "11:00";
+
 export const BOOKING_STATUSES = ["pending", "confirmed", "cancelled", "completed"] as const;
 export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 
@@ -78,6 +82,8 @@ export interface Booking {
   status: BookingStatus;
   pricing: BookingPricing;
   paymentStatus: BookingPaymentStatus;
+  /** Set on a stay (per-night offer): how many nights `pricing.amount` covers. */
+  nights?: number;
   notes?: string;
   /** Set once BookingReminderSchedulerService has sent a reminder for this appointment — absent
    *  otherwise. Cleared on reschedule (the old reminder no longer applies to the new time). */

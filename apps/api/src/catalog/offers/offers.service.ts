@@ -168,6 +168,8 @@ export class OffersService {
       durationMinutes: input.durationMinutes,
       compareAtPrice: input.compareAtPrice,
       optionGroups: input.optionGroups,
+      bookingUnit: input.bookingUnit,
+      minNights: input.minNights,
     });
 
     await this.auditService.record({

@@ -312,6 +312,29 @@ describe("CatalogPage — pagination", () => {
     expect(screen.getAllByText(/Formule Starter/).length).toBe(2);
   });
 
+  it("sells a booking offer by the night with a minimum stay, and no duration", async () => {
+    postMock.mockResolvedValue({ ...offer, id: "offer-7" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    await user.selectOptions(screen.getByLabelText("Type d'offre"), "booking");
+    await user.type(screen.getByPlaceholderText("Nom"), "Chambre double");
+    await user.selectOptions(screen.getByLabelText("Vendu"), "night");
+    expect(screen.queryByLabelText("Durée de la prestation (minutes)")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText("Séjour minimum (nuits)"), "2");
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({ type: "booking", bookingUnit: "night", minNights: 2 }),
+      ),
+    );
+    const payload = postMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(payload.durationMinutes).toBeUndefined();
+  });
+
   it("shows each offer's main photo in the list", async () => {
     mockOffersPage([{ ...offer, images: ["https://api.test/u/main.png", "https://api.test/u/2.png"] }]);
     const { container } = renderWithProviders(<CatalogPage />);
