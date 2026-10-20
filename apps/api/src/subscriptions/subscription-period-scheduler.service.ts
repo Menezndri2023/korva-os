@@ -14,6 +14,7 @@ import { SubscriptionDocument } from './schemas/subscription.schema';
 import { AuditService } from '../audit/audit.service';
 import { CountersService } from '../core/counters/counters.service';
 import { backgroundWorkersDisabled } from '../core/background/background-workers';
+import { SubscriptionsService } from './subscriptions.service';
 
 export const SUBSCRIPTION_PERIOD_QUEUE_NAME = 'subscription-period';
 export const SUBSCRIPTION_PERIOD_JOB_NAME = 'sweep';
@@ -112,6 +113,7 @@ export class SubscriptionPeriodSchedulerService
     private readonly plansRepository: PlansRepository,
     private readonly countersService: CountersService,
     private readonly auditService: AuditService,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -179,6 +181,17 @@ export class SubscriptionPeriodSchedulerService
    */
   private async runSweep(): Promise<void> {
     this.logger.log('Subscription period sweep starting');
+    // Expired signup trials first: entitlements already read the billed plan the moment a trial
+    // ends (SubscriptionsService.getActivePlan), this only brings enabledModules in line.
+    try {
+      const settled = await this.subscriptionsService.settleExpiredTrials();
+      if (settled > 0) this.logger.log(`Settled ${settled} expired trial(s)`);
+    } catch (error) {
+      this.logger.error(
+        'Subscription period sweep: settling trials failed',
+        error,
+      );
+    }
     const candidates =
       await this.subscriptionsRepository.findRenewalCandidates();
     let canceled = 0;

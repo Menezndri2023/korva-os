@@ -224,6 +224,14 @@ export const EXTRA_SEAT_PRICES: Record<BillingCurrency, number> = {
 export const EXTRA_SEAT_PURCHASABLE = false;
 
 /**
+ * The trial a new organization starts at signup (validated 2026-10-19): Pro for 14 days, then
+ * back to Free with nothing deleted. Started once per organization, by onboarding
+ * (POST /subscriptions/trial); the billed plan stays Free throughout, so no invoice is ever
+ * issued for it. See SubscriptionsService.getActivePlan / startTrial / settleExpiredTrials.
+ */
+export const SIGNUP_TRIAL: { plan: PlanKey; days: number } = { plan: "pro", days: 14 };
+
+/**
  * Monthly price per tier per currency.
  *
  * SET BY MARKET, NOT BY EXCHANGE RATE. XOF is pegged to the euro at a fixed 655.957, so

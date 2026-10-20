@@ -102,6 +102,19 @@ export class SubscriptionsController {
     );
   }
 
+  /** Starts the signup trial (SIGNUP_TRIAL) — once per organization, from the free plan. */
+  @RequirePermissions('settings.manage')
+  @Post('subscriptions/trial')
+  startTrial(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.subscriptionsService.startTrial(
+      tenant.organizationId,
+      user.userId,
+    );
+  }
+
   @RequirePermissions('settings.manage')
   @Post('subscriptions/reactivate')
   reactivate(

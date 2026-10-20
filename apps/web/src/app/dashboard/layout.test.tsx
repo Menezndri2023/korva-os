@@ -86,6 +86,24 @@ describe("DashboardLayout", () => {
     expect(navHrefs()).not.toContain("/dashboard/kitchen");
   });
 
+  it("shows the days left of a running trial, with a way to choose a plan", async () => {
+    const endsAt = new Date(Date.now() + 3 * 86_400_000 - 60_000).toISOString();
+    getMock.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === "/subscriptions/me"
+          ? { plan: { key: "pro" }, subscription: { trialEndsAt: endsAt } }
+          : [],
+      ),
+    );
+    renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+
+    expect(await screen.findByText(/Essai Pro offert : 3 jours restants/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "choisissez une formule" })).toHaveAttribute(
+      "href",
+      "/dashboard/settings",
+    );
+  });
+
   it("keeps both screens for an organization with no type of activity, as before", () => {
     enabledModules = ["commerce", "booking"];
     renderWithProviders(<DashboardLayout><div /></DashboardLayout>);

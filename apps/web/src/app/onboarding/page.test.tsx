@@ -406,3 +406,28 @@ describe("OnboardingPage — one sales channel on the free plan", () => {
     expect(screen.getByText(/choisissez un seul mode de vente/)).toBeInTheDocument();
   });
 });
+
+describe("OnboardingPage — signup trial", () => {
+  beforeEach(() => {
+    postMock.mockReset();
+    patchMock.mockReset();
+    postMock.mockResolvedValue({ id: "org-1" });
+    patchMock.mockResolvedValue({ id: "org-1" });
+  });
+
+  it("starts the Pro trial once the organization exists, and still finishes if that fails", async () => {
+    postMock.mockImplementation((path: string) =>
+      path === "/subscriptions/trial"
+        ? Promise.reject(new Error("already used"))
+        : Promise.resolve({ id: "org-1" }),
+    );
+    renderWithProviders(<OnboardingPage />);
+    expect(screen.getByText(/premiers jours, toutes les fonctions de la formule Pro/)).toBeInTheDocument();
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "Créer mon organisation" }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith("/subscriptions/trial"));
+    const paths = postMock.mock.calls.map(([path]) => path);
+    expect(paths.indexOf("/organizations")).toBeLessThan(paths.indexOf("/subscriptions/trial"));
+  });
+});

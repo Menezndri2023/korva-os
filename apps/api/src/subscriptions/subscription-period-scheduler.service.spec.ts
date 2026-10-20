@@ -1,3 +1,4 @@
+import type { SubscriptionsService } from './subscriptions.service';
 import type { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import { SubscriptionPeriodSchedulerService } from './subscription-period-scheduler.service';
@@ -167,6 +168,9 @@ async function buildHarness(
       nextFormatted: jest.fn().mockResolvedValue('ABO-0001'),
     } as unknown as CountersService,
     audit as unknown as AuditService,
+    {
+      settleExpiredTrials: jest.fn().mockResolvedValue(0),
+    } as unknown as SubscriptionsService,
   );
 
   await service.onModuleInit();

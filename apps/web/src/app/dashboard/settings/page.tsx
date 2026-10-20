@@ -1188,7 +1188,16 @@ export default function SettingsPage() {
           <div className="mt-4 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">{subscription.plan.name}</p>
+                <p className="text-sm font-medium">
+                  {subscription.plan.name}
+                  {planFeatures.trialEndsAt && (
+                    <span className="ml-2 text-xs font-normal text-text-muted">
+                      essai offert jusqu&apos;au{" "}
+                      {new Date(planFeatures.trialEndsAt).toLocaleDateString("fr-FR")}, puis
+                      formule Gratuite si vous ne choisissez rien
+                    </span>
+                  )}
+                </p>
                 <p className="text-xs text-text-muted">
                   {subscription.plan.priceAmount} {subscription.plan.priceCurrency} / {subscription.plan.interval === "month" ? "mois" : "an"}
                 </p>

@@ -10,9 +10,13 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import type { KorvaProduct } from '@korva/types';
 import {
+  BUSINESS_MODEL_DEFINITIONS,
   KORVA_PRODUCTS,
   PRODUCT_MODULES,
+  SIGNUP_TRIAL,
   isCurrencyChargeable,
+  planHasFeature,
+  planMeetsMinimum,
   parseChargeableCurrencies,
   resolveEffectiveModules,
 } from '@korva/types';
@@ -180,9 +184,125 @@ export class SubscriptionsService {
     return subscription;
   }
 
+  /**
+   * The plan every entitlement reads: the billed plan, or — while a signup trial runs and ranks
+   * above it — the trial plan, in the billed plan's currency. A trial therefore needs no
+   * scheduler to END: the moment trialEndsAt passes, this answers the billed plan again. (The
+   * period sweep then settles enabledModules — see settleExpiredTrials.)
+   */
   async getActivePlan(organizationId: string): Promise<PlanDocument> {
     const subscription = await this.getForOrganization(organizationId);
-    return this.plansService.getById(subscription.planId.toString());
+    const billed = await this.plansService.getById(
+      subscription.planId.toString(),
+    );
+    if (
+      subscription.trialPlanKey &&
+      subscription.trialEndsAt &&
+      subscription.trialEndsAt > new Date() &&
+      !planMeetsMinimum(billed.key, subscription.trialPlanKey as never)
+    ) {
+      return this.plansService.getByKey(
+        subscription.trialPlanKey,
+        billed.priceCurrency,
+      );
+    }
+    return billed;
+  }
+
+  /**
+   * Starts the signup trial (SIGNUP_TRIAL): once per organization, and only from the free plan.
+   * The billed plan is untouched — no invoice, nothing to cancel — so the trial is purely a
+   * window during which getActivePlan answers Pro.
+   */
+  async startTrial(
+    organizationId: string,
+    userId: string,
+  ): Promise<SubscriptionDocument> {
+    const subscription = await this.getForOrganization(organizationId);
+    if (subscription.trialStartedAt) {
+      throw new ConflictException({
+        code: 'TRIAL_ALREADY_USED',
+        message: 'This organization has already used its trial',
+      });
+    }
+    const billed = await this.plansService.getById(
+      subscription.planId.toString(),
+    );
+    if (billed.key !== 'free') {
+      throw new ConflictException({
+        code: 'TRIAL_NOT_AVAILABLE',
+        message: 'The trial is only available on the free plan',
+      });
+    }
+    const now = new Date();
+    subscription.trialPlanKey = SIGNUP_TRIAL.plan;
+    subscription.trialStartedAt = now;
+    subscription.trialEndsAt = new Date(
+      now.getTime() + SIGNUP_TRIAL.days * 24 * 60 * 60 * 1000,
+    );
+    await subscription.save();
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'UPDATE',
+      entity: 'subscription',
+      entityId: subscription.id as string,
+      metadata: { trial: SIGNUP_TRIAL.plan, endsAt: subscription.trialEndsAt },
+    });
+    return subscription;
+  }
+
+  /**
+   * After a trial ends, brings enabledModules back to what the billed plan grants: modules the
+   * plan lacks are switched off, and on a plan without both sales channels the one the type of
+   * activity does not sell through is too. DATA IS NOT TOUCHED — an offer, a campaign, a variant
+   * created during the trial stays; switching a module back on after upgrading shows it again.
+   *
+   * Called by the period sweep. Idempotent: a settled trial is never picked again.
+   */
+  async settleExpiredTrials(now: Date = new Date()): Promise<number> {
+    const expired =
+      await this.subscriptionsRepository.findExpiredUnsettledTrials(now);
+    for (const subscription of expired) {
+      const organizationId = subscription.organizationId.toString();
+      const billed = await this.plansService.getById(
+        subscription.planId.toString(),
+      );
+      const organization = await this.organizationModel
+        .findById(organizationId)
+        .exec();
+      if (organization) {
+        const allowed = resolveEffectiveModules(
+          billed.modules,
+          subscription.productOverrides,
+        );
+        let kept = organization.enabledModules.filter((module) =>
+          allowed.includes(module),
+        );
+        if (
+          !planHasFeature(billed.key, 'both_channels') &&
+          kept.includes('booking') &&
+          kept.includes('commerce')
+        ) {
+          const businessModel = organization.businessModel;
+          const sellsOrders =
+            businessModel !== undefined &&
+            BUSINESS_MODEL_DEFINITIONS[businessModel].primaryChannel ===
+              'orders';
+          kept = kept.filter(
+            (module) => module !== (sellsOrders ? 'booking' : 'commerce'),
+          );
+        }
+        if (kept.length !== organization.enabledModules.length) {
+          organization.enabledModules = kept;
+          await organization.save();
+        }
+      }
+      subscription.trialSettledAt = now;
+      await subscription.save();
+    }
+    return expired.length;
   }
 
   async changePlan(

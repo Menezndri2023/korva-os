@@ -15,6 +15,7 @@ import {
   PLAN_FEATURE_LABELS,
   PLAN_FEATURE_MIN_PLAN,
   PLAN_PRICES,
+  SIGNUP_TRIAL,
   countryFromTimeZone,
   currencyForCountry,
   type PlanFeature,
@@ -231,7 +232,9 @@ export function PlanLadder() {
           Commencer gratuitement
         </Link>
         <p className="text-sm text-ink-soft">
-          Vous changez de formule quand vous voulez, et vos données restent les vôtres.
+          {SIGNUP_TRIAL.days} jours de formule {PLAN_NAMES[SIGNUP_TRIAL.plan]} offerts à
+          l&apos;inscription, sans carte bancaire. Vous changez de formule quand vous voulez, et vos
+          données restent les vôtres.
         </p>
       </div>
     </div>

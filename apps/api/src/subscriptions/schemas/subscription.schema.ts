@@ -72,6 +72,19 @@ export class Subscription {
    */
   @Prop({ type: Object })
   productOverrides?: Partial<Record<KorvaProduct, boolean>>;
+
+  /** Signup trial — see Subscription.trialPlanKey in @korva/types and SIGNUP_TRIAL. */
+  @Prop({ type: String, default: null })
+  trialPlanKey!: string | null;
+
+  @Prop({ type: Date, default: null })
+  trialStartedAt!: Date | null;
+
+  @Prop({ type: Date, default: null })
+  trialEndsAt!: Date | null;
+
+  @Prop({ type: Date, default: null })
+  trialSettledAt!: Date | null;
 }
 
 export const SubscriptionSchema = SchemaFactory.createForClass(Subscription);

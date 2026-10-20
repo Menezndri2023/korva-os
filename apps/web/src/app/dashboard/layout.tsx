@@ -25,6 +25,10 @@ const MODULE_NAV: { module: KorvaModule; label: string; href: string }[] = [
   { module: "marketing", label: "Marketing", href: "/dashboard/marketing" },
 ];
 
+function trialDaysLeft(endsAt: string): number {
+  return Math.max(1, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 86_400_000));
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -228,7 +232,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8">
+          {planFeatures.trialEndsAt && (
+            // The trial ends on its own; saying when, and where to choose a plan, is the only
+            // way the owner is not surprised by Free coming back.
+            <p className="mb-4 rounded-md border border-border bg-surface-muted px-4 py-2 text-sm text-text">
+              Essai Pro offert : {trialDaysLeft(planFeatures.trialEndsAt)} jour
+              {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? "s" : ""} restant
+              {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? "s" : ""}. Vos données restent à vous
+              après l&apos;essai ;{" "}
+              <Link href="/dashboard/settings" className="font-medium underline">
+                choisissez une formule
+              </Link>{" "}
+              pour garder les fonctions Pro.
+            </p>
+          )}{children}</main>
       </div>
     </div>
   );

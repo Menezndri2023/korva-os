@@ -17,6 +17,7 @@ import {
   BUSINESS_MODEL_DEFINITIONS,
   MODULE_MIN_PLAN,
   PLAN_NAMES,
+  SIGNUP_TRIAL,
   VERTICAL_TEMPLATES,
   currencyForCountry,
   modulesForPlan,
@@ -213,6 +214,14 @@ export default function OnboardingPage() {
         });
       }
 
+      // Signup trial (SIGNUP_TRIAL): Pro for 14 days. Best-effort — the organization exists and
+      // works on Free either way, so a failure here must not block the owner at the last step.
+      try {
+        await apiClient.post("/subscriptions/trial");
+      } catch {
+        // Already used or unavailable: the free plan simply applies.
+      }
+
       // Starter workflow: only created when the vertical that suggested it is still selected
       // and its module ended up in the final list — a user can freely edit both after picking
       // a template, so this must reflect what was actually submitted, not just what the
@@ -240,6 +249,10 @@ export default function OnboardingPage() {
         <div className="text-center">
           <h1 className="text-2xl font-semibold">Configurez votre entreprise</h1>
           <p className="mt-1 text-sm text-zinc-500">Quelques informations pour démarrer sur KORVA OS.</p>
+          <p className="mt-1 text-sm font-medium text-text">
+            Les {SIGNUP_TRIAL.days} premiers jours, toutes les fonctions de la formule{" "}
+            {PLAN_NAMES[SIGNUP_TRIAL.plan]} sont offertes, sans carte bancaire.
+          </p>
         </div>
 
         <Card className="space-y-2 p-4">

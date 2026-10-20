@@ -115,6 +115,17 @@ export class SubscriptionsRepository {
    * sweep is system-wide, not per-tenant). Covers both branches the scheduler handles: a
    * cancelAtPeriodEnd candidate (transitions to 'canceled') and a non-canceling one (renews).
    */
+  /** Signup trials whose end has passed and whose modules have not been settled yet. */
+  findExpiredUnsettledTrials(
+    now: Date,
+    limit = 100,
+  ): Promise<SubscriptionDocument[]> {
+    return this.subscriptionModel
+      .find({ trialEndsAt: { $lte: now }, trialSettledAt: null })
+      .limit(limit)
+      .exec();
+  }
+
   findRenewalCandidates(limit = 100): Promise<SubscriptionDocument[]> {
     return this.subscriptionModel
       .find({ status: 'active', currentPeriodEnd: { $lt: new Date() } })

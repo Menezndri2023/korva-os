@@ -26,8 +26,11 @@ export function usePlanFeatures() {
   });
   // Optional chaining on `plan` too: a malformed or partial response must not take a page down.
   const planKey = data?.plan?.key;
+  const trialEndsAt = data?.subscription?.trialEndsAt ?? null;
   return {
     planKey,
+    /** Set while a signup trial is running (the end is in the future). */
+    trialEndsAt: trialEndsAt && new Date(trialEndsAt) > new Date() ? trialEndsAt : null,
     has: (feature: PlanFeature) => !planKey || planHasFeature(planKey, feature),
   };
 }

@@ -80,6 +80,14 @@ export interface Subscription {
   /** Independent of planId.modules — see resolveEffectiveModules in products.ts. Absent/empty
    *  means zero behavior change (today's pure plan-driven entitlement). */
   productOverrides?: Partial<Record<KorvaProduct, boolean>>;
+  /** Signup trial (SIGNUP_TRIAL). While trialEndsAt is in the future and trialPlanKey ranks
+   *  above the billed plan, every entitlement reads the trial plan instead. Absent on an
+   *  organization that never started one; trialStartedAt being set means it was used. */
+  trialPlanKey?: string | null;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  /** When the expired trial's modules were brought back to the billed plan (period sweep). */
+  trialSettledAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
