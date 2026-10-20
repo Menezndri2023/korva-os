@@ -24,6 +24,7 @@ import { WarehousesService } from '../warehouses/warehouses.service';
 import { CustomFieldsService } from '../../custom-fields/custom-fields.service';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
+import { EntitlementsService } from '../../subscriptions/entitlements.service';
 
 type VariantInput = NonNullable<UpdateOfferInput['variants']>[number];
 
@@ -102,6 +103,7 @@ export class OffersService {
     private readonly customFieldsService: CustomFieldsService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    private readonly entitlementsService: EntitlementsService,
   ) {}
 
   async create(
@@ -110,6 +112,13 @@ export class OffersService {
     input: CreateOfferInput,
   ): Promise<OfferDocument> {
     assertCompareAtPriceHigher(input.compareAtPrice, input.pricing.amount);
+    // An archived offer is outside the count, so creating one never needs room.
+    if (input.status !== 'archived') {
+      await this.entitlementsService.assertCountWithinLimit(
+        organizationId,
+        'offers',
+      );
+    }
     if (input.variants.some((variant) => variant.id)) {
       throw new BadRequestException({
         code: 'VARIANT_NOT_FOUND',
@@ -265,10 +274,22 @@ export class OffersService {
     const needsCurrent =
       input.variants !== undefined ||
       input.compareAtPrice != null ||
-      input.pricing !== undefined;
+      input.pricing !== undefined ||
+      (input.status !== undefined && input.status !== 'archived');
     const current = needsCurrent
       ? await this.getById(organizationId, id)
       : undefined;
+    // Un-archiving brings an offer back into the plan's count.
+    if (
+      current?.status === 'archived' &&
+      input.status !== undefined &&
+      input.status !== 'archived'
+    ) {
+      await this.entitlementsService.assertCountWithinLimit(
+        organizationId,
+        'offers',
+      );
+    }
     if (current) {
       assertCompareAtPriceHigher(
         input.compareAtPrice === undefined

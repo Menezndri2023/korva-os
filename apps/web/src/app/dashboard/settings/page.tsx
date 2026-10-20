@@ -97,6 +97,9 @@ const METRIC_LABELS: Record<string, string> = {
   // Seats are dashboard logins. Bookable team members (Réservations › Équipe et ressources) need
   // no account and use none — the label must not suggest otherwise.
   seats: "Utilisateurs du tableau de bord",
+  offers: "Offres au catalogue",
+  bookable_staff: "Membres d'équipe réservables",
+  workflows: "Automatisations",
   ai_messages_per_month: "Messages IA / mois",
 };
 

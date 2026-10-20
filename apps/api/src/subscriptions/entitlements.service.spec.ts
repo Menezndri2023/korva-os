@@ -46,6 +46,7 @@ describe('EntitlementsService — subscription status enforcement', () => {
       subscriptionsService,
       usageRepository,
       membershipsService,
+      {} as never,
     );
 
     return { service, getActivePlan, increment, countSeatsForOrganization };
@@ -137,6 +138,7 @@ describe('EntitlementsService — subscription status enforcement', () => {
         subscriptionsService,
         usageRepository,
         membershipsService,
+        {} as never,
       );
     }
 

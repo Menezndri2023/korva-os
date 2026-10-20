@@ -29,7 +29,44 @@ function toApiError(payload: ApiResponse<unknown> | ApiListResponse<unknown>): A
     // Unreachable in practice — only ever called on a response we already know failed.
     return new ApiError("UNKNOWN_ERROR", "Unknown error");
   }
-  return new ApiError(payload.error.code, payload.error.message, payload.error.details);
+  return new ApiError(
+    payload.error.code,
+    planLimitMessage(payload.error.code, payload.error.details) ?? payload.error.message,
+    payload.error.details,
+  );
+}
+
+const PLAN_LIMIT_SUBJECTS: Record<string, string> = {
+  offers: "offres au catalogue",
+  bookable_staff: "membres d'équipe réservables",
+  workflows: "automatisations",
+};
+
+/**
+ * The owner-facing French wording of the two plan-limit refusals, which every create form shows
+ * as-is. The API's own messages are English and say nothing about what to do next; these name
+ * the limit and the way out (a higher plan, or an extra user once that can be bought).
+ */
+export function planLimitMessage(code: string, details: unknown): string | undefined {
+  const d = (details ?? {}) as {
+    metric?: string;
+    limit?: number;
+    extraSeat?: { price: number | null; currency: string; purchasable: boolean };
+  };
+  if (code === "PLAN_LIMIT_REACHED" && d.metric && d.limit != null) {
+    const subject = PLAN_LIMIT_SUBJECTS[d.metric] ?? d.metric;
+    return `Votre formule permet ${d.limit} ${subject}. Passez à la formule supérieure pour en ajouter.`;
+  }
+  if (code === "SEAT_LIMIT_REACHED" && d.limit != null) {
+    const base = `Votre formule permet ${d.limit} utilisateur${d.limit > 1 ? "s" : ""} du tableau de bord.`;
+    const extra = d.extraSeat;
+    if (!extra || extra.price == null) return `${base} Passez à la formule supérieure.`;
+    const price = `${extra.price} ${extra.currency}/mois`;
+    return extra.purchasable
+      ? `${base} Ajoutez un utilisateur pour ${price}, ou passez à la formule supérieure.`
+      : `${base} L'utilisateur supplémentaire (${price}) arrive bientôt ; en attendant, passez à la formule supérieure. Vos coiffeurs, coachs ou formateurs réservables n'ont pas besoin de compte.`;
+  }
+  return undefined;
 }
 
 // Shared by every concurrent 401 so at most one POST /auth/refresh is ever in flight — every

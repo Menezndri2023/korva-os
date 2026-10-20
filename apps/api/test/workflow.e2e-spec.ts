@@ -5,6 +5,7 @@ import mongoose, { Connection, Model, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 import { EventBusService } from '../src/core/events/event-bus.service';
 import {
   ClaimActionResult,
@@ -154,6 +155,9 @@ describe('Workflow module (e2e)', () => {
       })
       .expect(201);
     const organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+    // These scenarios create several automations in one organization, more than the free
+    // plan's one (PLAN_LIMITS.workflows) — the tier is scaffolding here, not what is tested.
+    await putOrganizationOnPlan(connection, organizationId, 'business');
 
     await request(server)
       .patch('/api/v1/organizations/me')

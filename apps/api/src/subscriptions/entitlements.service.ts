@@ -1,5 +1,8 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
+import { Connection, Types } from 'mongoose';
 import type {
+  CountedMetric,
   KorvaModule,
   StorefrontFontPairingKey,
   StorefrontPaletteKey,
@@ -7,7 +10,10 @@ import type {
   UsageSummaryItem,
 } from '@korva/types';
 import {
+  COUNTED_METRICS,
   CUSTOM_DOMAIN_MIN_PLAN,
+  EXTRA_SEAT_PRICES,
+  EXTRA_SEAT_PURCHASABLE,
   getStorefrontTemplate,
   planMeetsMinimum,
   resolveEffectiveModules,
@@ -15,6 +21,26 @@ import {
 import { SubscriptionsService } from './subscriptions.service';
 import { UsageRepository } from './usage.repository';
 import { MembershipsService } from '../identity/memberships/memberships.service';
+
+/** What each counted metric counts, as a filter on its collection. See COUNTED_METRICS. */
+const COUNT_QUERIES: Record<
+  Exclude<CountedMetric, 'seats'>,
+  { collection: string; filter: Record<string, unknown> }
+> = {
+  offers: { collection: 'offers', filter: { status: { $ne: 'archived' } } },
+  bookable_staff: {
+    collection: 'resources',
+    filter: { type: 'person', active: true },
+  },
+  workflows: { collection: 'workflows', filter: {} },
+};
+
+const COUNTED_METRIC_LABELS: Record<CountedMetric, string> = {
+  seats: 'dashboard users',
+  offers: 'offers in the catalogue',
+  bookable_staff: 'bookable team members',
+  workflows: 'automations',
+};
 
 function currentPeriod(): string {
   return new Date().toISOString().slice(0, 7); // "YYYY-MM"
@@ -61,7 +87,56 @@ export class EntitlementsService {
     private readonly subscriptionsService: SubscriptionsService,
     private readonly usageRepository: UsageRepository,
     private readonly membershipsService: MembershipsService,
+    @InjectConnection() private readonly connection: Connection,
   ) {}
+
+  /** Current count of a counted metric for one organization. */
+  async countMetric(
+    organizationId: string,
+    metric: CountedMetric,
+  ): Promise<number> {
+    if (metric === 'seats') {
+      return this.membershipsService.countSeatsForOrganization(organizationId);
+    }
+    const { collection, filter } = COUNT_QUERIES[metric];
+    return this.connection.collection(collection).countDocuments({
+      organizationId: new Types.ObjectId(organizationId),
+      ...filter,
+    });
+  }
+
+  /**
+   * Refuses to ADD one more of `metric` when the plan's limit is already reached. Called before
+   * creating the item (or bringing one back into the count), never to remove anything: an
+   * organization above a limit keeps what it has — see COUNTED_METRICS.
+   *
+   * The count is read before the write, outside any transaction, so two simultaneous creations
+   * at the limit can both pass. Accepted: these are catalogue sizes, not money, and one item over
+   * a free-plan limit costs nothing — unlike stock or bookings, which do lock.
+   */
+  async assertCountWithinLimit(
+    organizationId: string,
+    metric: Exclude<CountedMetric, 'seats'>,
+  ): Promise<void> {
+    await this.assertSubscriptionActive(organizationId);
+    const plan = await this.subscriptionsService.getActivePlan(organizationId);
+    const limit = plan.limits[metric] ?? -1;
+    if (limit === -1) return;
+
+    const used = await this.countMetric(organizationId, metric);
+    if (used >= limit) {
+      throw new ForbiddenException({
+        code: 'PLAN_LIMIT_REACHED',
+        message: `Your plan ("${plan.name}") allows up to ${limit} ${COUNTED_METRIC_LABELS[metric]} — upgrade to add more`,
+        // Top-level keys, not a `details` object: HttpExceptionFilter collects whatever follows
+        // code/message into `error.details` itself (a literal `details` key nests twice).
+        metric,
+        limit,
+        used,
+        plan: plan.key,
+      });
+    }
+  }
 
   /**
    * Throws if the organization's subscription has been canceled. Only called from the
@@ -211,10 +286,20 @@ export class EntitlementsService {
     const count =
       await this.membershipsService.countSeatsForOrganization(organizationId);
     if (count >= limit) {
+      const currency = plan.priceCurrency as keyof typeof EXTRA_SEAT_PRICES;
       throw new ForbiddenException({
         code: 'SEAT_LIMIT_REACHED',
-        message: `Your plan ("${plan.name}") allows up to ${limit} team members`,
-        details: { limit, used: count },
+        message: `Your plan ("${plan.name}") allows up to ${limit} dashboard users`,
+        // The extra-seat price is shown to the owner with this refusal; `purchasable` says
+        // whether it can actually be bought yet (see EXTRA_SEAT_PURCHASABLE). Top-level keys,
+        // as HttpExceptionFilter gathers them into `error.details`.
+        limit,
+        used: count,
+        extraSeat: {
+          price: EXTRA_SEAT_PRICES[currency] ?? null,
+          currency,
+          purchasable: EXTRA_SEAT_PURCHASABLE,
+        },
       });
     }
   }
@@ -263,16 +348,9 @@ export class EntitlementsService {
       Object.entries(plan.limits).map(async ([metric, limit]) => ({
         metric,
         limit,
-        used:
-          metric === 'seats'
-            ? await this.membershipsService.countSeatsForOrganization(
-                organizationId,
-              )
-            : await this.usageRepository.getCount(
-                organizationId,
-                metric,
-                period,
-              ),
+        used: (COUNTED_METRICS as readonly string[]).includes(metric)
+          ? await this.countMetric(organizationId, metric as CountedMetric)
+          : await this.usageRepository.getCount(organizationId, metric, period),
       })),
     );
   }

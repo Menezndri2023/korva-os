@@ -59,6 +59,7 @@ import { QuizzesController } from './courses/quizzes.controller';
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { AuditModule } from '../audit/audit.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 // For ConversationsService (BookingReminderSchedulerService's outbound send). Safe: neither
 // CommunicationModule nor anything it imports (CrmModule, IdentityModule, AuditModule,
 // EmailModule, MessagingProviderModule) imports BookingModule — verified by grepping every
@@ -90,6 +91,7 @@ import { DocumentsModule } from '../documents/documents.module';
     CrmModule,
     CatalogModule,
     AuditModule,
+    SubscriptionsModule,
     CommunicationModule,
     IdentityModule,
     OrganizationsModule,

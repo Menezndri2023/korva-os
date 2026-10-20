@@ -29,6 +29,7 @@ import {
 import { Quote, QuoteSchema } from '../finance/quotes/schemas/quote.schema';
 import { CustomFieldsModule } from '../custom-fields/custom-fields.module';
 import { AuditModule } from '../audit/audit.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { StorageModule } from '../shared/storage/storage.module';
 import {
   Supplier,
@@ -81,6 +82,7 @@ import { StockLevelsService } from './warehouses/stock-levels.service';
     ]),
     CustomFieldsModule,
     AuditModule,
+    SubscriptionsModule,
     // Registers UploadsController (POST/GET/DELETE /uploads) — see storage.module.ts for why
     // it's imported here rather than directly in app.module.ts.
     StorageModule,

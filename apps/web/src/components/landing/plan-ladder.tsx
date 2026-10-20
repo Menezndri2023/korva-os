@@ -5,6 +5,8 @@ import Link from "next/link";
 import {
   BILLABLE_COUNTRIES,
   CURRENCY_FORMAT,
+  EXTRA_SEAT_PRICES,
+  EXTRA_SEAT_PURCHASABLE,
   KORVA_MODULES,
   MODULE_MIN_PLAN,
   PLAN_KEYS,
@@ -37,10 +39,28 @@ function modulesGainedAt(plan: PlanKey) {
   return KORVA_MODULES.filter((module) => MODULE_MIN_PLAN[module] === plan);
 }
 
+/** "Utilisateurs" are dashboard logins — bookable staff (coiffeurs, coachs) are a separate,
+ *  much larger allowance, which is the point of keeping the two words apart. */
 function seatLine(plan: PlanKey): string {
   const seats = PLAN_LIMITS[plan].seats;
-  if (seats === -1) return "Membres d'équipe illimités";
-  return seats === 1 ? "1 utilisateur" : `Jusqu'à ${seats} membres d'équipe`;
+  if (seats === -1) return "Utilisateurs illimités";
+  return seats === 1 ? "1 utilisateur du tableau de bord" : `${seats} utilisateurs du tableau de bord`;
+}
+
+/** The counted quotas, each enforced by EntitlementsService.assertCountWithinLimit. */
+function quotaLines(plan: PlanKey): string[] {
+  const { offers, bookable_staff: staff, workflows } = PLAN_LIMITS[plan];
+  return [
+    offers === -1 ? "Catalogue illimité" : `${offers} offres au catalogue`,
+    staff === -1
+      ? "Équipe réservable illimitée, sans compte à payer"
+      : `${staff} membres d'équipe réservables, sans compte à payer`,
+    workflows === -1
+      ? "Automatisations illimitées"
+      : workflows === 1
+        ? "L'automatisation de votre métier"
+        : `${workflows} automatisations`,
+  ];
 }
 
 function aiLine(plan: PlanKey): string | null {
@@ -113,6 +133,7 @@ export function PlanLadder() {
           const gained = modulesGainedAt(plan);
           const ai = aiLine(plan);
           const isEntry = plan === "free";
+          const quotas = quotaLines(plan);
 
           return (
             <div key={plan} className="grid gap-3 py-6 sm:grid-cols-[15rem_1fr] sm:gap-10">
@@ -162,7 +183,22 @@ export function PlanLadder() {
                     ✓
                   </span>
                   {seatLine(plan)}
+                  {!isEntry && (
+                    <span className="text-ink-soft">
+                      {" "}
+                      · utilisateur supplémentaire {format.display(EXTRA_SEAT_PRICES[currency])}
+                      /mois{EXTRA_SEAT_PURCHASABLE ? "" : " (bientôt)"}
+                    </span>
+                  )}
                 </li>
+                {quotas.map((line) => (
+                  <li key={line} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
+                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
+                      ✓
+                    </span>
+                    {line}
+                  </li>
+                ))}
                 {ai && (
                   <li className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
                     <span aria-hidden="true" className="mt-px select-none text-ink-soft">

@@ -10,6 +10,7 @@ import { WorkflowsRepository } from './workflows.repository';
 import { WorkflowDocument } from './schemas/workflow.schema';
 import { WorkflowExecutionDocument } from './schemas/workflow-execution.schema';
 import { evaluateConditions } from './conditions';
+import { EntitlementsService } from '../subscriptions/entitlements.service';
 
 export interface TestWorkflowResult {
   matched: boolean;
@@ -23,12 +24,19 @@ export interface TestWorkflowResult {
 
 @Injectable()
 export class WorkflowsService {
-  constructor(private readonly workflowsRepository: WorkflowsRepository) {}
+  constructor(
+    private readonly workflowsRepository: WorkflowsRepository,
+    private readonly entitlementsService: EntitlementsService,
+  ) {}
 
-  create(
+  async create(
     organizationId: string,
     input: CreateWorkflowInput,
   ): Promise<WorkflowDocument> {
+    await this.entitlementsService.assertCountWithinLimit(
+      organizationId,
+      'workflows',
+    );
     return this.workflowsRepository.create({
       organizationId: new Types.ObjectId(organizationId),
       name: input.name,

@@ -128,13 +128,47 @@ export function modulesForPlan(planKey: string): KorvaModule[] {
  * selling a one-off AI add-on.)
  */
 export const PLAN_LIMITS: Record<PlanKey, Record<string, number>> = {
-  free: { seats: 1, ai_messages_per_month: 0 },
-  starter: { seats: 5, ai_messages_per_month: 0 },
-  pro: { seats: 15, ai_messages_per_month: 500 },
-  // Seats are unlimited; AI is not. AI costs real money per token on every call, so an
-  // unlimited tier would be an uncapped liability rather than a feature.
-  business: { seats: -1, ai_messages_per_month: 2000 },
+  free: { seats: 1, offers: 30, bookable_staff: 3, workflows: 1, ai_messages_per_month: 0 },
+  starter: { seats: 3, offers: -1, bookable_staff: -1, workflows: 5, ai_messages_per_month: 0 },
+  pro: { seats: 10, offers: -1, bookable_staff: -1, workflows: -1, ai_messages_per_month: 500 },
+  // AI stays capped on every tier: it costs real money per token on every call, so an unlimited
+  // tier would be an uncapped liability rather than a feature. Seats were unlimited on Business
+  // until 2026-10-19; 25 plus paid extra seats lets a large network be priced fairly.
+  business: { seats: 25, offers: -1, bookable_staff: -1, workflows: -1, ai_messages_per_month: 2000 },
 };
+
+/**
+ * Quotas counted on what EXISTS rather than on what was done this month — the opposite of
+ * ai_messages_per_month, which UsageRepository meters per period. Enforced on creation (and on
+ * anything that brings an item back into the count), never by deleting: an organization already
+ * above a limit after a downgrade or after this grid changed keeps everything it has and only
+ * stops adding (docs/KORVA_OS_V3_STRUCTURE_PRODUIT.md §8, "rien n'est effacé").
+ *
+ *   seats          -> EntitlementsService.assertSeatAvailable (dashboard logins; suspended
+ *                     memberships excluded, invited ones included)
+ *   offers         -> OffersService.create / un-archiving (archived offers do not count)
+ *   bookable_staff -> ResourcesService.create / update (active resources of type "person" —
+ *                     bookable team members; places and equipment are not capped)
+ *   workflows      -> WorkflowsService.create
+ */
+export const COUNTED_METRICS = ["seats", "offers", "bookable_staff", "workflows"] as const;
+export type CountedMetric = (typeof COUNTED_METRICS)[number];
+
+/**
+ * Monthly price of one dashboard user beyond the plan's seats, validated 2026-10-19.
+ *
+ * DISPLAYED, NOT YET SOLD: no platform payment provider is configured, so nothing can charge it.
+ * Until one is, reaching the seat limit is refused as before and the refusal names this price
+ * and says the option is coming (EXTRA_SEAT_PURCHASABLE) — never a promise the API cannot keep.
+ */
+export const EXTRA_SEAT_PRICES: Record<BillingCurrency, number> = {
+  EUR: 5,
+  XOF: 1500,
+  MAD: 39,
+  USD: 5,
+  CAD: 7,
+};
+export const EXTRA_SEAT_PURCHASABLE = false;
 
 /**
  * Monthly price per tier per currency.

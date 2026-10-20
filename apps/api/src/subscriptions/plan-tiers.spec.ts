@@ -4,6 +4,8 @@ import {
   MODULE_MIN_PLAN,
   PLAN_KEYS,
   PLAN_LIMITS,
+  COUNTED_METRICS,
+  EXTRA_SEAT_PRICES,
   PLAN_PRICES,
   SUPPORTED_BILLING_CURRENCIES,
   COUNTRY_CURRENCY,
@@ -83,7 +85,13 @@ describe('plan tiers — commercial catalog', () => {
 
   it('never loosens a quota as the plan goes down', () => {
     const rank = (value: number) => (value === -1 ? Infinity : value);
-    for (const metric of ['seats', 'ai_messages_per_month']) {
+    for (const metric of [
+      'seats',
+      'offers',
+      'bookable_staff',
+      'workflows',
+      'ai_messages_per_month',
+    ]) {
       for (let i = 1; i < ASCENDING.length; i += 1) {
         const lower = rank(PLAN_LIMITS[ASCENDING[i - 1]!][metric]!);
         const higher = rank(PLAN_LIMITS[ASCENDING[i]!][metric]!);
@@ -93,15 +101,22 @@ describe('plan tiers — commercial catalog', () => {
   });
 
   it('declares no quota the code does not enforce', () => {
-    // seats -> assertSeatAvailable, ai_messages_per_month -> checkAndRecordUsage. Anything else
-    // here would be advertised on the pricing page and enforced nowhere. An email allowance is
-    // the one deliberately absent: metering the seven EMAIL_PROVIDER.send sites would also meter
+    // The counted metrics -> EntitlementsService.assertCountWithinLimit (see COUNTED_METRICS for
+    // each call site), ai_messages_per_month -> checkAndRecordUsage. Anything else here would be
+    // advertised on the pricing page and enforced nowhere. An email allowance is the one
+    // deliberately absent: metering the seven EMAIL_PROVIDER.send sites would also meter
     // password resets and email verification, locking people out over a quota.
-    const ENFORCED = ['seats', 'ai_messages_per_month'];
+    const ENFORCED = [...COUNTED_METRICS, 'ai_messages_per_month'];
     for (const plan of PLAN_KEYS) {
       expect(Object.keys(PLAN_LIMITS[plan]).sort()).toEqual(
         [...ENFORCED].sort(),
       );
+    }
+  });
+
+  it('prices an extra seat in every currency it bills in', () => {
+    for (const currency of SUPPORTED_BILLING_CURRENCIES) {
+      expect(EXTRA_SEAT_PRICES[currency]).toBeGreaterThan(0);
     }
   });
 

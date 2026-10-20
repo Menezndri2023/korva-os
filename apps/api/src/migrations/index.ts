@@ -4,6 +4,7 @@ import { migration as m0002 } from './0002-plan-currency-index';
 import { migration as m0003 } from './0003-plan-catalog-realignment';
 import { migration as m0004 } from './0004-marketing-to-starter';
 import { migration as m0005 } from './0005-business-model-backfill';
+import { migration as m0006 } from './0006-plan-limits-v3';
 
 /**
  * Every migration, registered explicitly.
@@ -25,4 +26,5 @@ export const MIGRATIONS: MigrationDefinition[] = [
   m0003,
   m0004,
   m0005,
+  m0006,
 ];

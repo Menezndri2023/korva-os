@@ -23,6 +23,7 @@ import { CommunicationModule } from '../communication/communication.module';
 import { DecisionEngineModule } from '../decision-engine/decision-engine.module';
 import { CommerceModule } from '../commerce/commerce.module';
 import { WebhookSubscriptionsModule } from '../webhook-subscriptions/webhook-subscriptions.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 // For EventsProcessor's WaitlistService.handleBookingCancelled call — safe to import directly:
 // BookingModule has no dependency back on WorkflowModule (verified — CommerceModule already
 // imports BookingModule without circularity, but CommerceModule doesn't re-export
@@ -46,6 +47,8 @@ import { BookingModule } from '../booking/booking.module';
     // For EventsProcessor's WebhookDispatchService.dispatchEvent call — same no-reverse-edge
     // safety check (WebhookSubscriptionsModule has no dependency back on WorkflowModule).
     WebhookSubscriptionsModule,
+    // WorkflowsService.create checks the plan's automation quota (EntitlementsService).
+    SubscriptionsModule,
     BookingModule,
   ],
   controllers: [WorkflowsController],

@@ -16,6 +16,7 @@ import {
   assertSafeWebhookUrl,
 } from '../../shared/safe-fetch';
 import { MembershipsService } from '../../identity/memberships/memberships.service';
+import { EntitlementsService } from '../../subscriptions/entitlements.service';
 
 /** Same check already applied to outgoing workflow webhook URLs — an ICS feed URL is just as
  *  capable of being pointed at an internal service or cloud metadata endpoint. */
@@ -38,6 +39,7 @@ export class ResourcesService {
   constructor(
     private readonly resourcesRepository: ResourcesRepository,
     private readonly membershipsService: MembershipsService,
+    private readonly entitlementsService: EntitlementsService,
   ) {}
 
   async create(
@@ -49,6 +51,14 @@ export class ResourcesService {
     }
     if (input.membershipId) {
       await this.assertMembershipExists(organizationId, input.membershipId);
+    }
+    // Only an active bookable PERSON counts against the plan (bookable_staff): places and
+    // equipment are not capped.
+    if (input.type === 'person' && input.active !== false) {
+      await this.entitlementsService.assertCountWithinLimit(
+        organizationId,
+        'bookable_staff',
+      );
     }
     return this.resourcesRepository.create({
       organizationId: new Types.ObjectId(organizationId),
@@ -118,6 +128,22 @@ export class ResourcesService {
     }
     if (input.membershipId) {
       await this.assertMembershipExists(organizationId, input.membershipId);
+    }
+    if (input.type !== undefined || input.active !== undefined) {
+      const current = await this.resourcesRepository.findById(
+        organizationId,
+        id,
+      );
+      const countedBefore = current?.type === 'person' && current.active;
+      const countedAfter =
+        (input.type ?? current?.type) === 'person' &&
+        (input.active ?? current?.active ?? true);
+      if (current && countedAfter && !countedBefore) {
+        await this.entitlementsService.assertCountWithinLimit(
+          organizationId,
+          'bookable_staff',
+        );
+      }
     }
     const updated = await this.resourcesRepository.update(organizationId, id, {
       ...input,
