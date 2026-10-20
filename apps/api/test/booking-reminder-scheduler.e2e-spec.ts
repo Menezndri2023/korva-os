@@ -167,9 +167,14 @@ describe('Booking reminder scheduler (e2e)', () => {
    * since +48h preserves the hour) — two arms of the same cause, which is why it looked like an
    * environmental flake the first time.
    *
-   * Pulling back 2 hours keeps `+3h` at least an hour in the future and well inside the 24h
-   * reminder window, and keeps `+48h` at 46h, well outside it — so neither assertion changes
-   * meaning. Shifting rather than skipping, so the test runs at every hour of the day.
+   * Pushing FORWARD 2 hours lands a 23:xx start at 01:xx the next day: no midnight crossed,
+   * `+2h`/`+3h` stay well inside the 24h reminder window, and `+48h` becomes 50h, still outside
+   * it — so no assertion changes meaning. Shifting rather than skipping, so the test runs at
+   * every hour of the day.
+   *
+   * It used to pull BACK 2 hours, which turned a `+2h` booking into one starting right now: by
+   * the time the sweep ran it was already in the past and was never reminded. CI hit exactly
+   * that at 21:38 Paris on 2026-10-20 (+2h = 23:38, minus 2h = now).
    */
   function avoidCrossingLocalMidnight(startAt: Date): Date {
     const localHour = Number(
@@ -180,7 +185,7 @@ describe('Booking reminder scheduler (e2e)', () => {
       }).format(startAt),
     );
     return localHour === 23
-      ? new Date(startAt.getTime() - 2 * 60 * 60 * 1000)
+      ? new Date(startAt.getTime() + 2 * 60 * 60 * 1000)
       : startAt;
   }
 
@@ -335,7 +340,7 @@ describe('Booking reminder scheduler (e2e)', () => {
 
     // Through the same guard as createBookingInHours: this was the one booking time in the file
     // that bypassed it, and it failed CI at 18:18 Paris (+5h = 23:18, ending past midnight).
-    // Shifted, it lands at +3h — still inside the 24h reminder window, so the re-sweep below
+    // Shifted, it lands at +7h — still inside the 24h reminder window, so the re-sweep below
     // keeps its meaning.
     const newStartAt = avoidCrossingLocalMidnight(
       new Date(Date.now() + 5 * 60 * 60 * 1000),
