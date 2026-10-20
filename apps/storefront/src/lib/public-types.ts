@@ -104,8 +104,11 @@ export interface PublicOfferReviewSummary {
 export interface PublicResource {
   id: string;
   name: string;
+  /** "person", "room", "equipment", or an older free-text value — see RESOURCE_KINDS. */
   type: string;
   capacity?: number;
+  description?: string;
+  photo?: string;
 }
 
 /** Mirrors PublicService#getSlots exactly. `time` is the slot's start as read on the business's

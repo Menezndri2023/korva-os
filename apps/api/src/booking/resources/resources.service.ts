@@ -56,6 +56,7 @@ export class ResourcesService {
       type: input.type,
       capacity: input.capacity,
       description: input.description,
+      photo: input.photo,
       active: input.active,
       weeklyAvailability: input.weeklyAvailability,
       externalCalendarUrl: input.externalCalendarUrl,

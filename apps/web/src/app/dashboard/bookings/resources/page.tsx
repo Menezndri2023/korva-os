@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createResourceSchema, type CreateResourceInput } from "@korva/validation";
-import type { Resource } from "@korva/types";
-import { Button, Card, Input } from "@korva/ui";
-import { apiClient, ApiError } from "@/lib/api-client";
+import {
+  RESOURCE_KINDS,
+  RESOURCE_KIND_LABELS,
+  type BusinessModel,
+  type Resource,
+  type ResourceKind,
+} from "@korva/types";
+import { Button, Card, Input, Select } from "@korva/ui";
+import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 
 const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
@@ -25,10 +32,24 @@ function memberName(member: MemberOption): string {
   );
 }
 
+/** What a new resource most likely is for this type of activity: a salon books people, a
+ *  restaurant books tables, a guesthouse books rooms. Only a default — any kind can be chosen. */
+function defaultKind(businessModel: BusinessModel | undefined): ResourceKind {
+  return businessModel === "restaurant" || businessModel === "lodging" ? "room" : "person";
+}
+
+function kindLabel(type: string): string {
+  return (RESOURCE_KIND_LABELS as Record<string, string>)[type] ?? type;
+}
+
 export default function ResourcesPage() {
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
+  const { data: organization } = useActiveOrganization();
+  const [photo, setPhoto] = useState<string | undefined>();
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const { data: resources, isLoading } = useQuery({
     queryKey: ["resources"],
@@ -47,38 +68,129 @@ export default function ResourcesPage() {
 
   const { register, control, handleSubmit, reset } = useForm<CreateResourceInput>({
     resolver: zodResolver(createResourceSchema),
-    defaultValues: { type: "room", capacity: 1, active: true, weeklyAvailability: [] },
+    defaultValues: { type: "person", capacity: 1, active: true, weeklyAvailability: [] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: "weeklyAvailability" });
+  const kind = useWatch({ control, name: "type" });
+
+  function openForm() {
+    reset({
+      type: defaultKind(organization?.businessModel),
+      capacity: 1,
+      active: true,
+      weeklyAvailability: [],
+    });
+    setPhoto(undefined);
+    setPhotoError(null);
+    setShowForm(true);
+  }
+
+  async function handlePhoto(file: File | undefined) {
+    if (!file) return;
+    setPhotoError(null);
+    setPhotoUploading(true);
+    try {
+      setPhoto((await uploadFile(file)).url);
+    } catch (error) {
+      setPhotoError(error instanceof ApiError ? error.message : "Échec de l'envoi de la photo.");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
 
   const createMutation = useMutation({
     mutationFn: (input: CreateResourceInput) => apiClient.post<Resource>("/resources", input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["resources"] });
       reset();
+      setPhoto(undefined);
       setShowForm(false);
     },
   });
 
+  const isPerson = kind === "person";
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouvelle ressource"}</Button>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <p className="max-w-2xl text-sm text-text-muted">
+          Ce que vos clients réservent : les membres de l&apos;équipe (coiffeurs, coachs,
+          formateurs), les lieux (salles, cabines, tables, chambres) et les équipements. Un membre
+          de l&apos;équipe n&apos;a pas besoin de compte et ne compte pas comme utilisateur de
+          votre abonnement.
+        </p>
+        <Button onClick={() => (showForm ? setShowForm(false) : openForm())}>
+          {showForm ? "Annuler" : "Nouvelle ressource"}
+        </Button>
       </div>
 
       {showForm && (
         <form
-          onSubmit={handleSubmit((values) => createMutation.mutate(values))}
+          onSubmit={handleSubmit((values) =>
+            createMutation.mutate({ ...values, photo: isPerson ? photo : undefined }),
+          )}
           // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
           // onSubmit), and Card renders a <div> — same exclusion documented on the other
           // migrated create-forms (dashboard/crm, dashboard/bookings).
           className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
-          <div className="grid grid-cols-3 gap-2">
-            <Input placeholder="Nom (ex: Salle 1)" className="col-span-2" {...register("name")} />
-            <Input placeholder="Type (room, vehicle...)" {...register("type")} />
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Select aria-label="Nature" {...register("type")}>
+              {RESOURCE_KINDS.map((value) => (
+                <option key={value} value={value}>
+                  {RESOURCE_KIND_LABELS[value]}
+                </option>
+              ))}
+            </Select>
+            <Input
+              aria-label="Nom"
+              placeholder={isPerson ? "Prénom (ex: Awa)" : "Nom (ex: Salle 1)"}
+              className="sm:col-span-2"
+              {...register("name")}
+            />
           </div>
-          <Input type="number" placeholder="Capacité" className="w-32" {...register("capacity", { valueAsNumber: true })} />
+          <label className="flex items-center gap-2 text-sm text-text">
+            {isPerson ? "Clients en même temps" : "Capacité"}
+            <Input
+              type="number"
+              min="1"
+              aria-label="Capacité"
+              className="w-24"
+              {...register("capacity", { valueAsNumber: true })}
+            />
+          </label>
+          <textarea
+            aria-label="Présentation"
+            placeholder={
+              isPerson
+                ? "Présentation (optionnel), affichée aux clients : spécialités, expérience..."
+                : "Description (optionnel)"
+            }
+            rows={2}
+            className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+            {...register("description", {
+              setValueAs: (v: string) => (v === "" ? undefined : v),
+            })}
+          />
+          {isPerson && (
+            <div className="flex items-center gap-3">
+              {photo && (
+                // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
+                <img src={photo} alt="" className="h-12 w-12 rounded-full object-cover" />
+              )}
+              <label className="text-sm text-text">
+                <span className="mr-2">{photoUploading ? "Envoi..." : "Photo (optionnel)"}</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  aria-label="Photo"
+                  onChange={(e) => void handlePhoto(e.target.files?.[0])}
+                  className="text-xs"
+                />
+              </label>
+              {photoError && <p className="text-xs text-destructive">{photoError}</p>}
+            </div>
+          )}
           {/* setValueAs: optional + format-constrained (.url()) — an untouched field always
               submits "" (never undefined), which fails validation unless converted here; same
               pattern as dashboard/settings/page.tsx's brandColor/logo/heroImage fields. */}
@@ -88,20 +200,29 @@ export default function ResourcesPage() {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           />
-          <select
-            className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
-            defaultValue=""
-            {...register("membershipId", {
-              setValueAs: (v: string) => (v === "" ? undefined : v),
-            })}
-          >
-            <option value="">Aucun membre assigné (ressource générique)</option>
-            {members?.map((member) => (
-              <option key={member.id} value={member.id}>
-                {memberName(member)}
-              </option>
-            ))}
-          </select>
+          {isPerson && (
+            <label className="block text-sm text-text">
+              <span className="mb-1 block text-xs text-text-muted">
+                Optionnel : relier à un utilisateur du tableau de bord, s&apos;il en a un, pour
+                qu&apos;il voie son propre planning.
+              </span>
+              <select
+                aria-label="Compte utilisateur lié"
+                className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+                defaultValue=""
+                {...register("membershipId", {
+                  setValueAs: (v: string) => (v === "" ? undefined : v),
+                })}
+              >
+                <option value="">Aucun compte (cas le plus courant)</option>
+                {members?.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {memberName(member)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-text">Horaires hebdomadaires</p>
@@ -154,10 +275,10 @@ export default function ResourcesPage() {
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
               <tr>
                 <th className="px-4 py-2">Nom</th>
-                <th className="px-4 py-2">Type</th>
+                <th className="px-4 py-2">Nature</th>
                 <th className="px-4 py-2">Capacité</th>
                 <th className="px-4 py-2">Horaires</th>
-                <th className="px-4 py-2">Membre assigné</th>
+                <th className="px-4 py-2">Compte lié</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -185,7 +306,7 @@ export default function ResourcesPage() {
                       {resource.name}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-text-muted">{resource.type}</td>
+                  <td className="px-4 py-2 text-text-muted">{kindLabel(resource.type)}</td>
                   <td className="px-4 py-2 text-text-muted">{resource.capacity}</td>
                   <td className="px-4 py-2 text-text-muted">
                     {resource.weeklyAvailability

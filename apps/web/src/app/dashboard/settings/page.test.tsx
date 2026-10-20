@@ -621,10 +621,12 @@ describe("SettingsPage — Team invite section (LOT F2-FE)", () => {
     await user.click(screen.getByRole("button", { name: "Inviter un membre" }));
   }
 
-  it("shows the Équipe section with the existing member list and an Inviter un membre action", async () => {
+  it("shows the Utilisateurs section with the existing member list and an Inviter un membre action", async () => {
     renderWithProviders(<SettingsPage />);
 
-    expect(screen.getByText("Équipe")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Utilisateurs" })).toBeInTheDocument();
+    // Bookable staff are not users: the section says where they go instead.
+    expect(screen.getByText(/n'ont pas besoin de compte/)).toBeInTheDocument();
     expect(await screen.findByText("owner@korva.test")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Inviter un membre" })).toBeInTheDocument();
   });

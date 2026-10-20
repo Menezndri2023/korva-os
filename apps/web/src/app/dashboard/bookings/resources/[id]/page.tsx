@@ -12,8 +12,8 @@ import {
   type AddBlockedSlotInput,
   type UpdateResourceInput,
 } from "@korva/validation";
-import type { Resource } from "@korva/types";
-import { Badge, Button, Card, Input } from "@korva/ui";
+import { RESOURCE_KINDS, RESOURCE_KIND_LABELS, type Resource } from "@korva/types";
+import { Badge, Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
@@ -175,7 +175,7 @@ export default function ResourceDetailPage() {
         {!isEditing ? (
           <>
             <div className="mt-4">
-              <dt className="text-sm text-text-muted">Membre assigné</dt>
+              <dt className="text-sm text-text-muted">Compte utilisateur lié</dt>
               <dd className="mt-0.5 text-sm text-text">
                 {(() => {
                   const member = members?.find((m) => m.id === resource.membershipId);
@@ -205,7 +205,17 @@ export default function ResourceDetailPage() {
           >
             <div className="grid grid-cols-3 gap-2">
               <Input placeholder="Nom" className="col-span-2" {...register("name")} />
-              <Input placeholder="Type" {...register("type")} />
+              <Select aria-label="Nature" {...register("type")}>
+                {RESOURCE_KINDS.map((value) => (
+                  <option key={value} value={value}>
+                    {RESOURCE_KIND_LABELS[value]}
+                  </option>
+                ))}
+                {/* A free-text type from before the kinds existed stays selectable as it is. */}
+                {!(RESOURCE_KINDS as readonly string[]).includes(resource.type) && (
+                  <option value={resource.type}>{resource.type}</option>
+                )}
+              </Select>
             </div>
             {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             <div className="flex items-center gap-3">

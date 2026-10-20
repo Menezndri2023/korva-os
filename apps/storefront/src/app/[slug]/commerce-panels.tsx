@@ -105,6 +105,8 @@ export function BookingPanel({
     queryKey: ["public-resources", slug],
     queryFn: () => publicApiClient.get<PublicResource[]>(`/public/${slug}/resources`),
   });
+  const resources = resourcesQuery.data ?? [];
+  const staffOnly = resources.length > 0 && resources.every((r) => r.type === "person");
 
   // Slots come from the API, already expressed in the business's own timezone. The panel used to
   // build startAt from the typed hour as `${date}T${time}:00.000Z` — UTC — so a 14:00 booking in
@@ -148,6 +150,48 @@ export function BookingPanel({
       <DialogCloseButton onClose={onClose} />
       <form onSubmit={handleSubmit((values) => bookMutation.mutate(values))} className="space-y-3 text-sm">
         <div>
+          {staffOnly ? (
+            // A salon's customer books a person, not an "emplacement": show who they are.
+            <div role="radiogroup" aria-label="Avec qui ?" className="space-y-1">
+              <p className="text-xs font-medium text-text-muted">Avec qui ?</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {resources.map((resource) => (
+                  <label
+                    key={resource.id}
+                    className={`flex cursor-pointer items-center gap-3 rounded-md border p-2 ${
+                      resourceId === resource.id ? "border-text" : "border-border"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      value={resource.id}
+                      className="sr-only"
+                      {...register("resourceId")}
+                    />
+                    {resource.photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
+                      <img src={resource.photo} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-muted text-sm text-text"
+                      >
+                        {resource.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-text">{resource.name}</span>
+                      {resource.description && (
+                        <span className="block truncate text-xs text-text-muted">
+                          {resource.description}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : (
           <Select
             {...register("resourceId")}
             aria-label="Emplacement"
@@ -163,6 +207,7 @@ export function BookingPanel({
               </option>
             ))}
           </Select>
+          )}
           {resourcesQuery.isError && (
             <p className="mt-1 text-xs text-destructive">
               Impossible de charger les emplacements.{" "}

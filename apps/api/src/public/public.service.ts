@@ -513,6 +513,8 @@ export class PublicService {
       type: resource.type,
       capacity: resource.capacity,
       weeklyAvailability: resource.weeklyAvailability,
+      description: resource.description,
+      photo: resource.photo,
     }));
   }
 

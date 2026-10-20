@@ -271,6 +271,32 @@ describe('Public booking slots and fixed-duration offers (e2e)', () => {
     expect(asError(res.body).code).toBe('OFFER_NOT_FOUND');
   });
 
+  it('publishes a team member with photo and presentation, needing no user account', async () => {
+    await auth(request(server).post('/api/v1/resources'))
+      .send({
+        name: 'Awa',
+        type: 'person',
+        description: 'Coloriste',
+        photo: 'https://example.com/awa.png',
+        weeklyAvailability: [
+          { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' },
+        ],
+      })
+      .expect(201);
+
+    const res = await request(server)
+      .get(`/api/v1/public/${slug}/resources`)
+      .expect(200);
+    const awa = asSuccess<
+      { name: string; type: string; description?: string; photo?: string }[]
+    >(res.body).find((resource) => resource.name === 'Awa');
+    expect(awa).toMatchObject({
+      type: 'person',
+      description: 'Coloriste',
+      photo: 'https://example.com/awa.png',
+    });
+  });
+
   it('rejects a duration outside the allowed bounds', async () => {
     await auth(request(server).patch(`/api/v1/offers/${fixedOfferId}`))
       .send({ durationMinutes: 2 })

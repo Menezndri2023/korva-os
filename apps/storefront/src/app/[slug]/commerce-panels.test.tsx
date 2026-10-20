@@ -115,6 +115,32 @@ describe("BookingPanel", () => {
     );
   });
 
+  it("asks 'Avec qui ?' and shows each team member when every resource is a person", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path.endsWith("/resources")) {
+        return Promise.resolve([
+          { id: "awa", name: "Awa", type: "person", description: "Coloriste", photo: "https://x/awa.png" },
+          { id: "moussa", name: "Moussa", type: "person" },
+        ]);
+      }
+      if (path.includes("/slots")) {
+        return Promise.resolve({ date: "2026-07-06", durationMinutes: 45, slots: SLOTS });
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const user = userEvent.setup();
+    renderPanel({ ...baseOffer, durationMinutes: 45 });
+
+    const group = await screen.findByRole("radiogroup", { name: "Avec qui ?" });
+    expect(group).toHaveTextContent("Coloriste");
+    expect(screen.queryByLabelText("Emplacement")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: /Moussa/ }));
+    await waitFor(() =>
+      expect(slotsCalls().some((path) => path.includes("resourceId=moussa"))).toBe(true),
+    );
+  });
+
   it("cannot be submitted before a slot is picked, and says so when a day has none", async () => {
     getMock.mockImplementation((path: string) => {
       if (path.endsWith("/resources")) {

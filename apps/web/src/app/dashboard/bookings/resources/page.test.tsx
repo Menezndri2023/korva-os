@@ -65,7 +65,7 @@ describe("ResourcesPage", () => {
 
     const link = await screen.findByRole("link", { name: "Salle 1" });
     expect(link).toHaveAttribute("href", "/dashboard/bookings/resources/res-1");
-    expect(screen.getByText("room")).toBeInTheDocument();
+    expect(screen.getByText("Lieu (salle, cabine, table, chambre)")).toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
   });
 
@@ -83,13 +83,13 @@ describe("ResourcesPage", () => {
     renderWithProviders(<ResourcesPage />);
 
     const toggle = await screen.findByRole("button", { name: "Nouvelle ressource" });
-    expect(screen.queryByPlaceholderText("Nom (ex: Salle 1)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Nom")).not.toBeInTheDocument();
 
     await user.click(toggle);
-    expect(screen.getByPlaceholderText("Nom (ex: Salle 1)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nom")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Annuler" }));
-    expect(screen.queryByPlaceholderText("Nom (ex: Salle 1)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Nom")).not.toBeInTheDocument();
   });
 
   it("submits the create form and calls POST /resources with the typed values", async () => {
@@ -98,11 +98,10 @@ describe("ResourcesPage", () => {
     renderWithProviders(<ResourcesPage />);
 
     await user.click(await screen.findByRole("button", { name: "Nouvelle ressource" }));
-    await user.type(screen.getByPlaceholderText("Nom (ex: Salle 1)"), "Salle 2");
-    await user.clear(screen.getByPlaceholderText("Type (room, vehicle...)"));
-    await user.type(screen.getByPlaceholderText("Type (room, vehicle...)"), "room");
-    await user.clear(screen.getByPlaceholderText("Capacité"));
-    await user.type(screen.getByPlaceholderText("Capacité"), "5");
+    await user.type(screen.getByLabelText("Nom"), "Salle 2");
+    await user.selectOptions(screen.getByLabelText("Nature"), "room");
+    await user.clear(screen.getByLabelText("Capacité"));
+    await user.type(screen.getByLabelText("Capacité"), "5");
     await user.click(screen.getByRole("button", { name: "Créer la ressource" }));
 
     await waitFor(() =>
@@ -122,11 +121,10 @@ describe("ResourcesPage", () => {
     renderWithProviders(<ResourcesPage />);
 
     await user.click(await screen.findByRole("button", { name: "Nouvelle ressource" }));
-    await user.type(screen.getByPlaceholderText("Nom (ex: Salle 1)"), "Salle 2");
-    await user.clear(screen.getByPlaceholderText("Type (room, vehicle...)"));
-    await user.type(screen.getByPlaceholderText("Type (room, vehicle...)"), "room");
-    await user.clear(screen.getByPlaceholderText("Capacité"));
-    await user.type(screen.getByPlaceholderText("Capacité"), "5");
+    await user.type(screen.getByLabelText("Nom"), "Salle 2");
+    await user.selectOptions(screen.getByLabelText("Nature"), "room");
+    await user.clear(screen.getByLabelText("Capacité"));
+    await user.type(screen.getByLabelText("Capacité"), "5");
 
     await user.click(screen.getByRole("button", { name: "+ Ajouter un créneau" }));
     await user.click(screen.getByRole("button", { name: "Créer la ressource" }));
@@ -147,7 +145,7 @@ describe("ResourcesPage", () => {
     renderWithProviders(<ResourcesPage />);
 
     await user.click(await screen.findByRole("button", { name: "Nouvelle ressource" }));
-    await user.type(screen.getByPlaceholderText("Nom (ex: Salle 1)"), "Salle 2");
+    await user.type(screen.getByLabelText("Nom"), "Salle 2");
     await user.click(screen.getByRole("button", { name: "Créer la ressource" }));
 
     expect(await screen.findByRole("button", { name: "Création..." })).toBeDisabled();
@@ -161,14 +159,55 @@ describe("ResourcesPage", () => {
     const callsBefore = getMock.mock.calls.filter(([path]) => path === "/resources").length;
 
     await user.click(await screen.findByRole("button", { name: "Nouvelle ressource" }));
-    await user.type(screen.getByPlaceholderText("Nom (ex: Salle 1)"), "Salle 2");
+    await user.type(screen.getByLabelText("Nom"), "Salle 2");
     await user.click(screen.getByRole("button", { name: "Créer la ressource" }));
 
     await waitFor(() =>
-      expect(screen.queryByPlaceholderText("Nom (ex: Salle 1)")).not.toBeInTheDocument(),
+      expect(screen.queryByLabelText("Nom")).not.toBeInTheDocument(),
     );
     expect(
       getMock.mock.calls.filter(([path]) => path === "/resources").length,
     ).toBeGreaterThan(callsBefore);
+  });
+
+  it("defaults to a team member, with a first-name prompt, a photo and no account needed", async () => {
+    postMock.mockResolvedValue(resourceOne);
+    const user = userEvent.setup();
+    renderWithProviders(<ResourcesPage />);
+
+    expect(await screen.findByText(/ne compte pas comme utilisateur/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Nouvelle ressource" }));
+    expect(screen.getByLabelText("Nature")).toHaveValue("person");
+    expect(screen.getByPlaceholderText("Prénom (ex: Awa)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Photo")).toBeInTheDocument();
+    expect(screen.getByLabelText("Compte utilisateur lié")).toHaveValue("");
+
+    await user.type(screen.getByLabelText("Nom"), "Awa");
+    await user.type(screen.getByLabelText("Présentation"), "Coloriste, 10 ans d'expérience");
+    await user.click(screen.getByRole("button", { name: "Créer la ressource" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/resources",
+        expect.objectContaining({
+          name: "Awa",
+          type: "person",
+          description: "Coloriste, 10 ans d'expérience",
+        }),
+      ),
+    );
+    const body = postMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body.membershipId).toBeUndefined();
+  });
+
+  it("hides the photo and the account link for a place", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ResourcesPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Nouvelle ressource" }));
+    await user.selectOptions(screen.getByLabelText("Nature"), "room");
+    expect(screen.getByPlaceholderText("Nom (ex: Salle 1)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Photo")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Compte utilisateur lié")).not.toBeInTheDocument();
   });
 });

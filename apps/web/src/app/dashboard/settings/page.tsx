@@ -94,7 +94,9 @@ interface PendingInvitation {
 }
 
 const METRIC_LABELS: Record<string, string> = {
-  seats: "Membres de l'équipe",
+  // Seats are dashboard logins. Bookable team members (Réservations › Équipe et ressources) need
+  // no account and use none — the label must not suggest otherwise.
+  seats: "Utilisateurs du tableau de bord",
   ai_messages_per_month: "Messages IA / mois",
 };
 
@@ -1419,11 +1421,16 @@ export default function SettingsPage() {
 
       <section className="rounded-lg border border-border bg-surface p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Équipe</h2>
+          <h2 className="text-sm font-semibold text-text">Utilisateurs</h2>
           <Button variant="secondary" size="sm" onClick={() => setInviteOpen((v) => !v)}>
             {inviteOpen ? "Annuler" : "Inviter un membre"}
           </Button>
         </div>
+        <p className="mt-1 text-sm text-text-muted">
+          Les personnes qui se connectent au tableau de bord. Vos coiffeurs, coachs ou formateurs
+          réservables par vos clients n&apos;ont pas besoin de compte : ajoutez-les dans
+          Réservations › Équipe et ressources, sans utiliser d&apos;utilisateur de votre abonnement.
+        </p>
 
         {inviteOpen && (
           <form

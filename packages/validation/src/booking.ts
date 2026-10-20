@@ -16,6 +16,7 @@ export const createResourceSchema = z.object({
   type: z.string().min(1).max(60),
   capacity: z.number().int().positive().default(1),
   description: z.string().max(2000).optional(),
+  photo: z.string().url().optional(),
   active: z.boolean().default(true),
   weeklyAvailability: z.array(weeklyAvailabilityWindowInputSchema).default([]),
   /** ICS feed URL (e.g. a Google/Outlook/Apple Calendar "secret address") — see

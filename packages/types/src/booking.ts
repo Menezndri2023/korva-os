@@ -19,6 +19,23 @@ export interface BlockedSlot {
   source?: "external_calendar";
 }
 
+/**
+ * The usual kinds of bookable resource, offered as a choice in the dashboard. `Resource.type`
+ * stays a free string (never a closed enum — see the note above), so older values keep working;
+ * these are just the ones the product now speaks in.
+ *
+ * "person" is the one that matters most: a bookable member of the team (a hairdresser, a coach)
+ * who needs NO dashboard account and therefore uses no seat. Seats are for people who log in.
+ */
+export const RESOURCE_KINDS = ["person", "room", "equipment"] as const;
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+
+export const RESOURCE_KIND_LABELS: Record<ResourceKind, string> = {
+  person: "Membre de l'équipe",
+  room: "Lieu (salle, cabine, table, chambre)",
+  equipment: "Équipement",
+};
+
 export interface Resource {
   id: string;
   organizationId: string;
@@ -26,6 +43,8 @@ export interface Resource {
   type: string;
   capacity: number;
   description?: string;
+  /** Shown to customers choosing whom to book — mostly for a "person" resource. */
+  photo?: string;
   active: boolean;
   weeklyAvailability: WeeklyAvailabilityWindow[];
   blockedSlots: BlockedSlot[];

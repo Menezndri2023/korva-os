@@ -86,6 +86,10 @@ export class Resource {
   @Prop()
   description?: string;
 
+  /** See Resource.photo in @korva/types. */
+  @Prop()
+  photo?: string;
+
   @Prop({ default: true })
   active!: boolean;
 
