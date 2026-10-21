@@ -90,6 +90,10 @@ export class Resource {
   @Prop()
   photo?: string;
 
+  /** See Resource.seats in @korva/types — seats at a restaurant table. */
+  @Prop({ min: 1 })
+  seats?: number;
+
   @Prop({ default: true })
   active!: boolean;
 

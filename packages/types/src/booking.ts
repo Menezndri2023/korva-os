@@ -45,6 +45,10 @@ export interface Resource {
   description?: string;
   /** Shown to customers choosing whom to book — mostly for a "person" resource. */
   photo?: string;
+  /** Seats at a restaurant table. Set on every bookable resource of an organization, it turns
+   *  the storefront into table booking: the customer gives a party size and the API assigns
+   *  the smallest free table that fits. Unrelated to `capacity` (bookings at the same time). */
+  seats?: number;
   active: boolean;
   weeklyAvailability: WeeklyAvailabilityWindow[];
   blockedSlots: BlockedSlot[];
@@ -84,6 +88,8 @@ export interface Booking {
   paymentStatus: BookingPaymentStatus;
   /** Set on a stay (per-night offer): how many nights `pricing.amount` covers. */
   nights?: number;
+  /** Party size of a table booking. */
+  partySize?: number;
   notes?: string;
   /** Set once BookingReminderSchedulerService has sent a reminder for this appointment — absent
    *  otherwise. Cleared on reschedule (the old reminder no longer applies to the new time). */

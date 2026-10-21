@@ -17,6 +17,7 @@ export const createResourceSchema = z.object({
   capacity: z.number().int().positive().default(1),
   description: z.string().max(2000).optional(),
   photo: z.string().url().optional(),
+  seats: z.number().int().min(1).max(100).optional(),
   active: z.boolean().default(true),
   weeklyAvailability: z.array(weeklyAvailabilityWindowInputSchema).default([]),
   /** ICS feed URL (e.g. a Google/Outlook/Apple Calendar "secret address") — see
@@ -52,6 +53,7 @@ export const createBookingSchema = z
     startAt: z.string().datetime(),
     endAt: z.string().datetime(),
     notes: z.string().max(2000).optional(),
+    partySize: z.number().int().min(1).max(100).optional(),
   })
   .refine((b) => b.startAt < b.endAt, { message: "startAt must be before endAt" });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;

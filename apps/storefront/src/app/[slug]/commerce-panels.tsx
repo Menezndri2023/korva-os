@@ -103,7 +103,7 @@ export function BookingPanel({
     resolver: zodResolver(createPublicBookingSchema),
     defaultValues: {
       offerId: offer.id,
-      resourceId: "",
+      resourceId: undefined,
       // Undefined, not "": both are optional in the schema (a stay sends dates instead), and an
       // empty string fails its datetime format.
       startAt: undefined,
@@ -120,19 +120,30 @@ export function BookingPanel({
   });
   const resources = resourcesQuery.data ?? [];
   const staffOnly = resources.length > 0 && resources.every((r) => r.type === "person");
+  // Every bookable resource has seats: this is a restaurant's tables. The customer gives a party
+  // size and picks a time; the API assigns the table (PublicService#bookAnyTable).
+  const tableMode = !isStay && resources.length > 0 && resources.every((r) => r.seats != null);
+  const [partySize, setPartySize] = useState(2);
 
   // Slots come from the API, already expressed in the business's own timezone. The panel used to
   // build startAt from the typed hour as `${date}T${time}:00.000Z` — UTC — so a 14:00 booking in
   // a Paris salon landed at 16:00, and the visitor also chose how long a fixed service lasted.
   const durationParam = fixedDuration ? "" : `&durationMinutes=${chosenDuration}`;
   const slotsQuery = useQuery({
-    queryKey: ["public-slots", slug, offer.id, resourceId, date, fixedDuration ?? chosenDuration],
+    queryKey: tableMode
+      ? ["public-table-slots", slug, offer.id, date, partySize]
+      : ["public-slots", slug, offer.id, resourceId, date, fixedDuration ?? chosenDuration],
     queryFn: () =>
       publicApiClient.get<PublicSlots>(
-        `/public/${slug}/slots?resourceId=${resourceId}&offerId=${offer.id}&date=${date}${durationParam}`,
+        tableMode
+          ? `/public/${slug}/table-slots?offerId=${offer.id}&date=${date}&partySize=${partySize}`
+          : `/public/${slug}/slots?resourceId=${resourceId}&offerId=${offer.id}&date=${date}${durationParam}`,
       ),
-    enabled: !!resourceId && !!date && !isStay,
+    enabled: !!date && !isStay && (tableMode || !!resourceId),
   });
+  useEffect(() => {
+    setValue("partySize", tableMode ? partySize : undefined);
+  }, [tableMode, partySize, setValue]);
 
   // A stay is priced and checked by the API before the customer commits (GET /stay-quote).
   const stayQuery = useQuery({
@@ -154,7 +165,7 @@ export function BookingPanel({
   useEffect(() => {
     setValue("startAt", undefined);
     setValue("endAt", undefined);
-  }, [resourceId, date, chosenDuration, setValue]);
+  }, [resourceId, date, chosenDuration, partySize, setValue]);
 
   function pickSlot(slot: { startAt: string; endAt: string }) {
     setValue("startAt", slot.startAt);
@@ -179,7 +190,20 @@ export function BookingPanel({
       <DialogCloseButton onClose={onClose} />
       <form onSubmit={handleSubmit((values) => bookMutation.mutate(values))} className="space-y-3 text-sm">
         <div>
-          {staffOnly ? (
+          {tableMode ? (
+            <label className="flex items-center gap-2 text-sm text-text">
+              Nombre de couverts
+              <Input
+                type="number"
+                min="1"
+                max="100"
+                aria-label="Nombre de couverts"
+                value={partySize}
+                onChange={(e) => setPartySize(Math.max(1, Number(e.target.value) || 1))}
+                className="w-20"
+              />
+            </label>
+          ) : staffOnly ? (
             // A salon's customer books a person, not an "emplacement": show who they are.
             <div role="radiogroup" aria-label="Avec qui ?" className="space-y-1">
               <p className="text-xs font-medium text-text-muted">Avec qui ?</p>
@@ -222,7 +246,7 @@ export function BookingPanel({
             </div>
           ) : (
           <Select
-            {...register("resourceId")}
+            {...register("resourceId", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
             aria-label="Emplacement"
             error={!!errors.resourceId}
             className="w-full"
@@ -313,7 +337,7 @@ export function BookingPanel({
           )}
         </div>
 
-        {resourceId && (
+        {(resourceId || tableMode) && (
           <div>
             {slotsQuery.isLoading && <p className="text-xs text-text-muted">Chargement des créneaux...</p>}
             {slotsQuery.isError && (

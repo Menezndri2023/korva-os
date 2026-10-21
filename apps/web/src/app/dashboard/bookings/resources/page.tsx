@@ -159,6 +159,20 @@ export default function ResourcesPage() {
               {...register("capacity", { valueAsNumber: true })}
             />
           </label>
+          {kind === "room" && (
+            <label className="flex items-center gap-2 text-sm text-text">
+              Places assises (pour une table de restaurant)
+              <Input
+                type="number"
+                min="1"
+                aria-label="Places assises"
+                className="w-24"
+                {...register("seats", {
+                  setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+                })}
+              />
+            </label>
+          )}
           <textarea
             aria-label="Présentation"
             placeholder={

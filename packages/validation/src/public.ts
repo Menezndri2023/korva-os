@@ -61,7 +61,9 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
  */
 export const createPublicBookingSchema = z
   .object({
-    resourceId: z.string().min(1),
+    /** Omitted for a TABLE booking: the API picks the table from partySize. */
+    resourceId: z.string().min(1).optional(),
+    partySize: z.number().int().min(1).max(100).optional(),
     offerId: z.string().min(1),
     startAt: z.string().datetime().optional(),
     endAt: z.string().datetime().optional(),
@@ -72,7 +74,18 @@ export const createPublicBookingSchema = z
   })
   .refine((b) => (b.startAt && b.endAt) || (b.checkIn && b.checkOut), {
     message: "Either startAt/endAt or checkIn/checkOut is required",
+  })
+  .refine((b) => b.resourceId || b.partySize, {
+    message: "Either resourceId or partySize is required",
   });
+
+/** GET /public/:slug/table-slots — start times when at least one table seats the party. */
+export const publicTableSlotsSchema = z.object({
+  offerId: z.string().min(1),
+  date: isoDate,
+  partySize: z.coerce.number().int().min(1).max(100),
+});
+export type PublicTableSlotsQuery = z.infer<typeof publicTableSlotsSchema>;
 
 /** GET /public/:slug/stay-quote — nights, total and availability of one room for a stay. */
 export const publicStayQuoteSchema = z.object({

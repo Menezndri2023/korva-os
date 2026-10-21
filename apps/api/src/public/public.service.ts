@@ -27,6 +27,7 @@ import type {
   CreatePublicBookingInput,
   PublicSlotsQuery,
   PublicStayQuoteQuery,
+  PublicTableSlotsQuery,
   CreatePublicLeadInput,
   CreatePublicOrderInput,
   ListPublicOffersQuery,
@@ -535,6 +536,7 @@ export class PublicService {
       weeklyAvailability: resource.weeklyAvailability,
       description: resource.description,
       photo: resource.photo,
+      seats: resource.seats,
     }));
   }
 
@@ -694,6 +696,92 @@ export class PublicService {
     }
   }
 
+  /** Active tables seating at least `partySize`, smallest first (a resource with `seats`). */
+  private async tablesFor(organizationId: string, partySize: number) {
+    const resources = await this.resourcesService.list(organizationId, true);
+    return resources
+      .filter(
+        (resource) => resource.seats != null && resource.seats >= partySize,
+      )
+      .sort((a, b) => (a.seats ?? 0) - (b.seats ?? 0));
+  }
+
+  /**
+   * Start times on `date` when at least one table seats the party — the union of each fitting
+   * table's slots (AvailabilityService#getDaySlots), so the customer never chooses a table.
+   */
+  async getTableSlots(slug: string, query: PublicTableSlotsQuery) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertModuleEnabled(organization, 'booking');
+    const organizationId = organization.id as string;
+    const offer = await this.findActiveOffer(organizationId, query.offerId);
+    const durationMinutes =
+      offer.durationMinutes ?? DEFAULT_SLOT_DURATION_MINUTES;
+    const byStart = new Map<
+      string,
+      { startAt: string; endAt: string; time: string }
+    >();
+    for (const table of await this.tablesFor(organizationId, query.partySize)) {
+      const slots = await this.availabilityService.getDaySlots(
+        organizationId,
+        table.id as string,
+        query.date,
+        durationMinutes,
+      );
+      for (const slot of slots) byStart.set(slot.startAt, slot);
+    }
+    return {
+      date: query.date,
+      durationMinutes,
+      slots: [...byStart.values()].sort((a, b) =>
+        a.startAt.localeCompare(b.startAt),
+      ),
+    };
+  }
+
+  /**
+   * Books the smallest free table that seats the party — big tables stay free for big groups.
+   * Each attempt goes through BookingsService.create, so the resource lock and the capacity
+   * check still serialise two customers racing for the last table: the loser simply moves to
+   * the next one, and gets NO_TABLE_AVAILABLE when none is left.
+   */
+  private async bookAnyTable(
+    organizationId: string,
+    partySize: number,
+    input: {
+      offerId: string;
+      startAt: string;
+      endAt: string;
+      contactId: string;
+      notes?: string;
+      partySize?: number;
+    },
+  ) {
+    const unavailable = new Set([
+      'SLOT_UNAVAILABLE',
+      'SLOT_BLOCKED',
+      'OUTSIDE_AVAILABILITY_WINDOW',
+      'RESOURCE_INACTIVE',
+    ]);
+    for (const table of await this.tablesFor(organizationId, partySize)) {
+      try {
+        return await this.bookingsService.create(organizationId, undefined, {
+          ...input,
+          resourceId: table.id as string,
+        });
+      } catch (error) {
+        const code = (
+          error as { getResponse?: () => { code?: string } }
+        ).getResponse?.()?.code;
+        if (!code || !unavailable.has(code)) throw error;
+      }
+    }
+    throw new BadRequestException({
+      code: 'NO_TABLE_AVAILABLE',
+      message: 'No table for this party size is free at that time',
+    });
+  }
+
   async createBooking(slug: string, input: CreatePublicBookingInput) {
     const organization = await this.resolveOrganization(slug);
     this.assertModuleEnabled(organization, 'booking');
@@ -709,18 +797,24 @@ export class PublicService {
       organizationId,
       input.contact,
     );
-    const booking = await this.bookingsService.create(
-      organizationId,
-      undefined,
-      {
-        resourceId: input.resourceId,
-        offerId: input.offerId,
-        startAt,
-        endAt,
-        contactId: contact.id as string,
-        notes: input.notes,
-      },
-    );
+    const bookingInput = {
+      offerId: input.offerId,
+      startAt,
+      endAt,
+      contactId: contact.id as string,
+      notes: input.notes,
+      partySize: input.partySize,
+    };
+    const booking = input.resourceId
+      ? await this.bookingsService.create(organizationId, undefined, {
+          ...bookingInput,
+          resourceId: input.resourceId,
+        })
+      : await this.bookAnyTable(
+          organizationId,
+          input.partySize ?? 0,
+          bookingInput,
+        );
 
     return {
       id: booking.id as string,

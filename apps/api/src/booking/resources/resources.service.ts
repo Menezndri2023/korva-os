@@ -67,6 +67,7 @@ export class ResourcesService {
       capacity: input.capacity,
       description: input.description,
       photo: input.photo,
+      seats: input.seats,
       active: input.active,
       weeklyAvailability: input.weeklyAvailability,
       externalCalendarUrl: input.externalCalendarUrl,

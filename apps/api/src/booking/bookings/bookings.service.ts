@@ -108,6 +108,7 @@ export class BookingsService {
               currency: offer.pricing.currency,
             },
             nights: stay?.nights,
+            partySize: input.partySize,
             notes: input.notes,
             // Snapshot, not a live join — see Booking.staffMembershipId's own doc comment.
             staffMembershipId: resource.membershipId,

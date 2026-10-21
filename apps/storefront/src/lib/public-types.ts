@@ -116,6 +116,8 @@ export interface PublicResource {
   capacity?: number;
   description?: string;
   photo?: string;
+  /** Seats at a restaurant table — see Resource.seats. */
+  seats?: number;
 }
 
 /** Mirrors PublicService#getSlots exactly. `time` is the slot's start as read on the business's

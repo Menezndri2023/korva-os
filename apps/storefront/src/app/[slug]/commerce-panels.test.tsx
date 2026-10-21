@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BookingPanel, CheckoutPanel } from "./commerce-panels";
@@ -177,6 +177,45 @@ describe("BookingPanel", () => {
       ),
     );
     expect(getMock.mock.calls.some(([path]) => path.includes("/slots"))).toBe(false);
+  });
+
+  it("asks a restaurant's customer for a party size, not a table, and lets the API choose the table", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path.endsWith("/resources")) {
+        return Promise.resolve([
+          { id: "t1", name: "Table 1", type: "room", seats: 2 },
+          { id: "t2", name: "Table 2", type: "room", seats: 6 },
+        ]);
+      }
+      if (path.includes("/table-slots")) {
+        return Promise.resolve({ date: "2026-07-06", durationMinutes: 90, slots: SLOTS });
+      }
+      throw new Error(`unexpected GET ${path}`);
+    });
+    const user = userEvent.setup();
+    renderPanel({ ...baseOffer, name: "Table au déjeuner", durationMinutes: 90 });
+
+    const party = await screen.findByLabelText("Nombre de couverts");
+    expect(screen.queryByLabelText("Emplacement")).not.toBeInTheDocument();
+    // Set in one go: clearing first would snap the field back to its minimum of 1.
+    fireEvent.change(party, { target: { value: "4" } });
+    await waitFor(() =>
+      expect(
+        getMock.mock.calls.some(([path]) => path.includes("/table-slots") && path.includes("partySize=4")),
+      ).toBe(true),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "14:00" }));
+    await user.type(screen.getByLabelText("Adresse e-mail"), "kofi@client.test");
+    await user.click(screen.getByRole("button", { name: "Confirmer la réservation" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/public/salon/bookings",
+        expect.objectContaining({ partySize: 4, startAt: SLOTS[0]!.startAt }),
+      ),
+    );
+    const body = postMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body.resourceId).toBeUndefined();
   });
 
   it("cannot be submitted before a slot is picked, and says so when a day has none", async () => {

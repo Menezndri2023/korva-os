@@ -55,6 +55,10 @@ export class Booking {
   @Prop({ min: 1 })
   nights?: number;
 
+  /** See Booking.partySize in @korva/types — a table booking's number of guests. */
+  @Prop({ min: 1 })
+  partySize?: number;
+
   @Prop()
   notes?: string;
 
