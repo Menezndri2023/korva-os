@@ -54,6 +54,11 @@ export class User {
   /** Set once failedLoginAttempts crosses the lockout threshold; cleared on a successful login. */
   @Prop({ type: Date, default: null })
   lockedUntil!: Date | null;
+
+  /** Set by KORVA's administration: the account can neither sign in nor refresh a session, and
+   *  every session was revoked when it was set. Reversible; memberships and data stay. */
+  @Prop({ type: Date, default: null })
+  disabledAt!: Date | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -116,6 +116,53 @@ export class PlatformAdminController {
     return this.adminService.reactivate(id, user.userId);
   }
 
+  @Get('plans')
+  plans() {
+    return this.adminService.plans();
+  }
+
+  @Get('audit')
+  audit(
+    @Query('organizationId') organizationId?: string,
+    @Query('page') page?: string,
+  ) {
+    return this.adminService.audit({
+      organizationId,
+      page: page ? Number(page) : 1,
+    });
+  }
+
+  @Get('system')
+  system() {
+    return this.adminService.system();
+  }
+
+  @Get('users')
+  users(@Query('q') q?: string) {
+    return this.adminService.users(q);
+  }
+
+  @Post('users/:id/disable')
+  @HttpCode(200)
+  disableUser(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.adminService.disableUser(id, user.userId);
+  }
+
+  @Post('users/:id/enable')
+  @HttpCode(200)
+  enableUser(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.adminService.enableUser(id, user.userId);
+  }
+
+  @Post('users/:id/password-reset')
+  @HttpCode(200)
+  sendPasswordReset(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.adminService.sendPasswordReset(id, user.userId);
+  }
+
   @Post('organizations/:id/invoices/:invoiceId/paid')
   @HttpCode(200)
   markInvoicePaid(

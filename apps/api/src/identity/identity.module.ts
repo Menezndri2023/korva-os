@@ -121,6 +121,12 @@ import { ApiKeyGuard } from '../core/guards/api-key.guard';
     ApiKeysService,
     ApiKeyGuard,
   ],
-  exports: [UsersService, RolesService, MembershipsService],
+  // PasswordResetService: KORVA's administration sends a reset link on a user's behalf.
+  exports: [
+    UsersService,
+    RolesService,
+    MembershipsService,
+    PasswordResetService,
+  ],
 })
 export class IdentityModule {}

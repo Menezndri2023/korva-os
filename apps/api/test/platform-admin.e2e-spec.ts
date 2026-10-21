@@ -276,12 +276,16 @@ describe('Platform administration (e2e)', () => {
     ]);
   });
 
+  // Cached: logging in again for every test runs into the auth throttle (429).
+  let cachedOpsToken: string | undefined;
   async function opsToken(): Promise<string> {
+    if (cachedOpsToken) return cachedOpsToken;
     const res = await request(server)
       .post('/api/v1/auth/login')
       .send({ email: 'ops@korva.test', password: 'password123' })
       .expect(201);
-    return asSuccess<AuthPayload>(res.body).accessToken;
+    cachedOpsToken = asSuccess<AuthPayload>(res.body).accessToken;
+    return cachedOpsToken;
   }
 
   it('suspends an organization — dashboard blocked, site offline — and reactivates it intact', async () => {
@@ -388,5 +392,98 @@ describe('Platform administration (e2e)', () => {
       organizations: 1,
       activity30d: 1,
     });
+  });
+
+  it('manages accounts: search, disable (sign-in refused), enable, password reset — never its own', async () => {
+    const token = await opsToken();
+    const admin = (r: request.Test) =>
+      r.set('Authorization', `Bearer ${token}`);
+    const member = await setupOrg(
+      'admin-user-target@korva.test',
+      'User Target Shop',
+      ['website'],
+    );
+
+    const found = asSuccess<
+      { id: string; email: string; organizations: { name: string }[] }[]
+    >(
+      (
+        await admin(
+          request(server).get('/api/v1/platform/users?q=user-target'),
+        ).expect(200)
+      ).body,
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]!.organizations[0]!.name).toBe('User Target Shop');
+    const userId = found[0]!.id;
+
+    await admin(
+      request(server).post(`/api/v1/platform/users/${userId}/disable`),
+    ).expect(200);
+    const refused = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email: 'admin-user-target@korva.test', password: 'password123' })
+      .expect(403);
+    expect((refused.body as { error: { code: string } }).error.code).toBe(
+      'ACCOUNT_DISABLED',
+    );
+
+    await admin(
+      request(server).post(`/api/v1/platform/users/${userId}/enable`),
+    ).expect(200);
+    await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email: 'admin-user-target@korva.test', password: 'password123' })
+      .expect(201);
+
+    await admin(
+      request(server).post(`/api/v1/platform/users/${userId}/password-reset`),
+    ).expect(200);
+
+    const me = asSuccess<{ id: string }[]>(
+      (
+        await admin(
+          request(server).get('/api/v1/platform/users?q=ops@korva.test'),
+        ).expect(200)
+      ).body,
+    );
+    await admin(
+      request(server).post(`/api/v1/platform/users/${me[0]!.id}/disable`),
+    ).expect(400);
+    expect(member.slug).toBeTruthy();
+  });
+
+  it('shows the plan catalog, the platform-wide audit trail and the system state', async () => {
+    const token = await opsToken();
+    const get = (path: string) =>
+      request(server)
+        .get(`/api/v1/platform/${path}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+    const plans = asSuccess<
+      { key: string; priceCurrency: string; subscribers: number }[]
+    >((await get('plans')).body);
+    expect(
+      plans.some((plan) => plan.key === 'pro' && plan.priceCurrency === 'XOF'),
+    ).toBe(true);
+
+    // A paginated list: rows in `data`, the pagination beside it at the top level.
+    const auditBody = (await get('audit')).body as {
+      data: { organizationName: string; metadata: Record<string, unknown> }[];
+      pagination: { total: number };
+    };
+    expect(auditBody.pagination.total).toBeGreaterThan(0);
+    expect(
+      auditBody.data.some((row) => row.metadata.by === 'platform_admin'),
+    ).toBe(true);
+
+    const system = asSuccess<{
+      database: { dataBytes: number };
+      email: { configured: boolean };
+      administrators: number;
+    }>((await get('system')).body);
+    expect(system.database.dataBytes).toBeGreaterThan(0);
+    expect(system.administrators).toBe(1);
   });
 });

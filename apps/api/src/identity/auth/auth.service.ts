@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -97,6 +98,19 @@ export class AuthService {
       throw new UnauthorizedException({
         code: 'INVALID_CREDENTIALS',
         message: 'Invalid email or password',
+      });
+    }
+
+    // Disabled by KORVA's administration: refused before the password is even checked, with its
+    // own code so the login page can say to contact support rather than "wrong password".
+    if (user.disabledAt) {
+      this.logAuthEvent('AUTH_LOGIN_BLOCKED', {
+        reason: 'account_disabled',
+        userId: user.id as string,
+      });
+      throw new ForbiddenException({
+        code: 'ACCOUNT_DISABLED',
+        message: 'This account has been disabled. Contact KORVA support.',
       });
     }
 
@@ -238,7 +252,7 @@ export class AuthService {
     }
 
     const user = await this.usersService.findById(session.userId.toString());
-    if (!user) {
+    if (!user || user.disabledAt) {
       throw new UnauthorizedException({
         code: 'INVALID_REFRESH_TOKEN',
         message: 'Refresh token is invalid or expired',

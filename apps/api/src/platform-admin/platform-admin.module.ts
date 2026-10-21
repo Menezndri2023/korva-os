@@ -10,6 +10,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { SubscriptionBillingModule } from '../subscription-billing/subscription-billing.module';
 import { AuditModule } from '../audit/audit.module';
 import { ActivationModule } from '../activation/activation.module';
+import { IdentityModule } from '../identity/identity.module';
 import { PlatformAdminController } from './platform-admin.controller';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { PlatformAdminService } from './platform-admin.service';
@@ -31,6 +32,7 @@ import { PlatformAdminService } from './platform-admin.service';
     SubscriptionBillingModule,
     AuditModule,
     ActivationModule,
+    IdentityModule,
   ],
   controllers: [PlatformAdminController],
   providers: [PlatformAdminService, PlatformAdminGuard],

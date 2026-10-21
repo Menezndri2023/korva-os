@@ -1,4 +1,35 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { PasswordResetService } from '../identity/auth/password-reset.service';
+import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bullmq';
+import IORedis from 'ioredis';
+import { backgroundWorkersDisabled } from '../core/background/background-workers';
+
+/** Every background queue the API runs, with what it does — for the Système page. */
+export const PLATFORM_QUEUES: { name: string; label: string }[] = [
+  { name: 'events', label: 'Événements et automatisations' },
+  { name: 'booking-reminder', label: 'Rappels de rendez-vous' },
+  { name: 'webhook-deliveries', label: 'Webhooks sortants' },
+  { name: 'campaign-sends', label: 'Envoi des campagnes' },
+  { name: 'abandoned-cart-reminder', label: 'Relance des paniers abandonnés' },
+  { name: 'customer-inactivity', label: 'Clients inactifs' },
+  { name: 'invoice-overdue', label: 'Factures en retard' },
+  { name: 'quote-expiry', label: 'Devis expirés' },
+  { name: 'recurring-billing', label: 'Facturation récurrente' },
+  { name: 'payment-reconciliation', label: 'Rapprochement des paiements' },
+  { name: 'subscription-period', label: 'Renouvellement des abonnements' },
+  { name: 'subscription-auto-charge', label: 'Prélèvement des abonnements' },
+  { name: 'calendar-sync', label: 'Synchronisation des agendas' },
+  { name: 'activation-nudge', label: 'Relance « site vide »' },
+];
+
+/** The free Atlas tier's storage cap — what the database figure is compared with. */
+const ATLAS_M0_BYTES = 512 * 1024 * 1024;
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Connection, Model, Types } from 'mongoose';
 import { Organization } from '../organizations/schemas/organization.schema';
@@ -91,8 +122,15 @@ export type SubscriptionFilter =
  * SubscriptionBillingService.settleAsPaid — so an administrator's change follows exactly the
  * rules an owner's would, and lands in the same audit log.
  */
+/** Escapes a search string for use inside a RegExp. */
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 @Injectable()
 export class PlatformAdminService {
+  private readonly logger = new Logger(PlatformAdminService.name);
+
   constructor(
     @InjectConnection() private readonly connection: Connection,
     @InjectModel(Organization.name)
@@ -101,7 +139,225 @@ export class PlatformAdminService {
     private readonly subscriptionBillingService: SubscriptionBillingService,
     private readonly auditService: AuditService,
     private readonly activationReport: ActivationReportService,
+    private readonly passwordResetService: PasswordResetService,
+    private readonly configService: ConfigService,
   ) {}
+
+  /** The plan catalog as the billing engine sees it: every tier in every currency. */
+  async plans() {
+    const plans = (await this.collection('plans')
+      .find(
+        {},
+        {
+          projection: {
+            key: 1,
+            name: 1,
+            priceAmount: 1,
+            priceCurrency: 1,
+            modules: 1,
+            limits: 1,
+          },
+        },
+      )
+      .sort({ priceCurrency: 1, priceAmount: 1 })
+      .toArray()) as unknown as {
+      key: string;
+      name: string;
+      priceAmount: number;
+      priceCurrency: string;
+      modules: string[];
+      limits?: Record<string, number>;
+    }[];
+    const counts = await this.collection('subscriptions')
+      .aggregate<{ _id: Types.ObjectId; count: number }>([
+        { $match: { status: { $ne: 'canceled' } } },
+        { $group: { _id: '$planId', count: { $sum: 1 } } },
+      ])
+      .toArray();
+    const byPlan = new Map(
+      counts.map((row) => [row._id.toString(), row.count]),
+    );
+    return plans.map((plan) => ({
+      key: plan.key,
+      name: plan.name,
+      priceAmount: plan.priceAmount,
+      priceCurrency: plan.priceCurrency,
+      modules: plan.modules,
+      limits: plan.limits ?? {},
+      subscribers:
+        byPlan.get(
+          (plan as unknown as { _id: Types.ObjectId })._id.toString(),
+        ) ?? 0,
+    }));
+  }
+
+  /** The audit trail of the whole platform, newest first, optionally for one organization. */
+  async audit(options: { organizationId?: string; page?: number }) {
+    const page = Math.max(1, options.page ?? 1);
+    const limit = 50;
+    const filter =
+      options.organizationId && Types.ObjectId.isValid(options.organizationId)
+        ? { organizationId: new Types.ObjectId(options.organizationId) }
+        : {};
+    const [rows, total] = await Promise.all([
+      this.collection('audit_logs')
+        .find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .toArray()
+        .then(
+          (docs) =>
+            docs as unknown as {
+              _id: Types.ObjectId;
+              organizationId: Types.ObjectId;
+              userId?: Types.ObjectId;
+              action: string;
+              entity: string;
+              entityId?: string;
+              metadata?: Record<string, unknown>;
+              createdAt: Date;
+            }[],
+        ),
+      this.collection('audit_logs').countDocuments(filter),
+    ]);
+    const [organizations, users] = await Promise.all([
+      this.organizationModel
+        .find(
+          { _id: { $in: rows.map((row) => row.organizationId) } },
+          { name: 1 },
+        )
+        .lean<{ _id: Types.ObjectId; name: string }[]>()
+        .exec(),
+      this.collection('users')
+        .find(
+          {
+            _id: {
+              $in: rows
+                .map((row) => row.userId)
+                .filter((id): id is Types.ObjectId => Boolean(id)),
+            },
+          },
+          { projection: { email: 1 } },
+        )
+        .toArray()
+        .then(
+          (docs) => docs as unknown as { _id: Types.ObjectId; email: string }[],
+        ),
+    ]);
+    const orgName = new Map(
+      organizations.map((org) => [org._id.toString(), org.name]),
+    );
+    const userEmail = new Map(
+      users.map((user) => [user._id.toString(), user.email]),
+    );
+    return {
+      data: rows.map((row) => ({
+        id: row._id.toString(),
+        organizationId: row.organizationId.toString(),
+        organizationName: orgName.get(row.organizationId.toString()) ?? '—',
+        userEmail: row.userId
+          ? (userEmail.get(row.userId.toString()) ?? null)
+          : null,
+        action: row.action,
+        entity: row.entity,
+        entityId: row.entityId ?? null,
+        metadata: row.metadata ?? {},
+        createdAt: row.createdAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
+
+  /**
+   * The technical state of the platform, from the API's own point of view: background queues
+   * (failed jobs are the first sign of trouble), database size against the free Atlas tier's
+   * cap, and whether email and payment collection are really configured.
+   */
+  async system() {
+    const stats = (await this.connection.db!.stats()) as {
+      dataSize: number;
+      storageSize: number;
+      indexSize: number;
+      collections: number;
+    };
+    const emailConfigured =
+      this.configService.get<string>('EMAIL_PROVIDER') === 'resend' &&
+      Boolean(this.configService.get<string>('RESEND_API_KEY'));
+    const platformPaymentAccounts = await this.collection(
+      'integration_accounts',
+    ).countDocuments({
+      scope: 'platform',
+      domain: 'payment',
+      status: { $ne: 'revoked' },
+    });
+
+    return {
+      api: {
+        uptimeSeconds: Math.round(process.uptime()),
+        nodeVersion: process.version,
+        environment:
+          this.configService.get<string>('NODE_ENV') ?? 'development',
+      },
+      database: {
+        dataBytes: stats.dataSize,
+        storageBytes: stats.storageSize,
+        indexBytes: stats.indexSize,
+        collections: stats.collections,
+        freeTierCapBytes: ATLAS_M0_BYTES,
+      },
+      email: {
+        configured: emailConfigured,
+        provider: emailConfigured ? 'resend' : 'aucun (journalisé seulement)',
+        from: this.configService.get<string>('EMAIL_FROM') ?? null,
+      },
+      payments: { platformAccounts: platformPaymentAccounts },
+      administrators: (
+        this.configService.get<string>('PLATFORM_ADMIN_EMAILS') ?? ''
+      )
+        .split(',')
+        .filter((email) => email.trim()).length,
+      queues: await this.queueCounts(),
+    };
+  }
+
+  private async queueCounts() {
+    const redisUrl = this.configService.get<string>('REDIS_URL');
+    if (!redisUrl || backgroundWorkersDisabled(this.configService)) return null;
+    const connection = new IORedis(redisUrl, {
+      maxRetriesPerRequest: 1,
+      lazyConnect: true,
+    });
+    try {
+      await connection.connect();
+      return await Promise.all(
+        PLATFORM_QUEUES.map(async ({ name, label }) => {
+          const queue = new Queue(name, { connection });
+          try {
+            const counts = await queue.getJobCounts(
+              'waiting',
+              'active',
+              'delayed',
+              'failed',
+            );
+            return { name, label, ...counts };
+          } finally {
+            await queue.close();
+          }
+        }),
+      );
+    } catch (error) {
+      this.logger.warn(`Queue counts unavailable: ${String(error)}`);
+      return null;
+    } finally {
+      connection.disconnect();
+    }
+  }
 
   /** Per organization, how many records each channel received since `since`. */
   private async channelCounts(
@@ -575,6 +831,182 @@ export class PlatformAdminService {
       metadata: { suspended: false, by: 'platform_admin' },
     });
     return { suspendedAt: null };
+  }
+
+  /**
+   * Every account on the platform — owners, staff, administrators — searchable by email or name,
+   * with the organizations each belongs to and the last time it used the dashboard.
+   */
+  async users(search?: string) {
+    const q = search?.trim();
+    const filter = q
+      ? {
+          $or: ['email', 'firstName', 'lastName'].map((field) => ({
+            [field]: { $regex: escapeRegex(q), $options: 'i' },
+          })),
+        }
+      : {};
+    const users = (await this.collection('users')
+      .find(filter, {
+        projection: {
+          email: 1,
+          firstName: 1,
+          lastName: 1,
+          createdAt: 1,
+          emailVerifiedAt: 1,
+          totpEnabled: 1,
+          disabledAt: 1,
+        },
+      })
+      .sort({ createdAt: -1 })
+      .limit(300)
+      .toArray()) as unknown as {
+      _id: Types.ObjectId;
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      createdAt: Date;
+      emailVerifiedAt?: Date | null;
+      totpEnabled?: boolean;
+      disabledAt?: Date | null;
+    }[];
+    const ids = users.map((user) => user._id);
+    const [memberships, activity] = await Promise.all([
+      this.collection('memberships')
+        .find(
+          { userId: { $in: ids } },
+          { projection: { userId: 1, organizationId: 1, status: 1 } },
+        )
+        .toArray()
+        .then(
+          (rows) =>
+            rows as unknown as {
+              userId: Types.ObjectId;
+              organizationId: Types.ObjectId;
+              status: string;
+            }[],
+        ),
+      this.collection('sessions')
+        .aggregate<{ _id: Types.ObjectId; last: Date }>([
+          { $match: { userId: { $in: ids } } },
+          { $group: { _id: '$userId', last: { $max: '$updatedAt' } } },
+        ])
+        .toArray(),
+    ]);
+    const organizations = await this.organizationModel
+      .find(
+        { _id: { $in: memberships.map((m) => m.organizationId) } },
+        { name: 1 },
+      )
+      .lean<{ _id: Types.ObjectId; name: string }[]>()
+      .exec();
+    const orgName = new Map(
+      organizations.map((org) => [org._id.toString(), org.name]),
+    );
+    const lastByUser = new Map(
+      activity.map((row) => [row._id.toString(), row.last]),
+    );
+
+    return users.map((user) => ({
+      id: user._id.toString(),
+      email: user.email,
+      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
+      createdAt: user.createdAt,
+      emailVerified: Boolean(user.emailVerifiedAt),
+      twoFactor: Boolean(user.totpEnabled),
+      disabledAt: user.disabledAt ?? null,
+      lastActivityAt: lastByUser.get(user._id.toString()) ?? null,
+      organizations: memberships
+        .filter((m) => m.userId.equals(user._id))
+        .map((m) => ({
+          id: m.organizationId.toString(),
+          name: orgName.get(m.organizationId.toString()) ?? '—',
+          status: m.status,
+        })),
+    }));
+  }
+
+  /**
+   * Disables an account: no sign-in, no session refresh, and every open session revoked now, so
+   * the dashboard stops at the latest when its current access token expires (15 minutes).
+   * An administrator cannot disable their own account — that would lock the administration out.
+   */
+  async disableUser(userId: string, adminUserId: string) {
+    if (userId === adminUserId) {
+      throw new BadRequestException({
+        code: 'CANNOT_DISABLE_SELF',
+        message: 'You cannot disable your own account',
+      });
+    }
+    const id = this.userObjectId(userId);
+    const result = await this.collection('users').updateOne(
+      { _id: id },
+      { $set: { disabledAt: new Date() } },
+    );
+    if (result.matchedCount === 0) this.notFound();
+    await this.collection('sessions').updateMany(
+      { userId: id, revokedAt: null },
+      { $set: { revokedAt: new Date() } },
+    );
+    await this.auditUserAction(id, adminUserId, { disabled: true });
+    return { disabled: true };
+  }
+
+  async enableUser(userId: string, adminUserId: string) {
+    const id = this.userObjectId(userId);
+    const result = await this.collection('users').updateOne(
+      { _id: id },
+      { $set: { disabledAt: null } },
+    );
+    if (result.matchedCount === 0) this.notFound();
+    await this.auditUserAction(id, adminUserId, { disabled: false });
+    return { disabled: false };
+  }
+
+  /** Sends the usual "reset your password" email — the administrator never sees the link. */
+  async sendPasswordReset(userId: string, adminUserId: string) {
+    const id = this.userObjectId(userId);
+    const user = (await this.collection('users').findOne(
+      { _id: id },
+      { projection: { email: 1 } },
+    )) as {
+      email: string;
+    } | null;
+    if (!user) this.notFound();
+    await this.passwordResetService.forgotPassword(user.email);
+    await this.auditUserAction(id, adminUserId, { passwordResetSent: true });
+    return { sent: true };
+  }
+
+  /** The audit log is per organization: one line in each organization the user belongs to. */
+  private async auditUserAction(
+    userId: Types.ObjectId,
+    adminUserId: string,
+    metadata: Record<string, unknown>,
+  ) {
+    const memberships = (await this.collection('memberships')
+      .find({ userId }, { projection: { organizationId: 1 } })
+      .toArray()) as unknown as { organizationId: Types.ObjectId }[];
+    if (memberships.length === 0) {
+      this.logger.log(
+        `Platform admin ${adminUserId} on user ${userId.toString()}: ${JSON.stringify(metadata)}`,
+      );
+    }
+    for (const membership of memberships) {
+      await this.auditService.record({
+        organizationId: membership.organizationId.toString(),
+        userId: adminUserId,
+        action: 'SETTINGS_CHANGE',
+        entity: 'membership',
+        entityId: userId.toString(),
+        metadata: { ...metadata, by: 'platform_admin' },
+      });
+    }
+  }
+
+  private userObjectId(userId: string): Types.ObjectId {
+    if (!Types.ObjectId.isValid(userId)) this.notFound();
+    return new Types.ObjectId(userId);
   }
 
   private async findOrganizationOrFail(organizationId: string) {
