@@ -275,4 +275,118 @@ describe('Platform administration (e2e)', () => {
       'Boutique Abidjan',
     ]);
   });
+
+  async function opsToken(): Promise<string> {
+    const res = await request(server)
+      .post('/api/v1/auth/login')
+      .send({ email: 'ops@korva.test', password: 'password123' })
+      .expect(201);
+    return asSuccess<AuthPayload>(res.body).accessToken;
+  }
+
+  it('suspends an organization — dashboard blocked, site offline — and reactivates it intact', async () => {
+    const shop = await setupOrg(
+      'admin-suspend@korva.test',
+      'Shop A Suspendre',
+      ['website', 'catalog'],
+    );
+    const token = await opsToken();
+    const asOwner = (r: request.Test) =>
+      r
+        .set('Authorization', `Bearer ${shop.accessToken}`)
+        .set('X-Organization-Id', shop.organizationId);
+
+    await request(server).get(`/api/v1/public/${shop.slug}`).expect(200);
+
+    await request(server)
+      .post(`/api/v1/platform/organizations/${shop.organizationId}/suspend`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Impayé depuis 2 mois' })
+      .expect(200);
+
+    const blocked = await asOwner(
+      request(server).get('/api/v1/organizations/me'),
+    ).expect(403);
+    expect((blocked.body as { error: { code: string } }).error.code).toBe(
+      'ORGANIZATION_SUSPENDED',
+    );
+    await request(server).get(`/api/v1/public/${shop.slug}`).expect(404);
+    // Still listed among the owner's organizations, so the dashboard can explain.
+    await request(server)
+      .get('/api/v1/organizations/me/all')
+      .set('Authorization', `Bearer ${shop.accessToken}`)
+      .expect(200);
+
+    await request(server)
+      .post(`/api/v1/platform/organizations/${shop.organizationId}/reactivate`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    await asOwner(request(server).get('/api/v1/organizations/me')).expect(200);
+    await request(server).get(`/api/v1/public/${shop.slug}`).expect(200);
+
+    // A reason is required.
+    await request(server)
+      .post(`/api/v1/platform/organizations/${shop.organizationId}/suspend`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: '' })
+      .expect(400);
+  });
+
+  it('lists every business with its trade, and groups the overview by trade', async () => {
+    const token = await opsToken();
+    const salon = await setupOrg('admin-salon@korva.test', 'Salon Test', [
+      'website',
+    ]);
+    await connection
+      .collection('organizations')
+      .updateOne(
+        { _id: new Types.ObjectId(salon.organizationId) },
+        { $set: { businessModel: 'appointments' } },
+      );
+    await connection.collection('bookings').insertOne({
+      organizationId: new Types.ObjectId(salon.organizationId),
+      createdAt: new Date(),
+    });
+
+    const rows = asSuccess<
+      { id: string; channel: string; activity30d: number; planKey: string }[]
+    >(
+      (
+        await request(server)
+          .get('/api/v1/platform/businesses')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200)
+      ).body,
+    );
+    const row = rows.find((entry) => entry.id === salon.organizationId)!;
+    // A salon is measured on bookings, not on shop orders.
+    expect(row).toMatchObject({
+      channel: 'bookings',
+      activity30d: 1,
+      planKey: 'free',
+    });
+
+    const overview = asSuccess<{
+      byBusinessModel: {
+        businessModel: string;
+        organizations: number;
+        activity30d: number;
+      }[];
+    }>(
+      (
+        await request(server)
+          .get('/api/v1/platform/overview')
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200)
+      ).body,
+    );
+    expect(
+      overview.byBusinessModel.find(
+        (group) => group.businessModel === 'appointments',
+      ),
+    ).toMatchObject({
+      organizations: 1,
+      activity30d: 1,
+    });
+  });
 });

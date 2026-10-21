@@ -152,6 +152,7 @@ export class MembershipsService {
       roleId: role._id.toString(),
       permissions: role.permissions,
       enabledModules: organization.enabledModules,
+      suspended: Boolean(organization.suspendedAt),
     };
   }
 }

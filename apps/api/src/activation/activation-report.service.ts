@@ -26,6 +26,7 @@ export interface ActivationRow {
    *  when its refresh token rotates, i.e. when someone actually uses the dashboard. */
   lastActivityAt: Date | null;
   nudgedAt: Date | null;
+  suspendedAt: Date | null;
   /** What needs a hand, in plain words, for the operator's follow-up. */
   issues: ('site_vide' | 'sans_logo' | 'sans_whatsapp' | 'inactif')[];
 }
@@ -61,6 +62,7 @@ export class ActivationReportService {
           whatsappNumber: 1,
           enabledModules: 1,
           activationNudgeSentAt: 1,
+          suspendedAt: 1,
         },
       )
       .sort({ createdAt: -1 })
@@ -76,6 +78,7 @@ export class ActivationReportService {
           whatsappNumber?: string;
           enabledModules?: string[];
           activationNudgeSentAt?: Date;
+          suspendedAt?: Date;
         }[]
       >()
       .exec();
@@ -165,6 +168,7 @@ export class ActivationReportService {
         websiteEnabled,
         lastActivityAt,
         nudgedAt: org.activationNudgeSentAt ?? null,
+        suspendedAt: org.suspendedAt ?? null,
         issues,
       };
     });

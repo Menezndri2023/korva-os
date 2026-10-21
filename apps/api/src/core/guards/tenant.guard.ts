@@ -61,6 +61,15 @@ export class TenantGuard {
       });
     }
 
+    // A suspended organization stays visible in its owner's organization list (that route skips
+    // tenancy), but nothing can be read or changed inside it until KORVA reactivates it.
+    if (tenant.suspended) {
+      throw new ForbiddenException({
+        code: 'ORGANIZATION_SUSPENDED',
+        message: 'This organization is suspended. Contact KORVA support.',
+      });
+    }
+
     request.tenant = tenant;
     return true;
   }

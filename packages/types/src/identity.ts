@@ -26,6 +26,9 @@ export interface TenantContext {
   permissions: string[];
   /** The active organization's currently activated modules — used by ModuleGuard. */
   enabledModules: KorvaModule[];
+  /** Set when KORVA's administration suspended the organization — TenantGuard then refuses
+   *  every request in its context. */
+  suspended?: boolean;
 }
 
 /** Metadata for a server-to-server API key — never the hash or the plaintext key itself. */

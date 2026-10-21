@@ -12,3 +12,9 @@ export const extendTrialSchema = z.object({
   days: z.number().int().min(1).max(90),
 });
 export type ExtendTrialInput = z.infer<typeof extendTrialSchema>;
+
+/** Why an organization is suspended — shown to the administration, kept in the audit log. */
+export const suspendOrganizationSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type SuspendOrganizationInput = z.infer<typeof suspendOrganizationSchema>;

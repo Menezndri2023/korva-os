@@ -5,6 +5,34 @@ import { Organization } from '../organizations/schemas/organization.schema';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { SubscriptionBillingService } from '../subscription-billing/subscription-billing.service';
 import { AuditService } from '../audit/audit.service';
+import {
+  BUSINESS_MODEL_DEFINITIONS,
+  type BusinessModel,
+  type PrimaryChannel,
+} from '@korva/types';
+import {
+  ActivationReportService,
+  type ActivationRow,
+} from '../activation/activation-report.service';
+
+/** The collection holding each sales channel's records — what "activity" means per trade. */
+const CHANNEL_COLLECTION: Record<PrimaryChannel, string> = {
+  orders: 'orders',
+  bookings: 'bookings',
+  quotes: 'quotes',
+  leads: 'leads',
+};
+const CHANNELS = Object.keys(CHANNEL_COLLECTION) as PrimaryChannel[];
+
+export type ChannelCounts = Record<PrimaryChannel, number>;
+
+export interface BusinessRow extends ActivationRow {
+  planKey: string | null;
+  /** Records in the trade's own main channel over 30 days (orders for a shop, bookings for a
+   *  salon, quotes for a service business, leads for an agency). */
+  activity30d: number;
+  channel: PrimaryChannel | null;
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -72,7 +100,124 @@ export class PlatformAdminService {
     private readonly subscriptionsService: SubscriptionsService,
     private readonly subscriptionBillingService: SubscriptionBillingService,
     private readonly auditService: AuditService,
+    private readonly activationReport: ActivationReportService,
   ) {}
+
+  /** Per organization, how many records each channel received since `since`. */
+  private async channelCounts(
+    organizationIds: Types.ObjectId[],
+    since: Date,
+  ): Promise<Map<string, ChannelCounts>> {
+    const result = new Map<string, ChannelCounts>();
+    const perChannel = await Promise.all(
+      CHANNELS.map((channel) =>
+        this.collection(CHANNEL_COLLECTION[channel])
+          .aggregate<{ _id: Types.ObjectId; count: number }>([
+            {
+              $match: {
+                organizationId: { $in: organizationIds },
+                createdAt: { $gte: since },
+              },
+            },
+            { $group: { _id: '$organizationId', count: { $sum: 1 } } },
+          ])
+          .toArray(),
+      ),
+    );
+    CHANNELS.forEach((channel, index) => {
+      for (const row of perChannel[index]!) {
+        const key = row._id.toString();
+        const counts = result.get(key) ?? {
+          orders: 0,
+          bookings: 0,
+          quotes: 0,
+          leads: 0,
+        };
+        counts[channel] = row.count;
+        result.set(key, counts);
+      }
+    });
+    return result;
+  }
+
+  /** The billed plan key of each organization. */
+  private async planKeysByOrganization(): Promise<Map<string, string>> {
+    const plans = await this.plansById();
+    const subscriptions = (await this.collection('subscriptions')
+      .find({}, { projection: { organizationId: 1, planId: 1 } })
+      .toArray()) as unknown as {
+      organizationId: Types.ObjectId;
+      planId: Types.ObjectId;
+    }[];
+    return new Map(
+      subscriptions.map((row) => [
+        row.organizationId.toString(),
+        plans.get(row.planId.toString())?.key ?? 'inconnu',
+      ]),
+    );
+  }
+
+  /**
+   * Every business on the platform, whatever its trade: what it needs (ActivationReportService),
+   * its plan, and its activity in its OWN channel — a salon is judged on bookings, an agency on
+   * leads, not everyone on shop orders.
+   */
+  async businesses(now: Date = new Date()): Promise<BusinessRow[]> {
+    const rows = await this.activationReport.report(now);
+    const ids = rows.map((row) => new Types.ObjectId(row.id));
+    const [counts, plans] = await Promise.all([
+      this.channelCounts(ids, new Date(now.getTime() - 30 * DAY_MS)),
+      this.planKeysByOrganization(),
+    ]);
+    return rows.map((row) => {
+      const channel = row.businessModel
+        ? BUSINESS_MODEL_DEFINITIONS[row.businessModel as BusinessModel]
+            .primaryChannel
+        : null;
+      const orgCounts = counts.get(row.id);
+      const activity30d = orgCounts
+        ? channel
+          ? orgCounts[channel]
+          : CHANNELS.reduce((sum, key) => sum + orgCounts[key], 0)
+        : 0;
+      return {
+        ...row,
+        planKey: plans.get(row.id) ?? null,
+        activity30d,
+        channel,
+      };
+    });
+  }
+
+  /** One line per type of activity: how many businesses, how many live, how busy. */
+  async byBusinessModel(now: Date = new Date()) {
+    const rows = await this.businesses(now);
+    const groups = new Map<
+      string,
+      {
+        organizations: number;
+        sitesOnline: number;
+        activity30d: number;
+        channel: PrimaryChannel | null;
+      }
+    >();
+    for (const row of rows) {
+      const key = row.businessModel ?? 'none';
+      const group = groups.get(key) ?? {
+        organizations: 0,
+        sitesOnline: 0,
+        activity30d: 0,
+        channel: row.channel,
+      };
+      group.organizations += 1;
+      if (row.activeOffers > 0 && row.websiteEnabled) group.sitesOnline += 1;
+      group.activity30d += row.activity30d;
+      groups.set(key, group);
+    }
+    return [...groups.entries()]
+      .map(([businessModel, group]) => ({ businessModel, ...group }))
+      .sort((a, b) => b.organizations - a.organizations);
+  }
 
   private collection(name: string) {
     return this.connection.collection(name);
@@ -150,7 +295,10 @@ export class PlatformAdminService {
       }
     }
 
+    const byBusinessModel = await this.byBusinessModel(now);
+
     return {
+      byBusinessModel,
       organizations,
       newLast7Days: new7,
       newLast30Days: new30,
@@ -241,6 +389,10 @@ export class PlatformAdminService {
       orders,
       bookings,
       audit,
+      quotes,
+      leads,
+      contacts,
+      invoicesIssued,
     ] = await Promise.all([
       this.collection('subscriptions')
         .findOne({ organizationId: id })
@@ -267,6 +419,10 @@ export class PlatformAdminService {
       this.collection('orders').countDocuments({ organizationId: id }),
       this.collection('bookings').countDocuments({ organizationId: id }),
       this.auditService.listRecent(organizationId, 20),
+      this.collection('quotes').countDocuments({ organizationId: id }),
+      this.collection('leads').countDocuments({ organizationId: id }),
+      this.collection('contacts').countDocuments({ organizationId: id }),
+      this.collection('invoices').countDocuments({ organizationId: id }),
     ]);
     const users = await this.collection('users')
       .find(
@@ -295,7 +451,18 @@ export class PlatformAdminService {
       contactPhone: organization.contactPhone,
       enabledModules: organization.enabledModules,
       activationNudgeSentAt: organization.activationNudgeSentAt ?? null,
-      counts: { offersOnline, offersTotal, orders, bookings },
+      suspendedAt: organization.suspendedAt ?? null,
+      suspensionReason: organization.suspensionReason ?? null,
+      counts: {
+        offersOnline,
+        offersTotal,
+        orders,
+        bookings,
+        quotes,
+        leads,
+        contacts,
+        invoices: invoicesIssued,
+      },
       members: memberships.map((membership) => {
         const user = userById.get(membership.userId.toString());
         return {
@@ -371,6 +538,52 @@ export class PlatformAdminService {
       { collection: 'manual', by: 'platform_admin', adminUserId },
     );
     return { invoiceNumber: invoice.number, settled };
+  }
+
+  /**
+   * Suspends an organization: its members can no longer work in it (TenantGuard), its API keys
+   * stop (ApiKeyGuard) and its public site goes offline (PublicService). Reversible, and no data
+   * is touched — reactivate() restores everything as it was.
+   */
+  async suspend(organizationId: string, adminUserId: string, reason: string) {
+    const organization = await this.findOrganizationOrFail(organizationId);
+    organization.suspendedAt = new Date();
+    organization.suspensionReason = reason;
+    await organization.save();
+    await this.auditService.record({
+      organizationId,
+      userId: adminUserId,
+      action: 'SETTINGS_CHANGE',
+      entity: 'organization',
+      entityId: organizationId,
+      metadata: { suspended: true, reason, by: 'platform_admin' },
+    });
+    return { suspendedAt: organization.suspendedAt };
+  }
+
+  async reactivate(organizationId: string, adminUserId: string) {
+    const organization = await this.findOrganizationOrFail(organizationId);
+    organization.suspendedAt = undefined;
+    organization.suspensionReason = undefined;
+    await organization.save();
+    await this.auditService.record({
+      organizationId,
+      userId: adminUserId,
+      action: 'SETTINGS_CHANGE',
+      entity: 'organization',
+      entityId: organizationId,
+      metadata: { suspended: false, by: 'platform_admin' },
+    });
+    return { suspendedAt: null };
+  }
+
+  private async findOrganizationOrFail(organizationId: string) {
+    if (!Types.ObjectId.isValid(organizationId)) this.notFound();
+    const organization = await this.organizationModel
+      .findById(organizationId)
+      .exec();
+    if (!organization) this.notFound();
+    return organization;
   }
 
   private notFound(): never {

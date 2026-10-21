@@ -144,7 +144,12 @@ export class PublicService {
     organization: OrganizationDocument,
     module: KorvaModule,
   ): void {
-    if (!organization.enabledModules.includes(module)) {
+    // A suspended organization's site answers exactly like a site switched off: the storefront
+    // shows its "pas encore en ligne" page, and nothing can be ordered or booked.
+    if (
+      organization.suspendedAt ||
+      !organization.enabledModules.includes(module)
+    ) {
       throw new NotFoundException({
         code: 'MODULE_NOT_AVAILABLE',
         message: `This organization has not enabled "${module}"`,

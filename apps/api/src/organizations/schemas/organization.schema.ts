@@ -86,6 +86,15 @@ export class Organization {
   @Prop()
   activationNudgeSentAt?: Date;
 
+  /** Set by KORVA's administration (PlatformAdminService.suspend): the dashboard refuses every
+   *  request in this organization's context (TenantGuard) and the public site answers as if
+   *  offline (PublicService.assertModuleEnabled). Cleared on reactivation; no data is touched. */
+  @Prop()
+  suspendedAt?: Date;
+
+  @Prop()
+  suspensionReason?: string;
+
   /** Wide banner image for the storefront hero, distinct from `logo` (which stays small, in the header). */
   @Prop()
   heroImage?: string;

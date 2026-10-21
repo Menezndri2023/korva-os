@@ -63,6 +63,7 @@ describe('MembershipsService.resolveTenantContext', () => {
       roleId: 'role-1',
       permissions: ['contacts.read'],
       enabledModules: ['crm', 'analytics'],
+      suspended: false,
     });
   });
 

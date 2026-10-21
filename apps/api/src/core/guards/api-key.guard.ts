@@ -97,6 +97,14 @@ export class ApiKeyGuard implements CanActivate {
       });
     }
 
+    // A suspended organization's keys stop working with it — the same rule as TenantGuard.
+    if (organization.suspendedAt) {
+      throw new ForbiddenException({
+        code: 'ORGANIZATION_SUSPENDED',
+        message: 'This organization is suspended. Contact KORVA support.',
+      });
+    }
+
     // Best-effort — never let a lastUsedAt write turn a valid request into a failed one.
     void this.apiKeysRepository.touchLastUsed(apiKey.id as string);
 

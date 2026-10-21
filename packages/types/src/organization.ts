@@ -115,6 +115,10 @@ export interface Organization {
   /** International format, e.g. "+225 07 07 07 07 07". */
   whatsappNumber?: string;
   contactAddress?: string;
+  /** Set while KORVA's administration has suspended the organization (dashboard blocked, site
+   *  offline). Reversible; nothing is deleted. */
+  suspendedAt?: string;
+  suspensionReason?: string;
   heroImage?: string;
   /** Undefined means "show every section `enabledModules` allows" — see STOREFRONT_SECTIONS doc. */
   storefrontSections?: StorefrontSection[];

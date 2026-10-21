@@ -12,14 +12,15 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   assignPlanSchema,
   extendTrialSchema,
+  suspendOrganizationSchema,
   type AssignPlanInput,
   type ExtendTrialInput,
+  type SuspendOrganizationInput,
 } from '@korva/validation';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SkipTenant } from '../common/decorators/skip-tenant.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import type { AuthenticatedUser } from '../core/tenant/request-context.types';
-import { ActivationReportService } from '../activation/activation-report.service';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import {
   PlatformAdminService,
@@ -40,10 +41,7 @@ const SUBSCRIPTION_FILTERS: SubscriptionFilter[] = [
 @UseGuards(PlatformAdminGuard)
 @Controller('platform')
 export class PlatformAdminController {
-  constructor(
-    private readonly adminService: PlatformAdminService,
-    private readonly activationReport: ActivationReportService,
-  ) {}
+  constructor(private readonly adminService: PlatformAdminService) {}
 
   /** 200 for an administrator, 403 otherwise — what the dashboard asks before showing the menu. */
   @Get('me')
@@ -56,9 +54,16 @@ export class PlatformAdminController {
     return this.adminService.overview();
   }
 
+  /** Every business, whatever its trade, with what it needs and its activity. */
+  @Get('businesses')
+  businesses() {
+    return this.adminService.businesses();
+  }
+
+  /** Kept for the old /platform/activation page and its bookmarks. */
   @Get('activation')
   activation() {
-    return this.activationReport.report();
+    return this.adminService.businesses();
   }
 
   @Get('subscriptions')
@@ -92,6 +97,23 @@ export class PlatformAdminController {
     @Body(new ZodValidationPipe(extendTrialSchema)) body: ExtendTrialInput,
   ) {
     return this.adminService.extendTrial(id, user.userId, body.days);
+  }
+
+  @Post('organizations/:id/suspend')
+  @HttpCode(200)
+  suspend(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(suspendOrganizationSchema))
+    body: SuspendOrganizationInput,
+  ) {
+    return this.adminService.suspend(id, user.userId, body.reason);
+  }
+
+  @Post('organizations/:id/reactivate')
+  @HttpCode(200)
+  reactivate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.adminService.reactivate(id, user.userId);
   }
 
   @Post('organizations/:id/invoices/:invoiceId/paid')
