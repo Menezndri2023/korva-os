@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@korva/ui";
-import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
+import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
 import type { StorefrontTemplateProps } from "../types";
@@ -13,6 +13,10 @@ import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
+import { OfferImage } from "../sections/OfferImage";
+import { SiteHeader, siteLinks } from "../sections/SiteHeader";
+import { SiteFooter } from "../sections/SiteFooter";
+import { Confirmation } from "../sections/Confirmation";
 
 const ALL_CATEGORY = "Tout";
 
@@ -50,60 +54,51 @@ export function BoutiqueTemplate({
     return (offers ?? []).filter((o) => o.categories.includes(activeCategory));
   }, [offers, activeCategory]);
 
+  const links = siteLinks(slug, catalogVisible, { catalog: "Catalogue complet", track: "Suivre ma commande" });
+
   return (
-    <div className={`min-h-screen ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
-      <header className={`border-b ${KT.border} ${KT.surface} px-6 py-4`}>
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Logo organization={organization} />
-            <span className={`text-lg font-semibold ${KT.headingFont}`}>{organization.name}</span>
-          </div>
-          <div className={`flex items-center gap-4 text-sm ${KT.textMuted}`}>
-            {catalogVisible && (
-              <Link href={`/${slug}/catalogue`} className="hover:underline">Catalogue complet</Link>
-            )}
-            <Link href={`/${slug}/track`} className="hover:underline">Suivre ma commande</Link>
-            {authHydrated && (
-              <Link href={`/${slug}/account${isAuthenticated ? "" : "/login"}`} className="hover:underline">
-                {isAuthenticated ? (customerFirstName ?? "Mon compte") : "Se connecter"}
-              </Link>
-            )}
-            <Button size="sm" onClick={onOpenCheckout} disabled={cartCount === 0} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-              Panier ({cartCount})
-            </Button>
-          </div>
-        </div>
-      </header>
+    <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
+      <SiteHeader
+        slug={slug}
+        organization={organization}
+        links={links}
+        authHydrated={authHydrated}
+        isAuthenticated={isAuthenticated}
+        customerFirstName={customerFirstName}
+        commerceEnabled={commerceEnabled}
+        cartCount={cartCount}
+        onOpenCheckout={onOpenCheckout}
+      />
 
-      <section className={`px-6 py-3 ${KT.accentBg} ${KT.accentContrastText}`}>
-        <p className="mx-auto max-w-6xl text-center text-sm font-medium">
-          {organization.tagline || `Bienvenue chez ${organization.name}`}
-        </p>
-      </section>
-
-      {organization.heroImage && (
-        <div className="mx-auto max-w-6xl px-6 pt-6">
-          <HeroBanner src={organization.heroImage} />
+      {organization.heroImage ? (
+        <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
+          <HeroBanner src={organization.heroImage} title={organization.name} tagline={organization.tagline} />
         </div>
+      ) : (
+        <section className={`px-4 py-3 sm:px-6 ${KT.accentBg} ${KT.accentContrastText}`}>
+          <p className="mx-auto max-w-6xl text-center text-sm font-medium">
+            {organization.tagline || `Bienvenue chez ${organization.name}`}
+          </p>
+        </section>
       )}
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        {confirmation && (
-          <div className="mb-4 rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">{confirmation}</div>
-        )}
+      <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <Confirmation message={confirmation} />
 
         {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>Le catalogue n&apos;est pas disponible pour le moment.</p>}
 
         {catalogVisible && categories.length > 1 && (
-          <div className="mb-5 flex flex-wrap gap-2">
+          // One scrolling row on a phone rather than pills wrapping over three lines.
+          <div className="-mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
             {categories.map((category) => (
               <button
                 key={category}
                 onClick={() => setActiveCategory(category)}
+                aria-pressed={activeCategory === category}
                 className={
                   activeCategory === category
-                    ? `rounded-full border px-4 py-1.5 text-xs font-semibold shadow-sm ${KT.accentBg} ${KT.accentContrastText} ${KT.borderAccent}`
-                    : `rounded-full border px-4 py-1.5 text-xs font-medium transition-colors hover:${KT.surface} ${KT.border} ${KT.textMuted}`
+                    ? `shrink-0 rounded-full border px-4 py-2 text-sm font-semibold ${KT.accentBg} ${KT.accentContrastText} ${KT.borderAccent}`
+                    : `shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${KT.border} ${KT.surface} ${KT.textMuted} ${KT.accentSoftHoverBg}`
                 }
               >
                 {category}
@@ -113,15 +108,15 @@ export function BoutiqueTemplate({
         )}
 
         {catalogVisible && offersLoading && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className={`h-56 animate-pulse rounded-md ${KT.surface}`} />
+              <div key={i} className={`aspect-[4/5] animate-pulse rounded-2xl ${KT.surface}`} />
             ))}
           </div>
         )}
 
         {catalogVisible && offersError && (
-          <div className={`rounded-md border ${KT.border} p-4 text-sm text-destructive`}>
+          <div className={`rounded-2xl border ${KT.border} p-4 text-sm text-destructive`}>
             Impossible de charger le catalogue.{" "}
             <button onClick={onRetryOffers} className="underline">Réessayer</button>
           </div>
@@ -129,17 +124,18 @@ export function BoutiqueTemplate({
 
         {catalogVisible && offers && visibleOffers.length === 0 && (
           <p className={`text-sm ${KT.textMuted}`}>
-            {activeCategory ? "Aucun produit dans cette catégorie." : "Aucun produit en ligne pour le moment."}
+            {activeCategory !== ALL_CATEGORY ? "Aucun produit dans cette catégorie." : "Aucun produit en ligne pour le moment."}
           </p>
         )}
 
         {catalogVisible && visibleOffers.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleOffers.map((offer) => (
+          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+            {visibleOffers.map((offer, index) => (
               <ProductCard
                 key={offer.id}
                 slug={slug}
                 offer={offer}
+                priority={index < 2}
                 bookingEnabled={bookingEnabled}
                 commerceEnabled={commerceEnabled}
                 onBook={() => onBook(offer)}
@@ -155,6 +151,7 @@ export function BoutiqueTemplate({
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
       <FaqSection organization={organization} />
+      <SiteFooter organization={organization} links={links} />
     </div>
   );
 }
@@ -162,6 +159,7 @@ export function BoutiqueTemplate({
 function ProductCard({
   slug,
   offer,
+  priority,
   bookingEnabled,
   commerceEnabled,
   onBook,
@@ -169,50 +167,36 @@ function ProductCard({
 }: {
   slug: string;
   offer: PublicOffer;
+  priority: boolean;
   bookingEnabled: boolean;
   commerceEnabled: boolean;
   onBook: () => void;
   onAddToCart: () => void;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const thumbnail = offer.images[0];
-
   return (
-    <div
-      className={`group overflow-hidden rounded-xl border shadow-sm transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}
-    >
-      <div className={`relative aspect-square overflow-hidden ${KT.bg}`}>
-        {thumbnail && !imageFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={thumbnail}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setImageFailed(true)}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        ) : (
-          <div className={`flex h-full items-center justify-center text-xs ${KT.textMuted}`}>Pas d&apos;image</div>
-        )}
-        <div className="absolute right-2 top-2">
+    <div className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
+      <div className="relative">
+        <Link href={`/${slug}/offers/${offer.id}`} tabIndex={-1} aria-hidden>
+          <OfferImage offer={offer} priority={priority} zoomOnHover className="aspect-[4/5] w-full" />
+        </Link>
+        <div className={`absolute right-2 top-2 rounded-full ${KT.surface}`}>
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>
       </div>
-      <div className="p-4">
-        <Link href={`/${slug}/offers/${offer.id}`} className="text-sm font-medium hover:underline">
+      <div className="flex flex-1 flex-col p-3 sm:p-4">
+        <Link href={`/${slug}/offers/${offer.id}`} className="line-clamp-2 text-sm font-medium hover:underline sm:text-base">
           {offer.name}
         </Link>
-        <p className={`mt-1 text-base font-semibold ${KT.accentText}`}>
+        <p className={`mt-1 text-sm font-semibold sm:text-base ${KT.accentText}`}>
           <OfferPrice offer={offer} />
         </p>
-        <div className="mt-2">
+        <div className="mt-auto pt-3">
           {offer.type === "booking" && bookingEnabled && (
             <Button variant="secondary" size="sm" className="w-full" onClick={onBook}>Réserver</Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
             <Button size="sm" className={`w-full ${KT.accentBg} ${KT.accentContrastText}`} onClick={onAddToCart}>
-              Ajouter au panier
+              Ajouter
             </Button>
           )}
         </div>
@@ -221,33 +205,26 @@ function ProductCard({
   );
 }
 
-function HeroBanner({ src }: { src: string }) {
+function HeroBanner({ src, title, tagline }: { src: string; title: string; tagline?: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt=""
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="h-48 w-full rounded-2xl object-cover shadow-lg sm:h-72"
-    />
-  );
-}
-
-function Logo({ organization }: { organization: PublicOrganization }) {
-  const [failed, setFailed] = useState(false);
-  if (!organization.logo || failed) return null;
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={organization.logo}
-      alt=""
-      loading="eager"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="h-8 w-8 rounded object-contain"
-    />
+    <div className="relative overflow-hidden rounded-3xl">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        fetchPriority="high"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="h-52 w-full object-cover sm:h-80"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-8">
+        <h1 className={`text-2xl font-semibold sm:text-4xl ${KT.headingFont}`}>{title}</h1>
+        {tagline && <p className="mt-1 max-w-xl text-sm text-white/85 sm:text-base">{tagline}</p>}
+      </div>
+    </div>
   );
 }

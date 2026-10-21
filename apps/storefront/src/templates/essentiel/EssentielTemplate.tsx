@@ -14,10 +14,14 @@ import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
+import { OfferImage } from "../sections/OfferImage";
+import { SiteHeader, siteLinks } from "../sections/SiteHeader";
+import { SiteFooter } from "../sections/SiteFooter";
+import { Confirmation } from "../sections/Confirmation";
 
 /** The original, sector-agnostic storefront layout — always available regardless of plan, and
  *  the fallback whenever a plan no longer covers the org's chosen template (see
- *  PublicService#resolveStorefrontTheme). Visually unchanged from before the template system. */
+ *  PublicService#resolveStorefrontTheme). Neutral by design: the brand colour is its only accent. */
 export function EssentielTemplate({
   slug,
   organization,
@@ -37,48 +41,26 @@ export function EssentielTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
+  const links = siteLinks(slug, catalogVisible, { catalog: "Catalogue complet", track: "Suivre ma commande" });
+
   return (
-    <div className={`min-h-screen ${KT.bg} ${KT.text}`}>
-      <header className={`border-b-[3px] ${KT.borderAccent} ${KT.surface} px-6 py-4`}>
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <OrganizationLogo organization={organization} />
-            <h1 className="text-lg font-semibold">{organization.name}</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            {catalogVisible && (
-              <Link href={`/${slug}/catalogue`} className={`text-sm hover:underline ${KT.textMuted}`}>
-                Catalogue complet
-              </Link>
-            )}
-            <Link href={`/${slug}/track`} className={`text-sm hover:underline ${KT.textMuted}`}>
-              Suivre ma commande
-            </Link>
-            {authHydrated && (
-              <Link
-                href={`/${slug}/account${isAuthenticated ? "" : "/login"}`}
-                className={`text-sm hover:underline ${KT.textMuted}`}
-              >
-                {isAuthenticated ? (customerFirstName ?? "Mon compte") : "Se connecter"}
-              </Link>
-            )}
-            {commerceEnabled && cartCount > 0 && (
-              <Button size="sm" onClick={onOpenCheckout} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-                Panier ({cartCount})
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
+    <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
+      <SiteHeader
+        slug={slug}
+        organization={organization}
+        links={links}
+        authHydrated={authHydrated}
+        isAuthenticated={isAuthenticated}
+        customerFirstName={customerFirstName}
+        commerceEnabled={commerceEnabled}
+        cartCount={cartCount}
+        onOpenCheckout={onOpenCheckout}
+      />
 
-      {(organization.heroImage || organization.tagline) && <HeroSection organization={organization} />}
+      <HeroSection organization={organization} />
 
-      <main className="mx-auto max-w-4xl space-y-4 px-6 py-8">
-        {confirmation && (
-          <div className="rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">
-            {confirmation}
-          </div>
-        )}
+      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+        <Confirmation message={confirmation} />
 
         {!catalogVisible && (
           <p className={`text-sm ${KT.textMuted}`}>Aucun catalogue disponible pour le moment.</p>
@@ -100,12 +82,13 @@ export function EssentielTemplate({
         )}
 
         {catalogVisible && offers && offers.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {offers.map((offer) => (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {offers.map((offer, index) => (
               <OfferCard
                 key={offer.id}
                 slug={slug}
                 offer={offer}
+                priority={index < 2}
                 bookingEnabled={bookingEnabled}
                 commerceEnabled={commerceEnabled}
                 onBook={() => onBook(offer)}
@@ -121,6 +104,7 @@ export function EssentielTemplate({
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
       <FaqSection organization={organization} />
+      <SiteFooter organization={organization} links={links} />
     </div>
   );
 }
@@ -128,6 +112,7 @@ export function EssentielTemplate({
 function OfferCard({
   slug,
   offer,
+  priority,
   bookingEnabled,
   commerceEnabled,
   onBook,
@@ -135,120 +120,87 @@ function OfferCard({
 }: {
   slug: string;
   offer: PublicOffer;
+  priority: boolean;
   bookingEnabled: boolean;
   commerceEnabled: boolean;
   onBook: () => void;
   onAddToCart: () => void;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const thumbnail = offer.images[0];
-
   return (
-    <Card
-      className={`overflow-hidden rounded-xl p-4 shadow-sm transition-shadow duration-200 hover:shadow-lg ${KT.surface} ${KT.border}`}
-    >
-      {thumbnail && !imageFailed && (
-        // Arbitrary tenant-supplied host, not one of Next's configured image domains (see
-        // middleware.ts img-src comment).
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={thumbnail}
-          alt=""
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setImageFailed(true)}
-          className="-mx-4 -mt-4 mb-3 h-40 w-[calc(100%+2rem)] object-cover"
-        />
-      )}
-      <div className="flex items-start justify-between gap-2">
-        <Link href={`/${slug}/offers/${offer.id}`} className={`font-medium hover:underline ${KT.text}`}>
-          {offer.name}
-        </Link>
-        <WishlistButton slug={slug} offerId={offer.id} />
+    <div className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.surface} ${KT.border}`}>
+      <Link href={`/${slug}/offers/${offer.id}`} tabIndex={-1} aria-hidden>
+        <OfferImage offer={offer} priority={priority} zoomOnHover className="aspect-[4/3] w-full" />
+      </Link>
+      <div className="flex flex-1 flex-col p-4">
+        <div className="flex items-start justify-between gap-2">
+          <Link href={`/${slug}/offers/${offer.id}`} className="font-medium hover:underline">
+            {offer.name}
+          </Link>
+          <WishlistButton slug={slug} offerId={offer.id} />
+        </div>
+        <div className="mt-1">
+          <Badge>{OFFER_TYPE_LABELS[offer.type]}</Badge>
+        </div>
+        {offer.description && <p className={`mt-2 line-clamp-2 text-sm ${KT.textMuted}`}>{offer.description}</p>}
+        <div className="mt-auto flex items-center justify-between gap-2 pt-4">
+          <span className="font-semibold">
+            <OfferPrice offer={offer} />
+          </span>
+          {offer.type === "booking" && bookingEnabled && (
+            <Button size="sm" onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>
+              Réserver
+            </Button>
+          )}
+          {offer.type !== "booking" && commerceEnabled && (
+            <Button size="sm" onClick={onAddToCart} className={`${KT.accentBg} ${KT.accentContrastText}`}>
+              Ajouter
+            </Button>
+          )}
+        </div>
       </div>
-      <div className="mt-1 flex items-center gap-2">
-        <Badge>{OFFER_TYPE_LABELS[offer.type]}</Badge>
-      </div>
-      {offer.description && <p className={`mt-2 text-sm ${KT.textMuted}`}>{offer.description}</p>}
-      <p className={`mt-2 text-sm font-medium ${KT.text}`}>
-        <OfferPrice offer={offer} />
-      </p>
-      <div className="mt-3 flex gap-2">
-        {offer.type === "booking" && bookingEnabled && (
-          <Button variant="secondary" size="sm" onClick={onBook}>
-            Réserver
-          </Button>
-        )}
-        {offer.type !== "booking" && commerceEnabled && (
-          <Button variant="secondary" size="sm" onClick={onAddToCart}>
-            Ajouter au panier
-          </Button>
-        )}
-        <Link
-          href={`/${slug}/offers/${offer.id}`}
-          className={`inline-flex items-center px-3 py-1.5 text-sm font-medium hover:underline ${KT.textMuted}`}
-        >
-          Détails
-        </Link>
-      </div>
-    </Card>
+    </div>
   );
 }
 
+/** The photo when there is one, the tagline when there is one — and when there is neither, the
+ *  organization's name as a heading rather than a page that opens straight onto a grid. */
 function HeroSection({ organization }: { organization: PublicOrganization }) {
   const [imageFailed, setImageFailed] = useState(false);
   const showImage = organization.heroImage && !imageFailed;
 
   return (
-    <div className={`relative border-b ${KT.border} ${KT.surface}`}>
+    <div className={`border-b ${KT.border} ${KT.surface}`}>
       {showImage && (
-        // Arbitrary tenant-supplied host — same rationale as OfferCard's thumbnail above.
+        // Arbitrary tenant-supplied host — same rationale as OfferImage.
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={organization.heroImage}
           alt=""
+          fetchPriority="high"
+          decoding="async"
           referrerPolicy="no-referrer"
           onError={() => setImageFailed(true)}
-          className="h-56 w-full object-cover sm:h-80"
+          className="h-52 w-full object-cover sm:h-80"
         />
       )}
-      {organization.tagline && (
-        <div className="mx-auto max-w-4xl px-6 py-6">
-          <p className={`max-w-xl text-base leading-relaxed sm:text-lg ${KT.textMuted}`}>
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <h1 className={`text-3xl font-semibold sm:text-4xl ${KT.headingFont}`}>{organization.name}</h1>
+        {organization.tagline && (
+          <p className={`mt-2 max-w-xl text-base leading-relaxed sm:text-lg ${KT.textMuted}`}>
             {organization.tagline}
           </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  );
-}
-
-function OrganizationLogo({ organization }: { organization: PublicOrganization }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  if (!organization.logo || imageFailed) {
-    return null;
-  }
-  return (
-    // Arbitrary tenant-supplied host, not one of Next's configured image domains — same
-    // rationale as OfferCard's thumbnail above.
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={organization.logo}
-      alt=""
-      loading="eager"
-      referrerPolicy="no-referrer"
-      onError={() => setImageFailed(true)}
-      className="h-8 w-8 rounded object-contain"
-    />
   );
 }
 
 function OffersSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {[0, 1, 2, 3].map((i) => (
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {[0, 1, 2].map((i) => (
         <Card key={i} className="p-4">
-          <div className="mb-3 h-32 w-full animate-pulse rounded-md bg-surface-muted" />
+          <div className="mb-3 aspect-[4/3] w-full animate-pulse rounded-xl bg-surface-muted" />
           <div className="h-4 w-2/3 animate-pulse rounded bg-surface-muted" />
           <div className="mt-2 h-3 w-full animate-pulse rounded bg-surface-muted" />
           <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-surface-muted" />

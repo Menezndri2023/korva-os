@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import OfferDetailClient from "./offer-detail-client";
 import { publicApiClient } from "@/lib/public-api-client";
 import {
@@ -100,5 +101,8 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
 export default async function OfferDetailPage({ params }: OfferDetailPageProps) {
   const { slug, offerId } = await params;
   if ((await fetchOrganization(slug)).kind === "offline") return <StorefrontOffline />;
-  return <OfferDetailClient slug={slug} offerId={offerId} />;
+  // Same nonce middleware.ts put on the CSP's `style-src` — the offer page now renders the
+  // shop's theme (see templates/storefront-theme-style.tsx).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  return <OfferDetailClient slug={slug} offerId={offerId} nonce={nonce} />;
 }

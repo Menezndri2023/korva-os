@@ -13,6 +13,10 @@ import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
+import { OfferImage } from "../sections/OfferImage";
+import { SiteHeader, siteLinks } from "../sections/SiteHeader";
+import { SiteFooter } from "../sections/SiteFooter";
+import { Confirmation } from "../sections/Confirmation";
 
 const UNCATEGORIZED = "Autres";
 
@@ -38,67 +42,88 @@ export function TableTemplate({
   customerFirstName,
 }: StorefrontTemplateProps) {
   const groups = useMemo(() => groupByCategory(offers), [offers]);
-  const heroTextClass = organization.heroImage ? "text-white" : KT.text;
-  const heroSubtextClass = organization.heroImage ? "text-zinc-100" : KT.textMuted;
+  const links = siteLinks(slug, catalogVisible, { catalog: "Menu complet", track: "Suivre ma commande" });
+  const hasHeroImage = Boolean(organization.heroImage);
 
   return (
-    <div className={`min-h-screen ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
-      <div className="relative flex h-72 flex-col items-center justify-center overflow-hidden text-center sm:h-96">
-        {organization.heroImage ? (
+    <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
+      <SiteHeader
+        slug={slug}
+        organization={organization}
+        links={links}
+        authHydrated={authHydrated}
+        isAuthenticated={isAuthenticated}
+        customerFirstName={customerFirstName}
+        commerceEnabled={commerceEnabled}
+        cartCount={cartCount}
+        onOpenCheckout={onOpenCheckout}
+      />
+
+      <div
+        className={`relative flex flex-col items-center justify-center overflow-hidden px-6 text-center ${
+          hasHeroImage ? "h-72 sm:h-96" : `py-14 sm:py-20 ${KT.surface}`
+        }`}
+      >
+        {hasHeroImage && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={organization.heroImage} alt="" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-cover" />
+            <img
+              src={organization.heroImage}
+              alt=""
+              fetchPriority="high"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
           </>
-        ) : (
-          <div className={`absolute inset-0 ${KT.surface}`} />
         )}
-        <div className="relative z-10 px-6">
-          <h1 className={`text-4xl font-semibold sm:text-5xl ${KT.headingFont} ${heroTextClass}`}>{organization.name}</h1>
+        <div className="relative z-10">
+          <h1 className={`text-4xl font-semibold sm:text-5xl ${KT.headingFont} ${hasHeroImage ? "text-white" : ""}`}>
+            {organization.name}
+          </h1>
           {organization.tagline && (
-            <p className={`mt-3 text-base sm:text-lg ${heroSubtextClass}`}>{organization.tagline}</p>
+            <p className={`mt-3 text-base sm:text-lg ${hasHeroImage ? "text-white/90" : KT.textMuted}`}>{organization.tagline}</p>
           )}
         </div>
       </div>
 
-      <header className={`border-b ${KT.border} ${KT.surface} px-6 py-3`}>
-        <div className="mx-auto flex max-w-3xl items-center justify-between text-sm">
-          <div className={`flex items-center gap-4 ${KT.textMuted}`}>
-            {catalogVisible && (
-              <Link href={`/${slug}/catalogue`} className="hover:underline">Menu complet</Link>
-            )}
-            <Link href={`/${slug}/track`} className="hover:underline">Suivre ma commande</Link>
-            {authHydrated && (
-              <Link href={`/${slug}/account${isAuthenticated ? "" : "/login"}`} className="hover:underline">
-                {isAuthenticated ? (customerFirstName ?? "Mon compte") : "Se connecter"}
-              </Link>
-            )}
+      {/* The menu's sections as a sticky row of jump links: a long carte on a phone is otherwise
+          one endless scroll to find the desserts. */}
+      {catalogVisible && groups.length > 1 && (
+        <nav
+          aria-label="Rubriques de la carte"
+          className={`sticky top-16 z-20 border-b ${KT.border} ${KT.bg}`}
+        >
+          <div className="mx-auto flex max-w-3xl gap-2 overflow-x-auto px-4 py-3 sm:px-6">
+            {groups.map(([category]) => (
+              <a
+                key={category}
+                href={`#${categoryAnchor(category)}`}
+                className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium ${KT.border} ${KT.surface} ${KT.accentSoftHoverBg}`}
+              >
+                {category}
+              </a>
+            ))}
           </div>
-          {commerceEnabled && cartCount > 0 && (
-            <Button size="sm" onClick={onOpenCheckout} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-              Panier ({cartCount})
-            </Button>
-          )}
-        </div>
-      </header>
+        </nav>
+      )}
 
-      <main className="mx-auto max-w-3xl space-y-8 px-6 py-10">
-        {confirmation && (
-          <div className="rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">{confirmation}</div>
-        )}
+      <main className="mx-auto w-full max-w-3xl space-y-10 px-4 py-10 sm:px-6">
+        <Confirmation message={confirmation} />
 
         {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>La carte n&apos;est pas disponible pour le moment.</p>}
 
         {catalogVisible && offersLoading && (
           <div className="space-y-3">
             {[0, 1, 2].map((i) => (
-              <div key={i} className={`h-14 animate-pulse rounded-md ${KT.surface}`} />
+              <div key={i} className={`h-16 animate-pulse rounded-xl ${KT.surface}`} />
             ))}
           </div>
         )}
 
         {catalogVisible && offersError && (
-          <div className={`rounded-md border ${KT.border} p-4 text-sm text-destructive`}>
+          <div className={`rounded-2xl border ${KT.border} p-4 text-sm text-destructive`}>
             Impossible de charger la carte.{" "}
             <button onClick={onRetryOffers} className="underline">Réessayer</button>
           </div>
@@ -110,13 +135,11 @@ export function TableTemplate({
 
         {catalogVisible &&
           groups.map(([category, items]) => (
-            <section key={category}>
-              <h2
-                className={`border-b-2 pb-3 text-xl font-semibold uppercase tracking-wide ${KT.borderAccent} ${KT.text} ${KT.headingFont}`}
-              >
+            <section key={category} id={categoryAnchor(category)} className="scroll-mt-32">
+              <h2 className={`border-b-2 pb-3 text-2xl font-semibold ${KT.borderAccent} ${KT.text} ${KT.headingFont}`}>
                 {category}
               </h2>
-              <ul className={`mt-3 divide-y ${KT.border}`}>
+              <ul className={`mt-2 divide-y ${KT.border}`}>
                 {items.map((offer) => (
                   <MenuRow
                     key={offer.id}
@@ -138,6 +161,7 @@ export function TableTemplate({
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
       <FaqSection organization={organization} />
+      <SiteFooter organization={organization} links={links} />
     </div>
   );
 }
@@ -158,15 +182,20 @@ function MenuRow({
   onAddToCart: () => void;
 }) {
   return (
-    <li className="flex items-start justify-between gap-4 py-3">
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <Link href={`/${slug}/offers/${offer.id}`} className="font-medium hover:underline">
-            {offer.name}
-          </Link>
-          <WishlistButton slug={slug} offerId={offer.id} />
+    <li className="flex items-start gap-4 py-4">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-3">
+          <div className="flex items-center gap-1">
+            <Link href={`/${slug}/offers/${offer.id}`} className="font-medium hover:underline">
+              {offer.name}
+            </Link>
+            <WishlistButton slug={slug} offerId={offer.id} />
+          </div>
+          <span className={`whitespace-nowrap text-base font-semibold ${KT.accentText}`}>
+            <OfferPrice offer={offer} />
+          </span>
         </div>
-        {offer.description && <p className={`mt-1 text-sm ${KT.textMuted}`}>{offer.description}</p>}
+        {offer.description && <p className={`mt-1 text-sm leading-relaxed ${KT.textMuted}`}>{offer.description}</p>}
         <div className="mt-2 flex gap-2">
           {offer.type === "booking" && bookingEnabled && (
             <Button variant="secondary" size="sm" onClick={onBook}>Réserver</Button>
@@ -178,11 +207,20 @@ function MenuRow({
           )}
         </div>
       </div>
-      <span className={`whitespace-nowrap text-base font-semibold ${KT.accentText}`}>
-        <OfferPrice offer={offer} />
-      </span>
+      {/* A dish photo when there is one; a menu row without it stays a clean line of text. */}
+      <OfferImage offer={offer} fallback="none" className="h-20 w-20 shrink-0 rounded-xl sm:h-24 sm:w-24" />
     </li>
   );
+}
+
+/** "Plats du jour" → "carte-plats-du-jour": a stable in-page anchor for the jump links. */
+function categoryAnchor(category: string): string {
+  return `carte-${category
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")}`;
 }
 
 function groupByCategory(offers: PublicOffer[] | undefined): [string, PublicOffer[]][] {

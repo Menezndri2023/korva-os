@@ -10,13 +10,29 @@ import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOfferReviewSummary, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "../../commerce-panels";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
+import { useCustomerAuth } from "@/lib/use-customer-auth";
+import { resolveStorefrontStyle } from "@/templates/palette";
+import { StorefrontThemeStyle } from "@/templates/storefront-theme-style";
+import { KT } from "@/templates/kt-classes";
+import { SiteHeader, siteLinks } from "@/templates/sections/SiteHeader";
+import { SiteFooter } from "@/templates/sections/SiteFooter";
+import { MobileCartBar } from "@/templates/sections/MobileCartBar";
+import { Confirmation } from "@/templates/sections/Confirmation";
 import {
   missingRequiredGroups,
   OfferOptionsPicker,
   summarizeOptions,
 } from "@/templates/sections/OfferOptionsPicker";
 
-export default function OfferDetailClient({ slug, offerId }: { slug: string; offerId: string }) {
+export default function OfferDetailClient({
+  slug,
+  offerId,
+  nonce,
+}: {
+  slug: string;
+  offerId: string;
+  nonce?: string;
+}) {
   const queryClient = useQueryClient();
 
   const orgQuery = useQuery({
@@ -34,6 +50,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
   });
 
   const { cart, addToCart, clearCart } = useCart(slug);
+  const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
   const [showBooking, setShowBooking] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
@@ -106,101 +123,112 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
   const optionGroups = offer.optionGroups ?? [];
   const missingOptions = missingRequiredGroups(optionGroups, selectedOptionIds);
 
+  // The offer page wears the shop's theme like its home page — it is the page a link shared on
+  // WhatsApp opens, and it used to be the one page of the site in neutral grey.
+  const style = resolveStorefrontStyle(organization.storefrontTheme, organization.brandColor);
+  const links = siteLinks(slug, organization.visibleSections.includes("catalog"), {
+    catalog: "Catalogue complet",
+    track: "Suivre ma commande",
+  });
+  const activeSrc = images[activeImage];
+
   return (
-    <div className="min-h-screen bg-app-background">
-      <header className="border-b border-border bg-surface px-6 py-4">
-        <div className="mx-auto flex max-w-4xl items-center justify-between">
-          <h1 className="text-lg font-semibold text-text">{organization.name}</h1>
-          {commerceEnabled && cartCount > 0 && (
-            <Button size="sm" onClick={() => setShowCheckout(true)}>
-              Panier ({cartCount})
-            </Button>
-          )}
-        </div>
-      </header>
+    <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
+      <StorefrontThemeStyle style={style} nonce={nonce} />
+      <SiteHeader
+        slug={slug}
+        organization={organization}
+        links={links}
+        authHydrated={authHydrated}
+        isAuthenticated={isAuthenticated}
+        customerFirstName={customer?.firstName}
+        commerceEnabled={commerceEnabled}
+        cartCount={cartCount}
+        onOpenCheckout={() => setShowCheckout(true)}
+      />
 
-      <main className="mx-auto max-w-4xl space-y-4 px-6 py-8">
+      <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
         <BackLink slug={slug} />
+        <Confirmation message={confirmation} />
 
-        {confirmation && (
-          <div className="rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">
-            {confirmation}
-          </div>
-        )}
-
-        <Card className="overflow-hidden p-6 sm:flex sm:gap-6">
-          <div className="sm:w-64 sm:flex-shrink-0">
-            {images.length > 0 && !imageFailed ? (
+        <div className="grid gap-6 md:grid-cols-2 md:gap-10">
+          <div>
+            {activeSrc && !imageFailed ? (
               <>
-                {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary tenant-supplied
-                    host, not one of Next's configured image domains (see middleware.ts img-src). */}
-                <img
-                  src={images[activeImage]}
-                  alt={offer.name}
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                  onError={() => setImageFailed(true)}
-                  className="h-56 w-full rounded-md object-cover"
-                />
+                <div className={`overflow-hidden rounded-3xl ${KT.accentSoftBg}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary tenant-supplied
+                      host, not one of Next's configured image domains (see middleware.ts img-src). */}
+                  <img
+                    src={activeSrc}
+                    alt={offer.name}
+                    fetchPriority="high"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onError={() => setImageFailed(true)}
+                    className="aspect-square w-full object-cover"
+                  />
+                </div>
                 {images.length > 1 && (
-                  <div className="mt-2 flex gap-2 overflow-x-auto">
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                     {images.map((image, index) => (
                       <button
                         key={image + String(index)}
                         onClick={() => setActiveImage(index)}
                         aria-label={`Image ${index + 1} sur ${images.length}`}
                         aria-current={index === activeImage}
-                        className={`h-12 w-12 flex-shrink-0 overflow-hidden rounded border ${
-                          index === activeImage ? "border-focus" : "border-border"
+                        className={`h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border-2 ${
+                          index === activeImage ? KT.borderAccent : "border-transparent"
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
-                        <img src={image} alt="" className="h-full w-full object-cover" />
+                        <img src={image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
                       </button>
                     ))}
                   </div>
                 )}
               </>
             ) : (
-              <div className="flex h-56 w-full items-center justify-center rounded-md bg-surface-muted text-sm text-text-muted">
-                Aucune image
+              <div
+                aria-hidden
+                className={`flex aspect-square w-full items-center justify-center rounded-3xl ${KT.accentSoftBg} ${KT.accentText}`}
+              >
+                <span className={`text-7xl font-semibold opacity-60 ${KT.headingFont}`}>
+                  {offer.name.trim().charAt(0).toUpperCase()}
+                </span>
               </div>
             )}
           </div>
 
-          <div className="mt-4 flex-1 sm:mt-0">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <h2 className="text-xl font-semibold text-text">{offer.name}</h2>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
               <Badge>{OFFER_TYPE_LABELS[offer.type]}</Badge>
+              {offer.categories.map((category) => (
+                <Badge key={category} variant="default">
+                  {category}
+                </Badge>
+              ))}
             </div>
+            <h1 className={`mt-3 text-3xl font-semibold leading-tight sm:text-4xl ${KT.headingFont}`}>{offer.name}</h1>
 
-            {offer.categories.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {offer.categories.map((category) => (
-                  <Badge key={category} variant="default">
-                    {category}
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            <p className="mt-3 text-lg font-medium text-text">
+            <p className={`mt-3 text-2xl font-semibold ${KT.accentText}`}>
               <OfferPrice offer={offer} />
               {offer.pricing.taxRate != null && (
-                <span className="ml-1 text-sm font-normal text-text-muted">
+                <span className={`ml-1 text-sm font-normal ${KT.textMuted}`}>
                   (TVA {offer.pricing.taxRate}%)
                 </span>
               )}
             </p>
 
-            {offer.description && <p className="mt-3 text-sm text-text-muted">{offer.description}</p>}
+            {offer.description && (
+              <p className={`mt-4 whitespace-pre-line text-base leading-relaxed ${KT.textMuted}`}>{offer.description}</p>
+            )}
 
             {offer.attributes && Object.keys(offer.attributes).length > 0 && (
-              <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+              <dl className={`mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-2xl border p-4 text-sm ${KT.border} ${KT.surface}`}>
                 {Object.entries(offer.attributes).map(([key, value]) => (
                   <div key={key} className="contents">
-                    <dt className="text-text-muted">{key}</dt>
-                    <dd className="text-text">{value}</dd>
+                    <dt className={KT.textMuted}>{key}</dt>
+                    <dd className="font-medium">{value}</dd>
                   </div>
                 ))}
               </dl>
@@ -215,33 +243,9 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
               />
             )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              {offer.type === "booking" && bookingEnabled && (
-                <Button onClick={() => setShowBooking(true)}>Réserver</Button>
-              )}
-              {offer.type !== "booking" && commerceEnabled && (
-                <Button
-                  disabled={missingOptions.length > 0}
-                  onClick={() => {
-                    addToCart(
-                      offer,
-                      selectedVariant,
-                      summarizeOptions(optionGroups, selectedOptionIds),
-                    );
-                    setSelectedOptionIds([]);
-                  }}
-                >
-                  Ajouter au panier
-                </Button>
-              )}
-              {missingOptions.length > 0 && offer.type !== "booking" && commerceEnabled && (
-                <p className="text-xs text-text-muted">À choisir : {missingOptions.join(", ")}</p>
-              )}
-            </div>
-
             {offer.variants.length > 0 && (
               <div className="mt-6">
-                <h3 className="text-sm font-medium text-text">Variantes</h3>
+                <h2 className="text-sm font-medium">Variantes</h2>
                 <Card className="mt-2 overflow-hidden">
                   {/* Separate scroll container from Card's own overflow-hidden (which exists only
                       to clip content to the rounded corners, per packages/ui/src/card/card.tsx) —
@@ -249,7 +253,7 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
                       on narrow screens instead of reachable via horizontal scroll. */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                      <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+                      <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                         <tr>
                           {commerceEnabled && offer.type !== "booking" && (
                             <th className="px-3 py-2" aria-hidden />
@@ -296,11 +300,42 @@ export default function OfferDetailClient({ slug, offerId }: { slug: string; off
                 </Card>
               </div>
             )}
+
+            <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center">
+              {offer.type === "booking" && bookingEnabled && (
+                <Button size="lg" className={`w-full sm:w-auto ${KT.accentBg} ${KT.accentContrastText}`} onClick={() => setShowBooking(true)}>
+                  Réserver
+                </Button>
+              )}
+              {offer.type !== "booking" && commerceEnabled && (
+                <Button
+                  size="lg"
+                  className={`w-full sm:w-auto ${KT.accentBg} ${KT.accentContrastText}`}
+                  disabled={missingOptions.length > 0}
+                  onClick={() => {
+                    addToCart(
+                      offer,
+                      selectedVariant,
+                      summarizeOptions(optionGroups, selectedOptionIds),
+                    );
+                    setSelectedOptionIds([]);
+                  }}
+                >
+                  Ajouter au panier
+                </Button>
+              )}
+              {missingOptions.length > 0 && offer.type !== "booking" && commerceEnabled && (
+                <p className={`text-sm ${KT.textMuted}`}>À choisir : {missingOptions.join(", ")}</p>
+              )}
+            </div>
           </div>
-        </Card>
+        </div>
 
         <OfferReviews slug={slug} offerId={offerId} />
       </main>
+
+      <SiteFooter organization={organization} links={links} />
+      {commerceEnabled && <MobileCartBar cartCount={cartCount} onOpenCheckout={() => setShowCheckout(true)} />}
 
       {showBooking && (
         <BookingPanel
@@ -356,7 +391,7 @@ function OfferReviews({ slug, offerId }: { slug: string; offerId: string }) {
 
   return (
     <Card className="p-6">
-      <h3 className="text-sm font-medium text-text">Avis clients</h3>
+      <h2 className="text-lg font-semibold text-text">Avis clients</h2>
       <div className="mt-2 flex items-center gap-2">
         {data.average != null && <Stars rating={Math.round(data.average)} />}
         {data.average != null && (
@@ -388,7 +423,7 @@ function Stars({ rating }: { rating: number }) {
 
 function BackLink({ slug }: { slug: string }) {
   return (
-    <Link href={`/${slug}`} className="text-sm text-text-muted hover:underline">
+    <Link href={`/${slug}`} className="inline-block text-sm text-[var(--kt-text-muted,var(--color-text-muted))] hover:underline">
       ← Retour à la boutique
     </Link>
   );

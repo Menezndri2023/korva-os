@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { StorefrontFontPairingKey, StorefrontPaletteKey, StorefrontTemplateKey } from "@korva/types";
 import { publicApiClient } from "@/lib/public-api-client";
@@ -10,6 +10,7 @@ import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "./commerce-panels";
 import { resolveStorefrontStyle } from "@/templates/palette";
 import { StorefrontThemeStyle } from "@/templates/storefront-theme-style";
+import { MobileCartBar } from "@/templates/sections/MobileCartBar";
 import type { StorefrontTemplateProps } from "@/templates/types";
 import { EssentielTemplate } from "@/templates/essentiel/EssentielTemplate";
 import { VitrineTemplate } from "@/templates/vitrine/VitrineTemplate";
@@ -52,16 +53,15 @@ function renderTemplate(key: string, props: StorefrontTemplateProps) {
  * EntitlementsService.assertStorefrontThemeAllowed), it only changes what this one page renders.
  */
 function usePreviewOverride() {
-  // Lazy initializer (not an effect) so this only ever runs once, on mount — `window` is absent
-  // during the server render, which is fine: no real storefront visitor ever has these query
-  // params, only the dashboard's preview iframe does.
-  const [override] = useState<{
-    template?: StorefrontTemplateKey;
-    palette?: StorefrontPaletteKey;
-    fontPairing?: StorefrontFontPairingKey;
-  } | null>(() => {
-    if (typeof window === "undefined") return null;
-    const params = new URLSearchParams(window.location.search);
+  // Read through useSyncExternalStore with an empty server snapshot, so the server render and
+  // the hydration pass agree (no override), and React then re-renders with the URL's choice.
+  // Reading `window` in a lazy useState initializer made the first client render differ from
+  // the server's HTML — React error #418 in every preview, and a full client re-render.
+  const search = useSyncExternalStore(subscribeToNothing, readSearch, readNoSearch);
+
+  return useMemo(() => {
+    if (!search) return null;
+    const params = new URLSearchParams(search);
     const template = params.get("template") as StorefrontTemplateKey | null;
     const palette = params.get("palette") as StorefrontPaletteKey | null;
     const fontPairing = params.get("font") as StorefrontFontPairingKey | null;
@@ -71,10 +71,13 @@ function usePreviewOverride() {
       palette: palette ?? undefined,
       fontPairing: fontPairing ?? undefined,
     };
-  });
-
-  return override;
+  }, [search]);
 }
+
+// The preview's query string never changes after load: nothing to subscribe to.
+const subscribeToNothing = () => () => {};
+const readSearch = () => window.location.search;
+const readNoSearch = () => "";
 
 /**
  * `initialOrganization`/`initialOffers` come from the server render (see page.tsx) and are what
@@ -151,7 +154,7 @@ export default function StorefrontClient({
     return (
       <CenteredMessage>
         <p>Cette boutique est momentanément indisponible.</p>
-        <button onClick={() => orgQuery.refetch()} className="mt-2 text-sm font-medium text-zinc-900 underline">
+        <button onClick={() => orgQuery.refetch()} className="mt-2 text-sm font-medium text-text underline">
           Réessayer
         </button>
       </CenteredMessage>
@@ -193,8 +196,9 @@ export default function StorefrontClient({
     <>
       <StorefrontThemeStyle style={style} nonce={nonce} />
       {renderTemplate(effectiveTheme.template, templateProps)}
+      {commerceEnabled && <MobileCartBar cartCount={cartCount} onOpenCheckout={() => setShowCheckout(true)} />}
       {organization.poweredByKorva && (
-        <p className="bg-app-background py-4 text-center text-xs text-text-muted">
+        <p className="bg-[var(--kt-surface)] pb-5 text-center text-xs text-[var(--kt-text-muted)]">
           Site propulsé par{" "}
           <a href="https://korvasuite.com" className="font-medium underline-offset-2 hover:underline">
             KORVA

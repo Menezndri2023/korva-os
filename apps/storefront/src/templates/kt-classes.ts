@@ -15,6 +15,9 @@ export const KT = {
   accentBg: "bg-[var(--kt-accent)]",
   accentText: "text-[var(--kt-accent)]",
   accentContrastText: "text-[var(--kt-accent-contrast)]",
+  /** A light wash of the accent: image placeholders, the active nav item, soft highlights. */
+  accentSoftBg: "bg-[color-mix(in_srgb,var(--kt-accent)_12%,var(--kt-surface))]",
+  accentSoftHoverBg: "hover:bg-[color-mix(in_srgb,var(--kt-accent)_12%,var(--kt-surface))]",
   headingFont: "[font-family:var(--kt-font-heading)]",
   bodyFont: "[font-family:var(--kt-font-body)]",
 } as const;

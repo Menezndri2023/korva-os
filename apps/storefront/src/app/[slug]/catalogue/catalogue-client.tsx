@@ -14,6 +14,11 @@ import { KT } from "@/templates/kt-classes";
 import { BookingPanel, CheckoutPanel } from "../commerce-panels";
 import { WishlistButton } from "../wishlist-button";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
+import { OfferImage } from "@/templates/sections/OfferImage";
+import { SiteHeader } from "@/templates/sections/SiteHeader";
+import { SiteFooter } from "@/templates/sections/SiteFooter";
+import { MobileCartBar } from "@/templates/sections/MobileCartBar";
+import { Confirmation } from "@/templates/sections/Confirmation";
 import { useRouter } from "next/navigation";
 
 const PAGE_SIZE = 24;
@@ -120,37 +125,25 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
   const result = offersQuery.data;
 
   return (
-    <div className={`min-h-screen ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
+    <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
       <StorefrontThemeStyle style={style} nonce={nonce} />
 
-      <header className={`border-b ${KT.border} ${KT.surface} px-6 py-4`}>
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href={`/${slug}`} className={`text-lg font-semibold hover:underline ${KT.headingFont}`}>
-            {organization.name}
-          </Link>
-          <div className={`flex items-center gap-4 text-sm ${KT.textMuted}`}>
-            <Link href={`/${slug}`} className="hover:underline">Accueil</Link>
-            <Link href={`/${slug}/track`} className="hover:underline">Suivre ma commande</Link>
-            {authHydrated && (
-              <Link href={`/${slug}/account${isAuthenticated ? "" : "/login"}`} className="hover:underline">
-                {isAuthenticated ? (customer?.firstName ?? "Mon compte") : "Se connecter"}
-              </Link>
-            )}
-            {commerceEnabled && (
-              <Button size="sm" onClick={() => setShowCheckout(true)} disabled={cartCount === 0} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-                Panier ({cartCount})
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
+      <SiteHeader
+        slug={slug}
+        organization={organization}
+        links={[{ href: `/${slug}`, label: "Accueil" }, { href: `/${slug}/track`, label: "Suivre ma commande" }]}
+        authHydrated={authHydrated}
+        isAuthenticated={isAuthenticated}
+        customerFirstName={customer?.firstName}
+        commerceEnabled={commerceEnabled}
+        cartCount={cartCount}
+        onOpenCheckout={() => setShowCheckout(true)}
+      />
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        <h1 className={`mb-6 text-2xl font-semibold ${KT.headingFont}`}>{labels.title}</h1>
+      <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <h1 className={`mb-6 text-3xl font-semibold ${KT.headingFont}`}>{labels.title}</h1>
 
-        {confirmation && (
-          <div className="mb-4 rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">{confirmation}</div>
-        )}
+        <Confirmation message={confirmation} />
 
         {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>Le catalogue n&apos;est pas disponible pour le moment.</p>}
 
@@ -188,9 +181,9 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
             </div>
 
             {offersQuery.isLoading && (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
                 {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className={`h-56 animate-pulse rounded-md ${KT.surface}`} />
+                  <div key={i} className={`aspect-[4/5] animate-pulse rounded-2xl ${KT.surface}`} />
                 ))}
               </div>
             )}
@@ -208,7 +201,7 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
 
             {result && result.data.length > 0 && (
               <>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
                   {result.data.map((offer) => (
                     <CatalogueCard
                       key={offer.id}
@@ -237,6 +230,9 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
           </>
         )}
       </main>
+
+      <SiteFooter organization={organization} links={[{ href: `/${slug}`, label: "Accueil" }, { href: `/${slug}/track`, label: "Suivre ma commande" }]} />
+      {commerceEnabled && <MobileCartBar cartCount={cartCount} onOpenCheckout={() => setShowCheckout(true)} />}
 
       {bookingOffer && (
         <BookingPanel
@@ -287,46 +283,33 @@ function CatalogueCard({
   onBook: () => void;
   onAddToCart: () => void;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const thumbnail = offer.images[0];
-
   return (
-    <div className={`overflow-hidden rounded-lg border ${KT.border} ${KT.surface}`}>
-      <div className={`relative aspect-square ${KT.bg}`}>
-        {thumbnail && !imageFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={thumbnail}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setImageFailed(true)}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className={`flex h-full items-center justify-center text-xs ${KT.textMuted}`}>Pas d&apos;image</div>
-        )}
-        <div className="absolute right-2 top-2">
+    <div className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
+      <div className="relative">
+        <Link href={`/${slug}/offers/${offer.id}`} tabIndex={-1} aria-hidden>
+          <OfferImage offer={offer} zoomOnHover className="aspect-[4/5] w-full" />
+        </Link>
+        <div className={`absolute right-2 top-2 rounded-full ${KT.surface}`}>
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>
       </div>
-      <div className="p-3">
+      <div className="flex flex-1 flex-col p-3 sm:p-4">
         {offer.categories.length > 0 && (
-          <p className={`text-xs uppercase tracking-wide ${KT.textMuted}`}>{offer.categories[0]}</p>
+          <p className={`text-xs ${KT.textMuted}`}>{offer.categories[0]}</p>
         )}
-        <Link href={`/${slug}/offers/${offer.id}`} className="text-sm font-medium hover:underline">
+        <Link href={`/${slug}/offers/${offer.id}`} className="line-clamp-2 text-sm font-medium hover:underline sm:text-base">
           {offer.name}
         </Link>
-        <p className={`mt-1 text-sm font-semibold ${KT.accentText}`}>
+        <p className={`mt-1 text-sm font-semibold sm:text-base ${KT.accentText}`}>
           <OfferPrice offer={offer} />
         </p>
-        <div className="mt-2">
+        <div className="mt-auto pt-3">
           {offer.type === "booking" && bookingEnabled && (
             <Button variant="secondary" size="sm" className="w-full" onClick={onBook}>Réserver</Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
             <Button size="sm" className={`w-full ${KT.accentBg} ${KT.accentContrastText}`} onClick={onAddToCart}>
-              Ajouter au panier
+              Ajouter
             </Button>
           )}
         </div>

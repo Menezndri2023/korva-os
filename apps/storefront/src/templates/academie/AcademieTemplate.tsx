@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { Button } from "@korva/ui";
 import { OFFER_TYPE_LABELS } from "@/lib/offer-labels";
-import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
+import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
 import type { StorefrontTemplateProps } from "../types";
@@ -14,8 +13,12 @@ import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
 import { FaqSection } from "../sections/FaqSection";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
+import { OfferImage } from "../sections/OfferImage";
+import { SiteHeader, siteLinks } from "../sections/SiteHeader";
+import { SiteFooter } from "../sections/SiteFooter";
+import { Confirmation } from "../sections/Confirmation";
 
-/** Training/coaching — offers presented as course cards (accent top bar, type badge, price,
+/** Training/coaching — offers presented as course cards (cover image, type badge, price,
  *  enrolment CTA) in a catalog grid, closer to an academy/course-platform look. */
 export function AcademieTemplate({
   slug,
@@ -36,71 +39,70 @@ export function AcademieTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
+  const links = siteLinks(slug, catalogVisible, { catalog: "Toutes nos formations", track: "Suivi" });
+
   return (
-    <div className={`min-h-screen ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
-      <header className={`px-6 py-8 ${KT.accentBg} ${KT.accentContrastText}`}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Logo organization={organization} />
-            <span className={`text-lg font-semibold ${KT.headingFont}`}>{organization.name}</span>
-          </div>
-          <div className="flex items-center gap-4 text-sm opacity-90">
-            {catalogVisible && (
-              <Link href={`/${slug}/catalogue`} className="hover:underline">Toutes nos formations</Link>
-            )}
-            <Link href={`/${slug}/track`} className="hover:underline">Suivi</Link>
-            {authHydrated && (
-              <Link href={`/${slug}/account${isAuthenticated ? "" : "/login"}`} className="hover:underline">
-                {isAuthenticated ? (customerFirstName ?? "Mon espace") : "Se connecter"}
-              </Link>
-            )}
-            {commerceEnabled && cartCount > 0 && (
-              <Link href="#" onClick={(e) => { e.preventDefault(); onOpenCheckout(); }} className="rounded-md bg-white/15 px-3 py-1.5 font-medium hover:bg-white/25">
-                Panier ({cartCount})
-              </Link>
-            )}
-          </div>
-        </div>
-        <div className="mx-auto mt-10 max-w-5xl">
-          <h1 className={`text-3xl font-semibold leading-tight sm:text-4xl ${KT.headingFont}`}>
+    <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
+      <SiteHeader
+        slug={slug}
+        organization={organization}
+        links={links}
+        authHydrated={authHydrated}
+        isAuthenticated={isAuthenticated}
+        customerFirstName={customerFirstName}
+        commerceEnabled={commerceEnabled}
+        cartCount={cartCount}
+        onOpenCheckout={onOpenCheckout}
+        tone="accent"
+      />
+
+      <section className={`px-4 pb-14 pt-8 sm:px-6 sm:pb-20 sm:pt-12 ${KT.accentBg} ${KT.accentContrastText}`}>
+        <div className="mx-auto max-w-5xl">
+          <h1 className={`max-w-3xl text-3xl font-semibold leading-tight sm:text-5xl ${KT.headingFont}`}>
             {organization.tagline || `Les formations ${organization.name}`}
           </h1>
+          {catalogVisible && offers && offers.length > 0 && (
+            <p className="mt-4 text-base opacity-90">
+              {offers.length} formation{offers.length > 1 ? "s" : ""} ouverte{offers.length > 1 ? "s" : ""} aux inscriptions
+            </p>
+          )}
         </div>
-      </header>
+      </section>
 
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        {confirmation && (
-          <div className="mb-4 rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-800">{confirmation}</div>
-        )}
+      <main className="mx-auto -mt-8 w-full max-w-5xl px-4 pb-12 sm:px-6">
+        <Confirmation message={confirmation} />
 
-        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>Aucune formation disponible pour le moment.</p>}
+        {!catalogVisible && <p className={`pt-12 text-sm ${KT.textMuted}`}>Aucune formation disponible pour le moment.</p>}
 
         {catalogVisible && offersLoading && (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             {[0, 1, 2, 3].map((i) => (
-              <div key={i} className={`h-40 animate-pulse rounded-lg ${KT.surface}`} />
+              <div key={i} className={`h-72 animate-pulse rounded-2xl ${KT.surface}`} />
             ))}
           </div>
         )}
 
         {catalogVisible && offersError && (
-          <div className={`rounded-md border ${KT.border} p-4 text-sm text-destructive`}>
+          <div className={`rounded-2xl border ${KT.border} ${KT.surface} p-4 text-sm text-destructive`}>
             Impossible de charger les formations.{" "}
             <button onClick={onRetryOffers} className="underline">Réessayer</button>
           </div>
         )}
 
         {catalogVisible && offers && offers.length === 0 && (
-          <p className={`text-sm ${KT.textMuted}`}>Les prochaines sessions seront bientôt publiées.</p>
+          <p className={`rounded-2xl border p-6 text-sm ${KT.border} ${KT.surface} ${KT.textMuted}`}>
+            Les prochaines sessions seront bientôt publiées.
+          </p>
         )}
 
         {catalogVisible && offers && offers.length > 0 && (
           <div className="grid gap-5 sm:grid-cols-2">
-            {offers.map((offer) => (
+            {offers.map((offer, index) => (
               <CourseCard
                 key={offer.id}
                 slug={slug}
                 offer={offer}
+                priority={index < 2}
                 bookingEnabled={bookingEnabled}
                 commerceEnabled={commerceEnabled}
                 onBook={() => onBook(offer)}
@@ -116,6 +118,7 @@ export function AcademieTemplate({
       <GallerySection organization={organization} />
       <TestimonialsSection organization={organization} />
       <FaqSection organization={organization} />
+      <SiteFooter organization={organization} links={links} />
     </div>
   );
 }
@@ -123,6 +126,7 @@ export function AcademieTemplate({
 function CourseCard({
   slug,
   offer,
+  priority,
   bookingEnabled,
   commerceEnabled,
   onBook,
@@ -130,29 +134,30 @@ function CourseCard({
 }: {
   slug: string;
   offer: PublicOffer;
+  priority: boolean;
   bookingEnabled: boolean;
   commerceEnabled: boolean;
   onBook: () => void;
   onAddToCart: () => void;
 }) {
   return (
-    <div
-      className={`overflow-hidden rounded-xl border shadow-sm transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}
-    >
-      <div className={`h-2 ${KT.accentBg}`} />
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-2">
-          <Link href={`/${slug}/offers/${offer.id}`} className={`font-medium hover:underline ${KT.headingFont}`}>
+    <div className={`group flex flex-col overflow-hidden rounded-2xl border shadow-sm transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
+      <Link href={`/${slug}/offers/${offer.id}`} tabIndex={-1} aria-hidden>
+        <OfferImage offer={offer} priority={priority} zoomOnHover className="aspect-video w-full" />
+      </Link>
+      <div className="flex flex-1 flex-col p-5">
+        <span className={`self-start rounded-full px-2.5 py-0.5 text-xs font-medium ${KT.accentSoftBg} ${KT.accentText}`}>
+          {OFFER_TYPE_LABELS[offer.type]}
+        </span>
+        <div className="mt-2 flex items-start justify-between gap-2">
+          <Link href={`/${slug}/offers/${offer.id}`} className={`text-lg font-semibold hover:underline ${KT.headingFont}`}>
             {offer.name}
           </Link>
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>
-        <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${KT.bg} ${KT.textMuted}`}>
-          {OFFER_TYPE_LABELS[offer.type]}
-        </span>
-        {offer.description && <p className={`mt-2 text-sm ${KT.textMuted}`}>{offer.description}</p>}
-        <div className="mt-3 flex items-center justify-between">
-          <span className="font-medium"><OfferPrice offer={offer} /></span>
+        {offer.description && <p className={`mt-1 line-clamp-3 text-sm leading-relaxed ${KT.textMuted}`}>{offer.description}</p>}
+        <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+          <span className="font-semibold"><OfferPrice offer={offer} /></span>
           {offer.type === "booking" && bookingEnabled && (
             <Button size="sm" onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>
               S&apos;inscrire
@@ -164,21 +169,5 @@ function CourseCard({
         </div>
       </div>
     </div>
-  );
-}
-
-function Logo({ organization }: { organization: PublicOrganization }) {
-  const [failed, setFailed] = useState(false);
-  if (!organization.logo || failed) return null;
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={organization.logo}
-      alt=""
-      loading="eager"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="h-8 w-8 rounded bg-white/10 object-contain"
-    />
   );
 }
