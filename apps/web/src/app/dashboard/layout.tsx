@@ -31,6 +31,7 @@ import {
   Workflow,
   type LucideIcon,
 } from "lucide-react";
+import { STOREFRONT_URL } from "@/lib/storefront-url";
 
 type NavItem = {
   href: string;
@@ -409,8 +410,7 @@ function OrgSwitcher({
 function StorefrontLinkMenu({ slug }: { slug: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const storefrontUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
-  const storefrontPageUrl = `${storefrontUrl}/${slug}`;
+  const storefrontPageUrl = `${STOREFRONT_URL}/${slug}`;
 
   return (
     <div className="relative">

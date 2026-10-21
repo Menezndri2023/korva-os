@@ -72,6 +72,7 @@ import { formatCurrency } from "@/lib/analytics-format";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthStore } from "@/lib/auth-store";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { STOREFRONT_URL } from "@/lib/storefront-url";
 
 interface MemberRow {
   id: string;
@@ -236,10 +237,8 @@ export default function SettingsPage() {
   const { data: organization } = useActiveOrganization();
   const planFeatures = usePlanFeatures();
   // Phase E3 — the bare host a custom domain's CNAME record must target, derived from the same
-  // NEXT_PUBLIC_STOREFRONT_URL already used elsewhere on this page (storefrontPageUrl etc).
-  const storefrontDomainCnameTarget = new URL(
-    process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001",
-  ).host;
+  // The same base URL every other storefront link on this page uses (storefrontPageUrl etc).
+  const storefrontDomainCnameTarget = new URL(STOREFRONT_URL).host;
   const authReady = useAuthReady();
   const currentUserId = useAuthStore((state) => state.user?.id);
   const { data: members, isLoading } = useQuery({
@@ -2595,7 +2594,7 @@ function StorefrontPreviewSection({
 }) {
   const [open, setOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const storefrontUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
+  const storefrontUrl = STOREFRONT_URL;
   const previewParams = new URLSearchParams();
   if (previewTemplate) previewParams.set("template", previewTemplate);
   if (previewPalette) previewParams.set("palette", previewPalette);
@@ -3255,7 +3254,7 @@ function ExternalWebsiteSection({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState("leads");
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
-  const storefrontUrl = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
+  const storefrontUrl = STOREFRONT_URL;
   const storefrontPageUrl = `${storefrontUrl}/${slug}`;
   // The default "leads" snippet is byte-identical to the one this section rendered before the
   // mode picker existed (no data-mode attribute at all) — an existing embed on a business's own

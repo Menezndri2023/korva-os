@@ -37,6 +37,11 @@ COPY packages/config packages/config
 COPY apps/web apps/web
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Every "Voir mon site" link, the Settings preview and the embeddable widget code are built from
+# this. It was never passed, so production shipped all of them pointing at localhost:3001 — the
+# owners' sites worked, but nothing in the dashboard led to them.
+ARG NEXT_PUBLIC_STOREFRONT_URL=http://localhost:3001
+ENV NEXT_PUBLIC_STOREFRONT_URL=$NEXT_PUBLIC_STOREFRONT_URL
 RUN pnpm --filter @korva/web build
 
 # Separate production-only install (--prod): excludes devDependencies (eslint, tailwindcss,

@@ -90,6 +90,9 @@ services:
         # arg and not a runtime variable. Changing it later means rebuilding the image; setting it
         # only in the environment silently ships a bundle pointing at localhost.
         NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL}
+        # The public sites' base URL — every "Voir mon site" link. Missing until 2026-10-21,
+        # which is exactly the bug described above: those links all led to localhost:3001.
+        NEXT_PUBLIC_STOREFRONT_URL: ${STOREFRONT_URL}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -105,6 +108,15 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # Read at RUNTIME by the server code (not inlined), so these belong here, not in `args`.
+      # Named one by one rather than `env_file: .env.production`, which would hand this
+      # public-facing container every secret the API holds.
+      #  - STOREFRONT_URL: canonical/og:url/sitemap, and the middleware's "is this our own host
+      #    or a custom domain" test. Unset, every page declared itself at localhost:3001.
+      #  - APP_URL: the one origin allowed to frame the site (the dashboard's Settings preview).
+      #    Unset, only localhost:3000 could, so the preview stayed blank in production.
+      STOREFRONT_URL: ${STOREFRONT_URL}
+      APP_URL: ${APP_URL}
     expose:
       - "3000"
 

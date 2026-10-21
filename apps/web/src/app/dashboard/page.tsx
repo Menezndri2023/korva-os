@@ -11,6 +11,7 @@ import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useAnalyticsActivity, useAnalyticsOverview } from "@/lib/use-analytics";
 import { ACTIVITY_ENTITY_LABELS, activityActionLabel, formatCurrency } from "@/lib/analytics-format";
+import { STOREFRONT_URL } from "@/lib/storefront-url";
 
 const ACTION_ITEM_TYPE_LABELS: Record<ActionCenterItem["type"], string> = {
   recommendation: "Recommandation",
@@ -273,8 +274,6 @@ function SummarySkeleton() {
     </div>
   );
 }
-
-const STOREFRONT_URL = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
 
 /**
  * The first things that make a business visible, checked against its real data — the list
