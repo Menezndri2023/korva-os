@@ -239,7 +239,9 @@ export default function OnboardingPage() {
     },
     onSuccess: (organization) => {
       setActiveOrganization(organization.id);
-      router.replace("/dashboard");
+      // Not straight to the dashboard: one more step puts an offer online, so the new site is
+      // not empty on day one (see first-offer/page.tsx). It can be skipped.
+      router.replace("/onboarding/first-offer");
     },
   });
 
