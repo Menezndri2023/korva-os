@@ -114,6 +114,17 @@ exits before the event leaves, and the check reports success having proved nothi
 Even so, the transport accepting an event is not the project accepting it. **Look in the Sentry
 UI for the message.**
 
+## smoke-production.sh
+
+Run after every deploy, from anywhere: `ops/smoke-production.sh` (defaults to korvasuite.com and
+the shop `freeworld`; pass another domain and slug as arguments). Checks the deployed result from
+the outside — services up, a tenant site's canonical URL and CSP, robots.txt, the dashboard's
+shipped links to the sites, the site's button styles. Read-only, no secrets, exit code 0 when
+everything passes.
+
+It exists because two production bugs (links to localhost:3001, transparent buttons on the sites)
+passed every test and CI job: they were build configuration, visible only in what was served.
+
 ## Knowing when things are down
 
 Two different absences, and neither is covered by Sentry — it reports errors from inside a
