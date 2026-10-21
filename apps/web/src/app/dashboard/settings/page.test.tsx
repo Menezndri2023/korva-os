@@ -1338,7 +1338,8 @@ describe("SettingsPage — Integrations section (Wave 4 Stage 2 frontend)", () =
     });
     renderWithProviders(<SettingsPage />);
 
-    expect(await screen.findByText("Intégrations")).toBeInTheDocument();
+    // A heading, not plain text: "Intégrations" is also the name of a settings tab.
+    expect(await screen.findByRole("heading", { name: "Intégrations" })).toBeInTheDocument();
     expect(screen.getAllByText("Chargement...").length).toBeGreaterThan(0);
   });
 

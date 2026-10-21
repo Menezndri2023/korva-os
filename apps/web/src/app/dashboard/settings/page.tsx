@@ -72,6 +72,7 @@ import { formatCurrency } from "@/lib/analytics-format";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthStore } from "@/lib/auth-store";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { SettingsTabPanel, SettingsTabs, useSettingsTab } from "./settings-tabs";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
 
 interface MemberRow {
@@ -233,6 +234,7 @@ interface PaymentPayoutFormValues {
 }
 
 export default function SettingsPage() {
+  const activeTab = useSettingsTab();
   const queryClient = useQueryClient();
   const { data: organization } = useActiveOrganization();
   const planFeatures = usePlanFeatures();
@@ -648,1595 +650,1614 @@ export default function SettingsPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold">Paramètres</h1>
-        <p className="mt-1 text-sm text-text-muted">Informations de votre organisation.</p>
+        <p className="mt-1 text-sm text-text-muted">Votre entreprise, votre site, votre équipe et votre abonnement.</p>
       </div>
 
-      {/* Not migrated to <Card>: Card always renders a <div>, and these are real document
-          <section>s — same exclusion as the raw <form> wrappers elsewhere (dashboard/crm,
-          dashboard/bookings). */}
-      <section className="rounded-lg border border-border bg-surface p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Organisation</h2>
-          {organization && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => (orgEditOpen ? cancelOrgEdit() : startOrgEdit())}
-            >
-              {orgEditOpen ? "Annuler" : "Modifier"}
-            </Button>
-          )}
-        </div>
+      <SettingsTabs active={activeTab} />
 
-        {!orgEditOpen ? (
-          <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-text-muted">Nom</dt>
-              <dd className="mt-0.5">{organization?.name ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Raison sociale</dt>
-              <dd className="mt-0.5">{organization?.legalName ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Secteur</dt>
-              <dd className="mt-0.5">{organization?.type ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Type d&apos;activité</dt>
-              <dd className="mt-0.5">
-                {organization?.businessModel
-                  ? `${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].label} · ${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].siteKind}`
-                  : "Non défini"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Pays</dt>
-              <dd className="mt-0.5">{organization?.country ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Devise</dt>
-              <dd className="mt-0.5">{organization?.currency ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Fuseau horaire</dt>
-              <dd className="mt-0.5">{organization?.timezone ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Langue</dt>
-              <dd className="mt-0.5">{organization?.language ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Couleur de marque</dt>
-              <dd className="mt-0.5 flex items-center gap-2">
-                {organization?.brandColor ? (
-                  <>
-                    <span
-                      className="inline-block h-4 w-4 rounded-full border border-border"
-                      style={{ backgroundColor: organization.brandColor }}
-                    />
-                    {organization.brandColor}
-                  </>
-                ) : (
-                  "—"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Slogan (page publique)</dt>
-              <dd className="mt-0.5">{organization?.tagline ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Téléphone (page publique)</dt>
-              <dd className="mt-0.5">{organization?.contactPhone || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">WhatsApp (page publique)</dt>
-              <dd className="mt-0.5">{organization?.whatsappNumber || "—"}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-text-muted">Adresse (page publique)</dt>
-              <dd className="mt-0.5">{organization?.contactAddress || "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Image de bannière (page publique)</dt>
-              <dd className="mt-0.5 truncate">{organization?.heroImage ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Titre SEO (page publique)</dt>
-              <dd className="mt-0.5">{organization?.seoTitle ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Description SEO (page publique)</dt>
-              <dd className="mt-0.5">{organization?.seoDescription ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Domaine personnalisé</dt>
-              <dd className="mt-0.5">{organization?.customDomain ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Frais de livraison (boutique en ligne)</dt>
-              <dd className="mt-0.5">
-                {organization?.shippingFlatRate != null
-                  ? `${organization.shippingFlatRate} ${organization.currency}`
-                  : "Gratuit"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-text-muted">Sections visibles (page publique)</dt>
-              <dd className="mt-0.5">
-                {organization?.storefrontSections
-                  ? organization.storefrontSections
-                      .map((s) => (s === "catalog" ? "Catalogue" : "Réservations"))
-                      .join(", ") || "Aucune"
-                  : "Toutes"}
-              </dd>
-            </div>
-            {organization?.enabledModules.includes("commerce") && (
-              <div>
-                <dt className="text-text-muted">Moyens de paiement acceptés</dt>
-                <dd className="mt-0.5">
-                  {(organization.acceptedPaymentMethods ?? ["cash"])
-                    .map((m) => (m === "cash" ? "Espèces / à la livraison" : "En ligne"))
-                    .join(", ")}
-                </dd>
-              </div>
-            )}
-          </dl>
-        ) : (
-          <form
-            onSubmit={handleOrgSubmit((values) => updateOrgMutation.mutate(values))}
-            className="mt-4 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
-          >
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-name">
-                Nom
-              </label>
-              <Input
-                id="org-name"
-                className="w-full"
-                error={!!orgErrors.name}
-                {...registerOrg("name")}
-              />
-              {orgErrors.name && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.name.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-legal-name">
-                Raison sociale
-              </label>
-              <Input id="org-legal-name" className="w-full" {...registerOrg("legalName")} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-type">
-                Secteur d&apos;activité
-              </label>
-              <Input
-                id="org-type"
-                className="w-full"
-                placeholder="ex: commerce, service, réservation..."
-                error={!!orgErrors.type}
-                {...registerOrg("type")}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-business-model">
-                Type d&apos;activité
-              </label>
-              <Select
-                id="org-business-model"
-                className="w-full"
-                {...registerOrg("businessModel", {
-                  // Left unchosen on an older organization: send nothing rather than "".
-                  setValueAs: (v: string | undefined) => (v ? v : undefined),
-                })}
-              >
-                <option value="">Non défini</option>
-                {BUSINESS_MODELS.map((model) => (
-                  <option key={model} value={model}>
-                    {BUSINESS_MODEL_DEFINITIONS[model].label} — {BUSINESS_MODEL_DEFINITIONS[model].siteKind}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-country">
-                Pays
-              </label>
-              <Select id="org-country" className="w-full" {...registerOrg("country")}>
-                {COUNTRIES.map((country) => (
-                  <option key={country.code} value={country.code}>
-                    {country.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-currency">
-                Devise
-              </label>
-              <Select id="org-currency" className="w-full" {...registerOrg("currency")}>
-                {CURRENCIES.map((currency) => (
-                  <option key={currency} value={currency}>
-                    {currency}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-timezone">
-                Fuseau horaire
-              </label>
-              <Select id="org-timezone" className="w-full" {...registerOrg("timezone")}>
-                {TIMEZONES.map((timezone) => (
-                  <option key={timezone} value={timezone}>
-                    {timezone}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-language">
-                Langue
-              </label>
-              <Input id="org-language" className="w-full" {...registerOrg("language")} />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-brand-color">
-                Couleur de marque
-              </label>
-              {/* setValueAs: brandColor/logo are optional but format-constrained (hex/url) —
-                  an uncontrolled input left untouched by the user always submits "" (never
-                  `undefined`, regardless of what reset() set as the default), which fails the
-                  regex/.url() check even though the field is meant to be skippable. Converting
-                  "" to undefined here is what actually makes it skippable. */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  aria-label="Choisir la couleur de marque"
-                  className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border-input bg-transparent p-0.5"
-                  value={/^#([0-9a-fA-F]{6})$/.test(watchedBrandColor ?? "") ? watchedBrandColor! : "#1a73e8"}
-                  onChange={(event) => setOrgValue("brandColor", event.target.value, { shouldDirty: true })}
-                />
-                <Input
-                  id="org-brand-color"
-                  className="w-full"
-                  placeholder="#1a73e8"
-                  error={!!orgErrors.brandColor}
-                  {...registerOrg("brandColor", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-                />
-              </div>
-              {orgErrors.brandColor && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.brandColor.message}</p>
-              )}
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-logo">
-                Logo
-              </label>
-              <div className="flex items-center gap-3">
-                {watchedLogo && (
-                  // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
-                  <img src={watchedLogo} alt="" className="h-10 w-10 rounded object-contain" />
-                )}
-                <Input
-                  id="org-logo"
-                  className="w-full"
-                  placeholder="https://... ou envoyez un fichier"
-                  error={!!orgErrors.logo}
-                  {...registerOrg("logo", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-                />
-                <input
-                  ref={logoFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  aria-label="Envoyer un fichier pour le logo"
-                  onChange={(event) => {
-                    void handleImageUpload("logo", event.target.files?.[0], setLogoUploading);
-                    event.target.value = "";
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="shrink-0"
-                  loading={logoUploading}
-                  onClick={() => logoFileInputRef.current?.click()}
-                >
-                  Envoyer
-                </Button>
-              </div>
-              {orgErrors.logo && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.logo.message}</p>
-              )}
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-tagline">
-                Slogan (affiché sur votre page publique)
-              </label>
-              <Input
-                id="org-tagline"
-                className="w-full"
-                placeholder="ex: Le meilleur salon de la ville"
-                error={!!orgErrors.tagline}
-                {...registerOrg("tagline", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-              />
-              {orgErrors.tagline && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.tagline.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-contact-phone">
-                Téléphone (affiché sur votre site)
-              </label>
-              <Input
-                id="org-contact-phone"
-                className="w-full"
-                type="tel"
-                placeholder="ex: 27 22 00 00 00"
-                error={!!orgErrors.contactPhone}
-                {...registerOrg("contactPhone")}
-              />
-              {orgErrors.contactPhone && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.contactPhone.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-whatsapp">
-                Numéro WhatsApp
-              </label>
-              <Input
-                id="org-whatsapp"
-                className="w-full"
-                type="tel"
-                placeholder="ex: +225 07 07 07 07 07"
-                error={!!orgErrors.whatsappNumber}
-                {...registerOrg("whatsappNumber")}
-              />
-              {orgErrors.whatsappNumber ? (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.whatsappNumber.message}</p>
-              ) : (
-                <p className="mt-1 text-xs text-text-muted">
-                  Vos clients pourront vous écrire et commander sur WhatsApp depuis votre site.
-                </p>
-              )}
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-contact-address">
-                Adresse (affichée sur votre site)
-              </label>
-              <Input
-                id="org-contact-address"
-                className="w-full"
-                placeholder="ex: Rue des Jardins, Cocody, Abidjan"
-                error={!!orgErrors.contactAddress}
-                {...registerOrg("contactAddress")}
-              />
-              {orgErrors.contactAddress && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.contactAddress.message}</p>
-              )}
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-seo-title">
-                Titre SEO (balise &lt;title&gt; de la page publique)
-              </label>
-              <Input
-                id="org-seo-title"
-                className="w-full"
-                placeholder={organization?.name || "Laissez vide pour utiliser le nom de l'organisation"}
-                error={!!orgErrors.seoTitle}
-                {...registerOrg("seoTitle", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-              />
-              {orgErrors.seoTitle && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.seoTitle.message}</p>
-              )}
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-seo-description">
-                Description SEO (meta description de la page publique)
-              </label>
-              <textarea
-                id="org-seo-description"
-                className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
-                rows={2}
-                maxLength={200}
-                placeholder="Laissez vide pour générer une description automatiquement"
-                {...registerOrg("seoDescription", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-              />
-              {orgErrors.seoDescription && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.seoDescription.message}</p>
-              )}
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-custom-domain">
-                Domaine personnalisé (optionnel)
-              </label>
-              <Input
-                id="org-custom-domain"
-                className="w-full"
-                placeholder="www.mon-entreprise.com"
-                error={!!orgErrors.customDomain}
-                {...registerOrg("customDomain", {
-                  setValueAs: (v: string) => (v === "" ? undefined : v),
-                })}
-              />
-              {orgErrors.customDomain && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.customDomain.message}</p>
-              )}
-              <p className="mt-1 text-xs text-text-muted">
-                Chez votre fournisseur de domaine, ajoutez un enregistrement CNAME pointant ce
-                domaine vers <span className="font-mono">{storefrontDomainCnameTarget}</span>.
-                Sans &quot;https://&quot; ni chemin — juste le nom de domaine.
-              </p>
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-hero-image">
-                Image de bannière (page publique)
-              </label>
-              <div className="flex items-center gap-3">
-                {watchedHeroImage && (
-                  // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
-                  <img src={watchedHeroImage} alt="" className="h-10 w-16 rounded object-cover" />
-                )}
-                <Input
-                  id="org-hero-image"
-                  className="w-full"
-                  placeholder="https://... ou envoyez un fichier"
-                  error={!!orgErrors.heroImage}
-                  {...registerOrg("heroImage", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-                />
-                <input
-                  ref={heroImageFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  aria-label="Envoyer un fichier pour la bannière"
-                  onChange={(event) => {
-                    void handleImageUpload("heroImage", event.target.files?.[0], setHeroImageUploading);
-                    event.target.value = "";
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="shrink-0"
-                  loading={heroImageUploading}
-                  onClick={() => heroImageFileInputRef.current?.click()}
-                >
-                  Envoyer
-                </Button>
-              </div>
-              {orgErrors.heroImage && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.heroImage.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-shipping-flat-rate">
-                Frais de livraison (boutique en ligne)
-              </label>
-              <Input
-                id="org-shipping-flat-rate"
-                type="number"
-                step="0.01"
-                className="w-full"
-                placeholder="Gratuit"
-                error={!!orgErrors.shippingFlatRate}
-                {...registerOrg("shippingFlatRate", {
-                  setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
-                })}
-              />
-              {orgErrors.shippingFlatRate && (
-                <p className="mt-1 text-xs text-destructive">{orgErrors.shippingFlatRate.message}</p>
-              )}
-            </div>
-            <div className="sm:col-span-2">
-              <StorefrontThemePicker
-                planKey={subscription?.plan.key}
-                selectedTemplate={watchedStorefrontTemplate}
-                selectedPalette={watchedStorefrontPalette}
-                selectedFontPairing={watchedStorefrontFontPairing}
-                onChangeTemplate={(key) => setOrgValue("storefrontTemplate", key, { shouldDirty: true })}
-                onChangePalette={(key) => setOrgValue("storefrontPalette", key, { shouldDirty: true })}
-                onChangeFontPairing={(key) => setOrgValue("storefrontFontPairing", key, { shouldDirty: true })}
-              />
-            </div>
-
-            {(organization?.enabledModules.includes("catalog") ||
-              organization?.enabledModules.includes("booking")) && (
-              <div className="sm:col-span-2">
-                <p className="mb-1 text-xs font-medium text-text">
-                  Sections visibles sur la page publique
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  {organization.enabledModules.includes("catalog") && (
-                    <label className="flex items-center gap-2 text-sm text-text">
-                      <input
-                        type="checkbox"
-                        value="catalog"
-                        {...registerOrg("storefrontSections")}
-                      />
-                      Afficher le catalogue
-                    </label>
-                  )}
-                  {organization.enabledModules.includes("booking") && (
-                    <label className="flex items-center gap-2 text-sm text-text">
-                      <input
-                        type="checkbox"
-                        value="booking"
-                        {...registerOrg("storefrontSections")}
-                      />
-                      Afficher les réservations
-                    </label>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {organization?.enabledModules.includes("commerce") && (
-              <div className="sm:col-span-2">
-                <p className="mb-1 text-xs font-medium text-text">
-                  Moyens de paiement acceptés à la commande
-                </p>
-                <p className="mb-2 text-xs text-text-muted">
-                  &quot;En ligne&quot; ne s&apos;affiche à vos clients que si un moyen de paiement
-                  réel est connecté (voir Intégrations) — cochez-le dès maintenant si vous
-                  comptez en connecter un.
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  <label className="flex items-center gap-2 text-sm text-text">
-                    <input
-                      type="checkbox"
-                      value="cash"
-                      {...registerOrg("acceptedPaymentMethods")}
-                    />
-                    Espèces / à la livraison ou au retrait
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-text">
-                    <input
-                      type="checkbox"
-                      value="online"
-                      // Turning it on needs a paid plan; one already on stays as it is.
-                      disabled={
-                        !planFeatures.has("online_payment") &&
-                        !organization?.acceptedPaymentMethods?.includes("online")
-                      }
-                      {...registerOrg("acceptedPaymentMethods")}
-                    />
-                    Paiement en ligne
-                    {!planFeatures.has("online_payment") && <PlanLock feature="online_payment" />}
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {uploadError && (
-              <p className="text-sm text-destructive sm:col-span-2">{uploadError}</p>
-            )}
-
-            {updateOrgMutation.isError && (
-              <p className="text-sm text-destructive sm:col-span-2">
-                {updateOrgMutation.error instanceof ApiError
-                  ? updateOrgMutation.error.message
-                  : "Impossible d'enregistrer les informations de l'organisation."}
-              </p>
-            )}
-
-            <div className="flex gap-2 sm:col-span-2">
-              <Button type="submit" loading={updateOrgMutation.isPending}>
-                {updateOrgMutation.isPending ? "Enregistrement..." : "Enregistrer"}
-              </Button>
-              <Button type="button" variant="ghost" onClick={cancelOrgEdit}>
-                Annuler
-              </Button>
-            </div>
-          </form>
-        )}
-      </section>
-
-      {organization?.slug && (
-        <StorefrontPreviewSection
-          slug={organization.slug}
-          previewTemplate={orgEditOpen ? watchedStorefrontTemplate : undefined}
-          previewPalette={orgEditOpen ? watchedStorefrontPalette : undefined}
-          previewFontPairing={orgEditOpen ? watchedStorefrontFontPairing : undefined}
-        />
-      )}
-
-      {organization?.enabledModules.includes("commerce") && (
-        <OrderReceptionSettings key={organization.id} organization={organization} />
-      )}
-
-      {organization?.enabledModules.includes("booking") && organization.businessModel === "lodging" && (
-        <StaySettings key={organization.id} organization={organization} />
-      )}
-
-      <section className="rounded-lg border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-text">Abonnement</h2>
-        {subscription && (
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">
-                  {subscription.plan.name}
-                  {planFeatures.trialEndsAt && (
-                    <span className="ml-2 text-xs font-normal text-text-muted">
-                      essai offert jusqu&apos;au{" "}
-                      {new Date(planFeatures.trialEndsAt).toLocaleDateString("fr-FR")}, puis
-                      formule Gratuite si vous ne choisissez rien
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-text-muted">
-                  {subscription.plan.priceAmount} {subscription.plan.priceCurrency} / {subscription.plan.interval === "month" ? "mois" : "an"}
-                </p>
-              </div>
-              <Badge variant="success">
-                {subscription.subscription.status === "active" ? "Actif" : subscription.subscription.status}
-              </Badge>
-            </div>
-
-            <div className="space-y-2">
-              {subscription.usage.map((item) => (
-                <div key={item.metric} className="text-xs">
-                  <div className="mb-1 flex justify-between text-text-muted">
-                    <span>{METRIC_LABELS[item.metric] ?? item.metric}</span>
-                    <span>
-                      {item.used} / {item.limit === -1 ? "illimité" : item.limit}
-                    </span>
-                  </div>
-                  {item.limit !== -1 && (
-                    <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
-                      <div
-                        className="h-full rounded-full bg-sidebar"
-                        style={{ width: `${Math.min(100, (item.used / item.limit) * 100)}%` }}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {changePlanMutation.isError && (
-              <p className="text-xs text-destructive">
-                {changePlanMutation.error instanceof ApiError
-                  ? changePlanMutation.error.message
-                  : "Erreur"}
-              </p>
-            )}
-
-            {aiUsage && !aiUsagePermissionDenied && (
-              <div className="border-t border-border pt-4">
-                <div className="mb-1 flex justify-between text-xs text-text-muted">
-                  <span>Coût IA ce mois-ci ({aiUsage.period})</span>
-                  <span>{formatCurrency(aiUsage.costUsd, "USD")}</span>
-                </div>
-                <p className="text-xs text-text-muted">
-                  {(aiUsage.inputTokens + aiUsage.outputTokens).toLocaleString("fr-FR")} tokens
-                  {aiUsage.unpricedCalls > 0 && (
-                    <> · {aiUsage.unpricedCalls} appel{aiUsage.unpricedCalls > 1 ? "s" : ""} non tarifé{aiUsage.unpricedCalls > 1 ? "s" : ""}</>
-                  )}
-                </p>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">
-              {plans?.map((plan) => (
-                <div key={plan.id} className="rounded-md border border-border p-3 text-xs">
-                  <p className="font-medium">{plan.name}</p>
-                  <p className="mt-0.5 text-text-muted">
-                    {plan.priceAmount} {plan.priceCurrency}/mois
-                  </p>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="mt-2 w-full disabled:cursor-default"
-                    onClick={() => changePlanMutation.mutate(plan.key)}
-                    disabled={plan.key === subscription.plan.key || changePlanMutation.isPending}
-                  >
-                    {plan.key === subscription.plan.key ? "Plan actuel" : "Choisir"}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      {!sensitiveToolsPermissionDenied && sensitiveTools && sensitiveTools.length > 0 && (
+      <SettingsTabPanel tab="entreprise" active={activeTab}>
+        {/* Not migrated to <Card>: Card always renders a <div>, and these are real document
+            <section>s — same exclusion as the raw <form> wrappers elsewhere (dashboard/crm,
+            dashboard/bookings). */}
         <section className="rounded-lg border border-border bg-surface p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text">Autonomie de l&apos;IA</h2>
-            {autoApprovedToolsMutation.isPending && (
+            <h2 className="text-sm font-semibold text-text">Organisation</h2>
+            {organization && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => (orgEditOpen ? cancelOrgEdit() : startOrgEdit())}
+              >
+                {orgEditOpen ? "Annuler" : "Modifier"}
+              </Button>
+            )}
+          </div>
+
+          {!orgEditOpen ? (
+            <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-text-muted">Nom</dt>
+                <dd className="mt-0.5">{organization?.name ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Raison sociale</dt>
+                <dd className="mt-0.5">{organization?.legalName ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Secteur</dt>
+                <dd className="mt-0.5">{organization?.type ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Type d&apos;activité</dt>
+                <dd className="mt-0.5">
+                  {organization?.businessModel
+                    ? `${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].label} · ${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].siteKind}`
+                    : "Non défini"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Pays</dt>
+                <dd className="mt-0.5">{organization?.country ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Devise</dt>
+                <dd className="mt-0.5">{organization?.currency ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Fuseau horaire</dt>
+                <dd className="mt-0.5">{organization?.timezone ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Langue</dt>
+                <dd className="mt-0.5">{organization?.language ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Couleur de marque</dt>
+                <dd className="mt-0.5 flex items-center gap-2">
+                  {organization?.brandColor ? (
+                    <>
+                      <span
+                        className="inline-block h-4 w-4 rounded-full border border-border"
+                        style={{ backgroundColor: organization.brandColor }}
+                      />
+                      {organization.brandColor}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Slogan (page publique)</dt>
+                <dd className="mt-0.5">{organization?.tagline ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Téléphone (page publique)</dt>
+                <dd className="mt-0.5">{organization?.contactPhone || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">WhatsApp (page publique)</dt>
+                <dd className="mt-0.5">{organization?.whatsappNumber || "—"}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-text-muted">Adresse (page publique)</dt>
+                <dd className="mt-0.5">{organization?.contactAddress || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Image de bannière (page publique)</dt>
+                <dd className="mt-0.5 truncate">{organization?.heroImage ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Titre SEO (page publique)</dt>
+                <dd className="mt-0.5">{organization?.seoTitle ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Description SEO (page publique)</dt>
+                <dd className="mt-0.5">{organization?.seoDescription ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Domaine personnalisé</dt>
+                <dd className="mt-0.5">{organization?.customDomain ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Frais de livraison (boutique en ligne)</dt>
+                <dd className="mt-0.5">
+                  {organization?.shippingFlatRate != null
+                    ? `${organization.shippingFlatRate} ${organization.currency}`
+                    : "Gratuit"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-text-muted">Sections visibles (page publique)</dt>
+                <dd className="mt-0.5">
+                  {organization?.storefrontSections
+                    ? organization.storefrontSections
+                        .map((s) => (s === "catalog" ? "Catalogue" : "Réservations"))
+                        .join(", ") || "Aucune"
+                    : "Toutes"}
+                </dd>
+              </div>
+              {organization?.enabledModules.includes("commerce") && (
+                <div>
+                  <dt className="text-text-muted">Moyens de paiement acceptés</dt>
+                  <dd className="mt-0.5">
+                    {(organization.acceptedPaymentMethods ?? ["cash"])
+                      .map((m) => (m === "cash" ? "Espèces / à la livraison" : "En ligne"))
+                      .join(", ")}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            <form
+              onSubmit={handleOrgSubmit((values) => updateOrgMutation.mutate(values))}
+              className="mt-4 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
+            >
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-name">
+                  Nom
+                </label>
+                <Input
+                  id="org-name"
+                  className="w-full"
+                  error={!!orgErrors.name}
+                  {...registerOrg("name")}
+                />
+                {orgErrors.name && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.name.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-legal-name">
+                  Raison sociale
+                </label>
+                <Input id="org-legal-name" className="w-full" {...registerOrg("legalName")} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-type">
+                  Secteur d&apos;activité
+                </label>
+                <Input
+                  id="org-type"
+                  className="w-full"
+                  placeholder="ex: commerce, service, réservation..."
+                  error={!!orgErrors.type}
+                  {...registerOrg("type")}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-business-model">
+                  Type d&apos;activité
+                </label>
+                <Select
+                  id="org-business-model"
+                  className="w-full"
+                  {...registerOrg("businessModel", {
+                    // Left unchosen on an older organization: send nothing rather than "".
+                    setValueAs: (v: string | undefined) => (v ? v : undefined),
+                  })}
+                >
+                  <option value="">Non défini</option>
+                  {BUSINESS_MODELS.map((model) => (
+                    <option key={model} value={model}>
+                      {BUSINESS_MODEL_DEFINITIONS[model].label} — {BUSINESS_MODEL_DEFINITIONS[model].siteKind}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-country">
+                  Pays
+                </label>
+                <Select id="org-country" className="w-full" {...registerOrg("country")}>
+                  {COUNTRIES.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-currency">
+                  Devise
+                </label>
+                <Select id="org-currency" className="w-full" {...registerOrg("currency")}>
+                  {CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-timezone">
+                  Fuseau horaire
+                </label>
+                <Select id="org-timezone" className="w-full" {...registerOrg("timezone")}>
+                  {TIMEZONES.map((timezone) => (
+                    <option key={timezone} value={timezone}>
+                      {timezone}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-language">
+                  Langue
+                </label>
+                <Input id="org-language" className="w-full" {...registerOrg("language")} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-brand-color">
+                  Couleur de marque
+                </label>
+                {/* setValueAs: brandColor/logo are optional but format-constrained (hex/url) —
+                    an uncontrolled input left untouched by the user always submits "" (never
+                    `undefined`, regardless of what reset() set as the default), which fails the
+                    regex/.url() check even though the field is meant to be skippable. Converting
+                    "" to undefined here is what actually makes it skippable. */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    aria-label="Choisir la couleur de marque"
+                    className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border-input bg-transparent p-0.5"
+                    value={/^#([0-9a-fA-F]{6})$/.test(watchedBrandColor ?? "") ? watchedBrandColor! : "#1a73e8"}
+                    onChange={(event) => setOrgValue("brandColor", event.target.value, { shouldDirty: true })}
+                  />
+                  <Input
+                    id="org-brand-color"
+                    className="w-full"
+                    placeholder="#1a73e8"
+                    error={!!orgErrors.brandColor}
+                    {...registerOrg("brandColor", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                  />
+                </div>
+                {orgErrors.brandColor && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.brandColor.message}</p>
+                )}
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-logo">
+                  Logo
+                </label>
+                <div className="flex items-center gap-3">
+                  {watchedLogo && (
+                    // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
+                    <img src={watchedLogo} alt="" className="h-10 w-10 rounded object-contain" />
+                  )}
+                  <Input
+                    id="org-logo"
+                    className="w-full"
+                    placeholder="https://... ou envoyez un fichier"
+                    error={!!orgErrors.logo}
+                    {...registerOrg("logo", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                  />
+                  <input
+                    ref={logoFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    aria-label="Envoyer un fichier pour le logo"
+                    onChange={(event) => {
+                      void handleImageUpload("logo", event.target.files?.[0], setLogoUploading);
+                      event.target.value = "";
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="shrink-0"
+                    loading={logoUploading}
+                    onClick={() => logoFileInputRef.current?.click()}
+                  >
+                    Envoyer
+                  </Button>
+                </div>
+                {orgErrors.logo && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.logo.message}</p>
+                )}
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-tagline">
+                  Slogan (affiché sur votre page publique)
+                </label>
+                <Input
+                  id="org-tagline"
+                  className="w-full"
+                  placeholder="ex: Le meilleur salon de la ville"
+                  error={!!orgErrors.tagline}
+                  {...registerOrg("tagline", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                />
+                {orgErrors.tagline && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.tagline.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-contact-phone">
+                  Téléphone (affiché sur votre site)
+                </label>
+                <Input
+                  id="org-contact-phone"
+                  className="w-full"
+                  type="tel"
+                  placeholder="ex: 27 22 00 00 00"
+                  error={!!orgErrors.contactPhone}
+                  {...registerOrg("contactPhone")}
+                />
+                {orgErrors.contactPhone && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.contactPhone.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-whatsapp">
+                  Numéro WhatsApp
+                </label>
+                <Input
+                  id="org-whatsapp"
+                  className="w-full"
+                  type="tel"
+                  placeholder="ex: +225 07 07 07 07 07"
+                  error={!!orgErrors.whatsappNumber}
+                  {...registerOrg("whatsappNumber")}
+                />
+                {orgErrors.whatsappNumber ? (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.whatsappNumber.message}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-text-muted">
+                    Vos clients pourront vous écrire et commander sur WhatsApp depuis votre site.
+                  </p>
+                )}
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-contact-address">
+                  Adresse (affichée sur votre site)
+                </label>
+                <Input
+                  id="org-contact-address"
+                  className="w-full"
+                  placeholder="ex: Rue des Jardins, Cocody, Abidjan"
+                  error={!!orgErrors.contactAddress}
+                  {...registerOrg("contactAddress")}
+                />
+                {orgErrors.contactAddress && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.contactAddress.message}</p>
+                )}
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-seo-title">
+                  Titre SEO (balise &lt;title&gt; de la page publique)
+                </label>
+                <Input
+                  id="org-seo-title"
+                  className="w-full"
+                  placeholder={organization?.name || "Laissez vide pour utiliser le nom de l'organisation"}
+                  error={!!orgErrors.seoTitle}
+                  {...registerOrg("seoTitle", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                />
+                {orgErrors.seoTitle && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.seoTitle.message}</p>
+                )}
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-seo-description">
+                  Description SEO (meta description de la page publique)
+                </label>
+                <textarea
+                  id="org-seo-description"
+                  className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+                  rows={2}
+                  maxLength={200}
+                  placeholder="Laissez vide pour générer une description automatiquement"
+                  {...registerOrg("seoDescription", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                />
+                {orgErrors.seoDescription && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.seoDescription.message}</p>
+                )}
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-custom-domain">
+                  Domaine personnalisé (optionnel)
+                </label>
+                <Input
+                  id="org-custom-domain"
+                  className="w-full"
+                  placeholder="www.mon-entreprise.com"
+                  error={!!orgErrors.customDomain}
+                  {...registerOrg("customDomain", {
+                    setValueAs: (v: string) => (v === "" ? undefined : v),
+                  })}
+                />
+                {orgErrors.customDomain && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.customDomain.message}</p>
+                )}
+                <p className="mt-1 text-xs text-text-muted">
+                  Chez votre fournisseur de domaine, ajoutez un enregistrement CNAME pointant ce
+                  domaine vers <span className="font-mono">{storefrontDomainCnameTarget}</span>.
+                  Sans &quot;https://&quot; ni chemin — juste le nom de domaine.
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-hero-image">
+                  Image de bannière (page publique)
+                </label>
+                <div className="flex items-center gap-3">
+                  {watchedHeroImage && (
+                    // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
+                    <img src={watchedHeroImage} alt="" className="h-10 w-16 rounded object-cover" />
+                  )}
+                  <Input
+                    id="org-hero-image"
+                    className="w-full"
+                    placeholder="https://... ou envoyez un fichier"
+                    error={!!orgErrors.heroImage}
+                    {...registerOrg("heroImage", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+                  />
+                  <input
+                    ref={heroImageFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    aria-label="Envoyer un fichier pour la bannière"
+                    onChange={(event) => {
+                      void handleImageUpload("heroImage", event.target.files?.[0], setHeroImageUploading);
+                      event.target.value = "";
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="shrink-0"
+                    loading={heroImageUploading}
+                    onClick={() => heroImageFileInputRef.current?.click()}
+                  >
+                    Envoyer
+                  </Button>
+                </div>
+                {orgErrors.heroImage && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.heroImage.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-shipping-flat-rate">
+                  Frais de livraison (boutique en ligne)
+                </label>
+                <Input
+                  id="org-shipping-flat-rate"
+                  type="number"
+                  step="0.01"
+                  className="w-full"
+                  placeholder="Gratuit"
+                  error={!!orgErrors.shippingFlatRate}
+                  {...registerOrg("shippingFlatRate", {
+                    setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
+                  })}
+                />
+                {orgErrors.shippingFlatRate && (
+                  <p className="mt-1 text-xs text-destructive">{orgErrors.shippingFlatRate.message}</p>
+                )}
+              </div>
+              <div className="sm:col-span-2">
+                <StorefrontThemePicker
+                  planKey={subscription?.plan.key}
+                  selectedTemplate={watchedStorefrontTemplate}
+                  selectedPalette={watchedStorefrontPalette}
+                  selectedFontPairing={watchedStorefrontFontPairing}
+                  onChangeTemplate={(key) => setOrgValue("storefrontTemplate", key, { shouldDirty: true })}
+                  onChangePalette={(key) => setOrgValue("storefrontPalette", key, { shouldDirty: true })}
+                  onChangeFontPairing={(key) => setOrgValue("storefrontFontPairing", key, { shouldDirty: true })}
+                />
+              </div>
+
+              {(organization?.enabledModules.includes("catalog") ||
+                organization?.enabledModules.includes("booking")) && (
+                <div className="sm:col-span-2">
+                  <p className="mb-1 text-xs font-medium text-text">
+                    Sections visibles sur la page publique
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    {organization.enabledModules.includes("catalog") && (
+                      <label className="flex items-center gap-2 text-sm text-text">
+                        <input
+                          type="checkbox"
+                          value="catalog"
+                          {...registerOrg("storefrontSections")}
+                        />
+                        Afficher le catalogue
+                      </label>
+                    )}
+                    {organization.enabledModules.includes("booking") && (
+                      <label className="flex items-center gap-2 text-sm text-text">
+                        <input
+                          type="checkbox"
+                          value="booking"
+                          {...registerOrg("storefrontSections")}
+                        />
+                        Afficher les réservations
+                      </label>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {organization?.enabledModules.includes("commerce") && (
+                <div className="sm:col-span-2">
+                  <p className="mb-1 text-xs font-medium text-text">
+                    Moyens de paiement acceptés à la commande
+                  </p>
+                  <p className="mb-2 text-xs text-text-muted">
+                    &quot;En ligne&quot; ne s&apos;affiche à vos clients que si un moyen de paiement
+                    réel est connecté (voir Intégrations) — cochez-le dès maintenant si vous
+                    comptez en connecter un.
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 text-sm text-text">
+                      <input
+                        type="checkbox"
+                        value="cash"
+                        {...registerOrg("acceptedPaymentMethods")}
+                      />
+                      Espèces / à la livraison ou au retrait
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-text">
+                      <input
+                        type="checkbox"
+                        value="online"
+                        // Turning it on needs a paid plan; one already on stays as it is.
+                        disabled={
+                          !planFeatures.has("online_payment") &&
+                          !organization?.acceptedPaymentMethods?.includes("online")
+                        }
+                        {...registerOrg("acceptedPaymentMethods")}
+                      />
+                      Paiement en ligne
+                      {!planFeatures.has("online_payment") && <PlanLock feature="online_payment" />}
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {uploadError && (
+                <p className="text-sm text-destructive sm:col-span-2">{uploadError}</p>
+              )}
+
+              {updateOrgMutation.isError && (
+                <p className="text-sm text-destructive sm:col-span-2">
+                  {updateOrgMutation.error instanceof ApiError
+                    ? updateOrgMutation.error.message
+                    : "Impossible d'enregistrer les informations de l'organisation."}
+                </p>
+              )}
+
+              <div className="flex gap-2 sm:col-span-2">
+                <Button type="submit" loading={updateOrgMutation.isPending}>
+                  {updateOrgMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                </Button>
+                <Button type="button" variant="ghost" onClick={cancelOrgEdit}>
+                  Annuler
+                </Button>
+              </div>
+            </form>
+          )}
+        </section>
+      </SettingsTabPanel>
+
+      <SettingsTabPanel tab="site" active={activeTab}>
+        {organization?.slug && (
+          <StorefrontPreviewSection
+            slug={organization.slug}
+            previewTemplate={orgEditOpen ? watchedStorefrontTemplate : undefined}
+            previewPalette={orgEditOpen ? watchedStorefrontPalette : undefined}
+            previewFontPairing={orgEditOpen ? watchedStorefrontFontPairing : undefined}
+          />
+        )}
+
+        {organization?.enabledModules.includes("commerce") && (
+          <OrderReceptionSettings key={organization.id} organization={organization} />
+        )}
+
+        {organization?.enabledModules.includes("booking") && organization.businessModel === "lodging" && (
+          <StaySettings key={organization.id} organization={organization} />
+        )}
+
+        <StorefrontContentSection />
+
+        {organization && <ExternalWebsiteSection slug={organization.slug} />}
+      </SettingsTabPanel>
+
+      <SettingsTabPanel tab="abonnement" active={activeTab}>
+        <section className="rounded-lg border border-border bg-surface p-6">
+          <h2 className="text-sm font-semibold text-text">Abonnement</h2>
+          {subscription && (
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">
+                    {subscription.plan.name}
+                    {planFeatures.trialEndsAt && (
+                      <span className="ml-2 text-xs font-normal text-text-muted">
+                        essai offert jusqu&apos;au{" "}
+                        {new Date(planFeatures.trialEndsAt).toLocaleDateString("fr-FR")}, puis
+                        formule Gratuite si vous ne choisissez rien
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-text-muted">
+                    {subscription.plan.priceAmount} {subscription.plan.priceCurrency} / {subscription.plan.interval === "month" ? "mois" : "an"}
+                  </p>
+                </div>
+                <Badge variant="success">
+                  {subscription.subscription.status === "active" ? "Actif" : subscription.subscription.status}
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                {subscription.usage.map((item) => (
+                  <div key={item.metric} className="text-xs">
+                    <div className="mb-1 flex justify-between text-text-muted">
+                      <span>{METRIC_LABELS[item.metric] ?? item.metric}</span>
+                      <span>
+                        {item.used} / {item.limit === -1 ? "illimité" : item.limit}
+                      </span>
+                    </div>
+                    {item.limit !== -1 && (
+                      <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
+                        <div
+                          className="h-full rounded-full bg-sidebar"
+                          style={{ width: `${Math.min(100, (item.used / item.limit) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {changePlanMutation.isError && (
+                <p className="text-xs text-destructive">
+                  {changePlanMutation.error instanceof ApiError
+                    ? changePlanMutation.error.message
+                    : "Erreur"}
+                </p>
+              )}
+
+              {aiUsage && !aiUsagePermissionDenied && (
+                <div className="border-t border-border pt-4">
+                  <div className="mb-1 flex justify-between text-xs text-text-muted">
+                    <span>Coût IA ce mois-ci ({aiUsage.period})</span>
+                    <span>{formatCurrency(aiUsage.costUsd, "USD")}</span>
+                  </div>
+                  <p className="text-xs text-text-muted">
+                    {(aiUsage.inputTokens + aiUsage.outputTokens).toLocaleString("fr-FR")} tokens
+                    {aiUsage.unpricedCalls > 0 && (
+                      <> · {aiUsage.unpricedCalls} appel{aiUsage.unpricedCalls > 1 ? "s" : ""} non tarifé{aiUsage.unpricedCalls > 1 ? "s" : ""}</>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">
+                {plans?.map((plan) => (
+                  <div key={plan.id} className="rounded-md border border-border p-3 text-xs">
+                    <p className="font-medium">{plan.name}</p>
+                    <p className="mt-0.5 text-text-muted">
+                      {plan.priceAmount} {plan.priceCurrency}/mois
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="mt-2 w-full disabled:cursor-default"
+                      onClick={() => changePlanMutation.mutate(plan.key)}
+                      disabled={plan.key === subscription.plan.key || changePlanMutation.isPending}
+                    >
+                      {plan.key === subscription.plan.key ? "Plan actuel" : "Choisir"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-lg border border-border bg-surface p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text">Produits</h2>
+            {productOverridesMutation.isPending && (
               <span className="text-xs text-text-muted">Enregistrement...</span>
             )}
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            Ces actions nécessitent normalement une confirmation humaine avant d&apos;être
-            exécutées par l&apos;assistant IA. Cochez celles que vous autorisez à s&apos;exécuter
-            automatiquement, sans confirmation.
+            KORVA CRM, Inventaire, Site web et Assistant IA peuvent être activés ou désactivés
+            indépendamment. Une case cochée par défaut signifie que votre plan actuel inclut déjà
+            ce produit ; désactiver ou forcer l&apos;activation d&apos;un produit met à jour les
+            modules concernés ci-dessous.
           </p>
 
-          {autoApprovedToolsMutation.isError && (
-            <p className="mt-2 text-xs text-destructive">
-              {autoApprovedToolsMutation.error instanceof ApiError
-                ? autoApprovedToolsMutation.error.message
-                : "Erreur"}
+          {productOverridesMutation.isError && (
+            <p className="mt-3 text-xs text-destructive">
+              {productOverridesMutation.error instanceof ApiError
+                ? productOverridesMutation.error.message
+                : "Impossible de mettre à jour les produits. Réessayez."}
             </p>
           )}
 
-          <div className="mt-4 space-y-2">
-            {sensitiveTools.map((tool) => {
-              const approved = organization?.aiAutoApprovedTools?.includes(tool.name) ?? false;
-              return (
-                <label
-                  key={tool.name}
-                  className={`flex items-start gap-2 text-sm ${
-                    autoApprovedToolsMutation.isPending ? "opacity-60" : ""
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={approved}
-                    disabled={autoApprovedToolsMutation.isPending}
-                    onChange={() => toggleAutoApprovedTool(tool.name, approved)}
-                    aria-label={`Auto-approuver ${tool.name}`}
-                  />
-                  <span>
-                    <span className="font-medium text-text">{tool.name}</span>
-                    <span className="block text-xs text-text-muted">{tool.description}</span>
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <section className="rounded-lg border border-border bg-surface p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Produits</h2>
-          {productOverridesMutation.isPending && (
-            <span className="text-xs text-text-muted">Enregistrement...</span>
-          )}
-        </div>
-        <p className="mt-1 text-sm text-text-muted">
-          KORVA CRM, Inventaire, Site web et Assistant IA peuvent être activés ou désactivés
-          indépendamment. Une case cochée par défaut signifie que votre plan actuel inclut déjà
-          ce produit ; désactiver ou forcer l&apos;activation d&apos;un produit met à jour les
-          modules concernés ci-dessous.
-        </p>
-
-        {productOverridesMutation.isError && (
-          <p className="mt-3 text-xs text-destructive">
-            {productOverridesMutation.error instanceof ApiError
-              ? productOverridesMutation.error.message
-              : "Impossible de mettre à jour les produits. Réessayez."}
-          </p>
-        )}
-
-        {!subscription ? (
-          <p className="mt-4 text-sm text-text-muted">Chargement...</p>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {KORVA_PRODUCTS.map((product) => {
-              const override = subscription.subscription.productOverrides?.[product];
-              const isActive =
-                override ??
-                PRODUCT_MODULES[product].some((m) => subscription.plan.modules.includes(m));
-              return (
-                <label
-                  key={product}
-                  htmlFor={`product-${product}`}
-                  className={`flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm ${
-                    productOverridesMutation.isPending ? "opacity-60" : ""
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <input
-                      id={`product-${product}`}
-                      type="checkbox"
-                      checked={isActive}
-                      disabled={productOverridesMutation.isPending}
-                      onChange={() => toggleProduct(product, isActive)}
-                      aria-label={PRODUCT_ARIA_LABELS[product]}
-                    />
-                    {PRODUCT_LABELS[product]}
-                  </span>
-                  {override === undefined && <Badge>Défaut du plan</Badge>}
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-lg border border-border bg-surface p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Modules</h2>
-          {modulesMutation.isPending && (
-            <span className="text-xs text-text-muted">Enregistrement...</span>
-          )}
-        </div>
-        <p className="mt-1 text-sm text-text-muted">
-          Activez ou désactivez les modules disponibles dans votre plan actuel. Le menu à
-          gauche se met à jour immédiatement.
-        </p>
-
-        {modulesMutation.isError && (
-          <p className="mt-3 text-xs text-destructive">
-            {modulesMutation.error instanceof ApiError
-              ? modulesMutation.error.message
-              : "Impossible de mettre à jour les modules. Réessayez."}
-          </p>
-        )}
-
-        {!organization || !subscription ? (
-          <p className="mt-4 text-sm text-text-muted">Chargement...</p>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {KORVA_MODULES.map((module) => {
-              const isEnabled = organization.enabledModules.includes(module);
-              const isAllowedByPlan = resolveEffectiveModules(
-                subscription.plan.modules,
-                subscription.subscription.productOverrides,
-              ).includes(module);
-              // One sales channel on Free: the second of bookings/orders is locked until the
-              // plan includes both (an organization already running both keeps them).
-              const otherChannel =
-                module === "booking" ? "commerce" : module === "commerce" ? "booking" : null;
-              const channelLocked =
-                otherChannel !== null &&
-                !isEnabled &&
-                organization.enabledModules.includes(otherChannel) &&
-                !planFeatures.has("both_channels");
-              const disabled = !isAllowedByPlan || channelLocked || modulesMutation.isPending;
-              return (
-                <label
-                  key={module}
-                  htmlFor={`module-${module}`}
-                  className={`flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm ${
-                    disabled ? "opacity-60" : ""
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <input
-                      id={`module-${module}`}
-                      type="checkbox"
-                      checked={isEnabled}
-                      disabled={disabled}
-                      onChange={() => toggleModule(module)}
-                    />
-                    {MODULE_LABELS[module]}
-                  </span>
-                  {!isAllowedByPlan && <Badge>Non inclus dans le plan</Badge>}
-                  {isAllowedByPlan && channelLocked && <PlanLock feature="both_channels" />}
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-lg border border-border bg-surface p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text">Utilisateurs</h2>
-          <Button variant="secondary" size="sm" onClick={() => setInviteOpen((v) => !v)}>
-            {inviteOpen ? "Annuler" : "Inviter un membre"}
-          </Button>
-        </div>
-        <p className="mt-1 text-sm text-text-muted">
-          Les personnes qui se connectent au tableau de bord. Vos coiffeurs, coachs ou formateurs
-          réservables par vos clients n&apos;ont pas besoin de compte : ajoutez-les dans
-          Réservations › Équipe et ressources, sans utiliser d&apos;utilisateur de votre abonnement.
-        </p>
-
-        {inviteOpen && (
-          <form
-            onSubmit={handleInviteSubmit((values) => inviteMemberMutation.mutate(values))}
-            className="mt-4 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
-          >
-            <div>
-              <label className="block text-sm font-medium text-text" htmlFor="invite-email">
-                Adresse email
-              </label>
-              <Input
-                id="invite-email"
-                type="email"
-                className="mt-1 w-full"
-                error={!!inviteErrors.email}
-                {...registerInvite("email")}
-              />
-              {inviteErrors.email && (
-                <p className="mt-1 text-xs text-destructive">{inviteErrors.email.message}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-text" htmlFor="invite-role">
-                Rôle
-              </label>
-              <select
-                id="invite-role"
-                defaultValue=""
-                disabled={rolesLoading || rolesError || (roles?.length ?? 0) === 0}
-                className="mt-1 w-full rounded-md border border-border-input bg-surface px-3 py-2 text-sm text-text focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                {...registerInvite("roleId")}
-              >
-                <option value="" disabled>
-                  {rolesLoading
-                    ? "Chargement des rôles..."
-                    : rolesError
-                      ? "Rôles indisponibles"
-                      : roles && roles.length === 0
-                        ? "Aucun rôle disponible"
-                        : "Sélectionner un rôle"}
-                </option>
-                {roles?.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
-                ))}
-              </select>
-              {rolesError && (
-                <div className="mt-1">
-                  <p className="text-xs text-destructive">Impossible de charger les rôles.</p>
-                  <button
-                    type="button"
-                    onClick={() => void refetchRoles()}
-                    className="text-xs font-medium text-text underline"
+          {!subscription ? (
+            <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {KORVA_PRODUCTS.map((product) => {
+                const override = subscription.subscription.productOverrides?.[product];
+                const isActive =
+                  override ??
+                  PRODUCT_MODULES[product].some((m) => subscription.plan.modules.includes(m));
+                return (
+                  <label
+                    key={product}
+                    htmlFor={`product-${product}`}
+                    className={`flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm ${
+                      productOverridesMutation.isPending ? "opacity-60" : ""
+                    }`}
                   >
-                    Réessayer
-                  </button>
-                </div>
-              )}
-              {inviteErrors.roleId && (
-                <p className="mt-1 text-xs text-destructive">{inviteErrors.roleId.message}</p>
-              )}
+                    <span className="flex items-center gap-2">
+                      <input
+                        id={`product-${product}`}
+                        type="checkbox"
+                        checked={isActive}
+                        disabled={productOverridesMutation.isPending}
+                        onChange={() => toggleProduct(product, isActive)}
+                        aria-label={PRODUCT_ARIA_LABELS[product]}
+                      />
+                      {PRODUCT_LABELS[product]}
+                    </span>
+                    {override === undefined && <Badge>Défaut du plan</Badge>}
+                  </label>
+                );
+              })}
             </div>
+          )}
+        </section>
 
-            {inviteMemberMutation.isError && (
-              <p className="text-sm text-destructive sm:col-span-2">
-                {inviteMemberMutation.error instanceof ApiError
-                  ? inviteMemberMutation.error.message
-                  : "Impossible d'envoyer l'invitation. Réessayez."}
-              </p>
+        <section className="rounded-lg border border-border bg-surface p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text">Modules</h2>
+            {modulesMutation.isPending && (
+              <span className="text-xs text-text-muted">Enregistrement...</span>
             )}
+          </div>
+          <p className="mt-1 text-sm text-text-muted">
+            Activez ou désactivez les modules disponibles dans votre plan actuel. Le menu à
+            gauche se met à jour immédiatement.
+          </p>
 
-            {inviteMemberMutation.isSuccess && (
-              <p className="text-sm text-text sm:col-span-2">
-                Invitation envoyée par email. Elle apparaîtra ci-dessous jusqu&apos;à ce qu&apos;elle soit acceptée.
-              </p>
-            )}
+          {modulesMutation.isError && (
+            <p className="mt-3 text-xs text-destructive">
+              {modulesMutation.error instanceof ApiError
+                ? modulesMutation.error.message
+                : "Impossible de mettre à jour les modules. Réessayez."}
+            </p>
+          )}
 
-            <Button
-              type="submit"
-              className="sm:col-span-2"
-              loading={inviteMemberMutation.isPending}
-              disabled={rolesLoading || rolesError || (roles?.length ?? 0) === 0}
-            >
-              {inviteMemberMutation.isPending ? "Invitation en cours..." : "Envoyer l'invitation"}
+          {!organization || !subscription ? (
+            <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {KORVA_MODULES.map((module) => {
+                const isEnabled = organization.enabledModules.includes(module);
+                const isAllowedByPlan = resolveEffectiveModules(
+                  subscription.plan.modules,
+                  subscription.subscription.productOverrides,
+                ).includes(module);
+                // One sales channel on Free: the second of bookings/orders is locked until the
+                // plan includes both (an organization already running both keeps them).
+                const otherChannel =
+                  module === "booking" ? "commerce" : module === "commerce" ? "booking" : null;
+                const channelLocked =
+                  otherChannel !== null &&
+                  !isEnabled &&
+                  organization.enabledModules.includes(otherChannel) &&
+                  !planFeatures.has("both_channels");
+                const disabled = !isAllowedByPlan || channelLocked || modulesMutation.isPending;
+                return (
+                  <label
+                    key={module}
+                    htmlFor={`module-${module}`}
+                    className={`flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm ${
+                      disabled ? "opacity-60" : ""
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        id={`module-${module}`}
+                        type="checkbox"
+                        checked={isEnabled}
+                        disabled={disabled}
+                        onChange={() => toggleModule(module)}
+                      />
+                      {MODULE_LABELS[module]}
+                    </span>
+                    {!isAllowedByPlan && <Badge>Non inclus dans le plan</Badge>}
+                    {isAllowedByPlan && channelLocked && <PlanLock feature="both_channels" />}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </SettingsTabPanel>
+
+      <SettingsTabPanel tab="equipe" active={activeTab}>
+        <section className="rounded-lg border border-border bg-surface p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text">Utilisateurs</h2>
+            <Button variant="secondary" size="sm" onClick={() => setInviteOpen((v) => !v)}>
+              {inviteOpen ? "Annuler" : "Inviter un membre"}
             </Button>
-          </form>
-        )}
+          </div>
+          <p className="mt-1 text-sm text-text-muted">
+            Les personnes qui se connectent au tableau de bord. Vos coiffeurs, coachs ou formateurs
+            réservables par vos clients n&apos;ont pas besoin de compte : ajoutez-les dans
+            Réservations › Équipe et ressources, sans utiliser d&apos;utilisateur de votre abonnement.
+          </p>
 
-        <div className="mt-4 divide-y divide-border">
-          {isLoading && <p className="py-2 text-sm text-text-muted">Chargement...</p>}
-          {members
-            ?.filter((member) => member.status === "active")
-            .map((member) => {
-              const isSelf = member.userId.id === currentUserId;
-              const isRoleChangePending =
-                updateMemberRoleMutation.isPending &&
-                updateMemberRoleMutation.variables?.id === member.id;
-              const roleChangeError =
-                updateMemberRoleMutation.isError &&
-                updateMemberRoleMutation.variables?.id === member.id
-                  ? updateMemberRoleMutation.error
-                  : null;
-              const isRemoveConfirming = removeConfirmId === member.id;
-              const isRemovePending =
-                removeMemberMutation.isPending && removeMemberMutation.variables === member.id;
-              const removeError =
-                removeMemberMutation.isError && removeMemberMutation.variables === member.id
-                  ? removeMemberMutation.error
-                  : null;
-              return (
-                <div key={member.id} className="py-2 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-medium">
-                        {member.userId.firstName
-                          ? `${member.userId.firstName} ${member.userId.lastName ?? ""}`.trim()
-                          : member.userId.email}
-                        {isSelf && <span className="text-xs text-text-muted"> (vous)</span>}
-                      </p>
-                      <p className="text-xs text-text-muted">{member.userId.email}</p>
-                    </div>
-                    {isSelf ? (
-                      <Badge>{member.roleId.name}</Badge>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={member.roleId.id}
-                          disabled={isRoleChangePending}
-                          onChange={(e) =>
-                            updateMemberRoleMutation.mutate({ id: member.id, roleId: e.target.value })
-                          }
-                          className="rounded-md border border-border-input bg-surface px-2 py-1 text-xs text-text focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {roles?.map((role) => (
-                            <option key={role.id} value={role.id}>
-                              {role.name}
-                            </option>
-                          ))}
-                        </select>
-                        {isRemoveConfirming ? (
-                          <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              loading={isRemovePending}
-                              onClick={() => removeMemberMutation.mutate(member.id)}
-                            >
-                              {isRemovePending ? "Retrait..." : "Confirmer ?"}
-                            </Button>
+          {inviteOpen && (
+            <form
+              onSubmit={handleInviteSubmit((values) => inviteMemberMutation.mutate(values))}
+              className="mt-4 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
+            >
+              <div>
+                <label className="block text-sm font-medium text-text" htmlFor="invite-email">
+                  Adresse email
+                </label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  className="mt-1 w-full"
+                  error={!!inviteErrors.email}
+                  {...registerInvite("email")}
+                />
+                {inviteErrors.email && (
+                  <p className="mt-1 text-xs text-destructive">{inviteErrors.email.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text" htmlFor="invite-role">
+                  Rôle
+                </label>
+                <select
+                  id="invite-role"
+                  defaultValue=""
+                  disabled={rolesLoading || rolesError || (roles?.length ?? 0) === 0}
+                  className="mt-1 w-full rounded-md border border-border-input bg-surface px-3 py-2 text-sm text-text focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                  {...registerInvite("roleId")}
+                >
+                  <option value="" disabled>
+                    {rolesLoading
+                      ? "Chargement des rôles..."
+                      : rolesError
+                        ? "Rôles indisponibles"
+                        : roles && roles.length === 0
+                          ? "Aucun rôle disponible"
+                          : "Sélectionner un rôle"}
+                  </option>
+                  {roles?.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+                {rolesError && (
+                  <div className="mt-1">
+                    <p className="text-xs text-destructive">Impossible de charger les rôles.</p>
+                    <button
+                      type="button"
+                      onClick={() => void refetchRoles()}
+                      className="text-xs font-medium text-text underline"
+                    >
+                      Réessayer
+                    </button>
+                  </div>
+                )}
+                {inviteErrors.roleId && (
+                  <p className="mt-1 text-xs text-destructive">{inviteErrors.roleId.message}</p>
+                )}
+              </div>
+
+              {inviteMemberMutation.isError && (
+                <p className="text-sm text-destructive sm:col-span-2">
+                  {inviteMemberMutation.error instanceof ApiError
+                    ? inviteMemberMutation.error.message
+                    : "Impossible d'envoyer l'invitation. Réessayez."}
+                </p>
+              )}
+
+              {inviteMemberMutation.isSuccess && (
+                <p className="text-sm text-text sm:col-span-2">
+                  Invitation envoyée par email. Elle apparaîtra ci-dessous jusqu&apos;à ce qu&apos;elle soit acceptée.
+                </p>
+              )}
+
+              <Button
+                type="submit"
+                className="sm:col-span-2"
+                loading={inviteMemberMutation.isPending}
+                disabled={rolesLoading || rolesError || (roles?.length ?? 0) === 0}
+              >
+                {inviteMemberMutation.isPending ? "Invitation en cours..." : "Envoyer l'invitation"}
+              </Button>
+            </form>
+          )}
+
+          <div className="mt-4 divide-y divide-border">
+            {isLoading && <p className="py-2 text-sm text-text-muted">Chargement...</p>}
+            {members
+              ?.filter((member) => member.status === "active")
+              .map((member) => {
+                const isSelf = member.userId.id === currentUserId;
+                const isRoleChangePending =
+                  updateMemberRoleMutation.isPending &&
+                  updateMemberRoleMutation.variables?.id === member.id;
+                const roleChangeError =
+                  updateMemberRoleMutation.isError &&
+                  updateMemberRoleMutation.variables?.id === member.id
+                    ? updateMemberRoleMutation.error
+                    : null;
+                const isRemoveConfirming = removeConfirmId === member.id;
+                const isRemovePending =
+                  removeMemberMutation.isPending && removeMemberMutation.variables === member.id;
+                const removeError =
+                  removeMemberMutation.isError && removeMemberMutation.variables === member.id
+                    ? removeMemberMutation.error
+                    : null;
+                return (
+                  <div key={member.id} className="py-2 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-medium">
+                          {member.userId.firstName
+                            ? `${member.userId.firstName} ${member.userId.lastName ?? ""}`.trim()
+                            : member.userId.email}
+                          {isSelf && <span className="text-xs text-text-muted"> (vous)</span>}
+                        </p>
+                        <p className="text-xs text-text-muted">{member.userId.email}</p>
+                      </div>
+                      {isSelf ? (
+                        <Badge>{member.roleId.name}</Badge>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={member.roleId.id}
+                            disabled={isRoleChangePending}
+                            onChange={(e) =>
+                              updateMemberRoleMutation.mutate({ id: member.id, roleId: e.target.value })
+                            }
+                            className="rounded-md border border-border-input bg-surface px-2 py-1 text-xs text-text focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {roles?.map((role) => (
+                              <option key={role.id} value={role.id}>
+                                {role.name}
+                              </option>
+                            ))}
+                          </select>
+                          {isRemoveConfirming ? (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                loading={isRemovePending}
+                                onClick={() => removeMemberMutation.mutate(member.id)}
+                              >
+                                {isRemovePending ? "Retrait..." : "Confirmer ?"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isRemovePending}
+                                onClick={() => setRemoveConfirmId(null)}
+                              >
+                                Annuler
+                              </Button>
+                            </>
+                          ) : (
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={isRemovePending}
-                              onClick={() => setRemoveConfirmId(null)}
+                              onClick={() => setRemoveConfirmId(member.id)}
                             >
-                              Annuler
+                              Retirer
                             </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setRemoveConfirmId(member.id)}
-                          >
-                            Retirer
-                          </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+                      <label htmlFor={`rate-${member.id}`}>Taux horaire par défaut</label>
+                      <Input
+                        id={`rate-${member.id}`}
+                        type="number"
+                        step="0.01"
+                        className="h-7 w-24 py-1 text-xs"
+                        defaultValue={member.defaultHourlyRate ?? ""}
+                        disabled={
+                          updateMemberRateMutation.isPending &&
+                          updateMemberRateMutation.variables?.id === member.id
+                        }
+                        onBlur={(e) => {
+                          const value = e.target.value === "" ? undefined : Number(e.target.value);
+                          if (value !== undefined && value > 0 && value !== member.defaultHourlyRate) {
+                            updateMemberRateMutation.mutate({ id: member.id, defaultHourlyRate: value });
+                          }
+                        }}
+                      />
+                      {updateMemberRateMutation.isError &&
+                        updateMemberRateMutation.variables?.id === member.id && (
+                          <span className="text-destructive">
+                            {updateMemberRateMutation.error instanceof ApiError
+                              ? updateMemberRateMutation.error.message
+                              : "Erreur"}
+                          </span>
                         )}
-                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+                      <label htmlFor={`commission-${member.id}`}>Commission (%)</label>
+                      <Input
+                        id={`commission-${member.id}`}
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        max={100}
+                        className="h-7 w-20 py-1 text-xs"
+                        defaultValue={
+                          member.commissionRateBasisPoints !== undefined
+                            ? member.commissionRateBasisPoints / 100
+                            : ""
+                        }
+                        disabled={
+                          updateMemberCommissionRateMutation.isPending &&
+                          updateMemberCommissionRateMutation.variables?.id === member.id
+                        }
+                        onBlur={(e) => {
+                          const percent = e.target.value === "" ? undefined : Number(e.target.value);
+                          if (percent !== undefined && percent >= 0 && percent <= 100) {
+                            const basisPoints = Math.round(percent * 100);
+                            if (basisPoints !== member.commissionRateBasisPoints) {
+                              updateMemberCommissionRateMutation.mutate({
+                                id: member.id,
+                                commissionRateBasisPoints: basisPoints,
+                              });
+                            }
+                          }
+                        }}
+                      />
+                      {updateMemberCommissionRateMutation.isError &&
+                        updateMemberCommissionRateMutation.variables?.id === member.id && (
+                          <span className="text-destructive">
+                            {updateMemberCommissionRateMutation.error instanceof ApiError
+                              ? updateMemberCommissionRateMutation.error.message
+                              : "Erreur"}
+                          </span>
+                        )}
+                    </div>
+                    {roleChangeError && (
+                      <p className="mt-1 text-xs text-destructive">
+                        {roleChangeError instanceof ApiError
+                          ? roleChangeError.message
+                          : "Impossible de modifier le rôle."}
+                      </p>
+                    )}
+                    {removeError && (
+                      <p className="mt-1 text-xs text-destructive">
+                        {removeError instanceof ApiError
+                          ? removeError.message
+                          : "Impossible de retirer ce membre."}
+                      </p>
                     )}
                   </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
-                    <label htmlFor={`rate-${member.id}`}>Taux horaire par défaut</label>
-                    <Input
-                      id={`rate-${member.id}`}
-                      type="number"
-                      step="0.01"
-                      className="h-7 w-24 py-1 text-xs"
-                      defaultValue={member.defaultHourlyRate ?? ""}
-                      disabled={
-                        updateMemberRateMutation.isPending &&
-                        updateMemberRateMutation.variables?.id === member.id
-                      }
-                      onBlur={(e) => {
-                        const value = e.target.value === "" ? undefined : Number(e.target.value);
-                        if (value !== undefined && value > 0 && value !== member.defaultHourlyRate) {
-                          updateMemberRateMutation.mutate({ id: member.id, defaultHourlyRate: value });
-                        }
-                      }}
-                    />
-                    {updateMemberRateMutation.isError &&
-                      updateMemberRateMutation.variables?.id === member.id && (
-                        <span className="text-destructive">
-                          {updateMemberRateMutation.error instanceof ApiError
-                            ? updateMemberRateMutation.error.message
-                            : "Erreur"}
-                        </span>
-                      )}
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
-                    <label htmlFor={`commission-${member.id}`}>Commission (%)</label>
-                    <Input
-                      id={`commission-${member.id}`}
-                      type="number"
-                      step="0.1"
-                      min={0}
-                      max={100}
-                      className="h-7 w-20 py-1 text-xs"
-                      defaultValue={
-                        member.commissionRateBasisPoints !== undefined
-                          ? member.commissionRateBasisPoints / 100
-                          : ""
-                      }
-                      disabled={
-                        updateMemberCommissionRateMutation.isPending &&
-                        updateMemberCommissionRateMutation.variables?.id === member.id
-                      }
-                      onBlur={(e) => {
-                        const percent = e.target.value === "" ? undefined : Number(e.target.value);
-                        if (percent !== undefined && percent >= 0 && percent <= 100) {
-                          const basisPoints = Math.round(percent * 100);
-                          if (basisPoints !== member.commissionRateBasisPoints) {
-                            updateMemberCommissionRateMutation.mutate({
-                              id: member.id,
-                              commissionRateBasisPoints: basisPoints,
-                            });
-                          }
-                        }
-                      }}
-                    />
-                    {updateMemberCommissionRateMutation.isError &&
-                      updateMemberCommissionRateMutation.variables?.id === member.id && (
-                        <span className="text-destructive">
-                          {updateMemberCommissionRateMutation.error instanceof ApiError
-                            ? updateMemberCommissionRateMutation.error.message
-                            : "Erreur"}
-                        </span>
-                      )}
-                  </div>
-                  {roleChangeError && (
-                    <p className="mt-1 text-xs text-destructive">
-                      {roleChangeError instanceof ApiError
-                        ? roleChangeError.message
-                        : "Impossible de modifier le rôle."}
-                    </p>
-                  )}
-                  {removeError && (
-                    <p className="mt-1 text-xs text-destructive">
-                      {removeError instanceof ApiError
-                        ? removeError.message
-                        : "Impossible de retirer ce membre."}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-        </div>
-
-        {pendingInvitations && pendingInvitations.length > 0 && (
-          <div className="mt-4">
-            <h3 className="text-xs font-semibold text-text-muted">
-              Invitations en attente
-            </h3>
-            <div className="mt-2 divide-y divide-border">
-              {pendingInvitations.map((invitation) => (
-                <div
-                  key={invitation.id}
-                  className="flex items-center justify-between py-2 text-sm"
-                >
-                  <div>
-                    <p className="font-medium">{invitation.email}</p>
-                    <p className="text-xs text-text-muted">
-                      Expire le {new Date(invitation.expiresAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <Badge variant="warning">
-                    {roles?.find((role) => role.id === invitation.roleId)?.name ??
-                      "En attente"}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+                );
+              })}
           </div>
-        )}
-      </section>
 
-      <section className="rounded-lg border border-border bg-surface p-6">
-        <h2 className="text-sm font-semibold text-text">Intégrations</h2>
-        <p className="mt-1 text-sm text-text-muted">
-          Connectez les services externes utilisés par votre organisation.
-        </p>
-
-        {integrationsPermissionDenied ? (
-          <p className="mt-4 text-sm text-text-muted">
-            Les intégrations sont réservées aux administrateurs.
-          </p>
-        ) : integrationsLoading ? (
-          <p className="mt-4 text-sm text-text-muted">Chargement...</p>
-        ) : integrationsIsError ? (
-          <div className="mt-4">
-            <p className="text-sm text-destructive">
-              {integrationsError instanceof ApiError
-                ? integrationsError.message
-                : "Impossible de charger les intégrations."}
-            </p>
-            <button
-              type="button"
-              onClick={() => void refetchIntegrations()}
-              className="mt-1 text-sm font-medium text-text underline"
-            >
-              Réessayer
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4 space-y-4">
-            {INTEGRATION_SLOTS.map((slot) => {
-              const integration = integrations?.find((i) => i.domain === slot.domain);
-              const isFormOpen = slot.domain === "payment" ? paymentFormOpen : messagingFormOpen;
-              const isConfirmingDisconnect =
-                !!integration && disconnectConfirmId === integration.id;
-              const isTestingThis =
-                testConnectionMutation.isPending &&
-                testConnectionMutation.variables === integration?.id;
-              const testResult =
-                integration && testConnectionMutation.variables === integration.id
-                  ? testConnectionMutation.data
-                  : undefined;
-              const testError =
-                integration &&
-                testConnectionMutation.isError &&
-                testConnectionMutation.variables === integration.id
-                  ? testConnectionMutation.error
-                  : null;
-              const isDisconnectPending =
-                disconnectMutation.isPending && disconnectMutation.variables === integration?.id;
-              const disconnectError =
-                integration &&
-                disconnectMutation.isError &&
-                disconnectMutation.variables === integration.id
-                  ? disconnectMutation.error
-                  : null;
-              // Once connected, name the ACTUAL resolved provider (market-driven server-side,
-              // see PAYMENT_PROVIDER_DISPLAY_NAMES's own doc) rather than the pre-connection
-              // slot's deliberately provider-agnostic default copy.
-              const providerName =
-                integration && slot.domain === "payment"
-                  ? paymentProviderDisplayName(integration.provider)
-                  : undefined;
-              const title = providerName ? `${slot.title} — ${providerName}` : slot.title;
-              const description = providerName
-                ? `Recevez vos règlements via ${providerName}.`
-                : slot.description;
-
-              return (
-                <div key={slot.domain} className="rounded-md border border-border p-4">
-                  <div className="flex items-start justify-between gap-3">
+          {pendingInvitations && pendingInvitations.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-xs font-semibold text-text-muted">
+                Invitations en attente
+              </h3>
+              <div className="mt-2 divide-y divide-border">
+                {pendingInvitations.map((invitation) => (
+                  <div
+                    key={invitation.id}
+                    className="flex items-center justify-between py-2 text-sm"
+                  >
                     <div>
-                      <p className="text-sm font-medium text-text">{title}</p>
-                      <p className="text-xs text-text-muted">{description}</p>
+                      <p className="font-medium">{invitation.email}</p>
+                      <p className="text-xs text-text-muted">
+                        Expire le {new Date(invitation.expiresAt).toLocaleDateString()}
+                      </p>
                     </div>
-                    <Badge
-                      variant={
-                        integration
-                          ? INTEGRATION_STATUS_BADGE[integration.status].variant
-                          : "default"
-                      }
-                    >
-                      {integration
-                        ? INTEGRATION_STATUS_BADGE[integration.status].label
-                        : "Non connecté"}
+                    <Badge variant="warning">
+                      {roles?.find((role) => role.id === invitation.roleId)?.name ??
+                        "En attente"}
                     </Badge>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
 
-                  {integration && (integration.market || integration.lastVerifiedAt) && (
-                    <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-text-muted">
-                      {integration.market && (
-                        <div>
-                          <dt>{slot.connectedLabel}</dt>
-                          <dd className="text-text">{integration.market}</dd>
-                        </div>
-                      )}
-                      {integration.lastVerifiedAt && (
-                        <div>
-                          <dt>Dernière vérification</dt>
-                          <dd className="text-text">
-                            {new Date(integration.lastVerifiedAt).toLocaleString("fr-FR")}
-                          </dd>
-                        </div>
-                      )}
-                    </dl>
-                  )}
+        <RolesManagementSection />
+      </SettingsTabPanel>
 
-                  {integration?.lastErrorMessage && (
-                    <p className="mt-2 text-xs text-destructive">
-                      {integration.lastErrorMessage}
-                    </p>
-                  )}
+      <SettingsTabPanel tab="integrations" active={activeTab}>
+        <section className="rounded-lg border border-border bg-surface p-6">
+          <h2 className="text-sm font-semibold text-text">Intégrations</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            Connectez les services externes utilisés par votre organisation.
+          </p>
 
-                  {testResult && (
-                    <p
-                      className={`mt-2 text-xs ${testResult.ok ? "text-success" : "text-destructive"}`}
-                    >
-                      {testResult.message ??
-                        (testResult.ok ? "Connexion réussie." : "Échec de la connexion.")}
-                    </p>
-                  )}
-                  {testError && (
-                    <p className="mt-2 text-xs text-destructive">
-                      {testError instanceof ApiError
-                        ? testError.message
-                        : "Impossible de tester la connexion."}
-                    </p>
-                  )}
-                  {disconnectError && (
-                    <p className="mt-2 text-xs text-destructive">
-                      {disconnectError instanceof ApiError
-                        ? disconnectError.message
-                        : "Impossible de déconnecter cette intégration."}
-                    </p>
-                  )}
+          {integrationsPermissionDenied ? (
+            <p className="mt-4 text-sm text-text-muted">
+              Les intégrations sont réservées aux administrateurs.
+            </p>
+          ) : integrationsLoading ? (
+            <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+          ) : integrationsIsError ? (
+            <div className="mt-4">
+              <p className="text-sm text-destructive">
+                {integrationsError instanceof ApiError
+                  ? integrationsError.message
+                  : "Impossible de charger les intégrations."}
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetchIntegrations()}
+                className="mt-1 text-sm font-medium text-text underline"
+              >
+                Réessayer
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {INTEGRATION_SLOTS.map((slot) => {
+                const integration = integrations?.find((i) => i.domain === slot.domain);
+                const isFormOpen = slot.domain === "payment" ? paymentFormOpen : messagingFormOpen;
+                const isConfirmingDisconnect =
+                  !!integration && disconnectConfirmId === integration.id;
+                const isTestingThis =
+                  testConnectionMutation.isPending &&
+                  testConnectionMutation.variables === integration?.id;
+                const testResult =
+                  integration && testConnectionMutation.variables === integration.id
+                    ? testConnectionMutation.data
+                    : undefined;
+                const testError =
+                  integration &&
+                  testConnectionMutation.isError &&
+                  testConnectionMutation.variables === integration.id
+                    ? testConnectionMutation.error
+                    : null;
+                const isDisconnectPending =
+                  disconnectMutation.isPending && disconnectMutation.variables === integration?.id;
+                const disconnectError =
+                  integration &&
+                  disconnectMutation.isError &&
+                  disconnectMutation.variables === integration.id
+                    ? disconnectMutation.error
+                    : null;
+                // Once connected, name the ACTUAL resolved provider (market-driven server-side,
+                // see PAYMENT_PROVIDER_DISPLAY_NAMES's own doc) rather than the pre-connection
+                // slot's deliberately provider-agnostic default copy.
+                const providerName =
+                  integration && slot.domain === "payment"
+                    ? paymentProviderDisplayName(integration.provider)
+                    : undefined;
+                const title = providerName ? `${slot.title} — ${providerName}` : slot.title;
+                const description = providerName
+                  ? `Recevez vos règlements via ${providerName}.`
+                  : slot.description;
 
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {!integration && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() =>
-                          slot.domain === "payment"
-                            ? setPaymentFormOpen((v) => !v)
-                            : setMessagingFormOpen((v) => !v)
+                return (
+                  <div key={slot.domain} className="rounded-md border border-border p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-text">{title}</p>
+                        <p className="text-xs text-text-muted">{description}</p>
+                      </div>
+                      <Badge
+                        variant={
+                          integration
+                            ? INTEGRATION_STATUS_BADGE[integration.status].variant
+                            : "default"
                         }
                       >
-                        {isFormOpen ? "Annuler" : "Connecter"}
-                      </Button>
+                        {integration
+                          ? INTEGRATION_STATUS_BADGE[integration.status].label
+                          : "Non connecté"}
+                      </Badge>
+                    </div>
+
+                    {integration && (integration.market || integration.lastVerifiedAt) && (
+                      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-text-muted">
+                        {integration.market && (
+                          <div>
+                            <dt>{slot.connectedLabel}</dt>
+                            <dd className="text-text">{integration.market}</dd>
+                          </div>
+                        )}
+                        {integration.lastVerifiedAt && (
+                          <div>
+                            <dt>Dernière vérification</dt>
+                            <dd className="text-text">
+                              {new Date(integration.lastVerifiedAt).toLocaleString("fr-FR")}
+                            </dd>
+                          </div>
+                        )}
+                      </dl>
                     )}
-                    {integration && (
-                      <>
+
+                    {integration?.lastErrorMessage && (
+                      <p className="mt-2 text-xs text-destructive">
+                        {integration.lastErrorMessage}
+                      </p>
+                    )}
+
+                    {testResult && (
+                      <p
+                        className={`mt-2 text-xs ${testResult.ok ? "text-success" : "text-destructive"}`}
+                      >
+                        {testResult.message ??
+                          (testResult.ok ? "Connexion réussie." : "Échec de la connexion.")}
+                      </p>
+                    )}
+                    {testError && (
+                      <p className="mt-2 text-xs text-destructive">
+                        {testError instanceof ApiError
+                          ? testError.message
+                          : "Impossible de tester la connexion."}
+                      </p>
+                    )}
+                    {disconnectError && (
+                      <p className="mt-2 text-xs text-destructive">
+                        {disconnectError instanceof ApiError
+                          ? disconnectError.message
+                          : "Impossible de déconnecter cette intégration."}
+                      </p>
+                    )}
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {!integration && (
                         <Button
                           variant="secondary"
                           size="sm"
-                          loading={isTestingThis}
-                          disabled={isConfirmingDisconnect}
-                          onClick={() => testConnectionMutation.mutate(integration.id)}
+                          onClick={() =>
+                            slot.domain === "payment"
+                              ? setPaymentFormOpen((v) => !v)
+                              : setMessagingFormOpen((v) => !v)
+                          }
                         >
-                          {isTestingThis ? "Test en cours..." : "Tester la connexion"}
+                          {isFormOpen ? "Annuler" : "Connecter"}
                         </Button>
-                        {isConfirmingDisconnect ? (
-                          <>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              loading={isDisconnectPending}
-                              onClick={() => disconnectMutation.mutate(integration.id)}
-                            >
-                              {isDisconnectPending ? "Déconnexion..." : "Confirmer ?"}
-                            </Button>
+                      )}
+                      {integration && (
+                        <>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            loading={isTestingThis}
+                            disabled={isConfirmingDisconnect}
+                            onClick={() => testConnectionMutation.mutate(integration.id)}
+                          >
+                            {isTestingThis ? "Test en cours..." : "Tester la connexion"}
+                          </Button>
+                          {isConfirmingDisconnect ? (
+                            <>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                loading={isDisconnectPending}
+                                onClick={() => disconnectMutation.mutate(integration.id)}
+                              >
+                                {isDisconnectPending ? "Déconnexion..." : "Confirmer ?"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isDisconnectPending}
+                                onClick={() => setDisconnectConfirmId(null)}
+                              >
+                                Annuler
+                              </Button>
+                            </>
+                          ) : (
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={isDisconnectPending}
-                              onClick={() => setDisconnectConfirmId(null)}
+                              onClick={() => setDisconnectConfirmId(integration.id)}
                             >
-                              Annuler
+                              Déconnecter
                             </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDisconnectConfirmId(integration.id)}
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {slot.domain === "payment" && !integration && paymentFormOpen && (
+                      <form
+                        onSubmit={handlePaymentSubmit(submitPaymentForm)}
+                        className="mt-3 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
+                      >
+                        <div>
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="payout-account-bank"
                           >
-                            Déconnecter
-                          </Button>
+                            Code banque (Flutterwave)
+                          </label>
+                          <Input
+                            id="payout-account-bank"
+                            className="mt-1 w-full"
+                            placeholder="ex : 044"
+                            error={!!paymentErrors.account_bank}
+                            {...registerPayment("account_bank", { required: true })}
+                          />
+                          <p className="mt-1 text-xs text-text-muted">
+                            Code numérique de la banque chez Flutterwave, pas son nom.
+                          </p>
+                        </div>
+                        <div>
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="payout-account-number"
+                          >
+                            Numéro de compte
+                          </label>
+                          <Input
+                            id="payout-account-number"
+                            className="mt-1 w-full"
+                            error={!!paymentErrors.account_number}
+                            {...registerPayment("account_number", { required: true })}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="payout-business-name"
+                          >
+                            Nom de l&apos;entreprise
+                          </label>
+                          <Input
+                            id="payout-business-name"
+                            className="mt-1 w-full"
+                            error={!!paymentErrors.business_name}
+                            {...registerPayment("business_name", { required: true })}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="payout-country"
+                          >
+                            Pays (code ISO)
+                          </label>
+                          <Input
+                            id="payout-country"
+                            className="mt-1 w-full"
+                            placeholder="ex : CI"
+                            defaultValue={organization?.country}
+                            error={!!paymentErrors.country}
+                            {...registerPayment("country", { required: true })}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="payout-split-type"
+                          >
+                            Type de répartition
+                          </label>
+                          <select
+                            id="payout-split-type"
+                            className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+                            {...registerPayment("split_type", { required: true })}
+                          >
+                            <option value="percentage">Pourcentage</option>
+                            <option value="flat">Montant fixe</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="payout-split-value"
+                          >
+                            Valeur de répartition
+                          </label>
+                          <Input
+                            id="payout-split-value"
+                            type="number"
+                            step="any"
+                            className="mt-1 w-full"
+                            error={!!paymentErrors.split_value}
+                            {...registerPayment("split_value", { required: true })}
+                          />
+                        </div>
+
+                        {connectPaymentMutation.isError && (
+                          <p className="text-sm text-destructive sm:col-span-2">
+                            {connectPaymentMutation.error instanceof ApiError
+                              ? connectPaymentMutation.error.message
+                              : "Impossible de connecter le compte de paiement."}
+                          </p>
                         )}
-                      </>
+
+                        <Button
+                          type="submit"
+                          className="sm:col-span-2"
+                          loading={connectPaymentMutation.isPending}
+                        >
+                          {connectPaymentMutation.isPending ? "Connexion..." : "Connecter"}
+                        </Button>
+                      </form>
+                    )}
+
+                    {slot.domain === "messaging" && !integration && messagingFormOpen && (
+                      <form
+                        onSubmit={handleMessagingSubmit((values) =>
+                          connectMessagingMutation.mutate(values),
+                        )}
+                        className="mt-3 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
+                      >
+                        <p className="text-xs text-text-muted sm:col-span-2">
+                          Le WABA ID, l&apos;ID du numéro de téléphone et la clé API proviennent de
+                          l&apos;inscription WhatsApp Business que vous avez complétée directement
+                          chez 360dialog (embedded signup) — ces informations ne sont pas saisies
+                          ici pour la première fois.
+                        </p>
+                        <div>
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="waba-id"
+                          >
+                            WABA ID
+                          </label>
+                          <Input
+                            id="waba-id"
+                            className="mt-1 w-full"
+                            error={!!messagingErrors.wabaId}
+                            {...registerMessaging("wabaId", { required: true })}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="phone-number-id"
+                          >
+                            ID du numéro de téléphone
+                          </label>
+                          <Input
+                            id="phone-number-id"
+                            className="mt-1 w-full"
+                            error={!!messagingErrors.phoneNumberId}
+                            {...registerMessaging("phoneNumberId", { required: true })}
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="waba-display-name"
+                          >
+                            Nom affiché
+                          </label>
+                          <Input
+                            id="waba-display-name"
+                            className="mt-1 w-full"
+                            error={!!messagingErrors.displayName}
+                            {...registerMessaging("displayName", { required: true })}
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label
+                            className="block text-sm font-medium text-text"
+                            htmlFor="waba-api-key"
+                          >
+                            Clé API (D360-API-KEY)
+                          </label>
+                          <Input
+                            id="waba-api-key"
+                            type="password"
+                            autoComplete="off"
+                            className="mt-1 w-full"
+                            error={!!messagingErrors.apiKey}
+                            {...registerMessaging("apiKey", { required: true })}
+                          />
+                          <p className="mt-1 text-xs text-text-muted">
+                            Stockée chiffrée et jamais réaffichée ensuite — nécessaire pour tester
+                            la connexion et activer l&apos;intégration.
+                          </p>
+                        </div>
+
+                        {connectMessagingMutation.isError && (
+                          <p className="text-sm text-destructive sm:col-span-2">
+                            {connectMessagingMutation.error instanceof ApiError
+                              ? connectMessagingMutation.error.message
+                              : "Impossible de connecter le compte WhatsApp Business."}
+                          </p>
+                        )}
+
+                        <Button
+                          type="submit"
+                          className="sm:col-span-2"
+                          loading={connectMessagingMutation.isPending}
+                        >
+                          {connectMessagingMutation.isPending ? "Connexion..." : "Connecter"}
+                        </Button>
+                      </form>
                     )}
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-                  {slot.domain === "payment" && !integration && paymentFormOpen && (
-                    <form
-                      onSubmit={handlePaymentSubmit(submitPaymentForm)}
-                      className="mt-3 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
-                    >
-                      <div>
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="payout-account-bank"
-                        >
-                          Code banque (Flutterwave)
-                        </label>
-                        <Input
-                          id="payout-account-bank"
-                          className="mt-1 w-full"
-                          placeholder="ex : 044"
-                          error={!!paymentErrors.account_bank}
-                          {...registerPayment("account_bank", { required: true })}
-                        />
-                        <p className="mt-1 text-xs text-text-muted">
-                          Code numérique de la banque chez Flutterwave, pas son nom.
-                        </p>
-                      </div>
-                      <div>
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="payout-account-number"
-                        >
-                          Numéro de compte
-                        </label>
-                        <Input
-                          id="payout-account-number"
-                          className="mt-1 w-full"
-                          error={!!paymentErrors.account_number}
-                          {...registerPayment("account_number", { required: true })}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="payout-business-name"
-                        >
-                          Nom de l&apos;entreprise
-                        </label>
-                        <Input
-                          id="payout-business-name"
-                          className="mt-1 w-full"
-                          error={!!paymentErrors.business_name}
-                          {...registerPayment("business_name", { required: true })}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="payout-country"
-                        >
-                          Pays (code ISO)
-                        </label>
-                        <Input
-                          id="payout-country"
-                          className="mt-1 w-full"
-                          placeholder="ex : CI"
-                          defaultValue={organization?.country}
-                          error={!!paymentErrors.country}
-                          {...registerPayment("country", { required: true })}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="payout-split-type"
-                        >
-                          Type de répartition
-                        </label>
-                        <select
-                          id="payout-split-type"
-                          className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-                          {...registerPayment("split_type", { required: true })}
-                        >
-                          <option value="percentage">Pourcentage</option>
-                          <option value="flat">Montant fixe</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="payout-split-value"
-                        >
-                          Valeur de répartition
-                        </label>
-                        <Input
-                          id="payout-split-value"
-                          type="number"
-                          step="any"
-                          className="mt-1 w-full"
-                          error={!!paymentErrors.split_value}
-                          {...registerPayment("split_value", { required: true })}
-                        />
-                      </div>
+        <WebhookSubscriptionsSection />
 
-                      {connectPaymentMutation.isError && (
-                        <p className="text-sm text-destructive sm:col-span-2">
-                          {connectPaymentMutation.error instanceof ApiError
-                            ? connectPaymentMutation.error.message
-                            : "Impossible de connecter le compte de paiement."}
-                        </p>
-                      )}
+        {!sensitiveToolsPermissionDenied && sensitiveTools && sensitiveTools.length > 0 && (
+          <section className="rounded-lg border border-border bg-surface p-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-text">Autonomie de l&apos;IA</h2>
+              {autoApprovedToolsMutation.isPending && (
+                <span className="text-xs text-text-muted">Enregistrement...</span>
+              )}
+            </div>
+            <p className="mt-1 text-sm text-text-muted">
+              Ces actions nécessitent normalement une confirmation humaine avant d&apos;être
+              exécutées par l&apos;assistant IA. Cochez celles que vous autorisez à s&apos;exécuter
+              automatiquement, sans confirmation.
+            </p>
 
-                      <Button
-                        type="submit"
-                        className="sm:col-span-2"
-                        loading={connectPaymentMutation.isPending}
-                      >
-                        {connectPaymentMutation.isPending ? "Connexion..." : "Connecter"}
-                      </Button>
-                    </form>
-                  )}
+            {autoApprovedToolsMutation.isError && (
+              <p className="mt-2 text-xs text-destructive">
+                {autoApprovedToolsMutation.error instanceof ApiError
+                  ? autoApprovedToolsMutation.error.message
+                  : "Erreur"}
+              </p>
+            )}
 
-                  {slot.domain === "messaging" && !integration && messagingFormOpen && (
-                    <form
-                      onSubmit={handleMessagingSubmit((values) =>
-                        connectMessagingMutation.mutate(values),
-                      )}
-                      className="mt-3 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
-                    >
-                      <p className="text-xs text-text-muted sm:col-span-2">
-                        Le WABA ID, l&apos;ID du numéro de téléphone et la clé API proviennent de
-                        l&apos;inscription WhatsApp Business que vous avez complétée directement
-                        chez 360dialog (embedded signup) — ces informations ne sont pas saisies
-                        ici pour la première fois.
-                      </p>
-                      <div>
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="waba-id"
-                        >
-                          WABA ID
-                        </label>
-                        <Input
-                          id="waba-id"
-                          className="mt-1 w-full"
-                          error={!!messagingErrors.wabaId}
-                          {...registerMessaging("wabaId", { required: true })}
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="phone-number-id"
-                        >
-                          ID du numéro de téléphone
-                        </label>
-                        <Input
-                          id="phone-number-id"
-                          className="mt-1 w-full"
-                          error={!!messagingErrors.phoneNumberId}
-                          {...registerMessaging("phoneNumberId", { required: true })}
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="waba-display-name"
-                        >
-                          Nom affiché
-                        </label>
-                        <Input
-                          id="waba-display-name"
-                          className="mt-1 w-full"
-                          error={!!messagingErrors.displayName}
-                          {...registerMessaging("displayName", { required: true })}
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label
-                          className="block text-sm font-medium text-text"
-                          htmlFor="waba-api-key"
-                        >
-                          Clé API (D360-API-KEY)
-                        </label>
-                        <Input
-                          id="waba-api-key"
-                          type="password"
-                          autoComplete="off"
-                          className="mt-1 w-full"
-                          error={!!messagingErrors.apiKey}
-                          {...registerMessaging("apiKey", { required: true })}
-                        />
-                        <p className="mt-1 text-xs text-text-muted">
-                          Stockée chiffrée et jamais réaffichée ensuite — nécessaire pour tester
-                          la connexion et activer l&apos;intégration.
-                        </p>
-                      </div>
-
-                      {connectMessagingMutation.isError && (
-                        <p className="text-sm text-destructive sm:col-span-2">
-                          {connectMessagingMutation.error instanceof ApiError
-                            ? connectMessagingMutation.error.message
-                            : "Impossible de connecter le compte WhatsApp Business."}
-                        </p>
-                      )}
-
-                      <Button
-                        type="submit"
-                        className="sm:col-span-2"
-                        loading={connectMessagingMutation.isPending}
-                      >
-                        {connectMessagingMutation.isPending ? "Connexion..." : "Connecter"}
-                      </Button>
-                    </form>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            <div className="mt-4 space-y-2">
+              {sensitiveTools.map((tool) => {
+                const approved = organization?.aiAutoApprovedTools?.includes(tool.name) ?? false;
+                return (
+                  <label
+                    key={tool.name}
+                    className={`flex items-start gap-2 text-sm ${
+                      autoApprovedToolsMutation.isPending ? "opacity-60" : ""
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={approved}
+                      disabled={autoApprovedToolsMutation.isPending}
+                      onChange={() => toggleAutoApprovedTool(tool.name, approved)}
+                      aria-label={`Auto-approuver ${tool.name}`}
+                    />
+                    <span>
+                      <span className="font-medium text-text">{tool.name}</span>
+                      <span className="block text-xs text-text-muted">{tool.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </section>
         )}
-      </section>
+      </SettingsTabPanel>
 
-      {organization && <ExternalWebsiteSection slug={organization.slug} />}
-      <WebhookSubscriptionsSection />
-      <RolesManagementSection />
-      <CustomFieldsSection />
-      <StorefrontContentSection />
-      <AuditLogSection />
+      <SettingsTabPanel tab="avance" active={activeTab}>
+        <CustomFieldsSection />
+
+        <AuditLogSection />
+      </SettingsTabPanel>
     </div>
   );
 }

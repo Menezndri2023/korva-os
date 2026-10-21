@@ -19,7 +19,7 @@ const ITEM_TYPE_LINKS: Record<ActionCenterItem["type"], string> = {
   recommendation: "/dashboard/recommendations",
   pending_approval: "/dashboard/ai",
   workflow_failure: "/dashboard/workflows",
-  webhook_delivery_failure: "/dashboard/settings",
+  webhook_delivery_failure: "/dashboard/settings#integrations",
 };
 
 const SEVERITY_LABELS: Record<ActionCenterSeverity, string> = {

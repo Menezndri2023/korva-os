@@ -128,7 +128,7 @@ export default function DashboardPage() {
             Activez le module Statistiques pour voir un résumé de votre activité ici.
           </p>
           <Link
-            href="/dashboard/settings"
+            href="/dashboard/settings#abonnement"
             className="mt-2 inline-block text-sm font-medium text-text underline"
           >
             Ouvrir les paramètres
@@ -297,9 +297,9 @@ function GettingStarted({
 }) {
   if (loading) return null;
   const steps = [
-    { done: hasLogo, label: "Ajoutez votre logo", href: "/dashboard/settings" },
+    { done: hasLogo, label: "Ajoutez votre logo", href: "/dashboard/settings#entreprise" },
     { done: hasOnlineOffer, label: "Mettez une offre en ligne", href: "/dashboard/catalog" },
-    { done: siteOnline, label: "Publiez votre site", href: "/dashboard/settings" },
+    { done: siteOnline, label: "Publiez votre site", href: "/dashboard/settings#abonnement" },
   ];
   const remaining = steps.filter((step) => !step.done).length;
   if (remaining === 0) return null;

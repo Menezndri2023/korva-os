@@ -100,7 +100,7 @@ describe("DashboardLayout", () => {
     expect(await screen.findByText(/Essai Pro offert : 3 jours restants/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "choisissez une formule" })).toHaveAttribute(
       "href",
-      "/dashboard/settings",
+      "/dashboard/settings#abonnement",
     );
   });
 

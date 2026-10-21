@@ -315,7 +315,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Notice tone="accent" className="mb-4">
               Votre site public n&apos;est pas en ligne : vos clients voient « Ce site n&apos;est pas
               en ligne pour le moment ».{" "}
-              <Link href="/dashboard/settings" className="font-medium underline">
+              <Link href="/dashboard/settings#abonnement" className="font-medium underline">
                 Activez le module Site web
               </Link>{" "}
               pour le publier.
@@ -329,7 +329,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? "s" : ""} restant
               {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? "s" : ""}. Vos données restent à vous
               après l&apos;essai ;{" "}
-              <Link href="/dashboard/settings" className="font-medium underline">
+              <Link href="/dashboard/settings#abonnement" className="font-medium underline">
                 choisissez une formule
               </Link>{" "}
               pour garder les fonctions Pro.
@@ -463,7 +463,7 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
             </button>
             <div className="my-1 h-px bg-border" />
             <Link
-              href="/dashboard/settings"
+              href="/dashboard/settings#entreprise"
               onClick={() => setOpen(false)}
               className="block rounded-md px-3 py-2 text-sm text-text-muted hover:bg-surface-muted"
             >

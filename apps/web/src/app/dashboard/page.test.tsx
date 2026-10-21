@@ -122,7 +122,7 @@ describe("DashboardPage", () => {
     expect(screen.queryByText("Impossible de charger l'activité de votre organisation.")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ouvrir les paramètres" })).toHaveAttribute(
       "href",
-      "/dashboard/settings",
+      "/dashboard/settings#abonnement",
     );
   });
 
