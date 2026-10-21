@@ -6,12 +6,12 @@ import { useQuery } from "@tanstack/react-query";
 import { Suspense } from "react";
 import { PLAN_NAMES, type PlanKey } from "@korva/types";
 import { Badge, Card, PageHeader } from "@korva/ui";
-import { apiClient } from "@/lib/api-client";
 import {
   SUBSCRIPTION_STATUS_LABELS,
   formatDay,
   formatMoney,
   type PlatformSubscriptionRow,
+  adminApi,
 } from "@/lib/platform-admin";
 
 const FILTERS = [
@@ -37,7 +37,7 @@ function SubscriptionsList() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["platform", "subscriptions", filter],
     queryFn: () =>
-      apiClient.get<PlatformSubscriptionRow[]>(`/platform/subscriptions?filter=${filter}`, { withOrganization: false }),
+      adminApi.get<PlatformSubscriptionRow[]>(`/platform/subscriptions?filter=${filter}`),
   });
 
   return (

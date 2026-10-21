@@ -1,58 +1,48 @@
 import {
   CanActivate,
+  createParamDecorator,
   ExecutionContext,
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { User } from '../identity/schemas/user.schema';
-import type { RequestWithContext } from '../core/tenant/request-context.types';
+import type { Request } from 'express';
+import {
+  PlatformAdminAuthService,
+  type PlatformAdminIdentity,
+} from './platform-admin-auth.service';
 
-/** The configured administrators, normalised. Exported for the tests. */
-export function platformAdminEmails(raw: string | undefined): string[] {
-  return (raw ?? '')
-    .split(',')
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
-}
+export { platformAdminEmails } from './platform-admin-auth.service';
+
+type AdminRequest = Request & { platformAdmin?: PlatformAdminIdentity };
 
 /**
- * KORVA's own administration — the team running the platform, not a tenant's staff. It sits
- * outside tenancy and every tenant role: access is decided only by PLATFORM_ADMIN_EMAILS
- * (comma-separated, set by the operator on the server). Unset or empty, nobody is admitted —
- * closed by default.
- *
- * Checked against the user's CURRENT email in the database rather than the address in the token,
- * so a user who changes their email cannot keep a grant made for the old one. Runs after the
- * global JwtAuthGuard, so `request.user` is always set here.
+ * Admits a request only with a valid administrator token (see PlatformAdminAuthService) — never
+ * with a business user's token. The routes it protects are marked @Public() so the businesses'
+ * JWT and tenant guards stand aside; this guard is then the only gate, and it is closed unless
+ * the account exists AND its address is listed in PLATFORM_ADMIN_EMAILS.
  */
 @Injectable()
 export class PlatformAdminGuard implements CanActivate {
-  constructor(
-    private readonly configService: ConfigService,
-    @InjectModel(User.name) private readonly userModel: Model<User>,
-  ) {}
+  constructor(private readonly auth: PlatformAdminAuthService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<RequestWithContext>();
-    const allowed = platformAdminEmails(
-      this.configService.get<string>('PLATFORM_ADMIN_EMAILS'),
-    );
-    const user =
-      allowed.length && request.user
-        ? await this.userModel
-            .findById(request.user.userId, { email: 1 })
-            .lean<{ email: string }>()
-            .exec()
-        : null;
-    if (!user || !allowed.includes(user.email.toLowerCase())) {
+    const request = context.switchToHttp().getRequest<AdminRequest>();
+    const header = request.headers.authorization ?? '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const admin = token ? await this.auth.verify(token) : null;
+    if (!admin) {
       throw new ForbiddenException({
         code: 'PLATFORM_ADMIN_ONLY',
         message: 'Reserved to KORVA platform administrators',
       });
     }
+    request.platformAdmin = admin;
     return true;
   }
 }
+
+/** The administrator PlatformAdminGuard admitted. */
+export const CurrentPlatformAdmin = createParamDecorator(
+  (_data: unknown, context: ExecutionContext): PlatformAdminIdentity =>
+    context.switchToHttp().getRequest<AdminRequest>().platformAdmin!,
+);

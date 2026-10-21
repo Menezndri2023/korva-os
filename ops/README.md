@@ -114,16 +114,28 @@ exits before the event leaves, and the check reports success having proved nothi
 Even so, the transport accepting an event is not the project accepting it. **Look in the Sentry
 UI for the message.**
 
-## Créer le compte administrateur / redéfinir un mot de passe
+## L'administrateur KORVA (accès /admin)
 
-`PLATFORM_ADMIN_EMAILS` says who may enter /admin; it creates no account. To create that account,
-or set the password of any account without email, on the server:
+The administration has its own accounts — not business users — and its own sign-in at
+`/admin/connexion`. Two conditions to get in: the address is listed in `PLATFORM_ADMIN_EMAILS`
+(`.env.production`), and its administrator account exists. To create it, or get a new password
+when it is lost, on the server:
 
     ssh -t korva@<server> 'cd ~/korva-os && docker compose -f docker-compose.prod.yml \
-      --env-file .env.production run --rm --no-deps api node dist/set-user-password.js ops@example.com'
+      --env-file .env.production run --rm --no-deps api node dist/create-platform-admin.js ops@example.com'
 
-The password is typed at a masked prompt, twice — never on the command line. Setting it on an
-existing account clears its login lock and closes its sessions (apps/api/src/set-user-password.ts).
+The password is generated on the server and printed ONCE in that terminal — only its hash is
+stored. Change it afterwards from /admin → your address → "Changer le mot de passe". Removing an
+address from `PLATFORM_ADMIN_EMAILS` (and restarting the API) revokes that administrator at once.
+
+## Redéfinir le mot de passe d'un compte d'entreprise
+
+For a business user (not an administrator), without email:
+
+    ssh -t korva@<server> 'cd ~/korva-os && docker compose -f docker-compose.prod.yml \
+      --env-file .env.production run --rm --no-deps api node dist/set-user-password.js user@example.com'
+
+The password is typed at a masked prompt, twice — never on the command line.
 
 ## smoke-production.sh
 

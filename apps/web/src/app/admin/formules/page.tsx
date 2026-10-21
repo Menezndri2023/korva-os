@@ -2,8 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Card, PageHeader } from "@korva/ui";
-import { apiClient } from "@/lib/api-client";
-import { formatMoney, type PlatformPlanRow } from "@/lib/platform-admin";
+import { formatMoney, type PlatformPlanRow, adminApi } from "@/lib/platform-admin";
 
 function limitText(value: number | undefined): string {
   if (value === undefined) return "—";
@@ -18,7 +17,7 @@ function limitText(value: number | undefined): string {
 export default function AdminPlansPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["platform", "plans"],
-    queryFn: () => apiClient.get<PlatformPlanRow[]>("/platform/plans", { withOrganization: false }),
+    queryFn: () => adminApi.get<PlatformPlanRow[]>("/platform/plans"),
   });
   const currencies = [...new Set((data ?? []).map((plan) => plan.priceCurrency))];
 

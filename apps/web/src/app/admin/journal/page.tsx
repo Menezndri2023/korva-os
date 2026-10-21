@@ -5,9 +5,8 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Card, PageHeader, Pagination } from "@korva/ui";
-import { apiClient } from "@/lib/api-client";
 import { ACTIVITY_ENTITY_LABELS, activityActionLabel } from "@/lib/analytics-format";
-import { formatDay, type PlatformAuditRow } from "@/lib/platform-admin";
+import { formatDay, type PlatformAuditRow, adminApi } from "@/lib/platform-admin";
 
 interface AuditPage {
   data: PlatformAuditRow[];
@@ -32,7 +31,7 @@ function Journal() {
       const params = new URLSearchParams({ page: String(page) });
       if (organizationId) params.set("organizationId", organizationId);
       // A paginated answer: the rows and the pagination sit side by side.
-      return apiClient.getList<PlatformAuditRow>(`/platform/audit?${params}`, { withOrganization: false }) as Promise<AuditPage>;
+      return adminApi.getList<PlatformAuditRow>(`/platform/audit?${params}`) as Promise<AuditPage>;
     },
   });
 

@@ -2,40 +2,64 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen } from "@testing-library/react";
 import AdminLayout from "./layout";
 import { renderWithProviders } from "@/test/render";
-import { ApiError, apiClient } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/admin" }));
-
-vi.mock("@/lib/auth-store", () => ({
-  useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ bootstrapped: true, accessToken: "token" }),
+const replace = vi.fn();
+let pathname = "/admin";
+vi.mock("next/navigation", () => ({
+  usePathname: () => pathname,
+  useRouter: () => ({ replace }),
 }));
 
-vi.mock("@/lib/api-client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn() } };
+let token: string | null = "admin-token";
+let me: { data?: { email: string }; isError: boolean; error?: unknown } = { isError: false };
+vi.mock("@/lib/platform-admin", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/platform-admin")>();
+  return {
+    ...actual,
+    useAdminToken: () => token,
+    usePlatformAdmin: () => me,
+    setAdminToken: vi.fn(),
+  };
 });
-
-const getMock = vi.mocked(apiClient.get);
 
 describe("AdminLayout", () => {
   beforeEach(() => {
-    getMock.mockReset();
+    replace.mockReset();
+    pathname = "/admin";
+    token = "admin-token";
+    me = { data: { email: "ops@korva.test" }, isError: false };
   });
 
-  it("shows the administration to a platform administrator", async () => {
-    getMock.mockResolvedValue({ email: "ops@korva.test" });
+  it("shows the administration to a signed-in administrator", () => {
     renderWithProviders(<AdminLayout><p>Contenu</p></AdminLayout>);
-    expect(await screen.findByText("Contenu")).toBeInTheDocument();
+    expect(screen.getByText("Contenu")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Vue d'ensemble" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Entreprises" })).toHaveAttribute("href", "/admin/entreprises");
-    expect(getMock).toHaveBeenCalledWith("/platform/me", { withOrganization: false });
+    expect(screen.getByRole("button", { name: "Se déconnecter" })).toBeInTheDocument();
   });
 
-  it("explains a refusal and never renders the pages", async () => {
-    getMock.mockImplementation(() => Promise.reject(new ApiError("PLATFORM_ADMIN_ONLY", "Reserved")));
+  it("sends anyone without an administrator session to the administration's own sign-in", () => {
+    token = null;
+    me = { isError: false };
     renderWithProviders(<AdminLayout><p>Contenu</p></AdminLayout>);
-    expect(await screen.findByText("Réservé à l'équipe KORVA")).toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith("/admin/connexion");
+    expect(screen.queryByText("Contenu")).toBeNull();
+  });
+
+  it("renders the sign-in page bare, without the administration around it", () => {
+    pathname = "/admin/connexion";
+    token = null;
+    renderWithProviders(<AdminLayout><p>Formulaire</p></AdminLayout>);
+    expect(screen.getByText("Formulaire")).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: "Entreprises" })).toBeNull();
+  });
+
+  it("asks to sign in again when the session was refused", () => {
+    me = { isError: true, error: new ApiError("PLATFORM_ADMIN_ONLY", "no") };
+    renderWithProviders(<AdminLayout><p>Contenu</p></AdminLayout>);
+    expect(screen.getByText("Session expirée")).toBeInTheDocument();
     expect(screen.queryByText("Contenu")).toBeNull();
   });
 });

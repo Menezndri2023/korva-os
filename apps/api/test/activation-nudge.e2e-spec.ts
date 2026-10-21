@@ -5,6 +5,7 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { PlatformAdminAuthService } from './../src/platform-admin/platform-admin-auth.service';
 import { ActivationNudgeService } from './../src/activation/activation-nudge.service';
 import {
   EMAIL_PROVIDER,
@@ -171,10 +172,13 @@ describe('Activation nudge (e2e)', () => {
       .expect(403);
 
     // Case-insensitive match against the configured list.
+    const { password } = await app
+      .get(PlatformAdminAuthService)
+      .provision('ops@korva.test');
     const admin = await request(server)
-      .post('/api/v1/auth/register')
-      .send({ email: 'ops@korva.test', password: 'password123' })
-      .expect(201);
+      .post('/api/v1/platform/auth/login')
+      .send({ email: 'ops@korva.test', password })
+      .expect(200);
     const adminToken = (admin.body as ApiSuccess<AuthPayload>).data.accessToken;
     const res = await request(server)
       .get('/api/v1/platform/activation')

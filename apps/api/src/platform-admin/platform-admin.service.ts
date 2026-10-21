@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PasswordResetService } from '../identity/auth/password-reset.service';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
@@ -929,15 +924,9 @@ export class PlatformAdminService {
   /**
    * Disables an account: no sign-in, no session refresh, and every open session revoked now, so
    * the dashboard stops at the latest when its current access token expires (15 minutes).
-   * An administrator cannot disable their own account — that would lock the administration out.
+   * Administrators are not Users (see PlatformAdmin), so this can never lock the administration out.
    */
   async disableUser(userId: string, adminUserId: string) {
-    if (userId === adminUserId) {
-      throw new BadRequestException({
-        code: 'CANNOT_DISABLE_SELF',
-        message: 'You cannot disable your own account',
-      });
-    }
     const id = this.userObjectId(userId);
     const result = await this.collection('users').updateOne(
       { _id: id },

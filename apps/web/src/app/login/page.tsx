@@ -10,7 +10,6 @@ import type { Organization } from "@korva/types";
 import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
-import { homeWithoutOrganization } from "@/lib/platform-admin";
 import { AuthShell, LoginAside } from "@/components/landing/auth-shell";
 
 interface LoginResponse {
@@ -40,7 +39,7 @@ export default function LoginPage() {
         setActiveOrganization(organizations[0]!.id);
         router.replace("/dashboard");
       } else {
-        router.replace(await homeWithoutOrganization());
+        router.replace("/onboarding");
       }
     },
   });

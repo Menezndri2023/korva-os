@@ -11,13 +11,13 @@ import {
   type PlanKey,
 } from "@korva/types";
 import { Badge, Card, Input, PageHeader, Select } from "@korva/ui";
-import { apiClient } from "@/lib/api-client";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
 import {
   channelCount,
   formatDay,
   type BusinessIssue,
   type PlatformBusinessRow,
+  adminApi,
 } from "@/lib/platform-admin";
 
 const ISSUE_LABELS: Record<BusinessIssue, string> = {
@@ -43,7 +43,7 @@ export default function AdminBusinessesPage() {
 
   const query = useQuery({
     queryKey: ["platform", "businesses"],
-    queryFn: () => apiClient.get<PlatformBusinessRow[]>("/platform/businesses", { withOrganization: false }),
+    queryFn: () => adminApi.get<PlatformBusinessRow[]>("/platform/businesses"),
   });
 
   const rows = useMemo(() => query.data ?? [], [query.data]);

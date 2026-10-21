@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
-  ArrowLeft,
+  LogOut,
   Building2,
   CreditCard,
   LayoutDashboard,
@@ -12,10 +13,9 @@ import {
   Tags,
   Users,
 } from "lucide-react";
-import { Card, EmptyState, ThemeToggle } from "@korva/ui";
+import { Button, Card, EmptyState, ThemeToggle } from "@korva/ui";
 import { ApiError } from "@/lib/api-client";
-import { useAuthStore } from "@/lib/auth-store";
-import { usePlatformAdmin } from "@/lib/platform-admin";
+import { setAdminToken, useAdminToken, usePlatformAdmin } from "@/lib/platform-admin";
 import { useTheme } from "@/lib/theme-provider";
 
 const NAV = [
@@ -29,46 +29,44 @@ const NAV = [
 ];
 
 /**
- * L'Administration de KORVA OS: the platform team's own space, apart from any organization.
- * The API is the gate (PlatformAdminGuard); this layout asks once and, when refused, says so
- * rather than showing empty tables.
+ * L'Administration de KORVA OS: the platform team's own space, with its own sign-in
+ * (/admin/connexion) and its own session — nothing shared with the businesses' dashboard. The API
+ * is the gate (PlatformAdminGuard); this layout only routes to sign-in and says when refused.
  */
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const bootstrapped = useAuthStore((state) => state.bootstrapped);
-  const accessToken = useAuthStore((state) => state.accessToken);
+  const router = useRouter();
+  const token = useAdminToken();
   const me = usePlatformAdmin();
   const { theme, toggleTheme } = useTheme();
+  const isSignInPage = pathname === "/admin/connexion";
 
-  if (bootstrapped && !accessToken) {
-    return (
-      <Centered>
-        <EmptyState
-          title="Connectez-vous"
-          description="L'administration est réservée à l'équipe KORVA."
-          action={<Link href="/login" className="font-medium underline">Se connecter</Link>}
-        />
-      </Centered>
-    );
-  }
+  // No administrator session (or it was just revoked): to the administration's own sign-in.
+  useEffect(() => {
+    if (!isSignInPage && token === null) router.replace("/admin/connexion");
+  }, [isSignInPage, token, router]);
+
+  if (isSignInPage) return <>{children}</>;
+
   if (me.isError) {
     const forbidden = me.error instanceof ApiError && me.error.code === "PLATFORM_ADMIN_ONLY";
     return (
       <Centered>
         <EmptyState
-          title={forbidden ? "Réservé à l'équipe KORVA" : "Administration indisponible"}
-          description={
-            forbidden
-              ? "Votre adresse doit figurer dans PLATFORM_ADMIN_EMAILS sur le serveur."
-              : "Réessayez dans un instant."
-          }
-          action={<Link href="/dashboard" className="font-medium underline">Retour au tableau de bord</Link>}
+          title={forbidden ? "Session expirée" : "Administration indisponible"}
+          description={forbidden ? "Reconnectez-vous à l'administration." : "Réessayez dans un instant."}
+          action={<Link href="/admin/connexion" className="font-medium underline">Se connecter</Link>}
         />
       </Centered>
     );
   }
   if (!me.data) {
-    return <Centered><p className="text-sm text-text-muted">Chargement…</p></Centered>;
+    return <Centered><p className="p-6 text-sm text-text-muted">Chargement…</p></Centered>;
+  }
+
+  function signOut() {
+    setAdminToken(null);
+    router.replace("/admin/connexion");
   }
 
   return (
@@ -100,17 +98,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
-        <div className="mt-auto hidden px-3 pb-5 md:block">
-          <Link href="/dashboard" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-sidebar-hover">
-            <ArrowLeft aria-hidden className="h-4 w-4" />
-            Mon tableau de bord
-          </Link>
-        </div>
       </aside>
       <div className="flex-1">
         <header className="flex items-center justify-end gap-3 border-b border-border bg-surface/90 px-4 py-3 sm:px-8">
-          <span className="text-sm text-text-muted">{me.data.email}</span>
+          <Link href="/admin/compte" className="text-sm text-text-muted hover:underline">
+            {me.data.email}
+          </Link>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <Button size="sm" variant="ghost" onClick={signOut}>
+            <LogOut aria-hidden className="h-4 w-4" />
+            Se déconnecter
+          </Button>
         </header>
         <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8">{children}</main>
       </div>

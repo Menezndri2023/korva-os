@@ -2,8 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Badge, Card, Notice, PageHeader } from "@korva/ui";
-import { apiClient } from "@/lib/api-client";
-import type { PlatformSystem } from "@/lib/platform-admin";
+import { adminApi, type PlatformSystem } from "@/lib/platform-admin";
 
 function megabytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Mo`;
@@ -23,7 +22,7 @@ function duration(seconds: number): string {
 export default function AdminSystemPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["platform", "system"],
-    queryFn: () => apiClient.get<PlatformSystem>("/platform/system", { withOrganization: false }),
+    queryFn: () => adminApi.get<PlatformSystem>("/platform/system"),
     refetchInterval: 60_000,
   });
 

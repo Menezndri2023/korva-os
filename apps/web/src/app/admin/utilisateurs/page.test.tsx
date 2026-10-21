@@ -2,16 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import AdminUsersPage from "./page";
 import { renderWithProviders } from "@/test/render";
-import { ApiError, apiClient } from "@/lib/api-client";
+import { adminApi } from "@/lib/platform-admin";
 import type { PlatformUserRow } from "@/lib/platform-admin";
 
-vi.mock("@/lib/api-client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn() } };
+vi.mock("@/lib/platform-admin", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/platform-admin")>();
+  return { ...actual, adminApi: { get: vi.fn(), post: vi.fn(), getList: vi.fn() } };
 });
 
-const getMock = vi.mocked(apiClient.get);
-const postMock = vi.mocked(apiClient.post);
+const getMock = vi.mocked(adminApi.get);
+const postMock = vi.mocked(adminApi.post);
 
 const user: PlatformUserRow = {
   id: "user-1",
@@ -44,7 +44,7 @@ describe("AdminUsersPage", () => {
     renderWithProviders(<AdminUsersPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Désactiver" }));
     await waitFor(() =>
-      expect(postMock).toHaveBeenCalledWith("/platform/users/user-1/disable", undefined, { withOrganization: false }),
+      expect(postMock).toHaveBeenCalledWith("/platform/users/user-1/disable"),
     );
   });
 
@@ -52,12 +52,5 @@ describe("AdminUsersPage", () => {
     renderWithProviders(<AdminUsersPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Réinitialiser le mot de passe" }));
     expect(await screen.findByText("E-mail de réinitialisation envoyé.")).toBeInTheDocument();
-  });
-
-  it("explains that one's own account cannot be disabled", async () => {
-    postMock.mockRejectedValue(new ApiError("CANNOT_DISABLE_SELF", "no"));
-    renderWithProviders(<AdminUsersPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Désactiver" }));
-    expect(await screen.findByText("Vous ne pouvez pas désactiver votre propre compte.")).toBeInTheDocument();
   });
 });

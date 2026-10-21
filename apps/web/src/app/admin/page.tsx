@@ -4,14 +4,13 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { BUSINESS_MODEL_DEFINITIONS, PLAN_KEYS, PLAN_NAMES } from "@korva/types";
 import { Card, PageHeader } from "@korva/ui";
-import { apiClient } from "@/lib/api-client";
-import { channelCount, formatMoney, type PlatformOverview } from "@/lib/platform-admin";
+import { channelCount, formatMoney, type PlatformOverview, adminApi } from "@/lib/platform-admin";
 
 /** The platform at a glance: who signed up, who is live, who pays, who needs a hand. */
 export default function AdminOverviewPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["platform", "overview"],
-    queryFn: () => apiClient.get<PlatformOverview>("/platform/overview", { withOrganization: false }),
+    queryFn: () => adminApi.get<PlatformOverview>("/platform/overview"),
   });
 
   return (

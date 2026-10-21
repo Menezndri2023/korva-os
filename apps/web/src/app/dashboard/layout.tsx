@@ -32,7 +32,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
-import { usePlatformAdmin } from "@/lib/platform-admin";
 
 type NavItem = {
   href: string;
@@ -512,9 +511,6 @@ function StorefrontIcon() {
 
 function UserMenu({ name, email, onLogout }: { name: string; email: string; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
-  // Only KORVA's own team gets the way into the administration; the API answers 403 to everyone
-  // else, once per session.
-  const platformAdmin = usePlatformAdmin();
   const initials = getInitials(name || email);
 
   return (
@@ -540,15 +536,6 @@ function UserMenu({ name, email, onLogout }: { name: string; email: string; onLo
               <p className="truncate text-xs text-text-muted">{email}</p>
             </div>
             <div className="my-1 h-px bg-border" />
-            {platformAdmin.data && (
-              <Link
-                href="/admin"
-                onClick={() => setOpen(false)}
-                className="block rounded-md px-3 py-2 text-sm font-medium text-text hover:bg-surface-muted"
-              >
-                Administration KORVA
-              </Link>
-            )}
             <Button
               variant="ghost"
               onClick={onLogout}

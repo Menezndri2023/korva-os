@@ -1,20 +1,97 @@
 import { useQuery } from "@tanstack/react-query";
-import { CURRENCY_FORMAT, type BillingCurrency, type BusinessModel } from "@korva/types";
-import { apiClient } from "./api-client";
-import { useAuthStore } from "./auth-store";
+import { useSyncExternalStore } from "react";
+import { CURRENCY_FORMAT, type BillingCurrency, type BusinessModel, type Pagination } from "@korva/types";
+import { ApiError } from "./api-client";
 
-/**
- * Whether the signed-in user belongs to KORVA's own administration. Asked once per session
- * (GET /platform/me answers 403 for everyone else) — the API decides, this only shows or hides
- * the way in.
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+
+/*
+ * KORVA's administration has its OWN session, kept apart from the businesses' one (auth-store):
+ * its own accounts, its own sign-in (/admin/connexion), its own token. The token lives in
+ * sessionStorage — this tab only, gone when it closes — and never in the businesses' store, so
+ * an administrator's session can never be used against a business, nor the reverse.
  */
+const TOKEN_KEY = "korva-admin-token";
+const listeners = new Set<() => void>();
+let memoryToken: string | null = null;
+
+function readToken(): string | null {
+  try {
+    return window.sessionStorage.getItem(TOKEN_KEY) ?? memoryToken;
+  } catch {
+    return memoryToken;
+  }
+}
+
+export function setAdminToken(token: string | null): void {
+  memoryToken = token;
+  try {
+    if (token) window.sessionStorage.setItem(TOKEN_KEY, token);
+    else window.sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Storage blocked (private mode): the in-memory copy still works for this page.
+  }
+  listeners.forEach((listener) => listener());
+}
+
+/** The administrator token, or null — "" during the server render, before the browser is read. */
+export function useAdminToken(): string | null | "" {
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    readToken,
+    () => "",
+  );
+}
+
+interface Envelope<T> {
+  success: boolean;
+  data?: T;
+  pagination?: Pagination;
+  error?: { code: string; message: string; details?: unknown };
+}
+
+async function adminRequest<T>(method: string, path: string, body?: unknown): Promise<Envelope<T>> {
+  const token = readToken();
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const payload = (await response.json()) as Envelope<T>;
+  if (!payload.success) {
+    const error = payload.error ?? { code: "UNKNOWN", message: "Request failed" };
+    // An expired or revoked administrator session: forget it, the layout sends to sign-in.
+    if (error.code === "PLATFORM_ADMIN_ONLY") setAdminToken(null);
+    throw new ApiError(error.code, error.message, error.details);
+  }
+  return payload;
+}
+
+/** The administration's API client: the administrator token, never a business's session. */
+export const adminApi = {
+  get: <T>(path: string) => adminRequest<T>("GET", path).then((payload) => payload.data as T),
+  getList: <T>(path: string) =>
+    adminRequest<T[]>("GET", path).then((payload) => ({
+      data: payload.data as T[],
+      pagination: payload.pagination as Pagination,
+    })),
+  post: <T>(path: string, body?: unknown) =>
+    adminRequest<T>("POST", path, body).then((payload) => payload.data as T),
+};
+
+/** The signed-in administrator, checked against the API once per session. */
 export function usePlatformAdmin() {
-  const bootstrapped = useAuthStore((state) => state.bootstrapped);
-  const accessToken = useAuthStore((state) => state.accessToken);
+  const token = useAdminToken();
   return useQuery({
-    queryKey: ["platform", "me"],
-    queryFn: () => apiClient.get<{ email: string }>("/platform/me", { withOrganization: false }),
-    enabled: bootstrapped && Boolean(accessToken),
+    queryKey: ["platform", "me", token],
+    queryFn: () => adminApi.get<{ email: string }>("/platform/me"),
+    enabled: Boolean(token),
     retry: false,
     staleTime: Infinity,
   });
@@ -141,19 +218,6 @@ export const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
   canceled: "Résilié",
 };
 
-/**
- * Where to send a user who belongs to no organization yet: KORVA's administrators to /admin
- * (they have no business of their own to set up), everyone else to onboarding. A 403 — the
- * usual answer — simply means "not an administrator".
- */
-export async function homeWithoutOrganization(): Promise<"/admin" | "/onboarding"> {
-  try {
-    await apiClient.get("/platform/me", { withOrganization: false });
-    return "/admin";
-  } catch {
-    return "/onboarding";
-  }
-}
 
 export type BusinessIssue = "site_vide" | "sans_logo" | "sans_whatsapp" | "inactif";
 

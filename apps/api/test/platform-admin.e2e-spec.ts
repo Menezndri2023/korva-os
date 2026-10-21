@@ -5,6 +5,7 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { PlatformAdminAuthService } from './../src/platform-admin/platform-admin-auth.service';
 
 interface ApiSuccess<T> {
   success: true;
@@ -36,7 +37,7 @@ describe('Platform administration (e2e)', () => {
   let connection: Connection;
 
   beforeAll(async () => {
-    process.env.PLATFORM_ADMIN_EMAILS = 'Ops@Korva.test';
+    process.env.PLATFORM_ADMIN_EMAILS = 'Ops@Korva.test, lock@korva.test';
     // Only EUR collectable: an XOF shop cannot buy a paid plan by itself — the case an
     // administrator's manual assignment exists for.
     process.env.BILLING_CHARGEABLE_CURRENCIES = 'EUR';
@@ -104,13 +105,22 @@ describe('Platform administration (e2e)', () => {
     return { accessToken, organizationId, slug };
   }
 
-  async function adminToken(): Promise<string> {
+  /** Administrators are provisioned on the server (dist/create-platform-admin.js), then sign in
+   *  at /platform/auth/login — never through the businesses' /auth. Cached: one sign-in per file. */
+  let cachedOpsToken: string | undefined;
+  async function opsToken(): Promise<string> {
+    if (cachedOpsToken) return cachedOpsToken;
+    const { password } = await app
+      .get(PlatformAdminAuthService)
+      .provision('ops@korva.test');
     const res = await request(server)
-      .post('/api/v1/auth/register')
-      .send({ email: 'ops@korva.test', password: 'password123' })
-      .expect(201);
-    return asSuccess<AuthPayload>(res.body).accessToken;
+      .post('/api/v1/platform/auth/login')
+      .send({ email: 'ops@korva.test', password })
+      .expect(200);
+    cachedOpsToken = asSuccess<AuthPayload>(res.body).accessToken;
+    return cachedOpsToken;
   }
+  const adminToken = opsToken;
 
   it('turns away everyone who is not a platform administrator', async () => {
     const tenant = await setupOrg('admin-tenant@korva.test', 'Tenant Shop', [
@@ -239,14 +249,7 @@ describe('Platform administration (e2e)', () => {
   });
 
   it('gives the administrator the overview and the subscription list', async () => {
-    const token = await adminToken().catch(async () => {
-      // Already registered by the previous test: log in instead.
-      const res = await request(server)
-        .post('/api/v1/auth/login')
-        .send({ email: 'ops@korva.test', password: 'password123' })
-        .expect(201);
-      return asSuccess<AuthPayload>(res.body).accessToken;
-    });
+    const token = await opsToken();
     const overview = asSuccess<{
       organizations: number;
       organizationsByPlan: Record<string, number>;
@@ -275,18 +278,6 @@ describe('Platform administration (e2e)', () => {
       'Boutique Abidjan',
     ]);
   });
-
-  // Cached: logging in again for every test runs into the auth throttle (429).
-  let cachedOpsToken: string | undefined;
-  async function opsToken(): Promise<string> {
-    if (cachedOpsToken) return cachedOpsToken;
-    const res = await request(server)
-      .post('/api/v1/auth/login')
-      .send({ email: 'ops@korva.test', password: 'password123' })
-      .expect(201);
-    cachedOpsToken = asSuccess<AuthPayload>(res.body).accessToken;
-    return cachedOpsToken;
-  }
 
   it('suspends an organization — dashboard blocked, site offline — and reactivates it intact', async () => {
     const shop = await setupOrg(
@@ -440,16 +431,6 @@ describe('Platform administration (e2e)', () => {
       request(server).post(`/api/v1/platform/users/${userId}/password-reset`),
     ).expect(200);
 
-    const me = asSuccess<{ id: string }[]>(
-      (
-        await admin(
-          request(server).get('/api/v1/platform/users?q=ops@korva.test'),
-        ).expect(200)
-      ).body,
-    );
-    await admin(
-      request(server).post(`/api/v1/platform/users/${me[0]!.id}/disable`),
-    ).expect(400);
     expect(member.slug).toBeTruthy();
   });
 
@@ -484,6 +465,81 @@ describe('Platform administration (e2e)', () => {
       administrators: number;
     }>((await get('system')).body);
     expect(system.database.dataBytes).toBeGreaterThan(0);
-    expect(system.administrators).toBe(1);
+    expect(system.administrators).toBe(2);
+  });
+
+  it('has its own sign-in: no business account gets in, and its token opens no business', async () => {
+    const auth = app.get(PlatformAdminAuthService);
+    const tenant = await setupOrg(
+      'admin-signin-tenant@korva.test',
+      'Signin Shop',
+      ['website'],
+    );
+
+    // A business user's token is refused by the administration.
+    await request(server)
+      .get('/api/v1/platform/me')
+      .set('Authorization', `Bearer ${tenant.accessToken}`)
+      .expect(403);
+
+    // Only addresses listed in PLATFORM_ADMIN_EMAILS can be provisioned.
+    await expect(auth.provision('intruder@korva.test')).rejects.toThrow();
+
+    // An administrator's token opens no business route.
+    const token = await opsToken();
+    await request(server)
+      .get('/api/v1/organizations/me/all')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(401);
+
+    // Repeated wrong passwords lock the account.
+    await auth.provision('lock@korva.test');
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await request(server)
+        .post('/api/v1/platform/auth/login')
+        .send({ email: 'lock@korva.test', password: 'wrong-password' })
+        .expect(401);
+    }
+    const locked = await request(server)
+      .post('/api/v1/platform/auth/login')
+      .send({ email: 'lock@korva.test', password: 'wrong-password' })
+      .expect(403);
+    expect((locked.body as { error: { code: string } }).error.code).toBe(
+      'ACCOUNT_LOCKED',
+    );
+
+    // Re-provisioning gives a new password and unlocks; the administrator can then choose theirs.
+    const { password } = await auth.provision('lock@korva.test');
+    const signedIn = asSuccess<AuthPayload>(
+      (
+        await request(server)
+          .post('/api/v1/platform/auth/login')
+          .send({ email: 'lock@korva.test', password })
+          .expect(200)
+      ).body,
+    );
+    await request(server)
+      .post('/api/v1/platform/auth/password')
+      .set('Authorization', `Bearer ${signedIn.accessToken}`)
+      .send({
+        currentPassword: password,
+        newPassword: 'Un-Mot-De-Passe-Choisi-1',
+      })
+      .expect(200);
+    await request(server)
+      .post('/api/v1/platform/auth/login')
+      .send({ email: 'lock@korva.test', password: 'Un-Mot-De-Passe-Choisi-1' })
+      .expect(200);
+
+    // Removing the address from the configuration revokes the administrator at once.
+    process.env.PLATFORM_ADMIN_EMAILS = 'Ops@Korva.test';
+    try {
+      await request(server)
+        .get('/api/v1/platform/me')
+        .set('Authorization', `Bearer ${signedIn.accessToken}`)
+        .expect(403);
+    } finally {
+      process.env.PLATFORM_ADMIN_EMAILS = 'Ops@Korva.test, lock@korva.test';
+    }
   });
 });

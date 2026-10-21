@@ -2,18 +2,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import AdminShopPage from "./page";
 import { renderWithProviders } from "@/test/render";
-import { apiClient } from "@/lib/api-client";
+import { adminApi } from "@/lib/platform-admin";
 import type { PlatformOrganization } from "@/lib/platform-admin";
 
 vi.mock("next/navigation", () => ({ useParams: () => ({ id: "org-1" }) }));
 
-vi.mock("@/lib/api-client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn(), post: vi.fn() } };
+vi.mock("@/lib/platform-admin", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/platform-admin")>();
+  return { ...actual, adminApi: { get: vi.fn(), post: vi.fn(), getList: vi.fn() } };
 });
 
-const getMock = vi.mocked(apiClient.get);
-const postMock = vi.mocked(apiClient.post);
+const getMock = vi.mocked(adminApi.get);
+const postMock = vi.mocked(adminApi.post);
 
 const shop: PlatformOrganization = {
   id: "org-1",
@@ -82,7 +82,7 @@ describe("AdminShopPage", () => {
     fireEvent.change(screen.getByLabelText("Formule"), { target: { value: "pro" } });
     fireEvent.click(screen.getByRole("button", { name: "Attribuer" }));
     await waitFor(() =>
-      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/plan", { planKey: "pro" }, { withOrganization: false }),
+      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/plan", { planKey: "pro" }),
     );
   });
 
@@ -91,10 +91,7 @@ describe("AdminShopPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Marquer payée" }));
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith(
-        "/platform/organizations/org-1/invoices/inv-1/paid",
-        undefined,
-        { withOrganization: false },
-      ),
+        "/platform/organizations/org-1/invoices/inv-1/paid"),
     );
   });
 
@@ -111,7 +108,7 @@ describe("AdminShopPage", () => {
     fireEvent.change(screen.getByLabelText("Nombre de jours"), { target: { value: "21" } });
     fireEvent.click(screen.getByRole("button", { name: "Prolonger de 21 jours" }));
     await waitFor(() =>
-      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/trial", { days: 21 }, { withOrganization: false }),
+      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/trial", { days: 21 }),
     );
   });
 
@@ -126,7 +123,6 @@ describe("AdminShopPage", () => {
       expect(postMock).toHaveBeenCalledWith(
         "/platform/organizations/org-1/suspend",
         { reason: "Impayé" },
-        { withOrganization: false },
       ),
     );
   });
@@ -137,7 +133,7 @@ describe("AdminShopPage", () => {
     expect(await screen.findByText(/Entreprise suspendue depuis le/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Réactiver" }));
     await waitFor(() =>
-      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/reactivate", undefined, { withOrganization: false }),
+      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/reactivate"),
     );
   });
 });

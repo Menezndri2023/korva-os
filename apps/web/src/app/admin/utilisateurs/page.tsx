@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, Input, PageHeader } from "@korva/ui";
-import { ApiError, apiClient } from "@/lib/api-client";
-import { formatDay, type PlatformUserRow } from "@/lib/platform-admin";
+import { formatDay, type PlatformUserRow, adminApi } from "@/lib/platform-admin";
 
 /**
  * Every account on the platform — owners, their staff, administrators — and what the KORVA team
@@ -18,9 +17,7 @@ export default function AdminUsersPage() {
   const query = useQuery({
     queryKey: ["platform", "users", q],
     queryFn: () =>
-      apiClient.get<PlatformUserRow[]>(`/platform/users${q ? `?q=${encodeURIComponent(q)}` : ""}`, {
-        withOrganization: false,
-      }),
+      adminApi.get<PlatformUserRow[]>(`/platform/users${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   });
 
   return (
@@ -71,7 +68,7 @@ function UserRow({ user }: { user: PlatformUserRow }) {
   const [notice, setNotice] = useState<string | null>(null);
   const action = useMutation({
     mutationFn: (kind: "disable" | "enable" | "password-reset") =>
-      apiClient.post(`/platform/users/${user.id}/${kind}`, undefined, { withOrganization: false }),
+      adminApi.post(`/platform/users/${user.id}/${kind}`),
     onSuccess: (_data, kind) => {
       setNotice(kind === "password-reset" ? "E-mail de réinitialisation envoyé." : null);
       void queryClient.invalidateQueries({ queryKey: ["platform", "users"] });
@@ -129,9 +126,7 @@ function UserRow({ user }: { user: PlatformUserRow }) {
         {notice && <p className="mt-1 text-xs text-success">{notice}</p>}
         {action.isError && (
           <p className="mt-1 text-xs text-destructive">
-            {action.error instanceof ApiError && action.error.code === "CANNOT_DISABLE_SELF"
-              ? "Vous ne pouvez pas désactiver votre propre compte."
-              : "L'action n'a pas abouti."}
+            L&apos;action n&apos;a pas abouti.
           </p>
         )}
       </td>

@@ -2,19 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import AdminShopsPage from "./page";
 import { renderWithProviders } from "@/test/render";
-import { apiClient } from "@/lib/api-client";
+import { adminApi } from "@/lib/platform-admin";
 
 vi.mock("@/lib/auth-store", () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ bootstrapped: true, accessToken: "token" }),
 }));
 
-vi.mock("@/lib/api-client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api-client")>();
-  return { ...actual, apiClient: { ...actual.apiClient, get: vi.fn() } };
+vi.mock("@/lib/platform-admin", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/platform-admin")>();
+  return { ...actual, adminApi: { get: vi.fn(), post: vi.fn(), getList: vi.fn() } };
 });
 
-const getMock = vi.mocked(apiClient.get);
+const getMock = vi.mocked(adminApi.get);
 
 const row = (slug: string, issues: string[]) => ({
   id: slug,

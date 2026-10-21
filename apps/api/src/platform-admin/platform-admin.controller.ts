@@ -17,11 +17,13 @@ import {
   type ExtendTrialInput,
   type SuspendOrganizationInput,
 } from '@korva/validation';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { SkipTenant } from '../common/decorators/skip-tenant.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import type { AuthenticatedUser } from '../core/tenant/request-context.types';
-import { PlatformAdminGuard } from './platform-admin.guard';
+import type { PlatformAdminIdentity } from './platform-admin-auth.service';
+import {
+  CurrentPlatformAdmin,
+  PlatformAdminGuard,
+} from './platform-admin.guard';
 import {
   PlatformAdminService,
   type SubscriptionFilter,
@@ -35,9 +37,12 @@ const SUBSCRIPTION_FILTERS: SubscriptionFilter[] = [
   'canceling',
 ];
 
-/** L'Administration de KORVA OS — see PlatformAdminGuard for who gets in. */
+/**
+ * L'Administration de KORVA OS. @Public() steps the businesses' guards aside (their JWT, tenancy,
+ * modules, permissions); PlatformAdminGuard alone decides, on an administrator token.
+ */
 @ApiTags('platform')
-@SkipTenant()
+@Public()
 @UseGuards(PlatformAdminGuard)
 @Controller('platform')
 export class PlatformAdminController {
@@ -45,8 +50,8 @@ export class PlatformAdminController {
 
   /** 200 for an administrator, 403 otherwise — what the dashboard asks before showing the menu. */
   @Get('me')
-  me(@CurrentUser() user: AuthenticatedUser) {
-    return { email: user.email, isPlatformAdmin: true };
+  me(@CurrentPlatformAdmin() admin: PlatformAdminIdentity) {
+    return { email: admin.email, isPlatformAdmin: true };
   }
 
   @Get('overview')
@@ -83,37 +88,40 @@ export class PlatformAdminController {
   @HttpCode(200)
   assignPlan(
     @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
     @Body(new ZodValidationPipe(assignPlanSchema)) body: AssignPlanInput,
   ) {
-    return this.adminService.assignPlan(id, user.userId, body.planKey);
+    return this.adminService.assignPlan(id, admin.id, body.planKey);
   }
 
   @Post('organizations/:id/trial')
   @HttpCode(200)
   extendTrial(
     @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
     @Body(new ZodValidationPipe(extendTrialSchema)) body: ExtendTrialInput,
   ) {
-    return this.adminService.extendTrial(id, user.userId, body.days);
+    return this.adminService.extendTrial(id, admin.id, body.days);
   }
 
   @Post('organizations/:id/suspend')
   @HttpCode(200)
   suspend(
     @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
     @Body(new ZodValidationPipe(suspendOrganizationSchema))
     body: SuspendOrganizationInput,
   ) {
-    return this.adminService.suspend(id, user.userId, body.reason);
+    return this.adminService.suspend(id, admin.id, body.reason);
   }
 
   @Post('organizations/:id/reactivate')
   @HttpCode(200)
-  reactivate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.adminService.reactivate(id, user.userId);
+  reactivate(
+    @Param('id') id: string,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
+  ) {
+    return this.adminService.reactivate(id, admin.id);
   }
 
   @Get('plans')
@@ -144,23 +152,29 @@ export class PlatformAdminController {
 
   @Post('users/:id/disable')
   @HttpCode(200)
-  disableUser(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.adminService.disableUser(id, user.userId);
+  disableUser(
+    @Param('id') id: string,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
+  ) {
+    return this.adminService.disableUser(id, admin.id);
   }
 
   @Post('users/:id/enable')
   @HttpCode(200)
-  enableUser(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.adminService.enableUser(id, user.userId);
+  enableUser(
+    @Param('id') id: string,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
+  ) {
+    return this.adminService.enableUser(id, admin.id);
   }
 
   @Post('users/:id/password-reset')
   @HttpCode(200)
   sendPasswordReset(
     @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
   ) {
-    return this.adminService.sendPasswordReset(id, user.userId);
+    return this.adminService.sendPasswordReset(id, admin.id);
   }
 
   @Post('organizations/:id/invoices/:invoiceId/paid')
@@ -168,8 +182,8 @@ export class PlatformAdminController {
   markInvoicePaid(
     @Param('id') id: string,
     @Param('invoiceId') invoiceId: string,
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
   ) {
-    return this.adminService.markInvoicePaid(id, invoiceId, user.userId);
+    return this.adminService.markInvoicePaid(id, invoiceId, admin.id);
   }
 }

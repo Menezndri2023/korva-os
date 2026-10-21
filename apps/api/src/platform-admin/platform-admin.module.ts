@@ -5,7 +5,13 @@ import {
   Organization,
   OrganizationSchema,
 } from '../organizations/schemas/organization.schema';
-import { User, UserSchema } from '../identity/schemas/user.schema';
+import { JwtModule } from '@nestjs/jwt';
+import {
+  PlatformAdmin,
+  PlatformAdminSchema,
+} from './schemas/platform-admin.schema';
+import { PlatformAdminAuthService } from './platform-admin-auth.service';
+import { PlatformAdminAuthController } from './platform-admin-auth.controller';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { SubscriptionBillingModule } from '../subscription-billing/subscription-billing.module';
 import { AuditModule } from '../audit/audit.module';
@@ -26,15 +32,22 @@ import { PlatformAdminService } from './platform-admin.service';
     ConfigModule,
     MongooseModule.forFeature([
       { name: Organization.name, schema: OrganizationSchema },
-      { name: User.name, schema: UserSchema },
+      { name: PlatformAdmin.name, schema: PlatformAdminSchema },
     ]),
     SubscriptionsModule,
     SubscriptionBillingModule,
     AuditModule,
     ActivationModule,
     IdentityModule,
+    // Signing keys are passed per call (PlatformAdminAuthService.signingKey): no module default.
+    JwtModule.register({}),
   ],
-  controllers: [PlatformAdminController],
-  providers: [PlatformAdminService, PlatformAdminGuard],
+  controllers: [PlatformAdminController, PlatformAdminAuthController],
+  providers: [
+    PlatformAdminService,
+    PlatformAdminGuard,
+    PlatformAdminAuthService,
+  ],
+  exports: [PlatformAdminAuthService],
 })
 export class PlatformAdminModule {}

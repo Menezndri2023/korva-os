@@ -9,7 +9,6 @@ import { registerSchema, type RegisterInput } from "@korva/validation";
 import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
-import { homeWithoutOrganization } from "@/lib/platform-admin";
 import { AuthShell, RegisterAside } from "@/components/landing/auth-shell";
 
 interface RegisterResponse {
@@ -30,9 +29,9 @@ export default function RegisterPage() {
   const mutation = useMutation({
     mutationFn: (data: RegisterInput) =>
       apiClient.post<RegisterResponse>("/auth/register", data, { withOrganization: false }),
-    onSuccess: async (data) => {
+    onSuccess: (data) => {
       setSession(data);
-      router.replace(await homeWithoutOrganization());
+      router.replace("/onboarding");
     },
   });
 

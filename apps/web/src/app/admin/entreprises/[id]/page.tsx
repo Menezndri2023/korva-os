@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { BUSINESS_MODEL_DEFINITIONS, PLAN_KEYS, PLAN_NAMES, type PlanKey } from "@korva/types";
 import { Badge, Button, Card, Input, Notice, PageHeader, Select } from "@korva/ui";
-import { ApiError, apiClient } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
 import { ACTIVITY_ENTITY_LABELS, activityActionLabel } from "@/lib/analytics-format";
 import {
@@ -15,6 +15,7 @@ import {
   formatDay,
   formatMoney,
   type PlatformOrganization,
+  adminApi,
 } from "@/lib/platform-admin";
 
 /**
@@ -27,7 +28,7 @@ export default function AdminShopPage() {
   const queryKey = ["platform", "organization", id];
   const { data: org, isLoading, isError } = useQuery({
     queryKey,
-    queryFn: () => apiClient.get<PlatformOrganization>(`/platform/organizations/${id}`, { withOrganization: false }),
+    queryFn: () => adminApi.get<PlatformOrganization>(`/platform/organizations/${id}`),
   });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey });
@@ -226,9 +227,7 @@ function InvoiceRow({
 }) {
   const mutation = useMutation({
     mutationFn: () =>
-      apiClient.post(`/platform/organizations/${organizationId}/invoices/${invoice.id}/paid`, undefined, {
-        withOrganization: false,
-      }),
+      adminApi.post(`/platform/organizations/${organizationId}/invoices/${invoice.id}/paid`),
     onSuccess: onPaid,
   });
   return (
@@ -270,7 +269,7 @@ function AssignPlan({
   const [planKey, setPlanKey] = useState<PlanKey>("starter");
   const mutation = useMutation({
     mutationFn: () =>
-      apiClient.post(`/platform/organizations/${organizationId}/plan`, { planKey }, { withOrganization: false }),
+      adminApi.post(`/platform/organizations/${organizationId}/plan`, { planKey }),
     onSuccess: onDone,
   });
   return (
@@ -308,7 +307,7 @@ function ExtendTrial({ organizationId, onDone }: { organizationId: string; onDon
   const [days, setDays] = useState("14");
   const mutation = useMutation({
     mutationFn: () =>
-      apiClient.post(`/platform/organizations/${organizationId}/trial`, { days: Number(days) }, { withOrganization: false }),
+      adminApi.post(`/platform/organizations/${organizationId}/trial`, { days: Number(days) }),
     onSuccess: onDone,
   });
   return (
@@ -348,8 +347,8 @@ function Suspension({
   const mutation = useMutation({
     mutationFn: () =>
       suspended
-        ? apiClient.post(`/platform/organizations/${organizationId}/reactivate`, undefined, { withOrganization: false })
-        : apiClient.post(`/platform/organizations/${organizationId}/suspend`, { reason }, { withOrganization: false }),
+        ? adminApi.post(`/platform/organizations/${organizationId}/reactivate`)
+        : adminApi.post(`/platform/organizations/${organizationId}/suspend`, { reason }),
     onSuccess: () => {
       setReason("");
       onDone();
