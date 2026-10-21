@@ -18,6 +18,7 @@ import { OfferImage } from "@/templates/sections/OfferImage";
 import { SiteHeader } from "@/templates/sections/SiteHeader";
 import { SiteFooter } from "@/templates/sections/SiteFooter";
 import { MobileCartBar } from "@/templates/sections/MobileCartBar";
+import { WhatsAppButton } from "@/templates/sections/WhatsAppButton";
 import { Confirmation } from "@/templates/sections/Confirmation";
 import { useRouter } from "next/navigation";
 
@@ -233,6 +234,13 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
 
       <SiteFooter organization={organization} links={[{ href: `/${slug}`, label: "Accueil" }, { href: `/${slug}/track`, label: "Suivre ma commande" }]} />
       {commerceEnabled && <MobileCartBar cartCount={cartCount} onOpenCheckout={() => setShowCheckout(true)} />}
+      {organization.whatsappNumber && (
+        <WhatsAppButton
+          number={organization.whatsappNumber}
+          shopName={organization.name}
+          raised={commerceEnabled && cartCount > 0}
+        />
+      )}
 
       {bookingOffer && (
         <BookingPanel

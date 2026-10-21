@@ -91,6 +91,20 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   tagline: z.string().max(200).optional(),
   /** Wide banner image for the storefront hero, distinct from `logo`. */
   heroImage: z.string().url().optional(),
+  /** Public contact details shown on the site, every plan. "" clears a value. */
+  contactPhone: z.string().trim().max(30).optional(),
+  /** International format, so the site can build a wa.me link — a local number ("07 07…") has
+   *  no country code and WhatsApp cannot resolve it. */
+  whatsappNumber: z
+    .union([
+      z.literal(""),
+      z
+        .string()
+        .trim()
+        .regex(/^\+[1-9][0-9 ]{7,18}$/, "Format international attendu, ex. +225 07 07 07 07 07"),
+    ])
+    .optional(),
+  contactAddress: z.string().trim().max(200).optional(),
   /** Omit to show every section `enabledModules` allows; pass an explicit array to restrict. */
   storefrontSections: z.array(z.enum(STOREFRONT_SECTIONS)).optional(),
   /** Omit to use the vertical's default template — see EntitlementsService.assertStorefrontThemeAllowed. */

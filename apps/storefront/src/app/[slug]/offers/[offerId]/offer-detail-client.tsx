@@ -17,6 +17,9 @@ import { KT } from "@/templates/kt-classes";
 import { SiteHeader, siteLinks } from "@/templates/sections/SiteHeader";
 import { SiteFooter } from "@/templates/sections/SiteFooter";
 import { MobileCartBar } from "@/templates/sections/MobileCartBar";
+import { WhatsAppButton } from "@/templates/sections/WhatsAppButton";
+import { whatsappLink } from "@/lib/contact";
+import { MessageCircle } from "lucide-react";
 import { Confirmation } from "@/templates/sections/Confirmation";
 import {
   missingRequiredGroups,
@@ -324,6 +327,29 @@ export default function OfferDetailClient({
                   Ajouter au panier
                 </Button>
               )}
+              {organization.whatsappNumber && (
+                // Built on click, not at render: the message carries this page's address, and
+                // `window` does not exist during the server render.
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    const price = formatOfferPrice(offer.pricing.amount, offer.pricing.currency);
+                    window.open(
+                      whatsappLink(
+                        organization.whatsappNumber!,
+                        `Bonjour ${organization.name}, je suis intéressé(e) par « ${offer.name} » (${price}) : ${window.location.href}`,
+                      ),
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  }}
+                >
+                  <MessageCircle aria-hidden className="h-5 w-5" />
+                  {offer.type === "booking" ? "Demander sur WhatsApp" : "Commander sur WhatsApp"}
+                </Button>
+              )}
               {missingOptions.length > 0 && offer.type !== "booking" && commerceEnabled && (
                 <p className={`text-sm ${KT.textMuted}`}>À choisir : {missingOptions.join(", ")}</p>
               )}
@@ -336,6 +362,13 @@ export default function OfferDetailClient({
 
       <SiteFooter organization={organization} links={links} />
       {commerceEnabled && <MobileCartBar cartCount={cartCount} onOpenCheckout={() => setShowCheckout(true)} />}
+      {organization.whatsappNumber && (
+        <WhatsAppButton
+          number={organization.whatsappNumber}
+          shopName={organization.name}
+          raised={commerceEnabled && cartCount > 0}
+        />
+      )}
 
       {showBooking && (
         <BookingPanel

@@ -110,6 +110,11 @@ export interface Organization {
   logo?: string;
   brandColor?: string;
   tagline?: string;
+  /** Public contact details shown on the site — every plan. */
+  contactPhone?: string;
+  /** International format, e.g. "+225 07 07 07 07 07". */
+  whatsappNumber?: string;
+  contactAddress?: string;
   heroImage?: string;
   /** Undefined means "show every section `enabledModules` allows" — see STOREFRONT_SECTIONS doc. */
   storefrontSections?: StorefrontSection[];

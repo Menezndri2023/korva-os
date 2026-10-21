@@ -414,6 +414,11 @@ export default function SettingsPage() {
       logo: organization.logo,
       brandColor: organization.brandColor,
       tagline: organization.tagline,
+      // "" rather than undefined: saving an emptied field must clear it, and undefined would
+      // simply leave the old number in place.
+      contactPhone: organization.contactPhone ?? "",
+      whatsappNumber: organization.whatsappNumber ?? "",
+      contactAddress: organization.contactAddress ?? "",
       seoTitle: organization.seoTitle,
       seoDescription: organization.seoDescription,
       customDomain: organization.customDomain,
@@ -722,6 +727,18 @@ export default function SettingsPage() {
               <dd className="mt-0.5">{organization?.tagline ?? "—"}</dd>
             </div>
             <div>
+              <dt className="text-text-muted">Téléphone (page publique)</dt>
+              <dd className="mt-0.5">{organization?.contactPhone || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-text-muted">WhatsApp (page publique)</dt>
+              <dd className="mt-0.5">{organization?.whatsappNumber || "—"}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-text-muted">Adresse (page publique)</dt>
+              <dd className="mt-0.5">{organization?.contactAddress || "—"}</dd>
+            </div>
+            <div>
               <dt className="text-text-muted">Image de bannière (page publique)</dt>
               <dd className="mt-0.5 truncate">{organization?.heroImage ?? "—"}</dd>
             </div>
@@ -949,6 +966,57 @@ export default function SettingsPage() {
               />
               {orgErrors.tagline && (
                 <p className="mt-1 text-xs text-destructive">{orgErrors.tagline.message}</p>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-contact-phone">
+                Téléphone (affiché sur votre site)
+              </label>
+              <Input
+                id="org-contact-phone"
+                className="w-full"
+                type="tel"
+                placeholder="ex: 27 22 00 00 00"
+                error={!!orgErrors.contactPhone}
+                {...registerOrg("contactPhone")}
+              />
+              {orgErrors.contactPhone && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.contactPhone.message}</p>
+              )}
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-whatsapp">
+                Numéro WhatsApp
+              </label>
+              <Input
+                id="org-whatsapp"
+                className="w-full"
+                type="tel"
+                placeholder="ex: +225 07 07 07 07 07"
+                error={!!orgErrors.whatsappNumber}
+                {...registerOrg("whatsappNumber")}
+              />
+              {orgErrors.whatsappNumber ? (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.whatsappNumber.message}</p>
+              ) : (
+                <p className="mt-1 text-xs text-text-muted">
+                  Vos clients pourront vous écrire et commander sur WhatsApp depuis votre site.
+                </p>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-contact-address">
+                Adresse (affichée sur votre site)
+              </label>
+              <Input
+                id="org-contact-address"
+                className="w-full"
+                placeholder="ex: Rue des Jardins, Cocody, Abidjan"
+                error={!!orgErrors.contactAddress}
+                {...registerOrg("contactAddress")}
+              />
+              {orgErrors.contactAddress && (
+                <p className="mt-1 text-xs text-destructive">{orgErrors.contactAddress.message}</p>
               )}
             </div>
             <div className="sm:col-span-2">

@@ -29,6 +29,10 @@ export interface PublicOrganization {
   /** Hex color (e.g. "#1a73e8") — the org's custom accent, applied per `storefrontTheme.customAccentApplied`. */
   brandColor?: string;
   tagline?: string;
+  contactPhone?: string;
+  /** International format, e.g. "+225 07 07 07 07 07" — see whatsappLink(). */
+  whatsappNumber?: string;
+  contactAddress?: string;
   heroImage?: string;
   enabledModules: string[];
   /** Which of "catalog"/"booking" to actually render — already intersected with enabledModules

@@ -11,6 +11,7 @@ import { BookingPanel, CheckoutPanel } from "./commerce-panels";
 import { resolveStorefrontStyle } from "@/templates/palette";
 import { StorefrontThemeStyle } from "@/templates/storefront-theme-style";
 import { MobileCartBar } from "@/templates/sections/MobileCartBar";
+import { WhatsAppButton } from "@/templates/sections/WhatsAppButton";
 import type { StorefrontTemplateProps } from "@/templates/types";
 import { EssentielTemplate } from "@/templates/essentiel/EssentielTemplate";
 import { VitrineTemplate } from "@/templates/vitrine/VitrineTemplate";
@@ -197,6 +198,13 @@ export default function StorefrontClient({
       <StorefrontThemeStyle style={style} nonce={nonce} />
       {renderTemplate(effectiveTheme.template, templateProps)}
       {commerceEnabled && <MobileCartBar cartCount={cartCount} onOpenCheckout={() => setShowCheckout(true)} />}
+      {organization.whatsappNumber && (
+        <WhatsAppButton
+          number={organization.whatsappNumber}
+          shopName={organization.name}
+          raised={commerceEnabled && cartCount > 0}
+        />
+      )}
       {organization.poweredByKorva && (
         <p className="bg-[var(--kt-surface)] pb-5 text-center text-xs text-[var(--kt-text-muted)]">
           Site propulsé par{" "}

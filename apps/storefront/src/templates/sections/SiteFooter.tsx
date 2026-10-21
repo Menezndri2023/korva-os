@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { MapPin, MessageCircle, Phone } from "lucide-react";
+import { telLink, whatsappLink } from "@/lib/contact";
 import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
 import type { SiteHeaderLink } from "./SiteHeader";
@@ -23,6 +25,7 @@ export function SiteFooter({
           {organization.tagline && (
             <p className={`mt-1 text-sm leading-relaxed ${KT.textMuted}`}>{organization.tagline}</p>
           )}
+          <ContactLines organization={organization} />
         </div>
         {links.length > 0 && (
           <nav aria-label="Liens utiles" className={`flex flex-col gap-2 text-sm ${KT.textMuted}`}>
@@ -35,5 +38,42 @@ export function SiteFooter({
         )}
       </div>
     </footer>
+  );
+}
+
+/** Phone, WhatsApp and address, each only when the shop gave it. */
+function ContactLines({ organization }: { organization: PublicOrganization }) {
+  const { contactPhone, whatsappNumber, contactAddress } = organization;
+  if (!contactPhone && !whatsappNumber && !contactAddress) return null;
+  return (
+    <ul className={`mt-4 space-y-2 text-sm ${KT.textMuted}`}>
+      {contactPhone && (
+        <li>
+          <a href={telLink(contactPhone)} className="inline-flex items-center gap-2 hover:underline">
+            <Phone aria-hidden className="h-4 w-4" />
+            {contactPhone}
+          </a>
+        </li>
+      )}
+      {whatsappNumber && (
+        <li>
+          <a
+            href={whatsappLink(whatsappNumber)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 hover:underline"
+          >
+            <MessageCircle aria-hidden className="h-4 w-4" />
+            WhatsApp {whatsappNumber}
+          </a>
+        </li>
+      )}
+      {contactAddress && (
+        <li className="flex items-start gap-2">
+          <MapPin aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
+          {contactAddress}
+        </li>
+      )}
+    </ul>
   );
 }

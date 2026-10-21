@@ -223,6 +223,11 @@ export class PublicService {
       brandColor: organization.brandColor,
       tagline: organization.tagline,
       heroImage: organization.heroImage,
+      // Contact details are never plan-gated: a free shop must at least be reachable. `|| undefined`
+      // because the dashboard clears a value by saving "".
+      contactPhone: organization.contactPhone || undefined,
+      whatsappNumber: organization.whatsappNumber || undefined,
+      contactAddress: organization.contactAddress || undefined,
       enabledModules: organization.enabledModules,
       visibleSections: this.computeVisibleSections(organization),
       shippingFlatRate: organization.shippingFlatRate,

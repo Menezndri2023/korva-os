@@ -70,6 +70,17 @@ export class Organization {
   @Prop()
   tagline?: string;
 
+  /** Public contact details on the site (footer, WhatsApp button) — every plan. */
+  @Prop()
+  contactPhone?: string;
+
+  /** International format ("+225 07…"); the storefront turns it into a wa.me link. */
+  @Prop()
+  whatsappNumber?: string;
+
+  @Prop()
+  contactAddress?: string;
+
   /** Wide banner image for the storefront hero, distinct from `logo` (which stays small, in the header). */
   @Prop()
   heroImage?: string;
