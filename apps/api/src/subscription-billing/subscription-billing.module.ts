@@ -23,5 +23,8 @@ import { SubscriptionAutoChargeSchedulerService } from './subscription-auto-char
     SubscriptionBillingService,
     SubscriptionAutoChargeSchedulerService,
   ],
+  // PlatformAdminModule records payments KORVA collected itself through settleAsPaid, the one
+  // definition of "a subscription invoice got paid".
+  exports: [SubscriptionBillingService],
 })
 export class SubscriptionBillingModule {}

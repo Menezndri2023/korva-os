@@ -1,5 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Organization } from '../organizations/schemas/organization.schema';
@@ -35,10 +34,7 @@ export interface ActivationRow {
  * KORVA's own view of its customers' activation: which shops have an empty site, no logo, no
  * WhatsApp, or nobody logging in for a week — the list to call or message.
  *
- * Platform-level, so it sits outside tenancy and every tenant permission: access is decided only
- * by PLATFORM_ADMIN_EMAILS (comma-separated, set by the operator on the server). Unset or empty,
- * nobody has access — closed by default. Checked against the user's CURRENT email in the database,
- * not the one in the token, so a changed address cannot keep an old grant.
+ * Served by the KORVA administration (PlatformAdminController), behind PlatformAdminGuard.
  */
 @Injectable()
 export class ActivationReportService {
@@ -50,29 +46,7 @@ export class ActivationReportService {
     private readonly membershipModel: Model<Membership>,
     @InjectModel(User.name) private readonly userModel: Model<User>,
     @InjectModel(Session.name) private readonly sessionModel: Model<Session>,
-    private readonly configService: ConfigService,
   ) {}
-
-  async assertPlatformAdmin(userId: string): Promise<void> {
-    const allowed = (
-      this.configService.get<string>('PLATFORM_ADMIN_EMAILS') ?? ''
-    )
-      .split(',')
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean);
-    const user = allowed.length
-      ? await this.userModel
-          .findById(userId, { email: 1 })
-          .lean<{ email: string }>()
-          .exec()
-      : null;
-    if (!user || !allowed.includes(user.email.toLowerCase())) {
-      throw new ForbiddenException({
-        code: 'PLATFORM_ADMIN_ONLY',
-        message: 'Reserved to KORVA platform administrators',
-      });
-    }
-  }
 
   async report(now: Date = new Date()): Promise<ActivationRow[]> {
     const organizations = await this.organizationModel

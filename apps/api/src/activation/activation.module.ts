@@ -14,7 +14,6 @@ import {
 import { User, UserSchema } from '../identity/schemas/user.schema';
 import { Session, SessionSchema } from '../identity/schemas/session.schema';
 import { ActivationReportService } from './activation-report.service';
-import { ActivationController } from './activation.controller';
 import { ActivationNudgeService } from './activation-nudge.service';
 import { ActivationNudgeSchedulerService } from './activation-nudge-scheduler.service';
 
@@ -31,12 +30,11 @@ import { ActivationNudgeSchedulerService } from './activation-nudge-scheduler.se
       { name: Session.name, schema: SessionSchema },
     ]),
   ],
-  controllers: [ActivationController],
   providers: [
     ActivationNudgeService,
     ActivationNudgeSchedulerService,
     ActivationReportService,
   ],
-  exports: [ActivationNudgeService],
+  exports: [ActivationNudgeService, ActivationReportService],
 })
 export class ActivationModule {}

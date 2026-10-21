@@ -29,6 +29,7 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { CommunicationModule } from './communication/communication.module';
 import { AiModule } from './ai/ai.module';
 import { ActivationModule } from './activation/activation.module';
+import { PlatformAdminModule } from './platform-admin/platform-admin.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { SubscriptionBillingModule } from './subscription-billing/subscription-billing.module';
 import { PublicModule } from './public/public.module';
@@ -74,6 +75,7 @@ import { CustomerServiceModule } from './customer-service/customer-service.modul
     IdentityModule,
     SubscriptionsModule,
     ActivationModule,
+    PlatformAdminModule,
     SubscriptionBillingModule,
     OrganizationsModule,
     CustomFieldsModule,

@@ -254,6 +254,47 @@ export class SubscriptionsService {
   }
 
   /**
+   * A KORVA administrator giving an organization more trial time — a prospect who needs another
+   * week to decide. Adds `days` to a trial still running, or opens a new one from now when none
+   * runs (also on an organization that already used its signup trial: this is a deliberate,
+   * audited exception, unlike startTrial). Clearing trialSettledAt lets the period sweep settle
+   * it again when it ends.
+   */
+  async extendTrial(
+    organizationId: string,
+    adminUserId: string,
+    days: number,
+  ): Promise<SubscriptionDocument> {
+    const subscription = await this.getForOrganization(organizationId);
+    const now = new Date();
+    const from =
+      subscription.trialEndsAt && subscription.trialEndsAt > now
+        ? subscription.trialEndsAt
+        : now;
+    subscription.trialPlanKey = subscription.trialPlanKey ?? SIGNUP_TRIAL.plan;
+    subscription.trialStartedAt = subscription.trialStartedAt ?? now;
+    subscription.trialEndsAt = new Date(
+      from.getTime() + days * 24 * 60 * 60 * 1000,
+    );
+    subscription.trialSettledAt = null;
+    await subscription.save();
+
+    await this.auditService.record({
+      organizationId,
+      userId: adminUserId,
+      action: 'UPDATE',
+      entity: 'subscription',
+      entityId: subscription.id as string,
+      metadata: {
+        trialExtendedByDays: days,
+        endsAt: subscription.trialEndsAt,
+        by: 'platform_admin',
+      },
+    });
+    return subscription;
+  }
+
+  /**
    * After a trial ends, brings enabledModules back to what the billed plan grants: modules the
    * plan lacks are switched off, and on a plan without both sales channels the one the type of
    * activity does not sell through is too. DATA IS NOT TOUCHED — an offer, a campaign, a variant
@@ -305,10 +346,18 @@ export class SubscriptionsService {
     return expired.length;
   }
 
+  /**
+   * `manualPayment`: a KORVA administrator assigning the plan after collecting the payment
+   * themselves (Mobile Money, cash, transfer) — see PlatformAdminService.assignPlan. It skips
+   * only the "can a provider charge this currency" refusal, which exists to stop an owner reaching
+   * a checkout that cannot take their money; there is no checkout here. Seats and modules are
+   * checked exactly as for an owner.
+   */
   async changePlan(
     organizationId: string,
     userId: string,
     planKey: string,
+    options: { manualPayment?: boolean } = {},
   ): Promise<SubscriptionDocument> {
     // Resolved in the organization's own currency: a tier the platform prices in EUR but not in
     // this tenant's currency is simply not sellable to them, and PLAN_NOT_FOUND says so rather
@@ -333,6 +382,7 @@ export class SubscriptionsService {
       this.configService.get<string>('BILLING_CHARGEABLE_CURRENCIES'),
     );
     if (
+      !options.manualPayment &&
       plan.priceAmount > 0 &&
       !isCurrencyChargeable(plan.priceCurrency, chargeable)
     ) {
@@ -443,7 +493,14 @@ export class SubscriptionsService {
       action: 'SETTINGS_CHANGE',
       entity: 'subscription',
       entityId: updated.id as string,
-      metadata: { plan: planKey, prorationAmount, prorationCurrency },
+      metadata: {
+        plan: planKey,
+        prorationAmount,
+        prorationCurrency,
+        ...(options.manualPayment
+          ? { manualPayment: true, by: 'platform_admin' }
+          : {}),
+      },
     });
 
     await this.eventBus.publish(organizationId, 'subscription.plan_changed', {
