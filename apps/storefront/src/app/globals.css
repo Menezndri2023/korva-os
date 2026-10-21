@@ -1,9 +1,27 @@
 @import "tailwindcss";
 @import "@korva/ui/tokens.css";
 
+/* @korva/ui's components carry their own Tailwind classes. Without scanning them, a class only
+ * the components use (bg-primary, text-on-primary) is never generated here, and every primary
+ * Button outside the templates rendered with no background at all. */
+@source "../../../../packages/ui/src";
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+}
+
+/*
+ * A tenant's site wears the tenant's colours, never KORVA's. @korva/ui's primary action is
+ * KORVA saffron, so here it is re-pointed at the organization's resolved accent (--kt-accent,
+ * declared by StorefrontThemeStyle). Pages that render no theme (account screens before the
+ * organization loads) fall back to the neutral near-black the storefront always had.
+ * Unlayered, so it wins over the @theme values Tailwind emits in its theme layer.
+ */
+:root {
+  --color-primary: var(--kt-accent, #18181b);
+  --color-primary-hover: color-mix(in srgb, var(--kt-accent, #18181b) 85%, #000000);
+  --color-on-primary: var(--kt-accent-contrast, #ffffff);
 }
 
 @theme inline {
