@@ -100,7 +100,7 @@ export default function LoginPage() {
 
         {mutation.isError && (
           <p className="text-sm text-destructive">
-            {mutation.error instanceof ApiError ? mutation.error.message : "Une erreur est survenue."}
+            {loginErrorMessage(mutation.error)}
           </p>
         )}
 
@@ -110,4 +110,16 @@ export default function LoginPage() {
       </form>
     </AuthShell>
   );
+}
+
+/** The API's messages are written for developers, in English; the person signing in gets these. */
+const LOGIN_ERRORS: Record<string, string> = {
+  INVALID_CREDENTIALS: "E-mail ou mot de passe incorrect.",
+  ACCOUNT_LOCKED: "Trop de tentatives : ce compte est bloqué quelques minutes. Réessayez plus tard.",
+  ACCOUNT_DISABLED: "Ce compte a été désactivé. Contactez le support KORVA.",
+};
+
+function loginErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) return LOGIN_ERRORS[error.code] ?? error.message;
+  return "Une erreur est survenue.";
 }

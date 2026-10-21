@@ -31,7 +31,30 @@ export function formatDay(value: string | null | undefined): string {
     : "—";
 }
 
+export type Channel = "orders" | "bookings" | "quotes" | "leads";
+
+/** What "activity" counts for each trade, in words. */
+export const CHANNEL_LABELS: Record<Channel, { one: string; many: string }> = {
+  orders: { one: "commande", many: "commandes" },
+  bookings: { one: "réservation", many: "réservations" },
+  quotes: { one: "devis", many: "devis" },
+  leads: { one: "prospect", many: "prospects" },
+};
+
+export function channelCount(count: number, channel: Channel | null): string {
+  if (!channel) return `${count} activité${count > 1 ? "s" : ""}`;
+  const label = CHANNEL_LABELS[channel];
+  return `${count} ${count > 1 ? label.many : label.one}`;
+}
+
 export interface PlatformOverview {
+  byBusinessModel: {
+    businessModel: BusinessModel | "none";
+    organizations: number;
+    sitesOnline: number;
+    activity30d: number;
+    channel: Channel | null;
+  }[];
   organizations: number;
   newLast7Days: number;
   newLast30Days: number;
@@ -74,7 +97,18 @@ export interface PlatformOrganization {
   contactPhone?: string;
   enabledModules: string[];
   activationNudgeSentAt: string | null;
-  counts: { offersOnline: number; offersTotal: number; orders: number; bookings: number };
+  suspendedAt: string | null;
+  suspensionReason: string | null;
+  counts: {
+    offersOnline: number;
+    offersTotal: number;
+    orders: number;
+    bookings: number;
+    quotes: number;
+    leads: number;
+    contacts: number;
+    invoices: number;
+  };
   members: { email: string; name: string | null; status: string }[];
   subscription: {
     planKey: string | null;
@@ -119,4 +153,69 @@ export async function homeWithoutOrganization(): Promise<"/admin" | "/onboarding
   } catch {
     return "/onboarding";
   }
+}
+
+export type BusinessIssue = "site_vide" | "sans_logo" | "sans_whatsapp" | "inactif";
+
+export interface PlatformBusinessRow {
+  id: string;
+  name: string;
+  slug: string;
+  businessModel?: BusinessModel;
+  createdAt: string;
+  ownerEmail: string | null;
+  activeOffers: number;
+  hasLogo: boolean;
+  hasWhatsapp: boolean;
+  websiteEnabled: boolean;
+  lastActivityAt: string | null;
+  nudgedAt: string | null;
+  suspendedAt: string | null;
+  issues: BusinessIssue[];
+  planKey: string | null;
+  activity30d: number;
+  channel: Channel | null;
+}
+
+export interface PlatformUserRow {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: string;
+  emailVerified: boolean;
+  twoFactor: boolean;
+  disabledAt: string | null;
+  lastActivityAt: string | null;
+  organizations: { id: string; name: string; status: string }[];
+}
+
+export interface PlatformPlanRow {
+  key: string;
+  name: string;
+  priceAmount: number;
+  priceCurrency: string;
+  modules: string[];
+  limits: Record<string, number>;
+  subscribers: number;
+}
+
+export interface PlatformAuditRow {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  userEmail: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface PlatformSystem {
+  api: { uptimeSeconds: number; nodeVersion: string; environment: string };
+  database: { dataBytes: number; storageBytes: number; indexBytes: number; collections: number; freeTierCapBytes: number };
+  email: { configured: boolean; provider: string; from: string | null };
+  payments: { platformAccounts: number };
+  administrators: number;
+  queues: { name: string; label: string; waiting: number; active: number; delayed: number; failed: number }[] | null;
 }

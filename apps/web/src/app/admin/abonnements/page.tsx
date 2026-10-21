@@ -82,7 +82,7 @@ function SubscriptionsList() {
               {data?.map((row) => (
                 <tr key={row.organizationId}>
                   <td className="px-4 py-3">
-                    <Link href={`/admin/commerces/${row.organizationId}`} className="font-medium hover:underline">
+                    <Link href={`/admin/entreprises/${row.organizationId}`} className="font-medium hover:underline">
                       {row.organizationName}
                     </Link>
                   </td>

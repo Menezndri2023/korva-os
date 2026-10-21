@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { PLAN_KEYS, PLAN_NAMES } from "@korva/types";
+import { BUSINESS_MODEL_DEFINITIONS, PLAN_KEYS, PLAN_NAMES } from "@korva/types";
 import { Card, PageHeader } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
-import { formatMoney, type PlatformOverview } from "@/lib/platform-admin";
+import { channelCount, formatMoney, type PlatformOverview } from "@/lib/platform-admin";
 
 /** The platform at a glance: who signed up, who is live, who pays, who needs a hand. */
 export default function AdminOverviewPage() {
@@ -24,12 +24,12 @@ export default function AdminOverviewPage() {
       {data && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="Commerces" value={data.organizations} hint={`+${data.newLast7Days} cette semaine, +${data.newLast30Days} sur 30 jours`} />
+            <Metric label="Entreprises" value={data.organizations} hint={`+${data.newLast7Days} cette semaine, +${data.newLast30Days} sur 30 jours`} />
             <Metric
               label="Sites en ligne"
               value={data.sitesOnline}
               hint={`${data.offersOnline} offres publiées`}
-              href="/admin/commerces"
+              href="/admin/entreprises"
             />
             <Metric label="Commandes (30 j)" value={data.ordersLast30Days} hint={`${data.bookingsLast30Days} réservations`} />
             <Metric
@@ -40,6 +40,41 @@ export default function AdminOverviewPage() {
               warn={data.pastDue > 0}
             />
           </div>
+
+          <Card className="overflow-hidden">
+            <div className="p-6 pb-3">
+              <h2 className="text-lg font-semibold">Par métier</h2>
+              <p className="mt-1 text-sm text-text-muted">
+                Chaque métier est mesuré sur son propre canal : commandes, réservations, devis ou prospects.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-y border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
+                  <tr>
+                    <th className="px-6 py-2.5">Métier</th>
+                    <th className="px-6 py-2.5">Entreprises</th>
+                    <th className="px-6 py-2.5">Sites en ligne</th>
+                    <th className="px-6 py-2.5">Activité sur 30 jours</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {data.byBusinessModel.map((group) => (
+                    <tr key={group.businessModel}>
+                      <td className="px-6 py-3 font-medium">
+                        {group.businessModel === "none"
+                          ? "Métier non renseigné"
+                          : BUSINESS_MODEL_DEFINITIONS[group.businessModel].label}
+                      </td>
+                      <td className="px-6 py-3 tabular-nums">{group.organizations}</td>
+                      <td className="px-6 py-3 tabular-nums">{group.sitesOnline}</td>
+                      <td className="px-6 py-3 tabular-nums">{channelCount(group.activity30d, group.channel)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="p-6">
@@ -62,7 +97,7 @@ export default function AdminOverviewPage() {
             </Card>
 
             <Card className="p-6">
-              <h2 className="text-lg font-semibold">Commerces par formule</h2>
+              <h2 className="text-lg font-semibold">Entreprises par formule</h2>
               <ul className="mt-4 space-y-3">
                 {PLAN_KEYS.map((plan) => {
                   const count = data.organizationsByPlan[plan] ?? 0;

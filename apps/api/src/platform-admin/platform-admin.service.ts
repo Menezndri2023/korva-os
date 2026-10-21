@@ -122,6 +122,12 @@ export type SubscriptionFilter =
  * SubscriptionBillingService.settleAsPaid — so an administrator's change follows exactly the
  * rules an owner's would, and lands in the same audit log.
  */
+/** One definition of "a site online" for every figure: website module on, at least one offer
+ *  published, and not suspended by the administration. */
+function isSiteOnline(row: ActivationRow): boolean {
+  return row.websiteEnabled && row.activeOffers > 0 && !row.suspendedAt;
+}
+
 /** Escapes a search string for use inside a RegExp. */
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -466,7 +472,7 @@ export class PlatformAdminService {
         channel: row.channel,
       };
       group.organizations += 1;
-      if (row.activeOffers > 0 && row.websiteEnabled) group.sitesOnline += 1;
+      if (isSiteOnline(row)) group.sitesOnline += 1;
       group.activity30d += row.activity30d;
       groups.set(key, group);
     }
@@ -493,33 +499,23 @@ export class PlatformAdminService {
 
   async overview(now: Date = new Date()) {
     const since = (days: number) => new Date(now.getTime() - days * DAY_MS);
-    const [
-      organizations,
-      new7,
-      new30,
-      sitesOnline,
-      offersOnline,
-      orders30,
-      bookings30,
-    ] = await Promise.all([
-      this.organizationModel.countDocuments().exec(),
-      this.organizationModel
-        .countDocuments({ createdAt: { $gte: since(7) } })
-        .exec(),
-      this.organizationModel
-        .countDocuments({ createdAt: { $gte: since(30) } })
-        .exec(),
-      this.collection('offers')
-        .distinct('organizationId', { status: 'active' })
-        .then((ids) => ids.length),
-      this.collection('offers').countDocuments({ status: 'active' }),
-      this.collection('orders').countDocuments({
-        createdAt: { $gte: since(30) },
-      }),
-      this.collection('bookings').countDocuments({
-        createdAt: { $gte: since(30) },
-      }),
-    ]);
+    const [organizations, new7, new30, offersOnline, orders30, bookings30] =
+      await Promise.all([
+        this.organizationModel.countDocuments().exec(),
+        this.organizationModel
+          .countDocuments({ createdAt: { $gte: since(7) } })
+          .exec(),
+        this.organizationModel
+          .countDocuments({ createdAt: { $gte: since(30) } })
+          .exec(),
+        this.collection('offers').countDocuments({ status: 'active' }),
+        this.collection('orders').countDocuments({
+          createdAt: { $gte: since(30) },
+        }),
+        this.collection('bookings').countDocuments({
+          createdAt: { $gte: since(30) },
+        }),
+      ]);
 
     const plans = await this.plansById();
     // Only subscriptions of organizations that still exist: an orphan row (its organization
@@ -552,6 +548,10 @@ export class PlatformAdminService {
     }
 
     const byBusinessModel = await this.byBusinessModel(now);
+    const sitesOnline = byBusinessModel.reduce(
+      (sum, group) => sum + group.sitesOnline,
+      0,
+    );
 
     return {
       byBusinessModel,

@@ -25,7 +25,9 @@ const shop: PlatformOrganization = {
   createdAt: "2026-10-01T00:00:00Z",
   enabledModules: ["website"],
   activationNudgeSentAt: null,
-  counts: { offersOnline: 2, offersTotal: 3, orders: 5, bookings: 0 },
+  counts: { offersOnline: 2, offersTotal: 3, orders: 5, bookings: 0, quotes: 1, leads: 0, contacts: 12, invoices: 2 },
+  suspendedAt: null,
+  suspensionReason: null,
   members: [{ email: "owner@korva.test", name: "Awa K", status: "active" }],
   subscription: {
     planKey: "free",
@@ -110,6 +112,32 @@ describe("AdminShopPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Prolonger de 21 jours" }));
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/trial", { days: 21 }, { withOrganization: false }),
+    );
+  });
+
+  it("suspends the business with a reason, only once one is typed", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Boutique Abidjan" });
+    const suspend = screen.getByRole("button", { name: "Suspendre" });
+    expect(suspend).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Motif de la suspension"), { target: { value: "Impayé" } });
+    fireEvent.click(suspend);
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/platform/organizations/org-1/suspend",
+        { reason: "Impayé" },
+        { withOrganization: false },
+      ),
+    );
+  });
+
+  it("offers reactivation for a suspended business", async () => {
+    getMock.mockResolvedValue({ ...shop, suspendedAt: "2026-10-20T00:00:00Z", suspensionReason: "Impayé" });
+    renderPage();
+    expect(await screen.findByText(/Entreprise suspendue depuis le/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Réactiver" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/reactivate", undefined, { withOrganization: false }),
     );
   });
 });

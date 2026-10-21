@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CreditCard, LayoutDashboard, Store, ArrowLeft } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  Building2,
+  CreditCard,
+  LayoutDashboard,
+  ScrollText,
+  Tags,
+  Users,
+} from "lucide-react";
 import { Card, EmptyState, ThemeToggle } from "@korva/ui";
 import { ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
@@ -11,8 +20,12 @@ import { useTheme } from "@/lib/theme-provider";
 
 const NAV = [
   { href: "/admin", label: "Vue d'ensemble", icon: LayoutDashboard, exact: true },
-  { href: "/admin/commerces", label: "Commerces", icon: Store, exact: false },
+  { href: "/admin/entreprises", label: "Entreprises", icon: Building2, exact: false },
+  { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users, exact: false },
   { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard, exact: false },
+  { href: "/admin/formules", label: "Formules", icon: Tags, exact: false },
+  { href: "/admin/journal", label: "Journal", icon: ScrollText, exact: false },
+  { href: "/admin/systeme", label: "Système", icon: Activity, exact: false },
 ];
 
 /**

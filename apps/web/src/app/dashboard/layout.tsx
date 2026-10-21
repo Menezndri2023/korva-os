@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BUSINESS_MODEL_DEFINITIONS, type KorvaModule, type Organization } from "@korva/types";
 import { Button, Notice, ThemeToggle } from "@korva/ui";
-import { apiClient } from "@/lib/api-client";
+import { ApiError, apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { usePlanFeatures } from "@/lib/use-plan-features";
@@ -131,7 +131,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const bootstrapped = useAuthStore((state) => state.bootstrapped);
   const setActiveOrganization = useAuthStore((state) => state.setActiveOrganization);
   const clear = useAuthStore((state) => state.clear);
-  const { data: organization } = useActiveOrganization();
+  const { data: organization, error: organizationError } = useActiveOrganization();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -205,6 +205,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // rather than trying to invalidate each query key individually, so nothing from the
     // previous organization can flash on screen under the new one.
     queryClient.clear();
+  }
+
+  // Suspended by KORVA's administration: every request in this organization's context is refused
+  // with ORGANIZATION_SUSPENDED. Say so plainly instead of a dashboard of failing panels.
+  if (organizationError instanceof ApiError && organizationError.code === "ORGANIZATION_SUSPENDED") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-app-background px-4">
+        <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-8 text-center">
+          <h1 className="text-2xl font-semibold">Compte suspendu</h1>
+          <p className="mt-2 text-sm text-text-muted">
+            L&apos;accès à cette entreprise est suspendu et son site est hors ligne. Vos données sont
+            conservées. Contactez le support KORVA pour la réactiver.
+          </p>
+          <Button variant="secondary" className="mt-6" onClick={() => void logout()}>
+            Se déconnecter
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (

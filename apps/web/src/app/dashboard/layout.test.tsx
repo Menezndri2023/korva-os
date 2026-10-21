@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor, fireEvent } from "@testing-library/react";
 import DashboardLayout from "./layout";
 import { renderWithProviders } from "@/test/render";
-import { apiClient } from "@/lib/api-client";
+import { ApiError, apiClient } from "@/lib/api-client";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn() }),
@@ -46,8 +46,12 @@ const getMock = vi.mocked(apiClient.get);
 
 let enabledModules: string[] = [];
 let businessModel: string | undefined;
+let organizationError: unknown = null;
 vi.mock("@/lib/use-active-organization", () => ({
-  useActiveOrganization: () => ({ data: { name: "Org de test", enabledModules, businessModel } }),
+  useActiveOrganization: () =>
+    organizationError
+      ? { data: undefined, error: organizationError }
+      : { data: { name: "Org de test", enabledModules, businessModel }, error: null },
 }));
 
 const orgA = { id: "org-1", name: "Org A" };
@@ -283,5 +287,17 @@ describe("DashboardLayout", () => {
         "false",
       );
     });
+  });
+
+  it("explains a suspension by KORVA instead of showing the dashboard", async () => {
+    organizationError = new ApiError("ORGANIZATION_SUSPENDED", "suspended");
+    try {
+      renderWithProviders(<DashboardLayout><p>Contenu du tableau de bord</p></DashboardLayout>);
+      expect(await screen.findByRole("heading", { name: "Compte suspendu" })).toBeInTheDocument();
+      expect(screen.queryByText("Contenu du tableau de bord")).toBeNull();
+      expect(screen.getByRole("button", { name: "Se déconnecter" })).toBeInTheDocument();
+    } finally {
+      organizationError = null;
+    }
   });
 });

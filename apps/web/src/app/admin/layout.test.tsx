@@ -28,7 +28,7 @@ describe("AdminLayout", () => {
     renderWithProviders(<AdminLayout><p>Contenu</p></AdminLayout>);
     expect(await screen.findByText("Contenu")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Vue d'ensemble" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Commerces" })).toHaveAttribute("href", "/admin/commerces");
+    expect(screen.getByRole("link", { name: "Entreprises" })).toHaveAttribute("href", "/admin/entreprises");
     expect(getMock).toHaveBeenCalledWith("/platform/me", { withOrganization: false });
   });
 

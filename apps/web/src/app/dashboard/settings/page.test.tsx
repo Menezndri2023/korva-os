@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Each test renders the whole Settings page (six tabs of sections, a dozen queries). Alone, this
+// file runs well within Vitest's 5 s default; under the full suite's parallel load a few tests
+// crossed it, which failed runs for no defect. A heavier page gets a longer budget.
+vi.setConfig({ testTimeout: 15_000 });
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SettingsPage from "./page";

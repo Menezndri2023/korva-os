@@ -44,6 +44,14 @@ export const ACTIVITY_ENTITY_LABELS: Record<string, string> = {
   deal: "Affaire",
   ticket: "Ticket",
   campaign: "Campagne",
+  conversation: "Conversation",
+  message: "Message",
+  payment: "Paiement",
+  refund: "Remboursement",
+  return_request: "Demande de retour",
+  review: "Avis",
+  user: "Compte",
+  integration: "Intégration",
 };
 
 export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
@@ -71,6 +79,8 @@ const FEMININE_ENTITIES = new Set([
   "workflow",
   "deal",
   "campaign",
+  "conversation",
+  "return_request",
 ]);
 
 const FEMININE_ACTION_LABELS: Record<string, string> = {

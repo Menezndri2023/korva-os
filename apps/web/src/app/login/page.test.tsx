@@ -26,3 +26,16 @@ describe("LoginPage — forgot password link", () => {
     expect(link).toHaveAttribute("href", "/forgot-password");
   });
 });
+
+describe("LoginPage — refused sign-ins, in French", () => {
+  it("says a disabled account must contact KORVA, not that the password is wrong", async () => {
+    const { apiClient, ApiError } = await import("@/lib/api-client");
+    vi.mocked(apiClient.post).mockRejectedValueOnce(new ApiError("ACCOUNT_DISABLED", "This account has been disabled."));
+    const { fireEvent } = await import("@testing-library/react");
+    renderWithProviders(<LoginPage />);
+    fireEvent.input(screen.getByLabelText("Email"), { target: { value: "awa@korva.test" } });
+    fireEvent.input(screen.getByLabelText("Mot de passe"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Se connecter" }));
+    expect(await screen.findByText("Ce compte a été désactivé. Contactez le support KORVA.")).toBeInTheDocument();
+  });
+});
