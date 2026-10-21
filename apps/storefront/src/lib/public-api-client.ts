@@ -24,9 +24,12 @@ interface RequestOptions {
   /** Bearer token for the storefront's authenticated customer-portal endpoints
    *  (/public/:slug/account/...) — never sent on any other request. */
   accessToken?: string;
+  /** Server-side only (see server-api.ts): the API's internal address and the visitor's IP. */
+  baseUrl?: string;
+  forwardedFor?: string;
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<ApiSuccess<T> | ApiListSuccess<T>> {
@@ -34,8 +37,11 @@ async function request<T>(
   if (options.accessToken) {
     headers.Authorization = `Bearer ${options.accessToken}`;
   }
+  if (options.forwardedFor) {
+    headers["X-Forwarded-For"] = options.forwardedFor;
+  }
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${options.baseUrl ?? API_URL}${path}`, {
     method: options.method ?? "GET",
     headers,
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,

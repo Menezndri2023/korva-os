@@ -1,9 +1,11 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
+import { configureProxyTrust } from './core/http/proxy-trust';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 import { publicCorsMiddleware } from './common/middleware/public-cors.middleware';
 import { StructuredLogger } from './common/logging/structured-logger.service';
@@ -19,7 +21,11 @@ async function bootstrap() {
   // the normal parsed `req.body` — this does not change parsing behavior for any other route).
   // Required by ResendWebhookController's Svix HMAC-SHA256 signature verification, which must
   // hash the exact bytes Resend sent — see communication/webhooks/resend-webhook.controller.ts.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
+
+  configureProxyTrust(app);
 
   // Replaces Nest's default ConsoleLogger with a JSON-structured one that also stamps every log
   // line with the current request's id (see common/logging/) — done as early as possible so it

@@ -31,6 +31,33 @@ export class ResourcesRepository {
       .exec();
   }
 
+  countForOrganization(organizationId: string): Promise<number> {
+    return this.resourceModel
+      .countDocuments({ organizationId: new Types.ObjectId(organizationId) })
+      .exec();
+  }
+
+  /** Creates the organization's default resource unless it already has one — atomic, so two
+   *  first visitors at once still produce a single resource. */
+  async upsertDefault(
+    organizationId: string,
+    data: Partial<Resource>,
+  ): Promise<void> {
+    await this.resourceModel
+      .updateOne(
+        { organizationId: new Types.ObjectId(organizationId), isDefault: true },
+        {
+          $setOnInsert: {
+            ...data,
+            organizationId: new Types.ObjectId(organizationId),
+            isDefault: true,
+          },
+        },
+        { upsert: true },
+      )
+      .exec();
+  }
+
   findAll(
     organizationId: string,
     activeOnly: boolean,

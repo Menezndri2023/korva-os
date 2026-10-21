@@ -2274,10 +2274,12 @@ interface RoleDetail {
  *  System roles are listed for visibility but never editable/deletable here (the API itself
  *  refuses, this UI just doesn't offer the buttons for them). */
 function RolesManagementSection() {
+  const authReady = useAuthReady();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
   const { data: roles, isLoading } = useQuery({
     queryKey: ["roles"],
+    enabled: authReady,
     queryFn: () => apiClient.get<RoleDetail[]>("/roles"),
   });
 
@@ -2433,6 +2435,7 @@ const CUSTOM_FIELD_TYPES_WITH_OPTIONS = new Set<CreateCustomFieldInput["type"]>(
  * fix a mistake by deleting and recreating rather than editing in place.
  */
 function CustomFieldsSection() {
+  const authReady = useAuthReady();
   const queryClient = useQueryClient();
   const [entity, setEntity] = useState<CustomFieldEntity>("contacts");
   const [createOpen, setCreateOpen] = useState(false);
@@ -2440,6 +2443,7 @@ function CustomFieldsSection() {
 
   const { data: fields, isLoading } = useQuery({
     queryKey: ["custom-fields", entity],
+    enabled: authReady,
     queryFn: () => apiClient.get<CustomField[]>(`/custom-fields?entity=${entity}`),
   });
 
@@ -2733,9 +2737,11 @@ function StorefrontPreviewSection({
  * then correctly capture real data on their first (and only) mount, with no sync effect needed.
  */
 function StorefrontContentSection() {
+  const authReady = useAuthReady();
   const { data: organization, isLoading } = useActiveOrganization();
   const { data: subscription } = useQuery({
     queryKey: ["subscriptions", "me"],
+    enabled: authReady,
     queryFn: () => apiClient.get<SubscriptionSummary>("/subscriptions/me"),
   });
   const planKey = subscription?.plan.key;
@@ -3697,10 +3703,12 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
 
 /** First read UI for AuditService.record — see apps/api/src/audit/audit.controller.ts. */
 function AuditLogSection() {
+  const authReady = useAuthReady();
   const [page, setPage] = useState(1);
   const limit = 20;
   const { data, isLoading } = useQuery({
     queryKey: ["audit-logs", page],
+    enabled: authReady,
     queryFn: () => apiClient.getList<AuditLogEntry>(`/audit-logs?page=${page}&limit=${limit}`),
   });
 

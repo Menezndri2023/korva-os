@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import StorefrontClient from "./storefront-client";
-import { publicApiClient } from "@/lib/public-api-client";
+import { serverApi } from "@/lib/server-api";
 import {
   classifyLookupFailure,
   unresolvedStorefrontMetadata,
@@ -23,14 +23,14 @@ interface StorefrontPageProps {
 
 /**
  * Wrapped in React's `cache()` so generateMetadata and the page body share ONE call per request.
- * publicApiClient sends `cache: "no-store"`, which opts out of Next's fetch memoization, so
+ * serverApi sends `cache: "no-store"`, which opts out of Next's fetch memoization, so
  * without this the organization was fetched twice for every page view — and three times once the
  * page started fetching it for the initial render below.
  */
 const fetchOrganization = cache(
   async (slug: string): Promise<OrganizationLookup<PublicOrganization>> => {
     try {
-      const organization = await publicApiClient.get<PublicOrganization>(
+      const organization = await serverApi.get<PublicOrganization>(
         `/public/${slug}`,
       );
       return { kind: "found", organization };
@@ -58,7 +58,7 @@ const fetchOfferSample = cache(
       return [];
     }
     try {
-      return await publicApiClient.get<PublicOffer[]>(`/public/${slug}/offers`);
+      return await serverApi.get<PublicOffer[]>(`/public/${slug}/offers`);
     } catch {
       return [];
     }

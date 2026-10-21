@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import OfferDetailClient from "./offer-detail-client";
-import { publicApiClient } from "@/lib/public-api-client";
+import { serverApi } from "@/lib/server-api";
 import {
   classifyLookupFailure,
   unresolvedStorefrontMetadata,
@@ -21,7 +21,7 @@ async function fetchOrganization(
   slug: string,
 ): Promise<OrganizationLookup<PublicOrganization>> {
   try {
-    const organization = await publicApiClient.get<PublicOrganization>(
+    const organization = await serverApi.get<PublicOrganization>(
       `/public/${slug}`,
     );
     return { kind: "found", organization };
@@ -61,7 +61,7 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
 
   let offer;
   try {
-    offer = await publicApiClient.get<{
+    offer = await serverApi.get<{
       name: string;
       description?: string;
       images: string[];

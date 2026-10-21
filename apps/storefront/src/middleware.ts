@@ -25,7 +25,9 @@ const platformHost = new URL(process.env.STOREFRONT_URL ?? "http://localhost:300
 async function resolveCustomDomain(host: string): Promise<string | null> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/public-sites/resolve-domain?host=${encodeURIComponent(host)}`,
+      // On the private network when configured (see lib/server-api.ts), like every other call the
+      // storefront server makes.
+      `${process.env.API_INTERNAL_URL ?? API_BASE_URL}/public-sites/resolve-domain?host=${encodeURIComponent(host)}`,
       { next: { revalidate: 300 } },
     );
     if (!response.ok) return null;
@@ -79,7 +81,8 @@ export async function middleware(request: NextRequest) {
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isProduction ? "" : " 'unsafe-eval'"}`,
     `style-src 'self' 'nonce-${nonce}'`,
-    `img-src 'self' data: https:`,
+    // + the API origin explicitly: uploads are served from it, and over plain http in development.
+    `img-src 'self' data: https: ${apiOrigin}`,
     `font-src 'self'`,
     `connect-src 'self' ${apiOrigin}`,
     `object-src 'none'`,

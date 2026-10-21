@@ -185,6 +185,20 @@ export function BookingPanel({
     onSuccess,
   });
 
+  // Nobody to book: the business switched every resource off (the API creates a default one
+  // when there was never any). Say so instead of showing a form that can never be sent.
+  if (resourcesQuery.isSuccess && resources.length === 0) {
+    return (
+      <Dialog open onClose={onClose} title={`Réserver — ${offer.name}`}>
+        <DialogCloseButton onClose={onClose} />
+        <p className="text-sm text-text-muted">
+          Les réservations en ligne ne sont pas ouvertes pour le moment. Contactez directement
+          l&apos;établissement pour prendre rendez-vous.
+        </p>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open onClose={onClose} title={`Réserver — ${offer.name}`}>
       <DialogCloseButton onClose={onClose} />

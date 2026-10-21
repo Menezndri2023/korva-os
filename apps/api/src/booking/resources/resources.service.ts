@@ -77,6 +77,39 @@ export class ResourcesService {
     });
   }
 
+  /**
+   * A business with booking switched on but no resource yet (the state right after signup —
+   * nobody has opened "Équipe et ressources") had a "Réserver" button leading to an empty choice
+   * and a form that could never be sent: every new salon, guesthouse or school took no booking.
+   * This creates one bookable resource named after the business, open Monday to Saturday,
+   * 9:00–18:00 — the owner renames it, changes its hours or adds the team whenever they like.
+   *
+   * Only when the organization has no resource at all, active or not: an owner who switched
+   * theirs off made a choice. Not counted against the bookable-staff quota check (there is
+   * nothing else, so it fits every plan).
+   */
+  async ensureDefaultResource(
+    organizationId: string,
+    organizationName: string,
+  ): Promise<void> {
+    if (
+      (await this.resourcesRepository.countForOrganization(organizationId)) > 0
+    )
+      return;
+    await this.resourcesRepository.upsertDefault(organizationId, {
+      name: organizationName.slice(0, 120),
+      type: 'person',
+      capacity: 1,
+      active: true,
+      // 0 = Sunday, as in AvailabilityService.
+      weeklyAvailability: [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+        dayOfWeek,
+        startTime: '09:00',
+        endTime: '18:00',
+      })),
+    });
+  }
+
   list(
     organizationId: string,
     activeOnly: boolean,

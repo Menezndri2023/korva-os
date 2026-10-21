@@ -24,6 +24,13 @@ export function useAuthBootstrap(): void {
 
   useEffect(() => {
     if (bootstrapped) return;
+    // Nobody has signed in from this browser (no remembered user): there is no session to
+    // recover, so skip the call that could only answer 401 — every anonymous visit of the landing
+    // page, the sign-in pages and the administration used to make it.
+    if (!useAuthStore.getState().user) {
+      setBootstrapped(true);
+      return;
+    }
     let cancelled = false;
 
     getRefreshedAccessToken()

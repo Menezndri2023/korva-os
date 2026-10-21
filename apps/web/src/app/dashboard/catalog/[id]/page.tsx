@@ -754,12 +754,15 @@ function StockLevelsSection({
   offerId: string;
   variants: Offer["variants"];
 }) {
+  const authReady = useAuthReady();
   const levelsQuery = useQuery({
     queryKey: ["offers", offerId, "stock-levels"],
+    enabled: authReady,
     queryFn: () => apiClient.get<StockLevel[]>(`/offers/${offerId}/stock/levels`),
   });
   const warehousesQuery = useQuery({
     queryKey: ["warehouses"],
+    enabled: authReady,
     queryFn: () => apiClient.get<Warehouse[]>("/warehouses"),
   });
   const levels = levelsQuery.data;
@@ -875,6 +878,7 @@ function StockMovementsSection({
   offerId: string;
   variants: Offer["variants"];
 }) {
+  const authReady = useAuthReady();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
 
@@ -906,6 +910,7 @@ function StockMovementsSection({
 
   const movementsQuery = useQuery({
     queryKey: ["stock-movements", offerId, page],
+    enabled: authReady,
     queryFn: () =>
       apiClient.getList<StockMovement>(`/offers/${offerId}/stock/movements?page=${page}`),
   });
@@ -915,6 +920,7 @@ function StockMovementsSection({
   // keeps today's exact aggregate-only behavior.
   const warehousesQuery = useQuery({
     queryKey: ["warehouses"],
+    enabled: authReady,
     queryFn: () => apiClient.get<Warehouse[]>("/warehouses"),
   });
   const warehouses = warehousesQuery.data;

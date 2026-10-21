@@ -38,7 +38,8 @@ describe("dashboard query vs. auth bootstrap race (Bug #6)", () => {
   beforeEach(() => {
     useAuthStore.setState({
       accessToken: null,
-      user: null,
+      // A returning user: signed in from this browser before, so the bootstrap tries a refresh.
+      user: { id: "user-1", email: "ada@example.com" } as never,
       activeOrganizationId: "org-1", // simulates a returning, already-onboarded user
       bootstrapped: false,
     });

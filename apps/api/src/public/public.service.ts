@@ -534,6 +534,11 @@ export class PublicService {
     const organization = await this.resolveOrganization(slug);
     this.assertModuleEnabled(organization, 'booking');
 
+    // A business that switched booking on but set up nobody yet must still be bookable.
+    await this.resourcesService.ensureDefaultResource(
+      organization.id as string,
+      organization.name,
+    );
     const resources = await this.resourcesService.list(
       organization.id as string,
       true,

@@ -135,7 +135,17 @@ export class Resource {
    */
   @Prop({ default: 0, select: false })
   bookingLockVersion!: number;
+
+  /** The resource KORVA created on its own so a business with booking switched on but nobody
+   *  set up yet can still be booked (ResourcesService.ensureDefaultResource). At most one per
+   *  organization (unique partial index below); a normal resource once the owner edits it. */
+  @Prop()
+  isDefault?: boolean;
 }
 
 export const ResourceSchema = SchemaFactory.createForClass(Resource);
 ResourceSchema.index({ organizationId: 1, active: 1 });
+ResourceSchema.index(
+  { organizationId: 1, isDefault: 1 },
+  { unique: true, partialFilterExpression: { isDefault: true } },
+);

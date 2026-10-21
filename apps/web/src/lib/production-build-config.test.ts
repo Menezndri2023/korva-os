@@ -63,4 +63,8 @@ describe("storefront runtime environment", () => {
   it.each(["STOREFRONT_URL", "APP_URL"])("sets %s", (name) => {
     expect(serviceBlock("storefront")).toMatch(new RegExp(`^\\s+${name}: \\$\\{${name}\\}`, "m"));
   });
+
+  it("calls the API on the private network", () => {
+    expect(serviceBlock("storefront")).toMatch(/^\s+API_INTERNAL_URL: http:\/\/api:4000\/api\/v1$/m);
+  });
 });

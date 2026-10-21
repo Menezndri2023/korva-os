@@ -15,7 +15,8 @@ describe("useAuthBootstrap", () => {
   beforeEach(() => {
     useAuthStore.setState({
       accessToken: null,
-      user: null,
+      // Someone signed in from this browser before: there is a session to try to recover.
+      user: { id: "user-1", email: "ada@example.com" } as never,
       activeOrganizationId: null,
       bootstrapped: false,
     });
@@ -92,5 +93,14 @@ describe("useAuthBootstrap", () => {
 
     await waitFor(() => expect(useAuthStore.getState().bootstrapped).toBe(true));
     expect(useAuthStore.getState().accessToken).toBeNull();
+  });
+
+  it("skips the refresh entirely when nobody ever signed in from this browser", async () => {
+    useAuthStore.setState({ user: null });
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    renderHook(() => useAuthBootstrap());
+    await waitFor(() => expect(useAuthStore.getState().bootstrapped).toBe(true));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

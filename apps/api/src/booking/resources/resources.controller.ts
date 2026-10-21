@@ -19,6 +19,7 @@ import {
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import { ResourcesService } from './resources.service';
+import { OrganizationsService } from '../../organizations/organizations.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -28,15 +29,26 @@ import { RequireModule } from '../../common/decorators/require-module.decorator'
 @RequireModule('booking')
 @Controller('resources')
 export class ResourcesController {
-  constructor(private readonly resourcesService: ResourcesService) {}
+  constructor(
+    private readonly resourcesService: ResourcesService,
+    private readonly organizationsService: OrganizationsService,
+  ) {}
 
   @RequirePermissions('bookings.read')
   @Get()
-  list(
+  async list(
     @CurrentTenant() tenant: TenantContext,
     @Query('active') active?: string,
     @Query('membershipId') membershipId?: string,
   ) {
+    // Same default as the public site: a business with booking on is never left with nobody.
+    const organization = await this.organizationsService.getById(
+      tenant.organizationId,
+    );
+    await this.resourcesService.ensureDefaultResource(
+      tenant.organizationId,
+      organization.name,
+    );
     return this.resourcesService.list(
       tenant.organizationId,
       active === 'true',

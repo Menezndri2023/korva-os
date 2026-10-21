@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import TrackClient from "./track-client";
-import { publicApiClient } from "@/lib/public-api-client";
+import { serverApi } from "@/lib/server-api";
 import type { PublicOrganization } from "@/lib/public-types";
 
 interface TrackPageProps {
@@ -9,7 +9,7 @@ interface TrackPageProps {
 
 async function fetchOrganization(slug: string): Promise<PublicOrganization | null> {
   try {
-    return await publicApiClient.get<PublicOrganization>(`/public/${slug}`);
+    return await serverApi.get<PublicOrganization>(`/public/${slug}`);
   } catch {
     return null;
   }
