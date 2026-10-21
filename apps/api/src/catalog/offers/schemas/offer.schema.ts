@@ -156,6 +156,10 @@ export class Offer {
   @Prop({ type: Number, min: 1 })
   minNights?: number | null;
 
+  /** See Offer.bufferMinutes in @korva/types. */
+  @Prop({ type: Number, min: 0 })
+  bufferMinutes?: number | null;
+
   /** See Offer.compareAtPrice in @korva/types. Null once cleared. */
   @Prop({ type: Number, min: 0 })
   compareAtPrice?: number | null;

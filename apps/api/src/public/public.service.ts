@@ -585,6 +585,8 @@ export class PublicService {
         query.resourceId,
         query.date,
         durationMinutes,
+        undefined,
+        offer.bufferMinutes ?? 0,
       ),
     };
   }
@@ -727,6 +729,8 @@ export class PublicService {
         table.id as string,
         query.date,
         durationMinutes,
+        undefined,
+        offer.bufferMinutes ?? 0,
       );
       for (const slot of slots) byStart.set(slot.startAt, slot);
     }

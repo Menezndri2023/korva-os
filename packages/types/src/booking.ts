@@ -90,6 +90,9 @@ export interface Booking {
   nights?: number;
   /** Party size of a table booking. */
   partySize?: number;
+  /** When the resource becomes free again: endAt plus the offer's buffer (Offer.bufferMinutes).
+   *  Absent on bookings made before buffers existed, which then occupy until endAt. */
+  blockedUntil?: string;
   notes?: string;
   /** Set once BookingReminderSchedulerService has sent a reminder for this appointment — absent
    *  otherwise. Cleared on reschedule (the old reminder no longer applies to the new time). */

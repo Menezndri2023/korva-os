@@ -170,6 +170,7 @@ export class OffersService {
       optionGroups: input.optionGroups,
       bookingUnit: input.bookingUnit,
       minNights: input.minNights,
+      bufferMinutes: input.bufferMinutes,
     });
 
     await this.auditService.record({

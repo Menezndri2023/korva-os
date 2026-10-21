@@ -59,6 +59,10 @@ export class Booking {
   @Prop({ min: 1 })
   partySize?: number;
 
+  /** See Booking.blockedUntil in @korva/types — endAt plus the offer's buffer. */
+  @Prop()
+  blockedUntil?: Date;
+
   @Prop()
   notes?: string;
 

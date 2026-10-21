@@ -294,6 +294,20 @@ export default function CatalogPage() {
           {fields.duration && bookingUnit !== "night" && (
             <Input
               type="number"
+              min="0"
+              max="240"
+              step="5"
+              aria-label="Temps de battement après (minutes)"
+              placeholder="Temps de battement après chaque rendez-vous, en minutes (optionnel)"
+              className="col-span-2"
+              {...register("bufferMinutes", {
+                setValueAs: (v: string | number | null) => (v === "" || v == null ? undefined : Number(v)),
+              })}
+            />
+          )}
+          {fields.duration && bookingUnit !== "night" && (
+            <Input
+              type="number"
               step="5"
               min={OFFER_MIN_DURATION_MINUTES}
               max={OFFER_MAX_DURATION_MINUTES}

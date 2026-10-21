@@ -51,6 +51,8 @@ export function pruneForType<T extends CreateOfferInput | UpdateOfferInput>(
       fields.duration && values.bookingUnit !== "night" ? values.durationMinutes : gone,
     bookingUnit: fields.duration ? values.bookingUnit : undefined,
     minNights: fields.duration && values.bookingUnit === "night" ? values.minNights : gone,
+    bufferMinutes:
+      fields.duration && values.bookingUnit !== "night" ? values.bufferMinutes : gone,
     // Groups and options left without a name are dropped, then empty groups with them.
     optionGroups: fields.options
       ? (drafts.optionGroups ?? [])

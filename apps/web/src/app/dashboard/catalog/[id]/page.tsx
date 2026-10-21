@@ -155,6 +155,7 @@ export default function OfferDetailPage() {
       compareAtPrice: offer.compareAtPrice ?? null,
       bookingUnit: offer.bookingUnit ?? "slot",
       minNights: offer.minNights ?? null,
+      bufferMinutes: offer.bufferMinutes ?? null,
     });
   }
   function cancelEdit() {
@@ -514,6 +515,20 @@ export default function OfferDetailPage() {
                 placeholder="Séjour minimum en nuits (optionnel)"
                 className="col-span-2"
                 {...register("minNights", {
+                  setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
+                })}
+              />
+            )}
+            {fields.duration && bookingUnit !== "night" && (
+              <Input
+                type="number"
+                min="0"
+                max="240"
+                step="5"
+                aria-label="Temps de battement après (minutes)"
+                placeholder="Temps de battement après chaque rendez-vous, en minutes (optionnel)"
+                className="col-span-2"
+                {...register("bufferMinutes", {
                   setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
                 })}
               />

@@ -324,6 +324,56 @@ describe('AvailabilityService — getDaySlots', () => {
     ).toEqual(['09:00', '09:30', '10:00']);
   });
 
+  it("keeps the resource busy during an existing booking's buffer", async () => {
+    const { service, findForResourceOnDay } = buildService(
+      mondayResource('09:00', '12:00'),
+      'Africa/Abidjan',
+    );
+    findForResourceOnDay.mockResolvedValue([
+      {
+        startAt: new Date('2026-07-06T09:00:00.000Z'),
+        endAt: new Date('2026-07-06T10:00:00.000Z'),
+        // 15 minutes of cleaning after it.
+        blockedUntil: new Date('2026-07-06T10:15:00.000Z'),
+      },
+    ]);
+
+    const slots = await service.getDaySlots(
+      ORG_ID,
+      RESOURCE_ID,
+      DATE,
+      60,
+      BEFORE_THAT_DAY,
+    );
+
+    expect(slots.map((s) => s.time)).toEqual(['10:30', '11:00']);
+  });
+
+  it('refuses a slot whose own buffer would run into the next booking', async () => {
+    const { service, findForResourceOnDay } = buildService(
+      mondayResource('09:00', '12:00'),
+      'Africa/Abidjan',
+    );
+    findForResourceOnDay.mockResolvedValue([
+      {
+        startAt: new Date('2026-07-06T11:00:00.000Z'),
+        endAt: new Date('2026-07-06T12:00:00.000Z'),
+      },
+    ]);
+
+    // 60 minutes + 30 of buffer: 10:00 would hold the resource until 11:30.
+    const slots = await service.getDaySlots(
+      ORG_ID,
+      RESOURCE_ID,
+      DATE,
+      60,
+      BEFORE_THAT_DAY,
+      30,
+    );
+
+    expect(slots.map((s) => s.time)).toEqual(['09:00', '09:30']);
+  });
+
   it('drops slots overlapping a blocked period and slots already in the past', async () => {
     const { service } = buildService(
       mondayResource('09:00', '12:00', {

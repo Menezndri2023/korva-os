@@ -16,6 +16,20 @@ export interface FindBookingsOptions {
   to?: string;
 }
 
+/**
+ * "Still occupies the resource after `instant`": a booking holds its resource until blockedUntil
+ * (end + the offer's buffer) when it has one, and until endAt otherwise — bookings made before
+ * buffers existed have no blockedUntil.
+ */
+function occupiedAfter(instant: Date): FilterQuery<Booking> {
+  return {
+    $or: [
+      { blockedUntil: { $gt: instant } },
+      { blockedUntil: { $exists: false }, endAt: { $gt: instant } },
+    ],
+  };
+}
+
 @Injectable()
 export class BookingsRepository {
   constructor(
@@ -96,7 +110,7 @@ export class BookingsRepository {
       resourceId: new Types.ObjectId(resourceId),
       status: { $in: ACTIVE_STATUSES },
       startAt: { $lt: endAt },
-      endAt: { $gt: startAt },
+      ...occupiedAfter(startAt),
     };
     if (excludeBookingId)
       filter._id = { $ne: new Types.ObjectId(excludeBookingId) };
@@ -118,7 +132,7 @@ export class BookingsRepository {
         resourceId: new Types.ObjectId(resourceId),
         status: { $in: ACTIVE_STATUSES },
         startAt: { $lt: dayEnd },
-        endAt: { $gt: dayStart },
+        ...occupiedAfter(dayStart),
       })
       .sort({ startAt: 1 })
       .exec();

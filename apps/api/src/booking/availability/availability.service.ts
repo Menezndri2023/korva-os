@@ -175,7 +175,7 @@ export class AvailabilityService {
     session?: ClientSession,
     /** A stay (per-night offer) spans several days: weekly opening hours are per day and do not
      *  apply to it. Blocked periods, overlaps and capacity still do. */
-    options: { stay?: boolean } = {},
+    options: { stay?: boolean; bufferMinutes?: number } = {},
   ): Promise<ResourceDocument> {
     const resource = await this.resourcesRepository.findById(
       organizationId,
@@ -228,11 +228,17 @@ export class AvailabilityService {
         .exec();
     }
 
+    // The new booking occupies the resource until its end PLUS its buffer; existing ones until
+    // their blockedUntil (BookingsRepository's occupiedAfter). Opening hours are checked against
+    // the real end above — a buffer may run past closing time.
+    const occupiedUntil = new Date(
+      endAt.getTime() + (options.bufferMinutes ?? 0) * 60_000,
+    );
     const overlapping = await this.bookingsRepository.findOverlapping(
       organizationId,
       resourceId,
       startAt,
-      endAt,
+      occupiedUntil,
       excludeBookingId,
       session,
     );
@@ -337,6 +343,8 @@ export class AvailabilityService {
     date: string,
     durationMinutes: number,
     now: Date = new Date(),
+    /** The offer's buffer after each slot — see Offer.bufferMinutes. */
+    bufferMinutes = 0,
   ): Promise<{ startAt: string; endAt: string; time: string }[]> {
     const resource = await this.resourcesRepository.findById(
       organizationId,
@@ -384,8 +392,12 @@ export class AvailabilityService {
         if (!isWithinWeeklyWindows(resource, startAt, endAt, timezone))
           continue;
         if (overlapsBlockedSlot(resource, startAt, endAt)) continue;
+        const occupiedUntil = new Date(
+          endAt.getTime() + bufferMinutes * 60_000,
+        );
         const overlapping = bookings.filter(
-          (b) => b.startAt < endAt && startAt < b.endAt,
+          (b) =>
+            b.startAt < occupiedUntil && startAt < (b.blockedUntil ?? b.endAt),
         ).length;
         if (overlapping >= resource.capacity) continue;
         slots.push({

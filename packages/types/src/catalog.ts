@@ -120,6 +120,9 @@ export interface Offer {
   bookingUnit?: BookingUnit;
   /** Shortest stay accepted for a per-night offer. */
   minNights?: number | null;
+  /** Minutes the resource stays unavailable AFTER a slot of this offer (cleaning, setting up the
+   *  next client). The customer's booking still ends at its own end. */
+  bufferMinutes?: number | null;
   /** Price before a promotion, shown struck through next to `pricing.amount`. Always higher than
    *  it (enforced by the API). Unset or null means no promotion is displayed. */
   compareAtPrice?: number | null;

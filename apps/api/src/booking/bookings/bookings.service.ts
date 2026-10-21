@@ -68,6 +68,8 @@ export class BookingsService {
     const startAt = new Date(input.startAt);
     const endAt = new Date(input.endAt);
     const stay = await this.resolveStay(organizationId, offer, startAt, endAt);
+    // A stay already ends at check-out time; a buffer only applies to slots.
+    const buffer = stay ? 0 : (offer.bufferMinutes ?? 0);
 
     // The overlap-count read and the booking insert must be atomic w.r.t. any other concurrent
     // create() for the same resource, or two requests can both read "under capacity" before
@@ -89,7 +91,7 @@ export class BookingsService {
           endAt,
           undefined,
           session,
-          { stay: stay !== null },
+          { stay: stay !== null, bufferMinutes: buffer },
         );
 
         return this.bookingsRepository.create(
@@ -109,6 +111,9 @@ export class BookingsService {
             },
             nights: stay?.nights,
             partySize: input.partySize,
+            blockedUntil: buffer
+              ? new Date(endAt.getTime() + buffer * 60_000)
+              : undefined,
             notes: input.notes,
             // Snapshot, not a live join — see Booking.staffMembershipId's own doc comment.
             staffMembershipId: resource.membershipId,
@@ -263,6 +268,12 @@ export class BookingsService {
     const endAt = new Date(input.endAt);
     // A stay keeps being a stay: re-counted, re-checked for its minimum, and re-priced at the
     // same nightly rate it was booked at.
+    // The buffer it was booked with moves with it.
+    const buffer = booking.blockedUntil
+      ? Math.round(
+          (booking.blockedUntil.getTime() - booking.endAt.getTime()) / 60_000,
+        )
+      : 0;
     let stayUpdate:
       | { nights: number; pricing: { amount: number; currency: string } }
       | undefined;
@@ -295,13 +306,16 @@ export class BookingsService {
       endAt,
       id,
       undefined,
-      { stay: Boolean(booking.nights) },
+      { stay: Boolean(booking.nights), bufferMinutes: buffer },
     );
 
     const updated = await this.bookingsRepository.update(organizationId, id, {
       startAt,
       endAt,
       ...stayUpdate,
+      ...(buffer
+        ? { blockedUntil: new Date(endAt.getTime() + buffer * 60_000) }
+        : {}),
     });
     if (!updated) {
       throw new NotFoundException({
