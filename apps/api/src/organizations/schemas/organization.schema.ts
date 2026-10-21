@@ -81,6 +81,11 @@ export class Organization {
   @Prop()
   contactAddress?: string;
 
+  /** When the "your site has no offer online yet" reminder went out — at most once per
+   *  organization. See activation/activation-nudge.service.ts. */
+  @Prop()
+  activationNudgeSentAt?: Date;
+
   /** Wide banner image for the storefront hero, distinct from `logo` (which stays small, in the header). */
   @Prop()
   heroImage?: string;
