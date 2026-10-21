@@ -45,6 +45,9 @@ overrides:
   engine.io: ">=6.6.10" # Engine.IO protocol revision mismatch DoS
   source-map-js: ">=1.2.2" # event-loop DoS
   undici: ">=8.10.2" # DoS via unrequested data
+  # moderate (2026-10-21) — capped below the next major on purpose (see the vite note below)
+  qs: ">=6.16.0 <7" # array-limit bypass + DoS via isBuffer (express > body-parser)
+  js-yaml: ">=5.4.1 <6" # CPU exhaustion via empty merge sources (@nestjs/swagger)
   # Upper bound on purpose: an open ">=" range can jump a major version (see the pnpm 11 note
   # in this repo's history). vite is test/dev tooling only (vitest, @vitejs/plugin-react).
   vite: ">=8.2.4 <9" # launch-editor existence check bypass on Windows (GHSA-587h-7wmj-h5pm)
