@@ -106,3 +106,17 @@ export const SUBSCRIPTION_STATUS_LABELS: Record<string, string> = {
   past_due: "Impayé",
   canceled: "Résilié",
 };
+
+/**
+ * Where to send a user who belongs to no organization yet: KORVA's administrators to /admin
+ * (they have no business of their own to set up), everyone else to onboarding. A 403 — the
+ * usual answer — simply means "not an administrator".
+ */
+export async function homeWithoutOrganization(): Promise<"/admin" | "/onboarding"> {
+  try {
+    await apiClient.get("/platform/me", { withOrganization: false });
+    return "/admin";
+  } catch {
+    return "/onboarding";
+  }
+}
