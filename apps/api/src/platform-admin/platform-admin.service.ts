@@ -121,9 +121,12 @@ export class PlatformAdminService {
     ]);
 
     const plans = await this.plansById();
+    // Only subscriptions of organizations that still exist: an orphan row (its organization
+    // deleted) would otherwise count towards a plan and the expected revenue.
+    const existingIds = await this.organizationModel.distinct('_id').exec();
     const subscriptions = (await this.collection('subscriptions')
       .find(
-        {},
+        { organizationId: { $in: existingIds } },
         {
           projection: { planId: 1, status: 1, trialEndsAt: 1, trialPlanKey: 1 },
         },
@@ -167,8 +170,9 @@ export class PlatformAdminService {
     now: Date = new Date(),
   ) {
     const plans = await this.plansById();
+    const existingIds = await this.organizationModel.distinct('_id').exec();
     const rows = (await this.collection('subscriptions')
-      .find({})
+      .find({ organizationId: { $in: existingIds } })
       .sort({ updatedAt: -1 })
       .limit(500)
       .toArray()) as unknown as SubscriptionRow[];

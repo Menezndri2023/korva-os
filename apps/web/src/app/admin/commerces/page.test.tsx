@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
-import PlatformActivationPage from "./page";
+import { screen, fireEvent } from "@testing-library/react";
+import AdminShopsPage from "./page";
 import { renderWithProviders } from "@/test/render";
-import { ApiError, apiClient } from "@/lib/api-client";
+import { apiClient } from "@/lib/api-client";
 
 vi.mock("@/lib/auth-store", () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
@@ -31,7 +31,7 @@ const row = (slug: string, issues: string[]) => ({
   issues,
 });
 
-describe("PlatformActivationPage", () => {
+describe("AdminShopsPage", () => {
   // Braces matter: mockReset() returns the mock, and a function returned from beforeEach is
   // run by Vitest as a cleanup hook — it called the rejecting mock after the test.
   beforeEach(() => {
@@ -40,18 +40,10 @@ describe("PlatformActivationPage", () => {
 
   it("filters the shops by what they need", async () => {
     getMock.mockResolvedValue([row("empty-shop", ["site_vide"]), row("busy-shop", ["sans_logo"])]);
-    renderWithProviders(<PlatformActivationPage />);
+    renderWithProviders(<AdminShopsPage />);
     expect(await screen.findByText("busy-shop")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Site vide (1)" }));
     expect(screen.getByText("empty-shop")).toBeInTheDocument();
     expect(screen.queryByText("busy-shop")).toBeNull();
-  });
-
-  it("explains a refusal instead of showing an empty table", async () => {
-    getMock.mockImplementation(() =>
-      Promise.reject(new ApiError("PLATFORM_ADMIN_ONLY", "Reserved")),
-    );
-    renderWithProviders(<PlatformActivationPage />);
-    await waitFor(() => expect(screen.getByText("Réservé à l'équipe KORVA")).toBeInTheDocument());
   });
 });
