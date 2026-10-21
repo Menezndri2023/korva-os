@@ -15,6 +15,7 @@ import {
   MODULE_PROMISES,
   TRIGGER_SENTENCES,
 } from "@/lib/landing-content";
+import { SitePreview } from "./site-preview";
 
 /**
  * The hero's working part: the visitor names their trade, and the page shows the account they
@@ -97,7 +98,7 @@ export function TradePanel() {
           {VERTICAL_TEMPLATES.map((item) => (
             <label
               key={item.key}
-              className="cursor-pointer rounded-full border border-ink-soft px-3.5 py-1.5 text-sm text-ink-muted transition-colors hover:border-paper hover:text-paper has-[:checked]:border-paper has-[:checked]:bg-paper has-[:checked]:font-medium has-[:checked]:text-ink has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-paper has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-ink-deep"
+              className="cursor-pointer rounded-full border border-ink-soft px-3.5 py-1.5 text-sm text-ink-muted transition-colors hover:border-paper hover:text-paper has-[:checked]:border-primary has-[:checked]:bg-primary has-[:checked]:font-semibold has-[:checked]:text-on-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-paper has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-ink-deep"
             >
               <input
                 type="radio"
@@ -113,112 +114,119 @@ export function TradePanel() {
         </div>
       </fieldset>
 
-      {/* aria-live so the panel's replacement is announced: a sighted visitor sees the content
-          swap under the control they just used, a screen-reader user otherwise gets silence. */}
-      <div
-        id={groupId}
-        aria-live="polite"
-        className="mt-6 rounded-xl bg-paper p-6 text-ink shadow-xl sm:mt-8 sm:p-8"
-      >
-        <p className="text-sm text-ink-soft">Ce que vous obtenez en ouvrant le compte</p>
-        <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-          {vertical.label}
-        </h2>
-        <p className="mt-2 max-w-prose text-[0.9375rem] leading-relaxed text-ink-soft">
-          {vertical.description}
-        </p>
+      {/* The phone beside the panel from lg:, above it on a phone — it is the part that shows
+          the visitor their own site, so on a small screen it comes before the details. */}
+      <div className="mt-6 grid gap-8 sm:mt-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-12">
+        <div className="lg:sticky lg:top-8 lg:order-last">
+          <SitePreview vertical={vertical} />
+        </div>
+        {/* aria-live so the panel's replacement is announced: a sighted visitor sees the content
+            swap under the control they just used, a screen-reader user otherwise gets silence. */}
+        <div
+          id={groupId}
+          aria-live="polite"
+          className="rounded-2xl bg-paper p-6 text-ink shadow-xl sm:p-8"
+        >
+          <p className="text-sm text-ink-soft">Ce que vous obtenez en ouvrant le compte</p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
+            {vertical.label}
+          </h2>
+          <p className="mt-2 max-w-prose text-[0.9375rem] leading-relaxed text-ink-soft">
+            {vertical.description}
+          </p>
 
-        {/* Split by what the free plan actually grants. Onboarding clamps a vertical's
-            suggestedModules to the plan before sending them (PATCH /organizations/me rejects the
-            update otherwise), so listing all of them under "day one" would promise a new signup
-            modules their account will not have. */}
-        <div className="mt-6 border-t border-rule pt-5">
-          <h3 className="text-sm font-medium">Dès le premier jour, gratuitement</h3>
-          <ul className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
-            {freeModules.map((module) => (
-              <li key={module} className="flex gap-2.5 text-[0.9375rem] leading-snug">
-                <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                  ✓
-                </span>
-                {MODULE_PROMISES[module]}
-              </li>
-            ))}
-          </ul>
-          {paidModules.length > 0 && (
+          {/* Split by what the free plan actually grants. Onboarding clamps a vertical's
+              suggestedModules to the plan before sending them (PATCH /organizations/me rejects the
+              update otherwise), so listing all of them under "day one" would promise a new signup
+              modules their account will not have. */}
+          <div className="mt-6 border-t border-rule pt-5">
+            <h3 className="text-sm font-medium">Dès le premier jour, gratuitement</h3>
             <ul className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
-              {paidModules.map((module) => (
-                <li
-                  key={module}
-                  className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink-soft"
-                >
-                  <span aria-hidden="true" className="mt-px select-none">
-                    +
+              {freeModules.map((module) => (
+                <li key={module} className="flex gap-2.5 text-[0.9375rem] leading-snug">
+                  <span aria-hidden="true" className="mt-px select-none text-ink-soft">
+                    ✓
                   </span>
-                  <span>
-                    {MODULE_PROMISES[module]}
-                    <span className="text-mark">
-                      {" "}
-                      — formule {PLAN_NAMES[MODULE_MIN_PLAN[module]]}
-                    </span>
-                  </span>
+                  {MODULE_PROMISES[module]}
                 </li>
               ))}
             </ul>
-          )}
-        </div>
+            {paidModules.length > 0 && (
+              <ul className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
+                {paidModules.map((module) => (
+                  <li
+                    key={module}
+                    className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink-soft"
+                  >
+                    <span aria-hidden="true" className="mt-px select-none">
+                      +
+                    </span>
+                    <span>
+                      {MODULE_PROMISES[module]}
+                      <span className="text-mark">
+                        {" "}
+                        — formule {PLAN_NAMES[MODULE_MIN_PLAN[module]]}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        {automation && vertical.starterWorkflow && (
+          {automation && vertical.starterWorkflow && (
+            <div className="mt-5 border-t border-rule pt-5">
+              <h3 className="text-sm font-medium">
+                Une automatisation, déjà configurée
+              </h3>
+              <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
+                <span className="font-medium text-ink">
+                  {vertical.starterWorkflow.name}.
+                </span>{" "}
+                {automation}
+              </p>
+              {/* `workflow` is a Pro module (MODULE_MIN_PLAN), and onboarding only creates the
+                  starter workflow when that module made it into the final list — so on a free
+                  account this automation is prepared and not created. Saying so beats letting
+                  someone discover it after signing up. */}
+              {MODULE_MIN_PLAN.workflow !== "free" && (
+                <p className="mt-2 text-sm text-mark">
+                  Les automatisations demandent la formule{" "}
+                  {PLAN_NAMES[MODULE_MIN_PLAN.workflow]}.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="mt-5 border-t border-rule pt-5">
-            <h3 className="text-sm font-medium">
-              Une automatisation, déjà configurée
-            </h3>
+            <h3 className="text-sm font-medium">Votre site public</h3>
             <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
-              <span className="font-medium text-ink">
-                {vertical.starterWorkflow.name}.
-              </span>{" "}
-              {automation}
+              <span className="font-medium text-ink">Modèle « {template.label} »</span>{" "}
+              {template.description}
             </p>
-            {/* `workflow` is a Pro module (MODULE_MIN_PLAN), and onboarding only creates the
-                starter workflow when that module made it into the final list — so on a free
-                account this automation is prepared and not created. Saying so beats letting
-                someone discover it after signing up. */}
-            {MODULE_MIN_PLAN.workflow !== "free" && (
+            {/* Kept as a conditional even though every template is reachable from free today: the
+                gate is real (assertStorefrontThemeAllowed), and if a template is ever put behind a
+                tier again this says so instead of promising a prospect something the API refuses.
+                It renders nothing while minPlan is "free" everywhere. */}
+            {template.minPlan !== "free" && (
               <p className="mt-2 text-sm text-mark">
-                Les automatisations demandent la formule{" "}
-                {PLAN_NAMES[MODULE_MIN_PLAN.workflow]}.
+                Ce modèle demande la formule {PLAN_NAMES[template.minPlan] ?? template.minPlan}. En
+                gratuit, votre site utilise le modèle « Essentiel ».
               </p>
             )}
           </div>
-        )}
 
-        <div className="mt-5 border-t border-rule pt-5">
-          <h3 className="text-sm font-medium">Votre site public</h3>
-          <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
-            <span className="font-medium text-ink">Modèle « {template.label} »</span>{" "}
-            {template.description}
-          </p>
-          {/* Kept as a conditional even though every template is reachable from free today: the
-              gate is real (assertStorefrontThemeAllowed), and if a template is ever put behind a
-              tier again this says so instead of promising a prospect something the API refuses.
-              It renders nothing while minPlan is "free" everywhere. */}
-          {template.minPlan !== "free" && (
-            <p className="mt-2 text-sm text-mark">
-              Ce modèle demande la formule {PLAN_NAMES[template.minPlan] ?? template.minPlan}. En
-              gratuit, votre site utilise le modèle « Essentiel ».
+          <div className="mt-7 flex flex-col gap-3 border-t border-rule pt-6 sm:flex-row sm:items-center">
+            <Link
+              href="/register"
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+            >
+              Créer mon compte
+            </Link>
+            <p className="text-sm text-ink-soft">
+              Gratuit, sans carte bancaire. Vous changez de formule quand vous voulez.
             </p>
-          )}
-        </div>
-
-        <div className="mt-7 flex flex-col gap-3 border-t border-rule pt-6 sm:flex-row sm:items-center">
-          <Link
-            href="/register"
-            className="inline-flex items-center justify-center rounded-md bg-ink px-5 py-2.5 font-medium text-paper transition-colors hover:bg-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
-          >
-            Créer mon compte
-          </Link>
-          <p className="text-sm text-ink-soft">
-            Gratuit, sans carte bancaire. Vous changez de formule quand vous voulez.
-          </p>
+          </div>
         </div>
       </div>
     </div>

@@ -110,6 +110,9 @@ export function PlanLadder() {
   // null until the visitor picks a country themselves, so detection keeps working on first
   // paint and is then overridden for good once they choose.
   const [chosenCountry, setChosenCountry] = useState<string | null>(null);
+  // Phones show one plan at a time: the four full lists made this section alone some 3,000px
+  // of scrolling. From sm: all four stay visible, as a ladder to compare.
+  const [mobilePlan, setMobilePlan] = useState<PlanKey>(SIGNUP_TRIAL.plan);
   const countryCode = chosenCountry ?? detectedCountry;
 
   const currency = currencyForCountry(countryCode);
@@ -138,7 +141,23 @@ export function PlanLadder() {
         </p>
       </div>
 
-      <div className="mt-8 divide-y divide-rule border-t border-ink">
+      <div role="group" aria-label="Formule affichée" className="mt-6 grid grid-cols-4 gap-1 rounded-xl bg-paper-shade p-1 sm:hidden">
+        {PLAN_KEYS.map((plan) => (
+          <button
+            key={plan}
+            type="button"
+            aria-pressed={plan === mobilePlan}
+            onClick={() => setMobilePlan(plan)}
+            className={`rounded-lg px-1 py-2 text-sm font-medium transition-colors ${
+              plan === mobilePlan ? "bg-ink text-paper shadow" : "text-ink-soft"
+            }`}
+          >
+            {PLAN_NAMES[plan]}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 divide-y divide-rule border-t border-ink sm:mt-8">
         {PLAN_KEYS.map((plan) => {
           const price = PLAN_PRICES[currency][plan];
           const gained = modulesGainedAt(plan);
@@ -147,10 +166,20 @@ export function PlanLadder() {
           const quotas = quotaLines(plan);
 
           return (
-            <div key={plan} className="grid gap-3 py-6 sm:grid-cols-[15rem_1fr] sm:gap-10">
+            <div
+              key={plan}
+              className={`gap-3 py-6 sm:grid sm:grid-cols-[15rem_1fr] sm:gap-10 ${
+                plan === mobilePlan ? "grid" : "hidden"
+              }`}
+            >
               <div>
-                <h3 className="text-lg font-semibold tracking-tight text-ink">
+                <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-ink">
                   {PLAN_NAMES[plan]}
+                  {plan === SIGNUP_TRIAL.plan && (
+                    <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-on-primary">
+                      {SIGNUP_TRIAL.days} jours offerts
+                    </span>
+                  )}
                 </h3>
                 {/* Mono, and this is the one place it is used: the four prices form a column
                     that has to line up, and proportional digits do not. */}
@@ -193,14 +222,18 @@ export function PlanLadder() {
                   <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                     ✓
                   </span>
-                  {seatLine(plan)}
-                  {!isEntry && (
-                    <span className="text-ink-soft">
-                      {" "}
-                      · utilisateur supplémentaire {format.display(EXTRA_SEAT_PRICES[currency])}
-                      /mois{EXTRA_SEAT_PURCHASABLE ? "" : " (bientôt)"}
-                    </span>
-                  )}
+                  {/* One span: as direct flex children, the seat count and the extra-seat price
+                      became two columns squeezed side by side. */}
+                  <span>
+                    {seatLine(plan)}
+                    {!isEntry && (
+                      <span className="text-ink-soft">
+                        {" "}
+                        · utilisateur supplémentaire {format.display(EXTRA_SEAT_PRICES[currency])}
+                        /mois{EXTRA_SEAT_PURCHASABLE ? "" : " (bientôt)"}
+                      </span>
+                    )}
+                  </span>
                 </li>
                 {quotas.map((line) => (
                   <li key={line} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
@@ -227,7 +260,7 @@ export function PlanLadder() {
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
         <Link
           href="/register"
-          className="inline-flex items-center justify-center rounded-md bg-ink px-5 py-2.5 font-medium text-paper transition-colors hover:bg-ink-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
+          className="inline-flex shrink-0 items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
         >
           Commencer gratuitement
         </Link>

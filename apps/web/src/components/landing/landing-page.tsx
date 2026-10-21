@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { VERTICAL_TEMPLATES } from "@korva/types";
+import { BUSINESS_MODELS, BUSINESS_MODEL_DEFINITIONS, PLAN_NAMES, SIGNUP_TRIAL } from "@korva/types";
 import { KorvaGlyph, KorvaWordmark } from "@/components/brand/korva-mark";
 import { REPLACES } from "@/lib/landing-content";
 import { PlanLadder } from "./plan-ladder";
@@ -14,8 +14,9 @@ import { TradePanel } from "./trade-panel";
  *
  * The layout is a ledger, left-aligned and ruled, because that is what the product replaces for
  * most of its customers — and because a centred hero over a card grid is what every generated
- * SaaS page looks like. One dark ink field at the top carries all the emphasis; everything below
- * it is quiet paper and hairlines. There are no decorative images and no entrance animations:
+ * SaaS page looks like. One dark ink field at the top carries all the emphasis, with the one
+ * picture on the page: a phone drawing the visitor's own site (site-preview.tsx). Everything below
+ * it is quiet paper and hairlines; saffron marks the actions. No photos and no entrance animations:
  * the markets this ships to (Cote d'Ivoire, Senegal, Morocco) are mobile-majority on metered
  * mobile data, so type and rules do the work and the page stays cheap to load.
  */
@@ -41,13 +42,13 @@ export function LandingPage() {
             </Link>
             <Link
               href="/login"
-              className="rounded-md px-3 py-2 text-sm text-ink-muted transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper"
+              className="whitespace-nowrap rounded-md px-2.5 py-2 text-sm text-ink-muted transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper"
             >
               Se connecter
             </Link>
             <Link
               href="/register"
-              className="rounded-md bg-paper px-3.5 py-2 text-sm font-medium text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deep"
+              className="whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deep"
             >
               Créer un compte
             </Link>
@@ -62,6 +63,18 @@ export function LandingPage() {
             KORVA OS remplace les carnets, les tableurs et les commandes perdues dans les
             messages. Vous ouvrez un compte, vous dites votre métier, et tout est déjà en place.
           </p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+            <Link
+              href="/register"
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-6 py-3 text-base font-semibold text-on-primary shadow-lg shadow-black/20 transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deep"
+            >
+              Créer mon compte gratuit
+            </Link>
+            <p className="text-sm text-ink-muted">
+              {SIGNUP_TRIAL.days} jours de formule {PLAN_NAMES[SIGNUP_TRIAL.plan]} offerts, sans
+              carte bancaire.
+            </p>
+          </div>
 
           <TradePanel />
         </div>
@@ -98,29 +111,37 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------------- trades (paper) */}
+      {/* ------------------------------------------------------ types of activity (paper) */}
+      {/* Was the seventeen trades again as chips — the hero's own picker, repeated. The eight
+          types of activity say something the picker does not: each one gets a different KIND of
+          site. Read from BUSINESS_MODEL_DEFINITIONS, the table onboarding stores and the
+          storefront reads, so this list cannot promise a site the product does not build. */}
       <section className="border-y border-rule bg-paper-shade">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-8 sm:py-20">
-          <h2 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-            {VERTICAL_TEMPLATES.length} métiers déjà configurés
+          <h2 className="max-w-2xl text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            Votre façon de vendre décide de votre site
           </h2>
           <p className="mt-3 max-w-2xl text-[0.9375rem] leading-relaxed text-ink-soft">
-            Choisir le vôtre à l&apos;inscription installe les bons modules, crée votre première
-            automatisation et sélectionne le modèle de votre site. Vous pouvez tout changer
-            ensuite.
+            Une boutique a besoin d&apos;un panier, un salon d&apos;un agenda, une agence
+            d&apos;un formulaire de devis. Vous dites comment vous travaillez, KORVA monte le site
+            qui va avec. Vous pouvez tout changer ensuite.
           </p>
-          {/* Rendered from the same catalog the hero reads, so this count and this list can
-              never disagree with what onboarding offers. */}
-          <ul className="mt-8 flex flex-wrap gap-x-2 gap-y-2.5">
-            {VERTICAL_TEMPLATES.map((vertical) => (
-              <li
-                key={vertical.key}
-                className="rounded-full border border-rule bg-paper px-3.5 py-1.5 text-sm text-ink"
-              >
-                {vertical.label}
-              </li>
-            ))}
-          </ul>
+          <dl className="mt-10 grid gap-x-10 border-t border-ink sm:grid-cols-2">
+            {BUSINESS_MODELS.map((key) => {
+              const model = BUSINESS_MODEL_DEFINITIONS[key];
+              return (
+                <div key={key} className="border-b border-rule py-5">
+                  <dt className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <span className="text-lg font-semibold text-ink">{model.label}</span>
+                    <span className="text-sm font-medium text-accent">{model.siteKind}</span>
+                  </dt>
+                  <dd className="mt-1 text-[0.9375rem] leading-snug text-ink-soft">
+                    {model.description}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
         </div>
       </section>
 
@@ -147,13 +168,13 @@ export function LandingPage() {
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <Link
               href="/register"
-              className="inline-flex items-center justify-center rounded-md bg-paper px-5 py-2.5 font-medium text-ink transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
             >
               Créer mon compte
             </Link>
             <Link
               href="/login"
-              className="inline-flex items-center justify-center rounded-md border border-ink-soft px-5 py-2.5 font-medium text-paper transition-colors hover:border-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+              className="inline-flex items-center justify-center rounded-lg border border-ink-soft px-5 py-2.5 font-medium text-paper transition-colors hover:border-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
             >
               J&apos;ai déjà un compte
             </Link>
