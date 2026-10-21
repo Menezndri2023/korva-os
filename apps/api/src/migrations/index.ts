@@ -5,6 +5,7 @@ import { migration as m0003 } from './0003-plan-catalog-realignment';
 import { migration as m0004 } from './0004-marketing-to-starter';
 import { migration as m0005 } from './0005-business-model-backfill';
 import { migration as m0006 } from './0006-plan-limits-v3';
+import { migration as m0007 } from './0007-create-new-indexes';
 
 /**
  * Every migration, registered explicitly.
@@ -27,4 +28,5 @@ export const MIGRATIONS: MigrationDefinition[] = [
   m0004,
   m0005,
   m0006,
+  m0007,
 ];
