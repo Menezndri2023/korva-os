@@ -248,7 +248,7 @@ export default function OnboardingPage() {
       <div className="w-full max-w-lg space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-semibold">Configurez votre entreprise</h1>
-          <p className="mt-1 text-sm text-zinc-500">Quelques informations pour démarrer sur KORVA OS.</p>
+          <p className="mt-1 text-sm text-text-muted">Quelques informations pour démarrer sur KORVA OS.</p>
           <p className="mt-1 text-sm font-medium text-text">
             Les {SIGNUP_TRIAL.days} premiers jours, toutes les fonctions de la formule{" "}
             {PLAN_NAMES[SIGNUP_TRIAL.plan]} sont offertes, sans carte bancaire.
@@ -257,7 +257,7 @@ export default function OnboardingPage() {
 
         <Card className="space-y-2 p-4">
           <p className="text-sm font-medium">Importer mon entreprise (optionnel)</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-text-muted">
             Vous avez déjà un site web ? Collez son adresse pour préremplir le nom, le slogan et
             le logo ci-dessous — tout reste modifiable avant de valider.
           </p>
@@ -304,7 +304,7 @@ export default function OnboardingPage() {
 
           <div>
             <p className="block text-sm font-medium">Quel est votre secteur ?</p>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-text-muted">
               Optionnel — préremplit le secteur et les modules suggérés ci-dessous, modifiables
               librement.
             </p>
@@ -316,7 +316,7 @@ export default function OnboardingPage() {
               className="mt-2 w-full"
             />
             {filteredVerticals.length === 0 && (
-              <p className="mt-2 text-xs text-zinc-500">Aucun secteur ne correspond à cette recherche.</p>
+              <p className="mt-2 text-xs text-text-muted">Aucun secteur ne correspond à cette recherche.</p>
             )}
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {filteredVerticals.map((template) => (
@@ -327,12 +327,12 @@ export default function OnboardingPage() {
                   className="text-left"
                 >
                   <Card
-                    className={`p-3 transition-colors hover:bg-zinc-50 ${
-                      selectedVertical === template.key ? "border-zinc-900" : ""
+                    className={`p-3 transition-colors hover:bg-surface-muted ${
+                      selectedVertical === template.key ? "border-primary" : ""
                     }`}
                   >
                     <p className="text-sm font-medium">{template.label}</p>
-                    <p className="mt-0.5 text-xs text-zinc-500">{template.description}</p>
+                    <p className="mt-0.5 text-xs text-text-muted">{template.description}</p>
                   </Card>
                 </button>
               ))}
@@ -375,7 +375,7 @@ export default function OnboardingPage() {
               ))}
             </Select>
             {businessModel ? (
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="mt-1 text-xs text-text-muted">
                 Votre site : {BUSINESS_MODEL_DEFINITIONS[businessModel].siteKind}.
               </p>
             ) : null}
@@ -388,13 +388,13 @@ export default function OnboardingPage() {
             <label className="block text-sm font-medium" htmlFor="business-description">
               Décrivez vos produits ou services (optionnel)
             </label>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-text-muted">
               Utilisé pour préremplir le slogan et le texte &quot;À propos&quot; de votre page
               publique — tout reste modifiable ensuite dans Réglages.
             </p>
             <textarea
               id="business-description"
-              className="mt-2 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+              className="mt-2 w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               rows={3}
               maxLength={2000}
               placeholder="ex: Nous proposons des coupes, colorations et soins capillaires bio à Paris."
@@ -414,7 +414,7 @@ export default function OnboardingPage() {
               </label>
               <select
                 id="country"
-                className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-zinc-900 focus:outline-none"
+                className="mt-1 w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
                 {...countryField}
                 onChange={(event) => {
                   void countryField.onChange(event);
@@ -464,7 +464,7 @@ export default function OnboardingPage() {
 
           <div>
             <p className="block text-sm font-medium">Que souhaitez-vous gérer ?</p>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-text-muted">
               En formule Gratuite, choisissez un seul mode de vente : réservations ou commandes.
               Les deux ensemble sont inclus à partir de la formule Starter.
             </p>

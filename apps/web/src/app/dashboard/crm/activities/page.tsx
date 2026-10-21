@@ -78,7 +78,7 @@ export default function ActivitiesPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Activités</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-text-muted">
           Appels, e-mails, rendez-vous et notes enregistrés sur vos clients et prospects.
         </p>
       </div>
@@ -96,7 +96,7 @@ export default function ActivitiesPage() {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+              <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
                   <th className="px-4 py-2">Type</th>
                   <th className="px-4 py-2">Contact</th>
@@ -104,17 +104,17 @@ export default function ActivitiesPage() {
                   <th className="px-4 py-2">Date</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100">
+              <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                    <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
                       Chargement...
                     </td>
                   </tr>
                 )}
                 {!isLoading && activities?.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-zinc-500">
+                    <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
                       Aucune activité enregistrée pour le moment.
                     </td>
                   </tr>
@@ -126,7 +126,7 @@ export default function ActivitiesPage() {
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
                           <Badge>{activity.type}</Badge>
-                          <span className="text-xs text-zinc-500">
+                          <span className="text-xs text-text-muted">
                             {ENTITY_LABELS[activity.entity]}
                           </span>
                         </div>
@@ -134,13 +134,13 @@ export default function ActivitiesPage() {
                       <td className="px-4 py-2 font-medium">
                         <Link
                           href={entity.href}
-                          className="text-zinc-900 underline-offset-2 hover:underline"
+                          className="text-text underline-offset-2 hover:underline"
                         >
                           {entity.label}
                         </Link>
                       </td>
-                      <td className="px-4 py-2 text-zinc-600">{activity.content ?? "—"}</td>
-                      <td className="px-4 py-2 text-zinc-600">
+                      <td className="px-4 py-2 text-text-muted">{activity.content ?? "—"}</td>
+                      <td className="px-4 py-2 text-text-muted">
                         {new Date(activity.createdAt).toLocaleString("fr-FR")}
                       </td>
                     </tr>

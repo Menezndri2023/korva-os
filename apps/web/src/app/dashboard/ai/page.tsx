@@ -118,7 +118,7 @@ export default function AiPage() {
                 onClick={() => setConversationId(c.id)}
                 className={`w-full truncate rounded-md px-2 py-1.5 text-left text-sm ${
                   conversationId === c.id
-                    ? "bg-zinc-900 text-text-primary"
+                    ? "bg-sidebar text-text-primary"
                     : "text-text hover:bg-surface-muted"
                 }`}
               >
@@ -237,7 +237,7 @@ function MessageBubble({ message }: { message: AiMessage }) {
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-          isUser ? "bg-zinc-900 text-text-primary" : "bg-surface-muted text-text"
+          isUser ? "bg-sidebar text-text-primary" : "bg-surface-muted text-text"
         }`}
       >
         {message.content}

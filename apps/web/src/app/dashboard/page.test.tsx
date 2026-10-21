@@ -83,7 +83,7 @@ describe("DashboardPage", () => {
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() =>
-      expect(screen.getByText("Votre organisation est prête")).toBeInTheDocument(),
+      expect(screen.getByText("Vos chiffres apparaîtront ici")).toBeInTheDocument(),
     );
     expect(screen.queryByText("Prospects")).not.toBeInTheDocument();
   });

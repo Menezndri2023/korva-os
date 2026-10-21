@@ -110,7 +110,7 @@ export default function ReturnsPage() {
             }}
             className={`rounded-full border px-3 py-1 text-xs font-medium ${
               statusFilter === status
-                ? "border-zinc-900 bg-zinc-900 text-white"
+                ? "border-primary bg-sidebar text-white"
                 : "border-border text-text-muted hover:text-text"
             }`}
           >
@@ -137,7 +137,7 @@ export default function ReturnsPage() {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+              <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
                   <th className="px-4 py-2">Client</th>
                   <th className="px-4 py-2">Commande</th>

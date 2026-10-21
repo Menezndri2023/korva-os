@@ -327,7 +327,7 @@ export default function OrderDetailPage() {
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
                 {order.status === "open" && <th className="px-4 py-2" aria-label="Sélection" />}
                 <th className="px-4 py-2">Description</th>

@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import type { ActionCenterItem, ActionCenterSummary } from "@korva/types";
-import { Badge, Card } from "@korva/ui";
+import type { ActionCenterItem, ActionCenterSummary, Offer } from "@korva/types";
+import { Check } from "lucide-react";
+import { Badge, Card, EmptyState } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useAnalyticsActivity, useAnalyticsOverview } from "@/lib/use-analytics";
-import { ACTIVITY_ACTION_LABELS, ACTIVITY_ENTITY_LABELS, formatCurrency } from "@/lib/analytics-format";
+import { ACTIVITY_ENTITY_LABELS, activityActionLabel, formatCurrency } from "@/lib/analytics-format";
 
 const ACTION_ITEM_TYPE_LABELS: Record<ActionCenterItem["type"], string> = {
   recommendation: "Recommandation",
@@ -38,6 +39,12 @@ export default function DashboardPage() {
     queryKey: ["action-center", "feed"],
     queryFn: () => apiClient.get<ActionCenterItem[]>("/action-center/feed"),
     enabled: authReady,
+  });
+  // What the "Pour bien démarrer" list needs to know: is anything on the public site yet?
+  const onlineOffersQuery = useQuery({
+    queryKey: ["offers", "online-count"],
+    queryFn: () => apiClient.getList<Offer>("/offers?page=1&limit=1&status=active"),
+    enabled: authReady && Boolean(organization?.enabledModules.includes("catalog")),
   });
   const actionTotal = actionSummaryQuery.data
     ? actionSummaryQuery.data.pendingApprovals +
@@ -74,6 +81,16 @@ export default function DashboardPage() {
           {isOrganizationLoading ? "Chargement..." : (organization?.name ?? "—")}
         </p>
       </div>
+
+      {organization && (
+        <GettingStarted
+          hasLogo={Boolean(organization.logo)}
+          hasOnlineOffer={(onlineOffersQuery.data?.pagination.total ?? 0) > 0}
+          siteOnline={organization.enabledModules.includes("website")}
+          slug={organization.slug}
+          loading={onlineOffersQuery.isLoading}
+        />
+      )}
 
       <AttentionSection
         summary={actionSummaryQuery.data}
@@ -119,12 +136,11 @@ export default function DashboardPage() {
       )}
 
       {overviewQuery.data && totalActivity === 0 && (
-        <Card className="p-8 text-center">
-          <p className="text-base font-medium text-text">Votre organisation est prête</p>
-          <p className="mx-auto mt-1 max-w-md text-sm text-text-muted">
-            Aucune activité pour l&apos;instant. Les modules que vous avez activés sont
-            disponibles dans le menu à gauche — les données que vous y créerez apparaîtront ici.
-          </p>
+        <Card>
+          <EmptyState
+            title="Vos chiffres apparaîtront ici"
+            description="Dès votre première réservation, commande ou facture, vous verrez ici votre activité du mois."
+          />
         </Card>
       )}
 
@@ -169,7 +185,7 @@ export default function DashboardPage() {
                     <span className="text-text">
                       {ACTIVITY_ENTITY_LABELS[entry.entity] ?? entry.entity}{" "}
                       <span className="text-text-muted">
-                        {ACTIVITY_ACTION_LABELS[entry.action] ?? entry.action.toLowerCase()}
+                        {activityActionLabel(entry.entity, entry.action)}
                       </span>
                     </span>
                     <span className="text-text-muted">
@@ -238,8 +254,8 @@ function SummaryCard({ label, value, href }: { label: string; value: number | st
   return (
     <Link href={href}>
       <Card className="p-4 transition-colors hover:bg-surface-muted">
-        <p className="text-xs font-medium uppercase text-text-muted">{label}</p>
-        <p className="mt-1 text-2xl font-semibold text-text">{value}</p>
+        <p className="text-sm text-text-muted">{label}</p>
+        <p className="mt-1 font-display text-2xl font-semibold text-text">{value}</p>
       </Card>
     </Link>
   );
@@ -255,5 +271,86 @@ function SummarySkeleton() {
         </Card>
       ))}
     </div>
+  );
+}
+
+const STOREFRONT_URL = process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001";
+
+/**
+ * The first things that make a business visible, checked against its real data — the list
+ * disappears once all are done. Its absence would have caught a shop whose only offer was a
+ * draft: the site looked broken to customers and nothing in the dashboard said why.
+ *
+ * A checklist, not numbered steps: they can be done in any order.
+ */
+function GettingStarted({
+  hasLogo,
+  hasOnlineOffer,
+  siteOnline,
+  slug,
+  loading,
+}: {
+  hasLogo: boolean;
+  hasOnlineOffer: boolean;
+  siteOnline: boolean;
+  slug: string;
+  loading: boolean;
+}) {
+  if (loading) return null;
+  const steps = [
+    { done: hasLogo, label: "Ajoutez votre logo", href: "/dashboard/settings" },
+    { done: hasOnlineOffer, label: "Mettez une offre en ligne", href: "/dashboard/catalog" },
+    { done: siteOnline, label: "Publiez votre site", href: "/dashboard/settings" },
+  ];
+  const remaining = steps.filter((step) => !step.done).length;
+  if (remaining === 0) return null;
+
+  return (
+    <section className="rounded-2xl bg-primary p-6 text-on-primary">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Pour bien démarrer</h2>
+          <p className="mt-1 text-sm opacity-80">
+            {remaining === 1 ? "Plus qu'une étape" : `Encore ${remaining} étapes`} avant que vos
+            clients trouvent votre activité en ligne.
+          </p>
+        </div>
+        {siteOnline && (
+          <a
+            href={`${STOREFRONT_URL}/${slug}`}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg bg-sidebar px-4 py-2 text-sm font-semibold text-white hover:bg-sidebar-hover"
+          >
+            Voir mon site
+          </a>
+        )}
+      </div>
+      <ul className="mt-5 grid gap-2 sm:grid-cols-3">
+        {steps.map((step) => (
+          <li key={step.label}>
+            <Link
+              href={step.href}
+              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
+                step.done ? "bg-white/25 line-through opacity-70" : "bg-white/60 hover:bg-white/80"
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-on-primary ${
+                  step.done ? "bg-on-primary text-primary" : ""
+                }`}
+              >
+                {step.done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+              </span>
+              <span>
+                {step.label}
+                <span className="sr-only">{step.done ? " (fait)" : " (à faire)"}</span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

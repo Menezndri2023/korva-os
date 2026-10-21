@@ -20,17 +20,17 @@ describe("Badge", () => {
 
   it("applies the success variant", () => {
     render(<Badge variant="success">Actif</Badge>);
-    expect(screen.getByText("Actif")).toHaveClass("bg-green-100", "text-success");
+    expect(screen.getByText("Actif")).toHaveClass("bg-success-soft", "text-success");
   });
 
   it("applies the warning variant", () => {
     render(<Badge variant="warning">Brouillon</Badge>);
-    expect(screen.getByText("Brouillon")).toHaveClass("bg-amber-100", "text-warning");
+    expect(screen.getByText("Brouillon")).toHaveClass("bg-warning-soft", "text-warning");
   });
 
   it("applies the destructive variant", () => {
     render(<Badge variant="destructive">Erreur</Badge>);
-    expect(screen.getByText("Erreur")).toHaveClass("bg-red-100", "text-destructive");
+    expect(screen.getByText("Erreur")).toHaveClass("bg-destructive-soft", "text-destructive");
   });
 
   it("merges a caller-supplied className without dropping the component's own classes", () => {

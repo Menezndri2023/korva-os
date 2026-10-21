@@ -45,7 +45,7 @@ describe("Select", () => {
 
   it("merges a caller-supplied className without dropping the component's own classes", () => {
     render(<Select aria-label="Statut" className="col-span-2" />);
-    expect(screen.getByRole("combobox")).toHaveClass("col-span-2", "rounded-md");
+    expect(screen.getByRole("combobox")).toHaveClass("col-span-2", "rounded-lg");
   });
 
   it("forwards a ref to the underlying select element (required for react-hook-form register())", () => {

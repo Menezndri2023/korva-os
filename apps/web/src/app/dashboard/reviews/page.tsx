@@ -16,7 +16,7 @@ function Stars({ rating }: { rating: number }) {
   return (
     <span aria-label={`${rating} sur 5`} className="text-yellow-500">
       {"★".repeat(rating)}
-      <span className="text-zinc-300">{"★".repeat(5 - rating)}</span>
+      <span className="text-text-muted">{"★".repeat(5 - rating)}</span>
     </span>
   );
 }

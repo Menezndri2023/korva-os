@@ -25,7 +25,7 @@ describe("Button", () => {
 
   it("applies the primary variant by default", () => {
     render(<Button>Envoyer</Button>);
-    expect(screen.getByRole("button")).toHaveClass("bg-zinc-900");
+    expect(screen.getByRole("button")).toHaveClass("bg-primary", "text-on-primary");
   });
 
   it("applies the secondary variant", () => {
@@ -40,17 +40,17 @@ describe("Button", () => {
 
   it("applies the sm size", () => {
     render(<Button size="sm">Envoyer</Button>);
-    expect(screen.getByRole("button")).toHaveClass("px-2", "py-1.5");
+    expect(screen.getByRole("button")).toHaveClass("px-3", "py-1.5");
   });
 
   it("applies the md size by default", () => {
     render(<Button>Envoyer</Button>);
-    expect(screen.getByRole("button")).toHaveClass("px-3", "py-2");
+    expect(screen.getByRole("button")).toHaveClass("px-4", "py-2");
   });
 
   it("applies the lg size", () => {
     render(<Button size="lg">Envoyer</Button>);
-    expect(screen.getByRole("button")).toHaveClass("px-4", "py-2");
+    expect(screen.getByRole("button")).toHaveClass("px-5", "py-2.5");
   });
 
   it("respects disabled", () => {
@@ -72,7 +72,7 @@ describe("Button", () => {
 
   it("merges a caller-supplied className without dropping the component's own classes", () => {
     render(<Button className="mt-4">Envoyer</Button>);
-    expect(screen.getByRole("button")).toHaveClass("mt-4", "bg-zinc-900");
+    expect(screen.getByRole("button")).toHaveClass("mt-4", "bg-primary");
   });
 
   it("forwards native button props (e.g. onClick) to the underlying element", async () => {

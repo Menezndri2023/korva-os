@@ -140,7 +140,7 @@ export default function MarketingCampaignsPage() {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+              <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
                   <th className="px-4 py-2">Nom</th>
                   <th className="px-4 py-2">Statut</th>

@@ -74,7 +74,7 @@ export default function KitchenDisplayPage() {
             const columnTickets = tickets.filter((t) => t.ticket.status === column.status);
             return (
               <div key={column.status} className="space-y-2">
-                <h2 className="text-sm font-semibold uppercase text-text-muted">
+                <h2 className="text-sm font-semibold text-text-muted">
                   {column.label} ({columnTickets.length})
                 </h2>
                 <div className="space-y-2">

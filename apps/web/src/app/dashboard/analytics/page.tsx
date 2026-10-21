@@ -12,7 +12,7 @@ import {
   useInventoryValuation,
 } from "@/lib/use-analytics";
 import {
-  ACTIVITY_ACTION_LABELS,
+  activityActionLabel,
   ACTIVITY_ENTITY_LABELS,
   formatCurrency,
   INVOICE_STATUS_LABELS,
@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
               onClick={() => setPeriodIndex(index)}
               className={`rounded px-3 py-1.5 text-sm font-medium ${
                 index === periodIndex
-                  ? "bg-zinc-900 text-text-primary"
+                  ? "bg-sidebar text-text-primary"
                   : "text-text-muted hover:bg-surface-muted"
               }`}
             >
@@ -175,7 +175,7 @@ export default function AnalyticsPage() {
                       <span className="text-text">
                         {ACTIVITY_ENTITY_LABELS[entry.entity] ?? entry.entity}{" "}
                         <span className="text-text-muted">
-                          {ACTIVITY_ACTION_LABELS[entry.action] ?? entry.action.toLowerCase()}
+                          {activityActionLabel(entry.entity, entry.action)}
                         </span>
                       </span>
                       <span className="text-text-muted">
@@ -288,7 +288,7 @@ function KpiCard({
 }) {
   return (
     <Card className="p-4">
-      <p className="text-xs font-medium uppercase text-text-muted">{label}</p>
+      <p className="text-xs font-medium text-text-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-text">{value}</p>
       {detail && <p className="mt-1 text-xs text-text-muted">{detail}</p>}
       {breakdown && labels && (
@@ -347,7 +347,7 @@ function StatusBreakdownCard({
                 </span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-muted">
                   <div
-                    className="h-full rounded-full bg-zinc-900"
+                    className="h-full rounded-full bg-sidebar"
                     style={{ width: `${(count / max) * 100}%` }}
                   />
                 </div>
@@ -388,10 +388,10 @@ function RevenueChart({
             className="group relative flex w-full max-w-10 flex-1 flex-col justify-end"
           >
             <div
-              className="rounded-t-[4px] bg-zinc-900 transition-colors group-hover:bg-zinc-700"
+              className="rounded-t-[4px] bg-sidebar transition-colors group-hover:bg-sidebar-hover"
               style={{ height: `${Math.max(2, (point.revenue / max) * 100)}%` }}
             />
-            <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-zinc-900 px-2 py-1 text-xs text-white group-hover:block">
+            <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-sidebar px-2 py-1 text-xs text-white group-hover:block">
               {point.date} · {formatCurrency(point.revenue, currency)}
             </div>
           </div>

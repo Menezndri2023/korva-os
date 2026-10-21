@@ -19,7 +19,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       className={cn(
         // Base style unchanged from the pattern already used on every <input> in apps/web
         // (F2-A audit §3/§4) — only the focus/border colors move to tokens.
-        "rounded-md border px-3 py-2 text-sm transition-colors focus:border-focus focus:outline-none focus:ring-2 focus:ring-focus/15",
+        "rounded-lg border bg-surface px-3 py-2 text-sm text-text transition-colors placeholder:text-text-muted focus:border-focus focus:outline-none focus:ring-2 focus:ring-primary/40",
         error ? "border-destructive" : "border-border-input",
         className,
       )}

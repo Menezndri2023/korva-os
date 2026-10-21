@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Archivo, IBM_Plex_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Figtree, IBM_Plex_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
@@ -17,22 +17,27 @@ import { Providers } from "./providers";
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('korva-theme');if(t==='dark'||t==='light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`;
 
 /**
- * Archivo, not Geist. Geist ships with `create-next-app`, so it was never a typographic choice
- * here — it was the absence of one, and it is the single most recognisable tell that a product's
- * front end has not been designed. Archivo is a grotesque with actual character (sturdy, tight
- * apertures, a real heavy weight), which suits a tool people run a business on. It is a variable
- * font on Google Fonts, so no `weight` array: the whole 100-900 axis ships in one file.
+ * The V3 identity (2026-10-21, "chaleureux et coloré"): Figtree for everything people read and
+ * type — open, rounded and very legible at small sizes on a phone — and Bricolage Grotesque for
+ * headings only, whose ink traps and slightly irregular widths give titles the warmth the
+ * request asked for without turning body text into a display face. Both are variable fonts on
+ * Google Fonts, so no `weight` array.
  *
  * `latin-ext` is not optional for a French-language product: the `latin` subset alone omits the
  * oe ligature in "oeuvre"/"voeux", which would silently fall back to a different face mid-word.
  *
- * Deliberately NOT changed: apps/storefront's fonts. All five tenant font pairings in
- * packages/types/src/storefront-themes.ts hardcode `bodyFont: "geistSans"`, so swapping the face
- * there would restyle every tenant site already published. KORVA's own identity stops at KORVA's
- * own pages.
+ * Deliberately NOT changed: apps/storefront's fonts. All tenant font pairings in
+ * packages/types/src/storefront-themes.ts set the body face, so swapping it there would restyle
+ * every tenant site already published. KORVA's own identity stops at KORVA's own pages.
  */
-const archivo = Archivo({
-  variable: "--font-archivo",
+const figtree = Figtree({
+  variable: "--font-figtree",
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+});
+
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
   subsets: ["latin", "latin-ext"],
   display: "swap",
 });
@@ -93,7 +98,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang="fr"
-      className={`${archivo.variable} ${plexMono.variable} h-full antialiased`}
+      className={`${figtree.variable} ${bricolage.variable} ${plexMono.variable} h-full antialiased`}
       // data-theme is set by THEME_INIT_SCRIPT below, outside React's own render — without this,
       // React would warn (or in dev, error) about a server/client attribute mismatch on <html>.
       suppressHydrationWarning

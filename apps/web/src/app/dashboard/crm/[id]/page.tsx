@@ -454,15 +454,15 @@ export default function ContactDetailPage() {
                 customFields: editCustomFields,
               }),
             )}
-            className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4"
+            className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-border bg-white p-4"
           >
             <div className="col-span-2">
-              <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="type">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="type">
                 Type
               </label>
               <select
                 id="type"
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border-input bg-white px-3 py-2 text-sm"
                 {...registerEdit("type")}
               >
                 {CONTACT_TYPES.map((type) => (
@@ -475,7 +475,7 @@ export default function ContactDetailPage() {
             {editType === "company" ? (
               <div className="col-span-2">
                 <label
-                  className="mb-1 block text-xs font-medium text-zinc-700"
+                  className="mb-1 block text-xs font-medium text-text"
                   htmlFor="company-name"
                 >
                   Nom de l&apos;entreprise
@@ -485,13 +485,13 @@ export default function ContactDetailPage() {
             ) : (
               <>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="firstName">
+                  <label className="mb-1 block text-xs font-medium text-text" htmlFor="firstName">
                     Prénom
                   </label>
                   <Input id="firstName" {...registerEdit("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="lastName">
+                  <label className="mb-1 block text-xs font-medium text-text" htmlFor="lastName">
                     Nom
                   </label>
                   <Input id="lastName" {...registerEdit("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
@@ -499,7 +499,7 @@ export default function ContactDetailPage() {
               </>
             )}
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="email">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="email">
                 Email
               </label>
               <Input
@@ -513,14 +513,14 @@ export default function ContactDetailPage() {
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="phone">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="phone">
                 Téléphone
               </label>
               <Input id="phone" {...registerEdit("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
             </div>
             {editType !== "company" && (
               <div className="col-span-2">
-                <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="company">
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="company">
                   Entreprise
                 </label>
                 <Input id="company" className="w-full" {...registerEdit("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
@@ -528,7 +528,7 @@ export default function ContactDetailPage() {
             )}
             <div>
               <label
-                className="mb-1 block text-xs font-medium text-zinc-700"
+                className="mb-1 block text-xs font-medium text-text"
                 htmlFor="defaultHourlyRate"
               >
                 Taux horaire par défaut
@@ -544,7 +544,7 @@ export default function ContactDetailPage() {
               />
             </div>
             <div className="col-span-2">
-              <label className="mb-1 block text-xs font-medium text-zinc-700" htmlFor="tags">
+              <label className="mb-1 block text-xs font-medium text-text" htmlFor="tags">
                 Tags (séparés par des virgules)
               </label>
               <Input
@@ -879,7 +879,7 @@ export default function ContactDetailPage() {
             >
               <select
                 aria-label="Type d'activité"
-                className="rounded-md border border-zinc-300 px-2 py-2 text-sm"
+                className="rounded-md border border-border-input px-2 py-2 text-sm"
                 {...registerActivity("type")}
               >
                 {ACTIVITY_TYPES.map((type) => (

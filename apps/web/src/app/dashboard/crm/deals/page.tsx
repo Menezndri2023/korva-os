@@ -268,7 +268,7 @@ export default function DealsPage() {
                 >
                   <h3
                     aria-label={`${stage.name} — ${stageDeals?.length ?? 0} affaire(s)`}
-                    className="mb-3 flex items-center justify-between text-xs font-medium uppercase text-text-muted"
+                    className="mb-3 flex items-center justify-between text-xs font-medium text-text-muted"
                   >
                     <span aria-hidden="true">{stage.name}</span>
                     <span aria-hidden="true" className="rounded-full bg-surface px-2 py-0.5 text-text-muted">

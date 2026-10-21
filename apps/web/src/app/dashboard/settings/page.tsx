@@ -1224,7 +1224,7 @@ export default function SettingsPage() {
                   {item.limit !== -1 && (
                     <div className="h-1.5 overflow-hidden rounded-full bg-surface-muted">
                       <div
-                        className="h-full rounded-full bg-zinc-900"
+                        className="h-full rounded-full bg-sidebar"
                         style={{ width: `${Math.min(100, (item.used / item.limit) * 100)}%` }}
                       />
                     </div>
@@ -1728,7 +1728,7 @@ export default function SettingsPage() {
 
         {pendingInvitations && pendingInvitations.length > 0 && (
           <div className="mt-4">
-            <h3 className="text-xs font-semibold uppercase text-text-muted">
+            <h3 className="text-xs font-semibold text-text-muted">
               Invitations en attente
             </h3>
             <div className="mt-2 divide-y divide-border">
@@ -2897,7 +2897,7 @@ function TeamMembersEditor({ organization }: { organization: Organization }) {
             >
               <div>
                 <p className="font-medium text-text">{member.name}</p>
-                <p className="text-xs uppercase tracking-wide text-text-muted">{member.role}</p>
+                <p className="text-xs text-text-muted">{member.role}</p>
               </div>
               <button
                 type="button"

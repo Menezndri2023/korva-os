@@ -5,25 +5,115 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BUSINESS_MODEL_DEFINITIONS, type KorvaModule, type Organization } from "@korva/types";
-import { Button, ThemeToggle } from "@korva/ui";
+import { Button, Notice, ThemeToggle } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { usePlanFeatures } from "@/lib/use-plan-features";
 import { useTheme } from "@/lib/theme-provider";
+import {
+  BellRing,
+  CalendarDays,
+  ChartColumn,
+  ChefHat,
+  GraduationCap,
+  LayoutDashboard,
+  Megaphone,
+  MessageCircle,
+  Package,
+  Receipt,
+  Settings,
+  ShoppingBag,
+  Sparkles,
+  Star,
+  Undo2,
+  Users,
+  Workflow,
+  type LucideIcon,
+} from "lucide-react";
 
-const MODULE_NAV: { module: KorvaModule; label: string; href: string }[] = [
-  { module: "crm", label: "CRM", href: "/dashboard/crm" },
-  { module: "catalog", label: "Catalogue", href: "/dashboard/catalog" },
-  { module: "booking", label: "Réservations", href: "/dashboard/bookings" },
-  { module: "commerce", label: "Commandes", href: "/dashboard/orders" },
-  { module: "finance", label: "Devis & Factures", href: "/dashboard/finance" },
-  { module: "workflow", label: "Workflows", href: "/dashboard/workflows" },
-  { module: "communication", label: "Communication", href: "/dashboard/communication" },
-  { module: "analytics", label: "Statistiques", href: "/dashboard/analytics" },
-  { module: "ai", label: "Assistant IA", href: "/dashboard/ai" },
-  { module: "marketing", label: "Marketing", href: "/dashboard/marketing" },
-];
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  /** Shown only while this is true for the active organization. */
+  visible: boolean;
+  /** Active on nested routes too (e.g. /dashboard/catalog/123). Exact match otherwise. */
+  prefix?: boolean;
+};
+
+/**
+ * The navigation, grouped by what an owner is doing rather than by module: selling, looking
+ * after customers, running the business. Each entry keeps the exact condition it had in the flat
+ * list (module enabled, type of activity, plan feature) — only the order and the grouping are new.
+ */
+function navGroups(
+  enabledModules: Set<KorvaModule>,
+  screens: { kitchen: boolean; training: boolean },
+  hasKitchen: boolean,
+): { title: string | null; items: NavItem[] }[] {
+  const on = (module: KorvaModule) => enabledModules.has(module);
+  return [
+    {
+      title: null,
+      items: [
+        { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard, visible: true },
+        { href: "/dashboard/action-center", label: "Centre d'action", icon: BellRing, visible: true },
+      ],
+    },
+    {
+      title: "Vendre",
+      items: [
+        { href: "/dashboard/catalog", label: "Catalogue", icon: Package, visible: on("catalog"), prefix: true },
+        { href: "/dashboard/orders", label: "Commandes", icon: ShoppingBag, visible: on("commerce"), prefix: true },
+        { href: "/dashboard/bookings", label: "Réservations", icon: CalendarDays, visible: on("booking"), prefix: true },
+        {
+          href: "/dashboard/kitchen",
+          label: "Cuisine",
+          icon: ChefHat,
+          visible: on("commerce") && screens.kitchen && hasKitchen,
+        },
+        { href: "/dashboard/returns", label: "Retours", icon: Undo2, visible: on("commerce") },
+        {
+          href: "/dashboard/reviews",
+          label: "Avis clients",
+          icon: Star,
+          visible: on("commerce") || on("booking"),
+        },
+      ],
+    },
+    {
+      title: "Clients",
+      items: [
+        { href: "/dashboard/crm", label: "CRM", icon: Users, visible: on("crm"), prefix: true },
+        { href: "/dashboard/marketing", label: "Marketing", icon: Megaphone, visible: on("marketing"), prefix: true },
+        {
+          href: "/dashboard/communication",
+          label: "Communication",
+          icon: MessageCircle,
+          visible: on("communication"),
+          prefix: true,
+        },
+      ],
+    },
+    {
+      title: "Gestion",
+      items: [
+        { href: "/dashboard/finance", label: "Devis & Factures", icon: Receipt, visible: on("finance"), prefix: true },
+        { href: "/dashboard/analytics", label: "Statistiques", icon: ChartColumn, visible: on("analytics") },
+        { href: "/dashboard/workflows", label: "Workflows", icon: Workflow, visible: on("workflow"), prefix: true },
+        {
+          href: "/dashboard/formation/courses",
+          label: "Formations",
+          icon: GraduationCap,
+          visible: on("booking") && screens.training,
+          prefix: true,
+        },
+        { href: "/dashboard/ai", label: "Assistant IA", icon: Sparkles, visible: on("ai") },
+      ],
+    },
+  ];
+}
 
 function trialDaysLeft(endsAt: string): number {
   return Math.max(1, Math.ceil((new Date(endsAt).getTime() - Date.now()) / 86_400_000));
@@ -127,80 +217,65 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <aside
         id="mobile-sidebar"
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-border bg-surface px-4 py-6 transition-transform md:static md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-sidebar px-3 py-5 text-sidebar-text transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="mb-6 px-2">
-          <p className="text-lg font-semibold">KORVA OS</p>
-          <p className="truncate text-xs text-text-muted">{organization?.name ?? "..."}</p>
+        <div className="mb-6 flex items-center gap-3 px-2">
+          {/* The business's initial on a saffron tile: the one warm mark in the petrol column,
+              and the quickest way to see which organization is open. */}
+          <span
+            aria-hidden="true"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary font-display text-base font-bold text-on-primary"
+          >
+            {(organization?.name ?? "K").charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{organization?.name ?? "..."}</p>
+            <p className="text-xs text-sidebar-muted">KORVA OS</p>
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-1">
-          <NavLink
-            href="/dashboard"
-            label="Tableau de bord"
-            active={pathname === "/dashboard"}
-            onClick={() => setSidebarOpen(false)}
-          />
-          {MODULE_NAV.filter((item) => enabledModules.has(item.module)).map((item) => (
-            <NavLink
-              key={item.module}
-              href={item.href}
-              label={item.label}
-              active={pathname === item.href}
-              onClick={() => setSidebarOpen(false)}
-            />
-          ))}
-          <NavLink
-            href="/dashboard/action-center"
-            label="Centre d'action"
-            active={pathname === "/dashboard/action-center"}
-            onClick={() => setSidebarOpen(false)}
-          />
-          {(enabledModules.has("commerce") || enabledModules.has("booking")) && (
-            <NavLink
-              href="/dashboard/reviews"
-              label="Avis clients"
-              active={pathname === "/dashboard/reviews"}
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
-          {enabledModules.has("commerce") && (
-            <NavLink
-              href="/dashboard/returns"
-              label="Retours"
-              active={pathname === "/dashboard/returns"}
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
-          {enabledModules.has("booking") && screens.training && (
-            <NavLink
-              href="/dashboard/formation/courses"
-              label="Formations"
-              active={pathname.startsWith("/dashboard/formation")}
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
-          {enabledModules.has("commerce") && screens.kitchen && planFeatures.has("kitchen_display") && (
-            <NavLink
-              href="/dashboard/kitchen"
-              label="Cuisine"
-              active={pathname === "/dashboard/kitchen"}
-              onClick={() => setSidebarOpen(false)}
-            />
-          )}
-          <NavLink
-            href="/dashboard/settings"
-            label="Paramètres"
-            active={pathname === "/dashboard/settings"}
-            onClick={() => setSidebarOpen(false)}
-          />
+        <nav className="flex-1 space-y-5 overflow-y-auto pb-4">
+          {navGroups(enabledModules, screens, planFeatures.has("kitchen_display")).map((group) => {
+            const items = group.items.filter((item) => item.visible);
+            if (items.length === 0) return null;
+            return (
+              <div key={group.title ?? "main"}>
+                {group.title && (
+                  <p className="mb-1.5 px-3 text-xs font-medium text-sidebar-muted">{group.title}</p>
+                )}
+                <div className="space-y-0.5">
+                  {items.map((item) => (
+                    <NavLink
+                      key={item.href}
+                      href={item.href}
+                      label={item.label}
+                      icon={item.icon}
+                      active={
+                        item.prefix
+                          ? pathname === item.href || pathname.startsWith(`${item.href}/`)
+                          : pathname === item.href
+                      }
+                      onClick={() => setSidebarOpen(false)}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </nav>
+        <NavLink
+          href="/dashboard/settings"
+          label="Paramètres"
+          icon={Settings}
+          active={pathname === "/dashboard/settings"}
+          onClick={() => setSidebarOpen(false)}
+        />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col md:pl-0">
-        <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 shadow-sm md:px-8">
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 py-3 backdrop-blur md:px-8">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -232,23 +307,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-8">
+        <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-8">
           {organization && !enabledModules.has("website") && (
             // Visitors of a site whose module is off see "Ce site n'est pas en ligne"; the owner
             // must not have to discover that from a customer.
-            <p className="mb-4 rounded-md border border-border bg-surface-muted px-4 py-2 text-sm text-text">
+            <Notice tone="accent" className="mb-4">
               Votre site public n&apos;est pas en ligne : vos clients voient « Ce site n&apos;est pas
               en ligne pour le moment ».{" "}
               <Link href="/dashboard/settings" className="font-medium underline">
                 Activez le module Site web
               </Link>{" "}
               pour le publier.
-            </p>
+            </Notice>
           )}
           {planFeatures.trialEndsAt && (
             // The trial ends on its own; saying when, and where to choose a plan, is the only
             // way the owner is not surprised by Free coming back.
-            <p className="mb-4 rounded-md border border-border bg-surface-muted px-4 py-2 text-sm text-text">
+            <Notice tone="warning" className="mb-4">
               Essai Pro offert : {trialDaysLeft(planFeatures.trialEndsAt)} jour
               {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? "s" : ""} restant
               {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? "s" : ""}. Vos données restent à vous
@@ -257,7 +332,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 choisissez une formule
               </Link>{" "}
               pour garder les fonctions Pro.
-            </p>
+            </Notice>
           )}{children}</main>
       </div>
     </div>
@@ -267,11 +342,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 function NavLink({
   href,
   label,
+  icon: Icon,
   active,
   onClick,
 }: {
   href: string;
   label: string;
+  icon: LucideIcon;
   active: boolean;
   onClick?: () => void;
 }) {
@@ -279,10 +356,17 @@ function NavLink({
     <Link
       href={href}
       onClick={onClick}
-      className={`block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "bg-zinc-900 text-text-primary shadow-sm" : "text-text hover:bg-surface-muted"
+      aria-current={active ? "page" : undefined}
+      className={`relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+        active
+          ? "bg-sidebar-hover font-semibold text-white"
+          : "text-sidebar-text hover:bg-sidebar-hover hover:text-white"
       }`}
     >
+      {active && (
+        <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-1 rounded-full bg-primary" />
+      )}
+      <Icon aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={2} />
       {label}
     </Link>
   );
@@ -415,7 +499,7 @@ function UserMenu({ name, email, onLogout }: { name: string; email: string; onLo
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900 text-xs font-medium text-text-primary"
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar text-xs font-medium text-text-primary"
       >
         {initials}
       </button>

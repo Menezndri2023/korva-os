@@ -36,6 +36,14 @@ export const ACTIVITY_ENTITY_LABELS: Record<string, string> = {
   invoice: "Facture",
   offer: "Offre",
   quote: "Devis",
+  organization: "Organisation",
+  subscription: "Abonnement",
+  membership: "Membre de l'équipe",
+  resource: "Ressource",
+  workflow: "Automatisation",
+  deal: "Affaire",
+  ticket: "Ticket",
+  campaign: "Campagne",
 };
 
 export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
@@ -51,6 +59,33 @@ export const ACTIVITY_ACTION_LABELS: Record<string, string> = {
   ROLE_CHANGE: "rôle modifié",
   SETTINGS_CHANGE: "paramètres modifiés",
 };
+
+/** Entities whose French label is feminine, so the past participle agrees: "Facture créée". */
+const FEMININE_ENTITIES = new Set([
+  "booking",
+  "order",
+  "invoice",
+  "offer",
+  "organization",
+  "resource",
+  "workflow",
+  "deal",
+  "campaign",
+]);
+
+const FEMININE_ACTION_LABELS: Record<string, string> = {
+  CREATE: "créée",
+  UPDATE: "mise à jour",
+  DELETE: "supprimée",
+};
+
+/** "Facture créée", "Contact supprimé": entity label plus an agreeing action label. */
+export function activityActionLabel(entity: string, action: string): string {
+  if (FEMININE_ENTITIES.has(entity) && FEMININE_ACTION_LABELS[action]) {
+    return FEMININE_ACTION_LABELS[action];
+  }
+  return ACTIVITY_ACTION_LABELS[action] ?? action.toLowerCase();
+}
 
 export function formatCurrency(amount: number, currency: string | null): string {
   if (!currency) return amount.toLocaleString("fr-FR");

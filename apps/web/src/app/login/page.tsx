@@ -10,7 +10,7 @@ import type { Organization } from "@korva/types";
 import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
-import { AuthShell } from "@/components/landing/auth-shell";
+import { AuthShell, LoginAside } from "@/components/landing/auth-shell";
 
 interface LoginResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
@@ -48,6 +48,7 @@ export default function LoginPage() {
     <AuthShell
       title="Se connecter"
       intro="Retrouvez vos clients, vos réservations et vos factures."
+      aside={<LoginAside />}
       footer={
         <>
           Pas encore de compte ?{" "}

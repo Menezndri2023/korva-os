@@ -110,18 +110,18 @@ export default function ProjectDetailPage() {
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card className="p-4">
-          <p className="text-xs uppercase text-text-muted">Heures totales</p>
+          <p className="text-xs text-text-muted">Heures totales</p>
           <p className="mt-1 text-2xl font-semibold">{summary.totalHoursLogged}h</p>
           {project.budgetHours && (
             <p className="mt-1 text-xs text-text-muted">Budget : {project.budgetHours}h</p>
           )}
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase text-text-muted">Heures facturables</p>
+          <p className="text-xs text-text-muted">Heures facturables</p>
           <p className="mt-1 text-2xl font-semibold">{summary.billableHoursLogged}h</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase text-text-muted">Montant facturé</p>
+          <p className="text-xs text-text-muted">Montant facturé</p>
           <p className="mt-1 text-2xl font-semibold">
             {summary.totalBilled} {project.currency ?? ""}
           </p>
@@ -132,7 +132,7 @@ export default function ProjectDetailPage() {
           )}
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase text-text-muted">Tâches</p>
+          <p className="text-xs text-text-muted">Tâches</p>
           <p className="mt-1 text-2xl font-semibold">
             {summary.totalTaskCount - summary.openTaskCount}/{summary.totalTaskCount}
           </p>

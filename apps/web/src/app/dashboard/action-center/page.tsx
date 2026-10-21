@@ -212,7 +212,7 @@ function SummaryTile({
   return (
     <Link href={href}>
       <Card className="p-4 transition-colors hover:bg-surface-muted">
-        <p className="text-xs font-medium uppercase text-text-muted">{label}</p>
+        <p className="text-xs font-medium text-text-muted">{label}</p>
         <p className={`mt-1 text-2xl font-semibold ${warn ? "text-destructive" : "text-text"}`}>
           {value}
         </p>

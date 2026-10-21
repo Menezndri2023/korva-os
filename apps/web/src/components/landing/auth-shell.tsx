@@ -74,6 +74,26 @@ export function AuthShell({
 }
 
 /**
+ * The ink column's content on /login: where the owner lands once signed in, so the column is not
+ * an empty slab on the page people see most often.
+ */
+export function LoginAside() {
+  return (
+    <ul className="space-y-5 text-sm leading-relaxed text-ink-muted">
+      <li>
+        <span className="block font-medium text-paper">Votre journée en un coup d&apos;œil</span>
+        Le tableau de bord ouvre sur ce qui vous attend : réservations, commandes et factures à
+        traiter.
+      </li>
+      <li>
+        <span className="block font-medium text-paper">Votre site toujours à jour</span>
+        Une offre mise en ligne dans le catalogue apparaît aussitôt sur votre site.
+      </li>
+    </ul>
+  );
+}
+
+/**
  * The ink column's content on /register: three facts about what the account actually does, read
  * off the product rather than written as benefits. Lives here, next to the only page that uses
  * it, rather than in landing-content.ts, because it is layout as much as copy.
@@ -88,7 +108,8 @@ export function RegisterAside() {
       </li>
       <li>
         <span className="block font-medium text-paper">Gratuit pour commencer</span>
-        Aucune carte bancaire. Vous passez à une formule payante le jour où vous en avez besoin.
+        Aucune carte bancaire, et 14 jours de formule Pro offerts. Vous passez à une formule
+        payante le jour où vous en avez besoin.
       </li>
       <li>
         <span className="block font-medium text-paper">Vos données restent les vôtres</span>

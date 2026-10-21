@@ -41,7 +41,7 @@ describe("Input", () => {
 
   it("merges a caller-supplied className without dropping the component's own classes", () => {
     render(<Input aria-label="Email" className="mt-1 w-full" />);
-    expect(screen.getByRole("textbox", { name: "Email" })).toHaveClass("mt-1", "w-full", "rounded-md");
+    expect(screen.getByRole("textbox", { name: "Email" })).toHaveClass("mt-1", "w-full", "rounded-lg");
   });
 
   it("forwards a ref to the underlying native input (required for react-hook-form's register())", () => {

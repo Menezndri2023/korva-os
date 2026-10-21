@@ -462,7 +462,7 @@ export default function DealDetailPage() {
             >
               <select
                 aria-label="Type d'activité"
-                className="rounded-md border border-zinc-300 px-2 py-2 text-sm"
+                className="rounded-md border border-border-input px-2 py-2 text-sm"
                 {...registerActivity("type")}
               >
                 {ACTIVITY_TYPES.map((type) => (

@@ -91,7 +91,7 @@ export default function WaitlistPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           Clients en attente d&apos;un créneau complet — prévenus automatiquement dès qu&apos;une
           annulation libère leur plage souhaitée.
         </p>
@@ -103,11 +103,11 @@ export default function WaitlistPage() {
       {showForm && (
         <form
           onSubmit={handleSubmit((values) => createMutation.mutate(values))}
-          className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4"
+          className="space-y-3 rounded-lg border border-border bg-white p-4"
         >
           <div className="grid grid-cols-3 gap-2">
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm"
               defaultValue=""
               {...register("resourceId", { required: true })}
             >
@@ -121,7 +121,7 @@ export default function WaitlistPage() {
               ))}
             </select>
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm"
               defaultValue=""
               {...register("offerId", { required: true })}
             >
@@ -135,7 +135,7 @@ export default function WaitlistPage() {
               ))}
             </select>
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm"
               defaultValue=""
               {...register("contactId", { required: true })}
             >
@@ -172,7 +172,7 @@ export default function WaitlistPage() {
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
                 <th className="px-4 py-2">Ressource</th>
                 <th className="px-4 py-2">Client</th>
@@ -181,17 +181,17 @@ export default function WaitlistPage() {
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
                     Chargement...
                   </td>
                 </tr>
               )}
               {!isLoading && entries?.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
                     Aucune entrée en liste d&apos;attente.
                   </td>
                 </tr>
@@ -199,13 +199,13 @@ export default function WaitlistPage() {
               {entries?.map((entry) => (
                 <tr key={entry.id}>
                   <td className="px-4 py-2 font-medium">{resourceName(entry.resourceId)}</td>
-                  <td className="px-4 py-2 text-zinc-600">{contactName(entry.contactId)}</td>
-                  <td className="px-4 py-2 text-zinc-600">
+                  <td className="px-4 py-2 text-text-muted">{contactName(entry.contactId)}</td>
+                  <td className="px-4 py-2 text-text-muted">
                     {new Date(entry.startAt).toLocaleString()} –{" "}
                     {new Date(entry.endAt).toLocaleTimeString()}
                   </td>
                   <td className="px-4 py-2">
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
+                    <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-text">
                       {STATUS_LABELS[entry.status]}
                     </span>
                   </td>

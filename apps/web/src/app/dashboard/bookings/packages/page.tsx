@@ -73,7 +73,7 @@ export default function PackagesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           Forfaits de séances prépayées — le solde se décrémente automatiquement quand une
           réservation pour ce forfait est marquée terminée avec présence.
         </p>
@@ -85,11 +85,11 @@ export default function PackagesPage() {
       {showForm && (
         <form
           onSubmit={handleSubmit((values) => topUpMutation.mutate(values))}
-          className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4"
+          className="space-y-3 rounded-lg border border-border bg-white p-4"
         >
           <div className="grid grid-cols-3 gap-2">
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm"
               defaultValue=""
               {...register("contactId", { required: true })}
             >
@@ -103,7 +103,7 @@ export default function PackagesPage() {
               ))}
             </select>
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm"
               defaultValue=""
               {...register("offerId", { required: true })}
             >
@@ -126,7 +126,7 @@ export default function PackagesPage() {
             <p className="text-xs text-red-600">{errors.credits.message}</p>
           )}
           {!packageOffers?.length && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-text-muted">
               Aucune offre de type &laquo; forfait &raquo; — créez-en une dans le catalogue avant
               de vendre un forfait.
             </p>
@@ -148,24 +148,24 @@ export default function PackagesPage() {
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
                 <th className="px-4 py-2">Client</th>
                 <th className="px-4 py-2">Forfait</th>
                 <th className="px-4 py-2">Solde restant</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
                     Chargement...
                   </td>
                 </tr>
               )}
               {!isLoading && balances?.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
                     Aucun forfait vendu.
                   </td>
                 </tr>
@@ -173,8 +173,8 @@ export default function PackagesPage() {
               {balances?.map((balance) => (
                 <tr key={balance.id}>
                   <td className="px-4 py-2 font-medium">{contactName(balance.contactId)}</td>
-                  <td className="px-4 py-2 text-zinc-600">{offerName(balance.offerId)}</td>
-                  <td className="px-4 py-2 text-zinc-600">
+                  <td className="px-4 py-2 text-text-muted">{offerName(balance.offerId)}</td>
+                  <td className="px-4 py-2 text-text-muted">
                     {balance.remainingCredits} / {balance.totalCredits}
                   </td>
                 </tr>

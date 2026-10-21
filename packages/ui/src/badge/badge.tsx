@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "../cn.ts";
 
-export type BadgeVariant = "default" | "success" | "warning" | "destructive";
+export type BadgeVariant = "default" | "success" | "warning" | "destructive" | "accent";
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
@@ -25,16 +25,17 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 // changing --color-text-muted itself, since that token is also read by Button's ghost variant.
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   default: "bg-surface-muted text-badge-text",
-  success: "bg-green-100 text-success",
-  warning: "bg-amber-100 text-warning",
-  destructive: "bg-red-100 text-destructive",
+  success: "bg-success-soft text-success",
+  warning: "bg-warning-soft text-warning",
+  destructive: "bg-destructive-soft text-destructive",
+  accent: "bg-accent-soft text-accent",
 };
 
 export function Badge({ variant = "default", className, children, ...props }: BadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
         VARIANT_CLASSES[variant],
         className,
       )}

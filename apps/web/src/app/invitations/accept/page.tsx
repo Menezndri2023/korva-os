@@ -77,10 +77,10 @@ function AcceptInvitationForm() {
     return (
       <div className="w-full max-w-sm space-y-4 text-center">
         <h1 className="text-2xl font-semibold">Lien invalide</h1>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           Ce lien d&apos;invitation est incomplet ou invalide.
         </p>
-        <Link href="/login" className="font-medium text-zinc-900 underline">
+        <Link href="/login" className="font-medium text-text underline">
           Retour à la connexion
         </Link>
       </div>
@@ -91,10 +91,10 @@ function AcceptInvitationForm() {
     return (
       <div className="w-full max-w-sm space-y-4 text-center">
         <h1 className="text-2xl font-semibold">Invitation acceptée</h1>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           Vous avez rejoint l&apos;organisation. Vous pouvez maintenant vous connecter.
         </p>
-        <Link href="/login" className="font-medium text-zinc-900 underline">
+        <Link href="/login" className="font-medium text-text underline">
           Se connecter
         </Link>
       </div>
@@ -105,7 +105,7 @@ function AcceptInvitationForm() {
     <div className="w-full max-w-sm space-y-6">
       <div className="text-center">
         <h1 className="text-2xl font-semibold">Rejoindre l&apos;organisation</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <p className="mt-1 text-sm text-text-muted">
           Si vous avez déjà un compte KORVA, laissez les champs ci-dessous vides.
         </p>
       </div>

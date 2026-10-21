@@ -698,7 +698,7 @@ export default function OfferDetailPage() {
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+              <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
                   <th className="px-4 py-2">Variante</th>
                   <th className="px-4 py-2">SKU</th>
@@ -780,7 +780,7 @@ function StockLevelsSection({
       <h2 className="text-sm font-semibold text-text">Stock par entrepôt</h2>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
             <tr>
               <th className="px-3 py-2">Entrepôt</th>
               {variants.length > 0 && <th className="px-3 py-2">Variante</th>}
@@ -988,7 +988,7 @@ function StockMovementsSection({
 
       <div className="mt-4 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium uppercase text-text-muted">
+          <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
             <tr>
               <th className="px-3 py-2">Date</th>
               <th className="px-3 py-2">Type</th>

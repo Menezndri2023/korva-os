@@ -35,10 +35,10 @@ function VerifyEmailStatus() {
     return (
       <div className="w-full max-w-sm space-y-4 text-center">
         <h1 className="text-2xl font-semibold">Lien invalide</h1>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           Ce lien de vérification est incomplet ou invalide.
         </p>
-        <Link href="/login" className="font-medium text-zinc-900 underline">
+        <Link href="/login" className="font-medium text-text underline">
           Se connecter
         </Link>
       </div>
@@ -49,10 +49,10 @@ function VerifyEmailStatus() {
     return (
       <div className="w-full max-w-sm space-y-4 text-center">
         <h1 className="text-2xl font-semibold">Email vérifié</h1>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           Votre adresse email a été vérifiée avec succès.
         </p>
-        <Link href="/login" className="font-medium text-zinc-900 underline">
+        <Link href="/login" className="font-medium text-text underline">
           Se connecter
         </Link>
       </div>
@@ -63,13 +63,13 @@ function VerifyEmailStatus() {
     return (
       <div className="w-full max-w-sm space-y-4 text-center">
         <h1 className="text-2xl font-semibold">Vérification impossible</h1>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-text-muted">
           {mutation.error instanceof ApiError &&
           mutation.error.code === "INVALID_VERIFICATION_TOKEN"
             ? "Ce lien de vérification est invalide ou a expiré."
             : "Une erreur est survenue. Veuillez réessayer."}
         </p>
-        <Link href="/login" className="font-medium text-zinc-900 underline">
+        <Link href="/login" className="font-medium text-text underline">
           Se connecter
         </Link>
       </div>

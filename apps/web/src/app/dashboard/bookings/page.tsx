@@ -134,10 +134,10 @@ export default function BookingsPage() {
           // Not migrated to <Card>: this wrapper is the <form> element itself (it carries
           // onSubmit), and Card renders a <div> — same exclusion already documented in
           // dashboard/crm/page.tsx (F2-B.7) and dashboard/crm/leads/page.tsx (F2-B.8).
-          className="space-y-3 rounded-lg border border-zinc-200 bg-white p-4"
+          className="space-y-3 rounded-lg border border-border bg-white p-4"
         >
           <select
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+            className="rounded-md border border-border-input px-3 py-2 text-sm"
             value={staffFilter}
             onChange={(e) => setStaffFilter(e.target.value)}
           >
@@ -151,7 +151,7 @@ export default function BookingsPage() {
 
           <div className="grid grid-cols-3 gap-2">
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm"
               defaultValue=""
               {...register("resourceId", { required: true })}
             >
@@ -166,7 +166,7 @@ export default function BookingsPage() {
               ))}
             </select>
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm"
               defaultValue=""
               {...register("offerId", { required: true })}
             >
@@ -180,7 +180,7 @@ export default function BookingsPage() {
               ))}
             </select>
             <select
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm"
+              className="rounded-md border border-border-input px-3 py-2 text-sm"
               defaultValue=""
               {...register("contactId", { required: true })}
             >
@@ -202,7 +202,7 @@ export default function BookingsPage() {
           </div>
 
           {dayAvailability && (
-            <div className="rounded-md bg-zinc-50 p-3 text-xs text-zinc-600">
+            <div className="rounded-md bg-surface-muted p-3 text-xs text-text-muted">
               <p>
                 Horaires du jour :{" "}
                 {dayAvailability.windows.map((w) => `${w.startTime}-${w.endTime}`).join(", ") || "fermé"}
@@ -225,7 +225,7 @@ export default function BookingsPage() {
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs font-medium uppercase text-zinc-500">
+            <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
                 <th className="px-4 py-2">Ressource</th>
                 <th className="px-4 py-2">Praticien</th>
@@ -236,17 +236,17 @@ export default function BookingsPage() {
                 <th className="px-4 py-2">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100">
+            <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
                     Chargement...
                   </td>
                 </tr>
               )}
               {!isLoading && bookings?.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
+                  <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
                     Aucune réservation.
                   </td>
                 </tr>
@@ -256,19 +256,19 @@ export default function BookingsPage() {
                   <td className="px-4 py-2 font-medium">
                     <Link
                       href={`/dashboard/bookings/${booking.id}`}
-                      className="text-zinc-900 underline-offset-2 hover:underline"
+                      className="text-text underline-offset-2 hover:underline"
                     >
                       {resourceName(booking.resourceId)}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-zinc-600">
+                  <td className="px-4 py-2 text-text-muted">
                     {staffName(booking.staffMembershipId)}
                   </td>
-                  <td className="px-4 py-2 text-zinc-600">{contactName(booking.contactId)}</td>
-                  <td className="px-4 py-2 text-zinc-600">{new Date(booking.startAt).toLocaleString()}</td>
-                  <td className="px-4 py-2 text-zinc-600">{new Date(booking.endAt).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-text-muted">{contactName(booking.contactId)}</td>
+                  <td className="px-4 py-2 text-text-muted">{new Date(booking.startAt).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-text-muted">{new Date(booking.endAt).toLocaleString()}</td>
                   <td className="px-4 py-2">
-                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
+                    <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-text">
                       {STATUS_LABELS[booking.status]}
                     </span>
                   </td>

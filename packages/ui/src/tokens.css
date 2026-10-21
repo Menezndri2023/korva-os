@@ -16,34 +16,34 @@
  */
 @theme {
   /* Page background (apps/web currently hardcodes bg-zinc-50 on <body>'s children wrapper). */
-  --color-app-background: var(--color-zinc-50);
+  --color-app-background: #f3f6f5;
 
   /* Card/panel background — currently hardcoded bg-white across every "rounded-lg border
      bg-white" container (29 occurrences per F2-A audit). */
-  --color-surface: var(--color-white);
+  --color-surface: #ffffff;
 
   /* Subtle fill inside a surface (table header row, hover background) — currently
      bg-zinc-50/bg-zinc-100 used ad hoc. */
-  --color-surface-muted: var(--color-zinc-100);
+  --color-surface-muted: #eef3f2;
 
   /* Container/separator border — currently border-zinc-200 (cards, table dividers). */
-  --color-border: var(--color-zinc-200);
+  --color-border: #dce5e3;
 
   /* Form field border — currently border-zinc-300 on every <input>/<select>/<textarea>. */
-  --color-border-input: var(--color-zinc-300);
+  --color-border-input: #c3d1ce;
 
   /* Default body text — currently text-zinc-900. */
-  --color-text: var(--color-zinc-900);
+  --color-text: #132e32;
 
   /* Secondary/help text — currently text-zinc-500. */
-  --color-text-muted: var(--color-zinc-500);
+  --color-text-muted: #5a7074;
 
   /* Neutral badge/tag text — distinct from --color-text-muted (zinc-500, secondary body
      text). Badge's neutral variant needs to match the "bg-zinc-100 text-zinc-700" tag pattern
      already used across the app (6 of 8 real neutral-badge occurrences per the F2-B.10/B.11
      audit), not the lighter secondary-text shade. Kept separate so this stays scoped to badges
      and never silently changes Button's ghost variant, which also reads --color-text-muted. */
-  --color-badge-text: var(--color-zinc-700);
+  --color-badge-text: #2f4a4e;
 
   /* Text rendered ON a primary-filled surface (e.g. the white label on a bg-zinc-900 button) —
      distinct from --color-text, which is for text ON a surface, not text on a filled control. */
@@ -51,20 +51,20 @@
 
   /* Form/mutation error state — currently text-red-600, used identically in every page's
      mutation.isError block (24 occurrences per F2-A audit). */
-  --color-destructive: var(--color-red-600);
+  --color-destructive: #c2302e;
 
   /* Positive status (active subscription, paid invoice, ...) — currently
      text-green-700 / bg-green-100. */
-  --color-success: var(--color-green-700);
+  --color-success: #2e7d5b;
 
   /* Warning status — currently text-amber-700 / bg-amber-50, so far only used in the AI
      pending-action confirmation UI. */
-  --color-warning: var(--color-amber-700);
+  --color-warning: #a35f00;
 
   /* Keyboard focus ring/border — currently focus:border-zinc-900, applied inconsistently
      across pages (see F2-A audit §6); this token exists so a future shared Input/Button can
      apply it uniformly everywhere in one place. */
-  --color-focus: var(--color-zinc-900);
+  --color-focus: #0f3b42;
 }
 
 /*
@@ -95,37 +95,37 @@
   :root:not([data-theme="light"]) {
     /* Page background — was zinc-50 (near-white); dark equivalent is the darkest neutral so
        cards (surface) still read as a visibly lighter layer above it. */
-    --color-app-background: var(--color-zinc-950);
+    --color-app-background: #0a1d20;
 
     /* Card/panel background — was white; dark equivalent is zinc-900, one step lighter than
        app-background so cards remain visually distinct from the page behind them. */
-    --color-surface: var(--color-zinc-900);
+    --color-surface: #10282c;
 
     /* Subtle fill inside a surface (table header row, hover background) — was zinc-100; dark
        equivalent is zinc-800, one step lighter than surface for the same "subtle fill" role. */
-    --color-surface-muted: var(--color-zinc-800);
+    --color-surface-muted: #163439;
 
     /* Container/separator border — was zinc-200; dark equivalent is zinc-800 (visible against
        zinc-900 surface without glowing). */
-    --color-border: var(--color-zinc-800);
+    --color-border: #1f4146;
 
     /* Form field border — was zinc-300 (one step darker than --color-border in light mode);
        dark equivalent is zinc-700, one step lighter than --color-border for the same relative
        contrast. */
-    --color-border-input: var(--color-zinc-700);
+    --color-border-input: #2b565c;
 
     /* Default body text — was zinc-900 (near-black on white); dark equivalent is zinc-100
        (near-white on the dark surface). */
-    --color-text: var(--color-zinc-100);
+    --color-text: #e8f1f0;
 
     /* Secondary/help text — was zinc-500; dark equivalent is zinc-400, kept in the same
        "readable but de-emphasized" register relative to --color-text. */
-    --color-text-muted: var(--color-zinc-400);
+    --color-text-muted: #9bb8bd;
 
     /* Neutral badge/tag text — was zinc-700 against a zinc-100 (--color-surface-muted) chip in
        light mode; dark equivalent is zinc-300 against the dark --color-surface-muted
        (zinc-800), preserving the same relative contrast. */
-    --color-badge-text: var(--color-zinc-300);
+    --color-badge-text: #cfe0de;
 
     /* Text rendered ON a primary-filled surface — unchanged. Button's primary variant keeps
        its own fixed bg-zinc-900 fill in both color schemes (F2-B.2 decision), so the label
@@ -134,19 +134,19 @@
 
     /* Form/mutation error state — was red-600 (readable on white); dark equivalent is red-400,
        lightened so it still passes contrast on the dark zinc-900 surface. */
-    --color-destructive: var(--color-red-400);
+    --color-destructive: #f07a72;
 
     /* Positive status — was green-700; dark equivalent is green-400, lightened for contrast on
        dark surfaces while staying visually "green". */
-    --color-success: var(--color-green-400);
+    --color-success: #6fcf9f;
 
     /* Warning status — was amber-700; dark equivalent is amber-400, same lightening rationale
        as destructive/success above. */
-    --color-warning: var(--color-amber-400);
+    --color-warning: #f5b547;
 
     /* Keyboard focus ring/border — was zinc-900 (near-black on white); dark equivalent is
        zinc-100 (near-white), so the ring stays visible against the dark surface it outlines. */
-    --color-focus: var(--color-zinc-100);
+    --color-focus: #f2a33a;
   }
 }
 
@@ -159,19 +159,19 @@
  * deliberately has none (Tailwind v4 CSS-first, see the top-of-file comment).
  */
 :root[data-theme="dark"] {
-  --color-app-background: var(--color-zinc-950);
-  --color-surface: var(--color-zinc-900);
-  --color-surface-muted: var(--color-zinc-800);
-  --color-border: var(--color-zinc-800);
-  --color-border-input: var(--color-zinc-700);
-  --color-text: var(--color-zinc-100);
-  --color-text-muted: var(--color-zinc-400);
-  --color-badge-text: var(--color-zinc-300);
+  --color-app-background: #0a1d20;
+  --color-surface: #10282c;
+  --color-surface-muted: #163439;
+  --color-border: #1f4146;
+  --color-border-input: #2b565c;
+  --color-text: #e8f1f0;
+  --color-text-muted: #9bb8bd;
+  --color-badge-text: #cfe0de;
   --color-text-primary: var(--color-white);
-  --color-destructive: var(--color-red-400);
-  --color-success: var(--color-green-400);
-  --color-warning: var(--color-amber-400);
-  --color-focus: var(--color-zinc-100);
+  --color-destructive: #f07a72;
+  --color-success: #6fcf9f;
+  --color-warning: #f5b547;
+  --color-focus: #f2a33a;
 }
 
 /*
@@ -223,4 +223,53 @@
 
   /* Ledger-red mark. Flags and totals only. See the note above: never a fill, never a button. */
   --color-mark: #c1121f;
+}
+
+/*
+ * Warm accents of the V3 identity (2026-10-21): the petrol above stays KORVA's structural
+ * colour — it is the one dark hue no tenant palette uses — and warmth comes from two accents
+ * borrowed from what this product's merchants work with every day: saffron (market spice, the
+ * call to action) and hibiscus (bissap, the highlight). Neither is a tenant palette accent
+ * either: "ocre" is a dull mustard (#B08A2E) and "corail" an orange-red (#E1604A).
+ *
+ *   --color-primary      saffron — the primary action. Text on it is --color-on-primary
+ *                        (petrol), ~5.8:1; white on saffron would fail contrast.
+ *   --color-accent       hibiscus — counts, highlights, the one thing to notice on a screen.
+ *   --color-*-soft       tinted fills behind a status label (badge, notice) in light mode.
+ *   --color-sidebar*     the petrol navigation column.
+ */
+@theme {
+  --color-primary: #f2a33a;
+  --color-primary-hover: #e48f17;
+  --color-on-primary: #0f3b42;
+  --color-accent: #c93c5b;
+  --color-accent-soft: #fbe7ec;
+  --color-success-soft: #e2f1e9;
+  --color-warning-soft: #fdf0d9;
+  --color-destructive-soft: #fbe5e4;
+  --color-sidebar: #0f3b42;
+  --color-sidebar-hover: #164a52;
+  --color-sidebar-text: #c9dedb;
+  --color-sidebar-muted: #7fa3a8;
+
+  --font-display: var(--font-bricolage), var(--font-figtree), system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-accent-soft: #3b1a22;
+    --color-success-soft: #123326;
+    --color-warning-soft: #3a2a10;
+    --color-destructive-soft: #3d1a19;
+    --color-sidebar: #081a1d;
+    --color-sidebar-hover: #10292d;
+  }
+}
+:root[data-theme="dark"] {
+  --color-accent-soft: #3b1a22;
+  --color-success-soft: #123326;
+  --color-warning-soft: #3a2a10;
+  --color-destructive-soft: #3d1a19;
+  --color-sidebar: #081a1d;
+  --color-sidebar-hover: #10292d;
 }
