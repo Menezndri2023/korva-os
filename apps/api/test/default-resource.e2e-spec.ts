@@ -18,17 +18,15 @@ interface ResourcePayload {
   id: string;
   name: string;
   type: string;
-  weeklyAvailability: { dayOfWeek: number; startTime: string; endTime: string }[];
+  weeklyAvailability: {
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+  }[];
 }
 interface OrganizationPayload {
   id: string;
   slug: string;
-}
-interface PublicOrganizationPayload {
-  name: string;
-  contactPhone?: string;
-  whatsappNumber?: string;
-  contactAddress?: string;
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -102,7 +100,11 @@ describe('Default bookable resource (e2e)', () => {
   }
 
   it('a new business with booking on can be booked right away, with one default resource', async () => {
-    const { slug } = await setupOrg('default-resource@korva.test', 'Salon Neuf', ['booking', 'website', 'catalog']);
+    const { slug } = await setupOrg(
+      'default-resource@korva.test',
+      'Salon Neuf',
+      ['booking', 'website', 'catalog'],
+    );
 
     // Two first visitors at the same time still produce a single resource.
     const [first, second] = await Promise.all([
@@ -114,11 +116,20 @@ describe('Default bookable resource (e2e)', () => {
     expect(resources).toHaveLength(1);
     expect(resources[0]).toMatchObject({ name: 'Salon Neuf', type: 'person' });
     // Monday to Saturday, 9:00–18:00 — never round the clock.
-    expect(resources[0]!.weeklyAvailability.map((w) => w.dayOfWeek)).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(resources[0]!.weeklyAvailability[0]).toMatchObject({ startTime: '09:00', endTime: '18:00' });
+    expect(resources[0]!.weeklyAvailability.map((w) => w.dayOfWeek)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
+    expect(resources[0]!.weeklyAvailability[0]).toMatchObject({
+      startTime: '09:00',
+      endTime: '18:00',
+    });
 
     const again = asSuccess<ResourcePayload[]>(
-      (await request(server).get(`/api/v1/public/${slug}/resources`).expect(200)).body,
+      (
+        await request(server)
+          .get(`/api/v1/public/${slug}/resources`)
+          .expect(200)
+      ).body,
     );
     expect(again.map((r) => r.id)).toEqual([resources[0]!.id]);
   });
@@ -137,7 +148,11 @@ describe('Default bookable resource (e2e)', () => {
       .expect(201);
 
     const resources = asSuccess<ResourcePayload[]>(
-      (await request(server).get(`/api/v1/public/${slug}/resources`).expect(200)).body,
+      (
+        await request(server)
+          .get(`/api/v1/public/${slug}/resources`)
+          .expect(200)
+      ).body,
     );
     expect(resources.map((r) => r.name)).toEqual(['Aminata']);
   });
