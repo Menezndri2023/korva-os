@@ -9,6 +9,7 @@ import { PublicApiError } from "@/lib/public-api-client";
 export type OrganizationLookup<T> =
   | { kind: "found"; organization: T }
   | { kind: "absent" }
+  | { kind: "offline" }
   | { kind: "unavailable" };
 
 /**
@@ -17,7 +18,7 @@ export type OrganizationLookup<T> =
  *
  * Both mean "there is nothing to show here, and retrying will not change that".
  */
-const ABSENT_CODES = new Set(["ORGANIZATION_NOT_FOUND", "MODULE_NOT_AVAILABLE"]);
+const ABSENT_CODES = new Set(["ORGANIZATION_NOT_FOUND"]);
 
 /**
  * Decides whether a failed storefront lookup means the shop is genuinely absent, or merely that
@@ -37,9 +38,16 @@ const ABSENT_CODES = new Set(["ORGANIZATION_NOT_FOUND", "MODULE_NOT_AVAILABLE"])
  * An unrecognised `PublicApiError` code is treated as `unavailable`, not `absent`: failing
  * towards "we don't know" keeps a future API error code from silently declaring live shops dead.
  */
-export function classifyLookupFailure(error: unknown): "absent" | "unavailable" {
+export function classifyLookupFailure(
+  error: unknown,
+): "absent" | "offline" | "unavailable" {
   if (error instanceof PublicApiError && ABSENT_CODES.has(error.code)) {
     return "absent";
+  }
+  // The business exists but its public site is not online (website module off): it deserves
+  // its own explanation, not "this shop does not exist" — see StorefrontOffline.
+  if (error instanceof PublicApiError && error.code === "MODULE_NOT_AVAILABLE") {
+    return "offline";
   }
   return "unavailable";
 }
@@ -48,8 +56,14 @@ export function classifyLookupFailure(error: unknown): "absent" | "unavailable" 
  *  different facts deserve two different sentences: a shop whose API is down has not stopped
  *  existing. `noindex` applies to both — neither state is worth recording. */
 export function unresolvedStorefrontMetadata(
-  kind: "absent" | "unavailable",
+  kind: "absent" | "offline" | "unavailable",
 ): { title: string; description: string } {
+  if (kind === "offline") {
+    return {
+      title: "Site pas encore en ligne — KORVA OS",
+      description: "Le site de cette entreprise n'est pas en ligne pour le moment.",
+    };
+  }
   return kind === "absent"
     ? {
         title: "Boutique introuvable — KORVA OS",

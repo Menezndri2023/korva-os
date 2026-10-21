@@ -233,6 +233,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         <main className="flex-1 p-4 md:p-8">
+          {organization && !enabledModules.has("website") && (
+            // Visitors of a site whose module is off see "Ce site n'est pas en ligne"; the owner
+            // must not have to discover that from a customer.
+            <p className="mb-4 rounded-md border border-border bg-surface-muted px-4 py-2 text-sm text-text">
+              Votre site public n&apos;est pas en ligne : vos clients voient « Ce site n&apos;est pas
+              en ligne pour le moment ».{" "}
+              <Link href="/dashboard/settings" className="font-medium underline">
+                Activez le module Site web
+              </Link>{" "}
+              pour le publier.
+            </p>
+          )}
           {planFeatures.trialEndsAt && (
             // The trial ends on its own; saying when, and where to choose a plan, is the only
             // way the owner is not surprised by Free coming back.

@@ -10,6 +10,7 @@ import {
   type OrganizationLookup,
 } from "@/lib/organization-lookup";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
+import { StorefrontOffline } from "./storefront-offline";
 
 
 // Server-side only (not NEXT_PUBLIC_*): generateMetadata and sitemap/robots run in the Node
@@ -163,6 +164,9 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
   // this change that actually matters.
   if (lookup.kind === "absent") {
     notFound();
+  }
+  if (lookup.kind === "offline") {
+    return <StorefrontOffline />;
   }
 
   const organization = lookup.kind === "found" ? lookup.organization : undefined;

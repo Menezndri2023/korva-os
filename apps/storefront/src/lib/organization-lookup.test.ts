@@ -11,12 +11,18 @@ import {
  * every customer's storefront into a notice that their business was gone.
  */
 describe("classifyLookupFailure", () => {
-  it("treats the API's own not-found codes as genuinely absent", () => {
-    for (const code of ["ORGANIZATION_NOT_FOUND", "MODULE_NOT_AVAILABLE"]) {
-      expect(
-        classifyLookupFailure(new PublicApiError(code, "nope")),
-      ).toBe("absent");
-    }
+  it("treats an unknown slug as genuinely absent", () => {
+    expect(
+      classifyLookupFailure(new PublicApiError("ORGANIZATION_NOT_FOUND", "nope")),
+    ).toBe("absent");
+  });
+
+  it("tells a business whose site is switched off apart from one that does not exist", () => {
+    // MODULE_NOT_AVAILABLE used to read as "absent", so a visitor given a real business's link
+    // was told the shop did not exist; it now shows StorefrontOffline instead.
+    expect(
+      classifyLookupFailure(new PublicApiError("MODULE_NOT_AVAILABLE", "nope")),
+    ).toBe("offline");
   });
 
   it("treats an unreachable API as unavailable, never as absent", () => {

@@ -335,6 +335,44 @@ describe("CatalogPage — pagination", () => {
     expect(payload.durationMinutes).toBeUndefined();
   });
 
+  it("publishes a new offer by default, and keeps it a draft only when asked", async () => {
+    postMock.mockResolvedValue({ ...offer, id: "offer-10" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    const publish = screen.getByRole("checkbox", { name: /Publier sur mon site/ });
+    expect(publish).toBeChecked();
+    await user.type(screen.getByPlaceholderText("Nom"), "Montre");
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/offers", expect.objectContaining({ status: "active" })),
+    );
+
+    postMock.mockClear();
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    await user.click(screen.getByRole("checkbox", { name: /Publier sur mon site/ }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Brouillon");
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/offers", expect.objectContaining({ status: "draft" })),
+    );
+  });
+
+  it("warns that the site shows nothing when no offer is online", async () => {
+    getListMock.mockImplementation((path: string) =>
+      Promise.resolve(
+        path.includes("status=active")
+          ? { data: [], pagination: { page: 1, limit: 1, total: 0, totalPages: 1 } }
+          : { data: [{ ...offer, status: "draft" }], pagination: { page: 1, limit: 20, total: 1, totalPages: 1 } },
+      ),
+    );
+    renderWithProviders(<CatalogPage />);
+
+    expect(await screen.findByText(/Aucune de vos offres n'est en ligne/)).toBeInTheDocument();
+    expect(screen.getByText("Brouillon")).toBeInTheDocument();
+  });
+
   it("shows each offer's main photo in the list", async () => {
     mockOffersPage([{ ...offer, images: ["https://api.test/u/main.png", "https://api.test/u/2.png"] }]);
     const { container } = renderWithProviders(<CatalogPage />);

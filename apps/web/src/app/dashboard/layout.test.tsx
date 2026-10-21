@@ -104,6 +104,17 @@ describe("DashboardLayout", () => {
     );
   });
 
+  it("warns the owner when the public site is switched off, and only then", () => {
+    enabledModules = ["crm", "catalog"];
+    const { unmount } = renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(screen.getByText(/Votre site public n'est pas en ligne/)).toBeInTheDocument();
+    unmount();
+
+    enabledModules = ["crm", "catalog", "website"];
+    renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(screen.queryByText(/Votre site public n'est pas en ligne/)).not.toBeInTheDocument();
+  });
+
   it("keeps both screens for an organization with no type of activity, as before", () => {
     enabledModules = ["commerce", "booking"];
     renderWithProviders(<DashboardLayout><div /></DashboardLayout>);

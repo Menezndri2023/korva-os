@@ -7,6 +7,7 @@ import {
   type OrganizationLookup,
 } from "@/lib/organization-lookup";
 import type { PublicOrganization } from "@/lib/public-types";
+import { StorefrontOffline } from "../../storefront-offline";
 
 // Server-side only — see the same note in ../page.tsx.
 const SITE_URL = (process.env.STOREFRONT_URL ?? "http://localhost:3001").replace(/\/$/, "");
@@ -42,9 +43,9 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
   // An unreachable API is not a missing offer. Only the SHOP lookup is split here; the offer
   // lookup below keeps its single answer on purpose, because PublicService#getOffer makes
   // "never existed" and "draft/archived" deliberately indistinguishable.
-  if (lookup.kind === "unavailable") {
+  if (lookup.kind === "unavailable" || lookup.kind === "offline") {
     return {
-      ...unresolvedStorefrontMetadata("unavailable"),
+      ...unresolvedStorefrontMetadata(lookup.kind),
       alternates: { canonical: canonicalUrl },
       robots: { index: false, follow: false },
     };
@@ -98,5 +99,6 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
 
 export default async function OfferDetailPage({ params }: OfferDetailPageProps) {
   const { slug, offerId } = await params;
+  if ((await fetchOrganization(slug)).kind === "offline") return <StorefrontOffline />;
   return <OfferDetailClient slug={slug} offerId={offerId} />;
 }

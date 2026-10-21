@@ -8,6 +8,7 @@ import {
   type OrganizationLookup,
 } from "@/lib/organization-lookup";
 import type { PublicOrganization } from "@/lib/public-types";
+import { StorefrontOffline } from "../storefront-offline";
 
 const SITE_URL = (process.env.STOREFRONT_URL ?? "http://localhost:3001").replace(/\/$/, "");
 
@@ -75,6 +76,7 @@ export async function generateMetadata({ params }: CataloguePageProps): Promise<
 
 export default async function CataloguePage({ params }: CataloguePageProps) {
   const { slug } = await params;
+  if ((await fetchOrganization(slug)).kind === "offline") return <StorefrontOffline />;
   const nonce = (await headers()).get("x-nonce") ?? undefined;
   return <CatalogueClient slug={slug} nonce={nonce} />;
 }

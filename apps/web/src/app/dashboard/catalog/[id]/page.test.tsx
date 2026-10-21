@@ -197,6 +197,21 @@ describe("OfferDetailPage", () => {
     );
   });
 
+  it("puts a draft on the site in one click, and takes an online offer off it", async () => {
+    getMock.mockImplementation((path: string) =>
+      Promise.resolve(path === "/offers/offer-1" ? { ...offer, status: "draft" } : []),
+    );
+    patchMock.mockResolvedValue(offer);
+    const user = userEvent.setup();
+    renderWithProviders(<OfferDetailPage />);
+
+    expect(await screen.findByText("Brouillon")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Publier sur le site" }));
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/offers/offer-1", { status: "active" }),
+    );
+  });
+
   it("shows the offer's photos and saves a new main photo from the edit form", async () => {
     getMock.mockImplementation((path: string) => {
       if (path === "/offers/offer-1") {

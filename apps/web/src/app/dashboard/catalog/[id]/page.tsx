@@ -73,6 +73,14 @@ const TYPE_LABELS: Record<OfferType, string> = {
   package: "Forfait",
 };
 
+/** Shown to owners instead of the API's status keys. "En ligne" is the one that matters: only
+ *  those offers appear on the public site. */
+const STATUS_LABELS: Record<Offer["status"], string> = {
+  draft: "Brouillon",
+  active: "En ligne",
+  archived: "Archivée",
+};
+
 const STATUS_VARIANT: Record<Offer["status"], "default" | "success" | "warning"> = {
   active: "success",
   archived: "default",
@@ -259,7 +267,21 @@ export default function OfferDetailPage() {
             <p className="text-sm text-text-muted">{TYPE_LABELS[offer.type]}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={STATUS_VARIANT[offer.status]}>{offer.status}</Badge>
+            <Badge variant={STATUS_VARIANT[offer.status]}>{STATUS_LABELS[offer.status]}</Badge>
+            {!isEditing && (
+              // One click to put an offer on the site or take it off — the status otherwise sat
+              // in the edit form only, as "draft"/"active", and new offers were drafts by default.
+              <Button
+                variant={offer.status === "active" ? "ghost" : "primary"}
+                size="sm"
+                loading={updateMutation.isPending}
+                onClick={() =>
+                  updateMutation.mutate({ status: offer.status === "active" ? "draft" : "active" })
+                }
+              >
+                {offer.status === "active" ? "Retirer du site" : "Publier sur le site"}
+              </Button>
+            )}
             <Button
               variant="secondary"
               size="sm"
@@ -481,7 +503,7 @@ export default function OfferDetailPage() {
             <Select aria-label="Statut" {...register("status")}>
               {OFFER_STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {status}
+                  {STATUS_LABELS[status]}
                 </option>
               ))}
             </Select>

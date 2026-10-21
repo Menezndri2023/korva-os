@@ -128,7 +128,9 @@ export function BoutiqueTemplate({
         )}
 
         {catalogVisible && offers && visibleOffers.length === 0 && (
-          <p className={`text-sm ${KT.textMuted}`}>Aucun produit dans cette catégorie.</p>
+          <p className={`text-sm ${KT.textMuted}`}>
+            {activeCategory ? "Aucun produit dans cette catégorie." : "Aucun produit en ligne pour le moment."}
+          </p>
         )}
 
         {catalogVisible && visibleOffers.length > 0 && (

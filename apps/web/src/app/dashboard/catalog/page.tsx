@@ -50,6 +50,14 @@ const TYPE_LABELS: Record<OfferType, string> = {
   package: "Forfait",
 };
 
+/** Shown to owners instead of the API's status keys. "En ligne" is the one that matters: only
+ *  those offers appear on the public site. */
+const STATUS_LABELS: Record<Offer["status"], string> = {
+  draft: "Brouillon",
+  active: "En ligne",
+  archived: "Archivée",
+};
+
 const STATUS_VARIANT: Record<Offer["status"], "default" | "success" | "warning"> = {
   active: "success",
   archived: "default",
@@ -84,6 +92,16 @@ export default function CatalogPage() {
     enabled: authReady,
   });
   const data = offersPage?.data;
+  // Whether anything is on the public site at all — counted on its own, so the answer does not
+  // depend on the page or the type filter shown. An offer saved as a draft is invisible to
+  // customers, and a site with none online looks broken to them.
+  const { data: onlinePage } = useQuery({
+    queryKey: ["offers", "online-count"],
+    queryFn: () => apiClient.getList<Offer>("/offers?page=1&limit=1&status=active"),
+    enabled: authReady,
+  });
+  const nothingOnline =
+    (offersPage?.pagination.total ?? 0) > 0 && onlinePage?.pagination.total === 0;
 
   const {
     register,
@@ -123,7 +141,9 @@ export default function CatalogPage() {
       images: [],
       categories: [],
       variants: [],
-      status: "draft",
+      // Published by default: an owner creating an offer expects to see it on their site. New
+      // offers used to be drafts with no way to publish them from this form.
+      status: "active",
       pricing: { amount: 0, currency: organization?.currency ?? "EUR" },
       trackStock: false,
     });
@@ -191,6 +211,13 @@ export default function CatalogPage() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-text-muted">Produits, services et autres offres.</p>
+
+      {nothingOnline && (
+        <p className="rounded-md border border-border bg-surface-muted px-4 py-3 text-sm text-text">
+          Aucune de vos offres n&apos;est en ligne : votre site n&apos;affiche rien pour
+          l&apos;instant. Ouvrez une offre et cliquez sur « Publier sur le site ».
+        </p>
+      )}
 
       <div className="flex items-center justify-between gap-3">
         <select
@@ -401,6 +428,18 @@ export default function CatalogPage() {
             </>
           )}
 
+          <label className="col-span-2 flex items-center gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              checked={watch("status") !== "draft"}
+              onChange={(e) => setValue("status", e.target.checked ? "active" : "draft")}
+            />
+            Publier sur mon site
+            <span className="text-xs text-text-muted">
+              (décochez pour garder l&apos;offre en brouillon, invisible de vos clients)
+            </span>
+          </label>
+
           <CustomFieldsFieldset
             entity="offers"
             values={createCustomFields}
@@ -504,7 +543,7 @@ export default function CatalogPage() {
                     {offer.pricing.amount} {offer.pricing.currency}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge variant={STATUS_VARIANT[offer.status]}>{offer.status}</Badge>
+                    <Badge variant={STATUS_VARIANT[offer.status]}>{STATUS_LABELS[offer.status]}</Badge>
                   </td>
                 </tr>
               ))}
