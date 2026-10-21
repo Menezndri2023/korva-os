@@ -15,6 +15,8 @@ import {
   type UpdateOfferInput,
 } from "@korva/validation";
 import {
+  BUSINESS_MODEL_DEFINITIONS,
+  BUSINESS_MODEL_OFFER_FIELDS,
   OFFER_STATUSES,
   OFFER_TYPES,
   STOCK_MOVEMENT_TYPES,
@@ -36,9 +38,11 @@ import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 import { OfferImagesEditor } from "@/components/offer-images-editor";
 import { PlanLock } from "@/components/plan-lock";
 import { usePlanFeatures } from "@/lib/use-plan-features";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 import {
   AttributesEditor,
   BundleItemsEditor,
+  GuidedFieldsEditor,
   OFFER_TYPE_FIELDS,
   OptionGroupsEditor,
   VariantsEditor,
@@ -112,11 +116,39 @@ export default function OfferDetailPage() {
   const bookingUnit = watch("bookingUnit") ?? "slot";
   const fields = OFFER_TYPE_FIELDS[offerType ?? "product"];
   const { has } = usePlanFeatures();
+  const { data: activeOrganization } = useActiveOrganization();
   // A promotion already on the offer stays editable after a downgrade; adding one needs the plan.
   const compareAtLocked =
     !has("compare_at_price") && offerQuery.data?.compareAtPrice == null;
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
+
+  // Guided characteristics of the type of activity (a room's amenities, a property's surface),
+  // for its main offer type only; the free editor then shows everything else.
+  const businessModelKey = activeOrganization?.businessModel;
+  const guidedFields =
+    businessModelKey &&
+    BUSINESS_MODEL_DEFINITIONS[businessModelKey].offerTypes[0] === offerType
+      ? (BUSINESS_MODEL_OFFER_FIELDS[businessModelKey] ?? [])
+      : [];
+  const guidedKeys = new Set(guidedFields.map((field) => field.label));
+  const freeAttributes = Object.fromEntries(
+    Object.entries(attributeDrafts).filter(([key]) => !guidedKeys.has(key)),
+  );
+  function setGuidedAttribute(label: string, value: string | undefined) {
+    setAttributeDrafts((current) => {
+      const next = { ...current };
+      if (value === undefined) delete next[label];
+      else next[label] = value;
+      return next;
+    });
+  }
+  function setFreeAttributes(next: Record<string, string>) {
+    setAttributeDrafts((current) => ({
+      ...Object.fromEntries(Object.entries(current).filter(([key]) => guidedKeys.has(key))),
+      ...next,
+    }));
+  }
   const [bundleDrafts, setBundleDrafts] = useState<BundleItemDraft[]>([]);
   const [optionGroupDrafts, setOptionGroupDrafts] = useState<OfferOptionGroup[]>([]);
   const [editCustomFields, setEditCustomFields] = useState<CustomFieldValues>({});
@@ -601,7 +633,16 @@ export default function OfferDetailPage() {
               <OptionGroupsEditor groups={optionGroupDrafts} onChange={setOptionGroupDrafts} />
             )}
             {fields.attributes && (
-              <AttributesEditor attributes={attributeDrafts} onChange={setAttributeDrafts} />
+              <>
+                {guidedFields.length > 0 && (
+                  <GuidedFieldsEditor
+                    fields={guidedFields}
+                    attributes={attributeDrafts}
+                    onChange={setGuidedAttribute}
+                  />
+                )}
+                <AttributesEditor attributes={freeAttributes} onChange={setFreeAttributes} />
+              </>
             )}
 
             <CustomFieldsFieldset

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Offer, OfferOptionGroup, OfferType } from "@korva/types";
+import type { Offer, OfferFieldDefinition, OfferOptionGroup, OfferType } from "@korva/types";
 import { Button, Input, Select } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -497,6 +497,88 @@ export function OptionGroupsEditor({
           </button>
         </div>
       ))}
+    </fieldset>
+  );
+}
+
+/**
+ * The guided characteristics of a type of activity (BUSINESS_MODEL_OFFER_FIELDS): a room's
+ * capacity and amenities, a property's surface and rooms. Reads and writes the same
+ * Offer.attributes the free characteristics editor does, under each field's label, so the
+ * storefront shows them with no extra work. An emptied field is removed rather than stored blank.
+ */
+export function GuidedFieldsEditor({
+  fields,
+  attributes,
+  onChange,
+}: {
+  fields: readonly OfferFieldDefinition[];
+  attributes: Record<string, string>;
+  onChange: (label: string, value: string | undefined) => void;
+}) {
+  return (
+    <fieldset className="col-span-2 grid gap-2 sm:grid-cols-2">
+      <legend className="col-span-2 mb-1 text-sm font-medium text-text">Détails</legend>
+      {fields.map((field) => {
+        const value = attributes[field.label] ?? "";
+        const set = (next: string) => onChange(field.label, next.trim() === "" ? undefined : next);
+        if (field.kind === "checklist") {
+          const chosen = value ? value.split(", ") : [];
+          return (
+            <div key={field.label} className="sm:col-span-2">
+              <p className="mb-1 text-xs text-text-muted">{field.label}</p>
+              <div className="flex flex-wrap gap-3">
+                {field.options?.map((option) => (
+                  <label key={option} className="flex items-center gap-1.5 text-sm text-text">
+                    <input
+                      type="checkbox"
+                      checked={chosen.includes(option)}
+                      onChange={(e) =>
+                        set(
+                          (field.options ?? [])
+                            .filter((o) =>
+                              o === option ? e.target.checked : chosen.includes(o),
+                            )
+                            .join(", "),
+                        )
+                      }
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        if (field.kind === "select") {
+          return (
+            <Select
+              key={field.label}
+              aria-label={field.label}
+              value={value}
+              onChange={(e) => set(e.target.value)}
+            >
+              <option value="">{field.label}</option>
+              {field.options?.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
+          );
+        }
+        return (
+          <Input
+            key={field.label}
+            type={field.kind === "number" ? "number" : field.kind === "date" ? "date" : "text"}
+            min={field.kind === "number" ? "0" : undefined}
+            aria-label={field.label}
+            placeholder={field.label}
+            value={value}
+            onChange={(e) => set(e.target.value)}
+          />
+        );
+      })}
     </fieldset>
   );
 }

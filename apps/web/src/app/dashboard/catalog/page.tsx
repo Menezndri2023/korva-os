@@ -13,6 +13,7 @@ import {
 } from "@korva/validation";
 import {
   BUSINESS_MODEL_DEFINITIONS,
+  BUSINESS_MODEL_OFFER_FIELDS,
   OFFER_TYPES,
   verticalForOrganizationType,
   type CustomFieldValues,
@@ -31,6 +32,7 @@ import { usePlanFeatures } from "@/lib/use-plan-features";
 import {
   AttributesEditor,
   BundleItemsEditor,
+  GuidedFieldsEditor,
   OFFER_TYPE_FIELDS,
   OptionGroupsEditor,
   VariantsEditor,
@@ -143,6 +145,33 @@ export default function CatalogPage() {
   const compareAtLocked = !has("compare_at_price");
   const [variantDrafts, setVariantDrafts] = useState<VariantDraft[]>([]);
   const [attributeDrafts, setAttributeDrafts] = useState<Record<string, string>>({});
+
+  // Guided characteristics of the type of activity (a room's amenities, a property's surface),
+  // for its main offer type only; the free editor then shows everything else.
+  const businessModelKey = organization?.businessModel;
+  const guidedFields =
+    businessModelKey &&
+    BUSINESS_MODEL_DEFINITIONS[businessModelKey].offerTypes[0] === offerType
+      ? (BUSINESS_MODEL_OFFER_FIELDS[businessModelKey] ?? [])
+      : [];
+  const guidedKeys = new Set(guidedFields.map((field) => field.label));
+  const freeAttributes = Object.fromEntries(
+    Object.entries(attributeDrafts).filter(([key]) => !guidedKeys.has(key)),
+  );
+  function setGuidedAttribute(label: string, value: string | undefined) {
+    setAttributeDrafts((current) => {
+      const next = { ...current };
+      if (value === undefined) delete next[label];
+      else next[label] = value;
+      return next;
+    });
+  }
+  function setFreeAttributes(next: Record<string, string>) {
+    setAttributeDrafts((current) => ({
+      ...Object.fromEntries(Object.entries(current).filter(([key]) => guidedKeys.has(key))),
+      ...next,
+    }));
+  }
   const [bundleDrafts, setBundleDrafts] = useState<BundleItemDraft[]>([]);
   const [optionGroupDrafts, setOptionGroupDrafts] = useState<OfferOptionGroup[]>([]);
   // Remounts the attributes editor (which keeps its own rows) each time the form is reopened.
@@ -356,11 +385,20 @@ export default function CatalogPage() {
             <OptionGroupsEditor groups={optionGroupDrafts} onChange={setOptionGroupDrafts} />
           )}
           {fields.attributes && (
-            <AttributesEditor
-              key={formKey}
-              attributes={attributeDrafts}
-              onChange={setAttributeDrafts}
-            />
+            <>
+              {guidedFields.length > 0 && (
+                <GuidedFieldsEditor
+                  fields={guidedFields}
+                  attributes={attributeDrafts}
+                  onChange={setGuidedAttribute}
+                />
+              )}
+              <AttributesEditor
+                key={formKey}
+                attributes={freeAttributes}
+                onChange={setFreeAttributes}
+              />
+            </>
           )}
 
           <CustomFieldsFieldset

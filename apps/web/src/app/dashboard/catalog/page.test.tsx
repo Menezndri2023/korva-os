@@ -413,6 +413,61 @@ describe("CatalogPage — trade suggestions and currency", () => {
     ]);
   });
 
+  it("gives a real estate agency guided listing fields, stored as characteristics", async () => {
+    orgMock.current = { type: "immobilier", currency: "XOF", businessModel: "real_estate" };
+    postMock.mockResolvedValue({ id: "offer-8" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Villa Cocody");
+    await user.selectOptions(screen.getByLabelText("Transaction"), "Location");
+    await user.type(screen.getByLabelText("Surface (m²)"), "180");
+    await user.type(screen.getByLabelText("Ville"), "Abidjan");
+    // A free characteristic still sits beside the guided ones.
+    await user.click(screen.getByRole("button", { name: "Ajouter une caractéristique" }));
+    await user.type(screen.getByLabelText("Caractéristique 1"), "Gardiennage");
+    await user.type(screen.getByLabelText("Valeur de la caractéristique 1"), "24h/24");
+    await user.click(screen.getByRole("button", { name: /créer l'offre/i }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({
+          attributes: {
+            Transaction: "Location",
+            "Surface (m²)": "180",
+            Ville: "Abidjan",
+            Gardiennage: "24h/24",
+          },
+        }),
+      ),
+    );
+  });
+
+  it("offers a guesthouse its room amenities as a checklist", async () => {
+    orgMock.current = { type: "hôtellerie", currency: "EUR", businessModel: "lodging" };
+    postMock.mockResolvedValue({ id: "offer-9" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Chambre Baobab");
+    await user.click(screen.getByRole("checkbox", { name: "Wi-Fi" }));
+    await user.click(screen.getByRole("checkbox", { name: "Climatisation" }));
+    await user.click(screen.getByRole("button", { name: /créer l'offre/i }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({
+          bookingUnit: "night",
+          attributes: expect.objectContaining({ Équipements: "Wi-Fi, Climatisation" }),
+        }),
+      ),
+    );
+  });
+
   it("prices a new offer in the organization's own currency, not EUR", async () => {
     // The form's defaultValues hardcoded "EUR" and are evaluated once on mount, before
     // useActiveOrganization resolves — so every organization got euros, and an offer created in

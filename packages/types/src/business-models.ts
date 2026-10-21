@@ -130,3 +130,58 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: false, training: false },
   },
 };
+
+/**
+ * Guided characteristics for the offers of some types of activity: a room's capacity and
+ * amenities, a property's surface and rooms. They are stored in Offer.attributes under these
+ * labels — the free-form characteristics the storefront already shows on the offer page — so no
+ * schema per trade is needed, and an owner can still add anything else freely.
+ *
+ * Shown for the activity's main offer type only (BusinessModelDefinition.offerTypes[0]): a
+ * guesthouse's nights, an agency's listings.
+ */
+export interface OfferFieldDefinition {
+  /** Also the attribute key, as displayed to customers. */
+  label: string;
+  kind: "number" | "text" | "date" | "select" | "checklist";
+  /** For select and checklist. A checklist is stored as "A, B, C". */
+  options?: readonly string[];
+}
+
+export const BUSINESS_MODEL_OFFER_FIELDS: Partial<Record<BusinessModel, readonly OfferFieldDefinition[]>> = {
+  lodging: [
+    { label: "Capacité (personnes)", kind: "number" },
+    { label: "Lits", kind: "text" },
+    { label: "Superficie (m²)", kind: "number" },
+    {
+      label: "Équipements",
+      kind: "checklist",
+      options: [
+        "Wi-Fi",
+        "Climatisation",
+        "Ventilateur",
+        "Salle de bain privée",
+        "Télévision",
+        "Petit-déjeuner inclus",
+        "Parking",
+        "Piscine",
+        "Cuisine équipée",
+      ],
+    },
+  ],
+  real_estate: [
+    { label: "Transaction", kind: "select", options: ["Vente", "Location"] },
+    {
+      label: "Type de bien",
+      kind: "select",
+      options: ["Appartement", "Maison", "Villa", "Studio", "Terrain", "Bureau", "Local commercial"],
+    },
+    { label: "Surface (m²)", kind: "number" },
+    { label: "Pièces", kind: "number" },
+    { label: "Chambres", kind: "number" },
+    { label: "Quartier", kind: "text" },
+    { label: "Ville", kind: "text" },
+    { label: "Charges mensuelles", kind: "number" },
+    { label: "Disponible à partir du", kind: "date" },
+  ],
+};
