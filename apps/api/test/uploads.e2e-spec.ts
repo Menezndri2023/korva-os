@@ -137,6 +137,17 @@ describe('Uploads (e2e) — local storage provider', () => {
       .expect(200);
     expect(getRes.headers['content-type']).toBe('image/png');
     expect(getRes.headers['content-length']).toBe(String(PNG_SIGNATURE.length));
+    // Shown on other origins (the tenant sites, the dashboard): a same-origin resource policy
+    // made browsers refuse every uploaded photo while the request itself succeeded.
+    expect(getRes.headers['cross-origin-resource-policy']).toBe('cross-origin');
+
+    // Not subject to the API's per-IP rate limit: one catalogue page is dozens of photos, and
+    // many visitors share one IP behind a mobile carrier's NAT.
+    for (let index = 0; index < 150; index += 1) {
+      await request(server)
+        .get(`/api/v1/uploads/${organizationId}/${upload.filename}`)
+        .expect(200);
+    }
 
     const deleteRes = await request(server)
       .delete(`/api/v1/uploads/${organizationId}/${upload.filename}`)

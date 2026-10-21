@@ -1,3 +1,4 @@
+import { SkipThrottle } from '@nestjs/throttler';
 import {
   BadRequestException,
   Controller,
@@ -127,7 +128,20 @@ export class UploadsController {
     };
   }
 
+  /**
+   * Served to OTHER origins by design: the photos are shown on sites.korvasuite.com, on tenants'
+   * own domains and in the dashboard — never on api.korvasuite.com itself. Helmet's default
+   * `Cross-Origin-Resource-Policy: same-origin` made every browser refuse them (the request
+   * succeeded, the image never painted), so this route answers `cross-origin`. Safe because only
+   * raster images whose bytes were checked against their type are ever stored (see
+   * ALLOWED_UPLOAD_MIME_TYPES and file-signature-checks.ts) — no SVG, nothing executable.
+   *
+   * Not rate-limited: one catalogue page is dozens of images, and many visitors on mobile networks
+   * share one IP behind the carrier's NAT, so the API's per-IP limit refused photos to real
+   * customers. Files are immutable and cached for a year, which bounds the load anyway.
+   */
   @Public()
+  @SkipThrottle()
   @Get(':organizationId/:filename')
   async read(
     @Param('organizationId') organizationId: string,
@@ -150,6 +164,9 @@ export class UploadsController {
     // never let a browser MIME-sniff this response into something other than the declared
     // image type (e.g. as HTML, if a legacy sniffing algorithm ever disagreed with it).
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    // A read error mid-stream (disk, S3) must end the response rather than leave it hanging.
+    file.stream.on('error', () => res.destroy());
     file.stream.pipe(res);
   }
 
