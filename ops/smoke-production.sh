@@ -65,6 +65,16 @@ for sheet in $(grep -oE '/_next/static/[^"]+\.css' <<<"$site_html" | sort -u); d
 done
 check "Site stylesheet defines the shared button colour" 'grep -q "\.bg-primary{" <<<"$site_css"'
 
+echo "Email DNS"
+# Read over DNS-over-HTTPS: works from networks where plain port-53 DNS is blocked.
+txt() {
+  curl -s --max-time 20 -H 'accept: application/dns-json' \
+    "https://cloudflare-dns.com/dns-query?name=$1&type=TXT"
+}
+check "DMARC record published (_dmarc.${DOMAIN})" 'txt "_dmarc.${DOMAIN}" | grep -q "v=DMARC1"'
+check "DKIM key published (resend._domainkey.${DOMAIN})" 'txt "resend._domainkey.${DOMAIN}" | grep -q "p=MI"'
+check "SPF for the sending subdomain (send.${DOMAIN})" 'txt "send.${DOMAIN}" | grep -q "v=spf1"'
+
 echo
 if [ "$failures" -eq 0 ]; then
   echo "All checks passed."
