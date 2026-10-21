@@ -40,6 +40,8 @@ describe('Activation nudge (e2e)', () => {
   let connection: Connection;
 
   beforeAll(async () => {
+    // Read by ActivationReportService at request time, through ConfigService.
+    process.env.PLATFORM_ADMIN_EMAILS = 'Ops@Korva.test';
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -58,6 +60,7 @@ describe('Activation nudge (e2e)', () => {
   });
 
   afterAll(async () => {
+    delete process.env.PLATFORM_ADMIN_EMAILS;
     await connection.dropDatabase();
     await app.close();
   });
@@ -155,5 +158,39 @@ describe('Activation nudge (e2e)', () => {
     await nudges.sendDueNudges();
     expect(send).toHaveBeenCalledTimes(1);
     send.mockRestore();
+  });
+
+  it('shows the activation report to platform admins only', async () => {
+    const tenant = await setupOrg('report-tenant@korva.test', 'Report Shop', [
+      'website',
+      'catalog',
+    ]);
+    await request(server)
+      .get('/api/v1/platform/activation')
+      .set('Authorization', `Bearer ${tenant.accessToken}`)
+      .expect(403);
+
+    // Case-insensitive match against the configured list.
+    const admin = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email: 'ops@korva.test', password: 'password123' })
+      .expect(201);
+    const adminToken = (admin.body as ApiSuccess<AuthPayload>).data.accessToken;
+    const res = await request(server)
+      .get('/api/v1/platform/activation')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    const rows = (
+      res.body as ApiSuccess<
+        { slug: string; issues: string[]; ownerEmail: string }[]
+      >
+    ).data;
+    const shop = rows.find((row) => row.slug === tenant.slug)!;
+    expect(shop.ownerEmail).toBe('report-tenant@korva.test');
+    expect(shop.issues).toEqual(
+      expect.arrayContaining(['site_vide', 'sans_logo', 'sans_whatsapp']),
+    );
+    // The owner just signed up, so they are not inactive.
+    expect(shop.issues).not.toContain('inactif');
   });
 });
