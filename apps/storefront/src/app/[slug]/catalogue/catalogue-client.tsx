@@ -11,7 +11,7 @@ import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { resolveStorefrontStyle } from "@/templates/palette";
 import { StorefrontThemeStyle } from "@/templates/storefront-theme-style";
 import { KT } from "@/templates/kt-classes";
-import { BookingPanel, CheckoutPanel } from "../commerce-panels";
+import { BookingPanel, CheckoutPanel } from "../lazy-commerce-panels";
 import { WishlistButton } from "../wishlist-button";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
 import { OfferImage } from "@/templates/sections/OfferImage";

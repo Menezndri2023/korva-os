@@ -8,7 +8,7 @@ import { PublicApiError, publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
 import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOfferReviewSummary, PublicOrganization } from "@/lib/public-types";
-import { BookingPanel, CheckoutPanel } from "../../commerce-panels";
+import { BookingPanel, CheckoutPanel } from "../../lazy-commerce-panels";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import { resolveStorefrontStyle } from "@/templates/palette";

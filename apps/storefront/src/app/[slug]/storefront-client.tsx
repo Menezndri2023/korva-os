@@ -7,7 +7,7 @@ import { publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
-import { BookingPanel, CheckoutPanel } from "./commerce-panels";
+import { BookingPanel, CheckoutPanel } from "./lazy-commerce-panels";
 import { resolveStorefrontStyle } from "@/templates/palette";
 import { StorefrontThemeStyle } from "@/templates/storefront-theme-style";
 import { MobileCartBar } from "@/templates/sections/MobileCartBar";
