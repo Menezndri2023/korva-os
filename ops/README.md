@@ -114,6 +114,17 @@ exits before the event leaves, and the check reports success having proved nothi
 Even so, the transport accepting an event is not the project accepting it. **Look in the Sentry
 UI for the message.**
 
+## Créer le compte administrateur / redéfinir un mot de passe
+
+`PLATFORM_ADMIN_EMAILS` says who may enter /admin; it creates no account. To create that account,
+or set the password of any account without email, on the server:
+
+    ssh -t korva@<server> 'cd ~/korva-os && docker compose -f docker-compose.prod.yml \
+      --env-file .env.production run --rm --no-deps api node dist/set-user-password.js ops@example.com'
+
+The password is typed at a masked prompt, twice — never on the command line. Setting it on an
+existing account clears its login lock and closes its sessions (apps/api/src/set-user-password.ts).
+
 ## smoke-production.sh
 
 Run after every deploy, from anywhere: `ops/smoke-production.sh` (defaults to korvasuite.com and
