@@ -42,9 +42,11 @@ function renderPanel(offer: PublicOffer) {
   );
 }
 
-/** The resource list loads asynchronously: wait for its option before choosing it. */
+/** The resource list loads asynchronously: wait for its option before choosing it. The first test
+ *  of the file also pays for the panel's lazy chunk, which took over the default 1 s whenever the
+ *  whole monorepo's suites ran in parallel. */
 async function pickResource(user: ReturnType<typeof userEvent.setup>) {
-  await screen.findByRole("option", { name: "Fauteuil 1" });
+  await screen.findByRole("option", { name: "Fauteuil 1" }, { timeout: 5_000 });
   await user.selectOptions(screen.getByLabelText("Emplacement"), "res-1");
 }
 

@@ -6,15 +6,22 @@ import type {
   Pagination,
 } from "@korva/types";
 
+import { visitorMessage } from "./visitor-messages";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 
+/**
+ * `message` is always the visitor's French sentence for `code` (see visitor-messages.ts), so any
+ * form can print it as is. The API's own English wording stays available as `apiMessage` for
+ * logs and debugging.
+ */
 export class PublicApiError extends Error {
   constructor(
     public readonly code: string,
-    message: string,
+    public readonly apiMessage: string,
     public readonly details?: unknown,
   ) {
-    super(message);
+    super(visitorMessage(code));
   }
 }
 
@@ -41,14 +48,28 @@ export async function request<T>(
     headers["X-Forwarded-For"] = options.forwardedFor;
   }
 
-  const response = await fetch(`${options.baseUrl ?? API_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${options.baseUrl ?? API_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new PublicApiError("NETWORK_ERROR", error instanceof Error ? error.message : String(error));
+  }
 
-  const payload = (await response.json()) as ApiResponse<T> | ApiListResponse<T>;
+  let payload: ApiResponse<T> | ApiListResponse<T>;
+  try {
+    payload = (await response.json()) as ApiResponse<T> | ApiListResponse<T>;
+  } catch {
+    // A proxy's HTML error page (502 during a deploy, 504…) instead of the API's JSON envelope.
+    throw new PublicApiError(
+      response.status === 429 ? "TOO_MANY_REQUESTS" : "NETWORK_ERROR",
+      `HTTP ${response.status} without a JSON body`,
+    );
+  }
 
   if (!payload.success) {
     throw new PublicApiError(payload.error.code, payload.error.message, payload.error.details);
@@ -96,14 +117,15 @@ export async function downloadPdf(
     cache: "no-store",
   });
   if (!response.ok) {
-    let message = "Impossible de télécharger le document.";
+    let code = "DOWNLOAD_FAILED";
+    let apiMessage = `HTTP ${response.status}`;
     try {
       const payload = (await response.json()) as ApiResponse<unknown>;
-      if (!payload.success) message = payload.error.message;
+      if (!payload.success) ({ code, message: apiMessage } = payload.error);
     } catch {
       // Response wasn't JSON (e.g. a raw 401 from the guard) — keep the generic message.
     }
-    throw new PublicApiError("DOWNLOAD_FAILED", message);
+    throw new PublicApiError(code, apiMessage);
   }
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
