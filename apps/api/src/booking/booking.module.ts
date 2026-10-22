@@ -74,6 +74,9 @@ import { IdentityModule } from '../identity/identity.module';
 // documented above for IdentityModule; OrganizationsModule has no path back to BookingModule.
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { DocumentsModule } from '../documents/documents.module';
+// ReviewRequestsService (review link in the completion message). ReviewsModule imports only
+// CommunicationModule/CrmModule, neither of which leads back here.
+import { ReviewsModule } from '../reviews/reviews.module';
 
 @Module({
   imports: [
@@ -96,6 +99,7 @@ import { DocumentsModule } from '../documents/documents.module';
     IdentityModule,
     OrganizationsModule,
     DocumentsModule,
+    ReviewsModule,
   ],
   controllers: [
     ResourcesController,

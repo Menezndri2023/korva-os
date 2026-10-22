@@ -33,12 +33,15 @@ import type {
   ListPublicOffersQuery,
   SearchPublicOffersQuery,
   TrackCartCheckoutStartedInput,
+  SubmitInvitedReviewInput,
 } from '@korva/validation';
 import type { OfferDocument } from '../catalog/offers/schemas/offer.schema';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { OffersService } from '../catalog/offers/offers.service';
-import { ReviewsService } from '../reviews/reviews.service';
+import { ReviewsService, reviewAuthorName } from '../reviews/reviews.service';
+import { ReviewRequestsService } from '../reviews/review-requests.service';
+import type { ReviewInvitationClaims } from '../reviews/review-invitation-token';
 import {
   AvailabilityService,
   nightsBetween,
@@ -132,6 +135,7 @@ export class PublicService {
     private readonly contactModel: Model<ContactDocument>,
     private readonly reviewsService: ReviewsService,
     private readonly cartsService: CartsService,
+    private readonly reviewRequestsService: ReviewRequestsService,
   ) {}
 
   private async resolveOrganization(
@@ -210,9 +214,12 @@ export class PublicService {
     // since those also power the embeddable widget on a business's own external site, a
     // distinct capability from KORVA's own hosted storefront page.
     this.assertModuleEnabled(organization, 'website');
-    const plan = await this.subscriptionsService.getActivePlan(
-      organization.id as string,
-    );
+    const [plan, reviewSummary] = await Promise.all([
+      this.subscriptionsService.getActivePlan(organization.id as string),
+      this.reviewsService.getPublicOrganizationSummary(
+        organization.id as string,
+      ),
+    ]);
     // Defense-in-depth, same reasoning as resolveStorefrontTheme's own plan clamp below: an
     // organization downgraded after saving testimonials/team/gallery/about/FAQ must stop showing
     // them on the public page even though the fields are still stored — enforced at save-time
@@ -222,6 +229,7 @@ export class PublicService {
       name: organization.name,
       slug: organization.slug,
       type: organization.type,
+      businessModel: organization.businessModel,
       currency: organization.currency,
       language: organization.language,
       logo: organization.logo,
@@ -263,6 +271,8 @@ export class PublicService {
         ? organization.galleryImages
         : undefined,
       faqItems: contentSectionsAllowed ? organization.faqItems : undefined,
+      // Real customers' reviews are never plan-gated, unlike the curated testimonials above.
+      reviewSummary,
     };
   }
 
@@ -510,23 +520,132 @@ export class PublicService {
   ) {
     const organization = await this.resolveOrganization(slug);
     await this.getOffer(slug, offerId);
-    const { average, count, reviews } =
-      await this.reviewsService.getPublicSummary(
-        organization.id as string,
-        offerId,
-        page,
-        limit,
-      );
+    return this.reviewsService.getPublicSummary(
+      organization.id as string,
+      offerId,
+      page,
+      limit,
+    );
+  }
+
+  /**
+   * What a review link (sent after a delivered order / completed booking — see
+   * ReviewRequestsService) is about. Every failure — forged, expired, another business's link,
+   * an order that no longer exists — is the same 404, so the link reveals nothing it shouldn't.
+   */
+  async getReviewInvitation(slug: string, token: string) {
+    const { organization, claims, items } = await this.resolveInvitation(
+      slug,
+      token,
+    );
+    const contact = await this.contactModel
+      .findOne(
+        {
+          _id: new Types.ObjectId(claims.contactId),
+          organizationId: organization._id,
+        },
+        { firstName: 1 },
+      )
+      .lean()
+      .exec();
     return {
-      average,
-      count,
-      reviews: reviews.map((review) => ({
-        rating: review.rating,
-        comment: review.comment,
-        createdAt: (
-          review as unknown as { createdAt: Date }
-        ).createdAt.toISOString(),
-      })),
+      organizationName: organization.name,
+      entity: claims.entity,
+      items: items.names,
+      customerFirstName: contact?.firstName || undefined,
+      alreadyReviewed: await this.reviewsService.hasReviewed(
+        claims.organizationId,
+        claims.contactId,
+        claims.entity,
+        claims.entityId,
+      ),
+    };
+  }
+
+  async submitInvitedReview(slug: string, input: SubmitInvitedReviewInput) {
+    const { claims, items } = await this.resolveInvitation(slug, input.token);
+    let authorName: string | undefined;
+    if (input.showName) {
+      const contact = await this.contactModel
+        .findById(claims.contactId, { firstName: 1, lastName: 1 })
+        .lean()
+        .exec();
+      authorName = contact ? reviewAuthorName(contact) : undefined;
+    }
+    const review = await this.reviewsService.create(
+      claims.organizationId,
+      claims.contactId,
+      {
+        entity: claims.entity,
+        entityId: claims.entityId,
+        rating: input.rating,
+        comment: input.comment,
+      },
+      { offerId: items.singleOfferId, authorName },
+    );
+    return {
+      rating: review.rating,
+      createdAt: review.get('createdAt') as Date,
+    };
+  }
+
+  private async resolveInvitation(slug: string, token: string) {
+    const invalid = () =>
+      new NotFoundException({
+        code: 'REVIEW_INVITATION_INVALID',
+        message: 'This review link is invalid or has expired',
+      });
+    const organization = await this.resolveOrganization(slug);
+    const claims = this.reviewRequestsService.verify(token);
+    if (
+      !claims ||
+      claims.organizationId !== (organization.id as string) ||
+      organization.suspendedAt
+    ) {
+      throw invalid();
+    }
+    const items = await this.invitationItems(claims);
+    if (!items) throw invalid();
+    return { organization, claims, items };
+  }
+
+  /** The reviewed order's or booking's offers — null when it is gone, belongs to someone else,
+   *  or is not finished (a link is only ever issued once it is, but nothing else re-checks). */
+  private async invitationItems(
+    claims: ReviewInvitationClaims,
+  ): Promise<{ names: string[]; singleOfferId?: string } | null> {
+    const scope = {
+      _id: new Types.ObjectId(claims.entityId),
+      organizationId: new Types.ObjectId(claims.organizationId),
+      contactId: new Types.ObjectId(claims.contactId),
+    };
+    if (claims.entity === 'order') {
+      const order = await this.orderModel
+        .findOne(scope, { items: 1, status: 1 })
+        .lean()
+        .exec();
+      if (!order || order.status !== 'fulfilled') return null;
+      const offerIds = new Set(
+        order.items
+          .map((item) => item.offerId?.toString())
+          .filter((id): id is string => Boolean(id)),
+      );
+      return {
+        names: [...new Set(order.items.map((item) => item.description))],
+        singleOfferId: offerIds.size === 1 ? [...offerIds][0] : undefined,
+      };
+    }
+    const booking = await this.bookingModel
+      .findOne(scope, { offerId: 1, status: 1 })
+      .lean()
+      .exec();
+    if (!booking || booking.status !== 'completed') return null;
+    const offer = await this.offersService
+      .getById(claims.organizationId, booking.offerId.toString())
+      .catch(() => null);
+    return {
+      names: offer ? [offer.name] : [],
+      singleOfferId: booking.offerId.toString(),
     };
   }
 

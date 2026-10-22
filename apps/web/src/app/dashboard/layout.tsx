@@ -17,6 +17,7 @@ import {
   ChartColumn,
   ChefHat,
   GraduationCap,
+  HeartHandshake,
   LayoutDashboard,
   Megaphone,
   MessageCircle,
@@ -285,6 +286,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             );
           })}
         </nav>
+        <NavLink
+          href="/dashboard/avis-korva"
+          label="Votre avis sur KORVA"
+          icon={HeartHandshake}
+          active={pathname === "/dashboard/avis-korva"}
+          onClick={() => setSidebarOpen(false)}
+        />
         <NavLink
           href="/dashboard/settings"
           label="Paramètres"

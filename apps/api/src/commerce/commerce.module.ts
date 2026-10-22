@@ -63,6 +63,8 @@ import { CommunicationModule } from '../communication/communication.module';
 // `import { CommerceModule }` site before adding this edge.
 import { IdentityModule } from '../identity/identity.module';
 
+import { ReviewsModule } from '../reviews/reviews.module';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -82,6 +84,9 @@ import { IdentityModule } from '../identity/identity.module';
     IdentityModule,
     OrganizationsModule,
     CommunicationModule,
+    // ReviewRequestsService ("donnez votre avis" once an order is delivered). ReviewsModule only
+    // imports CommunicationModule/CrmModule — no path back to CommerceModule.
+    ReviewsModule,
     // A second, module-local JwtModule registration for KitchenGateway's own JwtService
     // injection — deliberately NOT exported (see this module's own `exports` array below), so
     // it can never collide with CustomerAuthModule's separately-registered JwtService (a

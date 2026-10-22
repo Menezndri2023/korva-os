@@ -3,6 +3,7 @@ import { BUSINESS_MODELS, BUSINESS_MODEL_DEFINITIONS, PLAN_NAMES, SIGNUP_TRIAL }
 import { KorvaGlyph, KorvaWordmark } from "@/components/brand/korva-mark";
 import { REPLACES } from "@/lib/landing-content";
 import { PlanLadder } from "./plan-ladder";
+import { PlatformReviews } from "./platform-reviews";
 import { TradePanel } from "./trade-panel";
 
 /**
@@ -144,6 +145,8 @@ export function LandingPage() {
           </dl>
         </div>
       </section>
+
+      <PlatformReviews />
 
       {/* ------------------------------------------------------------------ plans (paper) */}
       <section id="formules" className="mx-auto max-w-6xl px-4 py-16 sm:px-8 sm:py-24">

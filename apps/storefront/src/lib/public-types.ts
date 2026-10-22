@@ -1,5 +1,6 @@
 import type {
   BookingStatus,
+  BusinessModel,
   DeliveryZone,
   FaqItem,
   FulfillmentMode,
@@ -15,6 +16,8 @@ import type {
   ReturnRequestStatus,
   StorefrontTheme,
   TeamMember,
+  PublicReview,
+  PublicReviewSummary,
   Testimonial,
 } from "@korva/types";
 
@@ -23,6 +26,8 @@ export interface PublicOrganization {
   name: string;
   slug: string;
   type: string;
+  /** Type of activity (business-models.ts); absent for an older organization. */
+  businessModel?: BusinessModel;
   currency: string;
   language: string;
   logo?: string;
@@ -62,6 +67,8 @@ export interface PublicOrganization {
    *  yourself." See apps/storefront/src/templates/sections/. */
   aboutText?: string;
   testimonials?: Testimonial[];
+  /** Real customers' reviews — every plan. Absent from an API older than this field. */
+  reviewSummary?: PublicReviewSummary;
   teamMembers?: TeamMember[];
   galleryImages?: GalleryImage[];
   faqItems?: FaqItem[];
@@ -108,7 +115,7 @@ export interface PublicOffer {
 export interface PublicOfferReviewSummary {
   average: number | null;
   count: number;
-  reviews: { rating: number; comment?: string; createdAt: string }[];
+  reviews: PublicReview[];
 }
 
 /** Mirrors PublicService#listResources exactly. */

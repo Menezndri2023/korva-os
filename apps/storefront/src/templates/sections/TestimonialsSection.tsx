@@ -9,7 +9,7 @@ export function TestimonialsSection({ organization }: { organization: PublicOrga
   return (
     <section className="px-6 py-16">
       <div className="mx-auto max-w-5xl">
-        <SectionHeading eyebrow="Avis clients" title="Ce que disent nos clients" />
+        <SectionHeading eyebrow="Témoignages" title="Ils nous font confiance" />
         <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
           {testimonials.map((testimonial) => (
             <figure

@@ -21,6 +21,8 @@ import {
   publicStayQuoteSchema,
   publicTableSlotsSchema,
   publicOfferReviewsQuerySchema,
+  reviewInvitationQuerySchema,
+  submitInvitedReviewSchema,
   resolveDomainQuerySchema,
   searchPublicOffersQuerySchema,
   trackByEmailQuerySchema,
@@ -35,6 +37,8 @@ import {
   type PublicStayQuoteQuery,
   type PublicTableSlotsQuery,
   type PublicOfferReviewsQuery,
+  type ReviewInvitationQuery,
+  type SubmitInvitedReviewInput,
   type ResolveDomainQuery,
   type SearchPublicOffersQuery,
   type TrackByEmailQuery,
@@ -188,6 +192,26 @@ export class PublicController {
       query.page,
       query.limit,
     );
+  }
+
+  @Get('review-invitation')
+  getReviewInvitation(
+    @Param('organizationSlug') slug: string,
+    @Query(new ZodValidationPipe(reviewInvitationQuerySchema))
+    query: ReviewInvitationQuery,
+  ) {
+    return this.publicService.getReviewInvitation(slug, query.token);
+  }
+
+  /** Same low budget as a booking: a real customer posts one review, a script posts many. */
+  @Throttle(PUBLIC_BOOKING_THROTTLE)
+  @Post('reviews')
+  submitInvitedReview(
+    @Param('organizationSlug') slug: string,
+    @Body(new ZodValidationPipe(submitInvitedReviewSchema))
+    body: SubmitInvitedReviewInput,
+  ) {
+    return this.publicService.submitInvitedReview(slug, body);
   }
 
   @Get('resources')

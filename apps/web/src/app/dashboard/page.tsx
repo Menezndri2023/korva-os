@@ -12,6 +12,7 @@ import { useAuthReady } from "@/lib/use-auth-ready";
 import { useAnalyticsActivity, useAnalyticsOverview } from "@/lib/use-analytics";
 import { ACTIVITY_ENTITY_LABELS, activityActionLabel, formatCurrency } from "@/lib/analytics-format";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
+import { KorvaReviewPrompt } from "@/components/korva-review-prompt";
 
 const ACTION_ITEM_TYPE_LABELS: Record<ActionCenterItem["type"], string> = {
   recommendation: "Recommandation",
@@ -91,6 +92,10 @@ export default function DashboardPage() {
           slug={organization.slug}
           loading={onlineOffersQuery.isLoading}
         />
+      )}
+
+      {organization && (
+        <KorvaReviewPrompt organizationId={organization.id} organizationCreatedAt={organization.createdAt} />
       )}
 
       <AttentionSection

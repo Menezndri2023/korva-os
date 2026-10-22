@@ -105,6 +105,8 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
     ])
     .optional(),
   contactAddress: z.string().trim().max(200).optional(),
+  /** Ask each customer for a review after a delivered order / a completed booking. */
+  reviewRequestsEnabled: z.boolean().optional(),
   /** Omit to show every section `enabledModules` allows; pass an explicit array to restrict. */
   storefrontSections: z.array(z.enum(STOREFRONT_SECTIONS)).optional(),
   /** Omit to use the vertical's default template — see EntitlementsService.assertStorefrontThemeAllowed. */

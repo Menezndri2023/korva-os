@@ -10,6 +10,7 @@ import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
 import type { CreateOrderInput, LineItemInput } from '@korva/validation';
 import type { FulfillmentMode, Pagination } from '@korva/types';
+import { ReviewRequestsService } from '../../reviews/review-requests.service';
 import { OrdersRepository, FindOrdersOptions } from './orders.repository';
 import { OrderDocument } from './schemas/order.schema';
 import { CartsRepository } from '../carts/carts.repository';
@@ -46,6 +47,7 @@ export class OrdersService {
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
     private readonly discountCodesService: DiscountCodesService,
+    private readonly reviewRequestsService: ReviewRequestsService,
     // KitchenTicketsService.list() needs OrdersService back (to join a ticket with its live
     // order), so this pair is a genuine circular provider dependency within CommerceModule —
     // forwardRef() on both sides is the standard, documented NestJS resolution for that, not a
@@ -967,6 +969,12 @@ export class OrdersService {
       'fulfilled',
     );
     await this.fulfillmentsService.createForOrder(organizationId, id);
+    // Best-effort and self-contained: never throws (see ReviewRequestsService).
+    await this.reviewRequestsService.requestForOrder(organizationId, {
+      id,
+      number: order.number,
+      contactId: order.contactId,
+    });
     return order;
   }
 

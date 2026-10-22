@@ -18,6 +18,8 @@ import { AuditModule } from '../audit/audit.module';
 import { ActivationModule } from '../activation/activation.module';
 import { IdentityModule } from '../identity/identity.module';
 import { PlatformAdminController } from './platform-admin.controller';
+import { PlatformReviewsModule } from '../platform-reviews/platform-reviews.module';
+import { PlatformReviewsAdminController } from './platform-reviews-admin.controller';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { PlatformAdminService } from './platform-admin.service';
 
@@ -39,10 +41,15 @@ import { PlatformAdminService } from './platform-admin.service';
     AuditModule,
     ActivationModule,
     IdentityModule,
+    PlatformReviewsModule,
     // Signing keys are passed per call (PlatformAdminAuthService.signingKey): no module default.
     JwtModule.register({}),
   ],
-  controllers: [PlatformAdminController, PlatformAdminAuthController],
+  controllers: [
+    PlatformAdminController,
+    PlatformAdminAuthController,
+    PlatformReviewsAdminController,
+  ],
   providers: [
     PlatformAdminService,
     PlatformAdminGuard,

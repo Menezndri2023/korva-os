@@ -1,18 +1,26 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
-import type { ReviewEntity } from '@korva/types';
-import { REVIEW_ENTITIES } from '@korva/types';
+import { HydratedDocument, Schema as MongooseSchema, Types } from 'mongoose';
+import type { ReviewEntity, ReviewStatus } from '@korva/types';
+import { REVIEW_ENTITIES, REVIEW_STATUSES } from '@korva/types';
 import { idToJson } from '../../core/mongoose/schema-options';
 
 export type ReviewDocument = HydratedDocument<Review>;
 
+const ReviewReplySchema = new MongooseSchema(
+  {
+    body: { type: String, required: true },
+    repliedAt: { type: Date, required: true },
+  },
+  { _id: false },
+);
+
 /**
- * A customer's rating/comment on their own already-completed order or booking — created only
- * through the customer portal (see CustomerAuthService#createReview), never by staff. Read-only
- * for staff (ReviewsController, gated on the existing `orders.read` permission — a review is
- * inherently order/booking-adjacent, not important enough on its own to warrant a whole new
- * permission category). At most one review per (contact, entity, entityId) — see the unique
- * index below.
+ * A customer's rating/comment on their own already-completed order or booking — written by the
+ * customer, never by staff: from their account (CustomerAuthService#createReview) or from the
+ * signed link sent after the order was delivered / the booking completed (no account needed —
+ * see review-invitation-token.ts). Staff can read it (`orders.read`), answer it publicly and
+ * take it off the site (`orders.update`), never edit it. At most one review per (contact,
+ * entity, entityId) — see the unique index below.
  */
 @Schema({ timestamps: true, collection: 'reviews', toJSON: idToJson })
 export class Review {
@@ -49,6 +57,18 @@ export class Review {
 
   @Prop()
   comment?: string;
+
+  /** Absent on reviews written before moderation existed: they count as published. */
+  @Prop({ type: String, enum: REVIEW_STATUSES })
+  status?: ReviewStatus;
+
+  /** "Awa K." — set only when the customer chose to sign with their first name. */
+  @Prop()
+  authorName?: string;
+
+  /** The business's public answer, shown under the review. */
+  @Prop({ type: ReviewReplySchema })
+  reply?: { body: string; repliedAt: Date };
 }
 
 export const ReviewSchema = SchemaFactory.createForClass(Review);

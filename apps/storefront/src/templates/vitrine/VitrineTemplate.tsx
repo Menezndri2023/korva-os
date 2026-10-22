@@ -12,6 +12,7 @@ import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
 import { GallerySection } from "../sections/GallerySection";
 import { TestimonialsSection } from "../sections/TestimonialsSection";
+import { CustomerReviewsSection } from "../sections/CustomerReviews";
 import { FaqSection } from "../sections/FaqSection";
 import { SectionHeading } from "../sections/SectionHeading";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
@@ -120,6 +121,7 @@ export function VitrineTemplate({
       <AboutSection organization={organization} />
       <TeamSection organization={organization} />
       <GallerySection organization={organization} />
+      <CustomerReviewsSection organization={organization} />
       <TestimonialsSection organization={organization} />
       <FaqSection organization={organization} />
       <SiteFooter organization={organization} links={links} />

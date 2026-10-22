@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Button, Card } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
+import { StarPicker } from "../star-picker";
 
 /**
  * Shared "Laisser un avis" widget for a fulfilled order or a completed booking — the server
@@ -22,16 +23,17 @@ export function ReviewForm({
   entity: "order" | "booking";
   entityId: string;
 }) {
-  const { authFetch } = useCustomerAuth(slug);
-  const [rating, setRating] = useState(5);
+  const { authFetch, customer } = useCustomerAuth(slug);
+  const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [showName, setShowName] = useState(true);
 
   const reviewMutation = useMutation({
     mutationFn: () =>
       authFetch((token) =>
         publicApiClient.post(
           `/public/${slug}/account/reviews`,
-          { entity, entityId, rating, comment: comment.trim() || undefined },
+          { entity, entityId, rating, comment: comment.trim() || undefined, showName },
           token,
         ),
       ),
@@ -45,7 +47,7 @@ export function ReviewForm({
   if (reviewMutation.isSuccess) {
     return (
       <Card className="p-4 text-sm text-text">
-        Merci pour votre avis !
+        Merci, votre avis est publié sur le site.
       </Card>
     );
   }
@@ -57,28 +59,25 @@ export function ReviewForm({
         <p className="text-sm text-text-muted">Vous avez déjà laissé un avis pour cet élément.</p>
       ) : (
         <>
-          <div className="flex gap-1" role="radiogroup" aria-label="Note">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={rating === value}
-                aria-label={`${value} étoile${value > 1 ? "s" : ""}`}
-                onClick={() => setRating(value)}
-                className={`text-2xl leading-none ${value <= rating ? "text-yellow-500" : "text-zinc-300"}`}
-              >
-                ★
-              </button>
-            ))}
-          </div>
+          <StarPicker value={rating} onChange={setRating} />
           <textarea
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             placeholder="Votre commentaire (optionnel)"
             rows={3}
-            className="w-full rounded-md border border-border-input px-3 py-2 text-sm text-text focus:border-focus focus:outline-none"
+            className="w-full rounded-md border border-border-input px-3 py-2 text-base text-text focus:border-focus focus:outline-none"
           />
+          {customer?.firstName && (
+            <label className="flex items-center gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={showName}
+                onChange={(event) => setShowName(event.target.checked)}
+                className="h-4 w-4"
+              />
+              Signer avec mon prénom ({customer.firstName}), sinon « Client vérifié »
+            </label>
+          )}
           {reviewMutation.isError && !alreadyReviewed && (
             <p className="text-xs text-destructive">
               {reviewMutation.error instanceof PublicApiError
@@ -90,6 +89,7 @@ export function ReviewForm({
             type="button"
             size="sm"
             loading={reviewMutation.isPending}
+            disabled={rating === 0}
             onClick={() => reviewMutation.mutate()}
           >
             Envoyer

@@ -10,6 +10,7 @@ import {
   CreditCard,
   LayoutDashboard,
   ScrollText,
+  Star,
   Tags,
   Users,
 } from "lucide-react";
@@ -24,6 +25,7 @@ const NAV = [
   { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users, exact: false },
   { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard, exact: false },
   { href: "/admin/formules", label: "Formules", icon: Tags, exact: false },
+  { href: "/admin/avis", label: "Avis sur KORVA", icon: Star, exact: false },
   { href: "/admin/journal", label: "Journal", icon: ScrollText, exact: false },
   { href: "/admin/systeme", label: "Système", icon: Activity, exact: false },
 ];

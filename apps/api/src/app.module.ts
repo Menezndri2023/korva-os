@@ -35,6 +35,7 @@ import { SubscriptionBillingModule } from './subscription-billing/subscription-b
 import { PublicModule } from './public/public.module';
 import { CustomerAuthModule } from './customer-auth/customer-auth.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { PlatformReviewsModule } from './platform-reviews/platform-reviews.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { BusinessGraphModule } from './business-graph/business-graph.module';
@@ -91,6 +92,7 @@ import { CustomerServiceModule } from './customer-service/customer-service.modul
     PublicModule,
     CustomerAuthModule,
     ReviewsModule,
+    PlatformReviewsModule,
     IntegrationsModule,
     BusinessGraphModule,
     DecisionEngineModule,

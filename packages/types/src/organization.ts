@@ -115,6 +115,8 @@ export interface Organization {
   /** International format, e.g. "+225 07 07 07 07 07". */
   whatsappNumber?: string;
   contactAddress?: string;
+  /** Undefined = on: a review request goes out after each delivered order / completed booking. */
+  reviewRequestsEnabled?: boolean;
   /** Set while KORVA's administration has suspended the organization (dashboard blocked, site
    *  offline). Reversible; nothing is deleted. */
   suspendedAt?: string;

@@ -81,6 +81,10 @@ export class Organization {
   @Prop()
   contactAddress?: string;
 
+  /** Undefined = on. See ReviewRequestsService. */
+  @Prop()
+  reviewRequestsEnabled?: boolean;
+
   /** When the "your site has no offer online yet" reminder went out — at most once per
    *  organization. See activation/activation-nudge.service.ts. */
   @Prop()

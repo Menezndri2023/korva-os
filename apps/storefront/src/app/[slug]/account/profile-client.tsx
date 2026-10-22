@@ -7,11 +7,36 @@ import { useMutation } from "@tanstack/react-query";
 import { Button, Card, Input } from "@korva/ui";
 import { PublicApiError } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
+import { usePublicOrganization } from "@/lib/use-public-organization";
+import type { PublicOrganization } from "@/lib/public-types";
 import { AccountShell } from "./account-shell";
+
+/**
+ * The account sections this business actually has: a clothing shop's customer has no "Mes
+ * formations", a salon's no "Mes retours". Until the business is known, every section is listed
+ * (each page handles being empty on its own).
+ */
+export function accountLinks(organization: PublicOrganization | undefined): { path: string; label: string }[] {
+  const on = (module: string) => !organization || organization.enabledModules.includes(module);
+  const links: { path: string; label: string; shown: boolean }[] = [
+    { path: "orders", label: "Mes commandes", shown: on("commerce") },
+    { path: "bookings", label: "Mes réservations", shown: on("booking") },
+    { path: "quotes", label: "Mes devis", shown: on("finance") || organization?.businessModel === "quotes" },
+    { path: "returns", label: "Mes retours", shown: on("commerce") && organization?.businessModel !== "restaurant" },
+    { path: "wishlist", label: "Ma liste de souhaits", shown: on("catalog") && on("commerce") },
+    {
+      path: "learning",
+      label: "Mes formations",
+      shown: !organization || organization.businessModel === "training",
+    },
+  ];
+  return links.filter((link) => link.shown);
+}
 
 export default function ProfileClient({ slug }: { slug: string }) {
   const router = useRouter();
   const { hydrated, isAuthenticated, customer, updateProfile, logout } = useCustomerAuth(slug);
+  const organizationQuery = usePublicOrganization(slug);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -63,26 +88,13 @@ export default function ProfileClient({ slug }: { slug: string }) {
 
   return (
     <AccountShell slug={slug} title="Mon compte">
-      <div className="flex gap-4 text-sm">
-        <Link href={`/${slug}/account/orders`} className="font-medium text-text hover:underline">
-          Mes commandes
-        </Link>
-        <Link href={`/${slug}/account/bookings`} className="font-medium text-text hover:underline">
-          Mes réservations
-        </Link>
-        <Link href={`/${slug}/account/quotes`} className="font-medium text-text hover:underline">
-          Mes devis
-        </Link>
-        <Link href={`/${slug}/account/returns`} className="font-medium text-text hover:underline">
-          Mes retours
-        </Link>
-        <Link href={`/${slug}/account/wishlist`} className="font-medium text-text hover:underline">
-          Ma liste de souhaits
-        </Link>
-        <Link href={`/${slug}/account/learning`} className="font-medium text-text hover:underline">
-          Mes formations
-        </Link>
-      </div>
+      <nav aria-label="Mon espace client" className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+        {accountLinks(organizationQuery.data).map(({ path, label }) => (
+          <Link key={path} href={`/${slug}/account/${path}`} className="font-medium text-text hover:underline">
+            {label}
+          </Link>
+        ))}
+      </nav>
 
       <Card className="p-4">
         <form onSubmit={handleSubmit} className="space-y-3 text-sm">

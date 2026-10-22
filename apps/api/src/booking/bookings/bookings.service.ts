@@ -25,9 +25,16 @@ import { ConversationsService } from '../../communication/conversations/conversa
 import { sendWithChannelFallback } from '../../communication/notify-contact-with-fallback';
 import { interpolate } from '../../shared/template';
 import { CreditBalancesService } from '../credit-balances/credit-balances.service';
+import { ReviewRequestsService } from '../../reviews/review-requests.service';
 
-const COMPLETION_MESSAGE =
+/** Training centres complete a course; every other business a visit, a stay, an appointment.
+ *  The second wording used to go to everyone, so a hair salon's client was congratulated on
+ *  "finishing the training". */
+const TRAINING_COMPLETION_MESSAGE =
   'Bonjour {{contact.firstName}}, félicitations pour avoir terminé la formation « {{offer.name}} » ! Merci pour votre participation.';
+const COMPLETION_MESSAGE =
+  'Bonjour {{contact.firstName}}, merci d’avoir choisi {{organization.name}} pour « {{offer.name}} » ! À très bientôt.';
+const REVIEW_INVITATION = ' Votre avis compte, il ne prend que 30 secondes : ';
 
 @Injectable()
 export class BookingsService {
@@ -42,6 +49,7 @@ export class BookingsService {
     private readonly eventBus: EventBusService,
     private readonly conversationsService: ConversationsService,
     private readonly creditBalancesService: CreditBalancesService,
+    private readonly reviewRequestsService: ReviewRequestsService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
@@ -455,17 +463,31 @@ export class BookingsService {
     organizationId: string,
     booking: BookingDocument,
   ): Promise<void> {
-    const [offer, contact] = await Promise.all([
+    const [offer, contact, invitation] = await Promise.all([
       this.offersService.getById(organizationId, booking.offerId.toString()),
       this.contactsService.getById(
         organizationId,
         booking.contactId.toString(),
       ),
+      this.reviewRequestsService.invitation(
+        organizationId,
+        'booking',
+        booking.id as string,
+        booking.contactId.toString(),
+      ),
     ]);
-    const body = interpolate(COMPLETION_MESSAGE, {
-      contact: { firstName: contact.firstName ?? '' },
-      offer: { name: offer.name },
-    });
+    // Suspended or deleted business: nothing goes out in its name.
+    if (!invitation) return;
+    const template =
+      invitation.businessModel === 'training'
+        ? TRAINING_COMPLETION_MESSAGE
+        : COMPLETION_MESSAGE;
+    const body =
+      interpolate(template, {
+        contact: { firstName: contact.firstName ?? '' },
+        offer: { name: offer.name },
+        organization: { name: invitation.organizationName },
+      }) + (invitation.link ? `${REVIEW_INVITATION}${invitation.link}` : '');
     await sendWithChannelFallback(
       this.conversationsService,
       this.logger,

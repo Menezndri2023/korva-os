@@ -41,7 +41,7 @@ import { InvoicesService } from '../finance/invoices/invoices.service';
 import { QuotesService } from '../finance/quotes/quotes.service';
 import { QuoteDocument } from '../finance/quotes/schemas/quote.schema';
 import { OffersService } from '../catalog/offers/offers.service';
-import { ReviewsService } from '../reviews/reviews.service';
+import { ReviewsService, reviewAuthorName } from '../reviews/reviews.service';
 import { ReturnRequestsService } from '../commerce/returns/return-requests.service';
 import { ReturnRequestDocument } from '../commerce/returns/schemas/return-request.schema';
 import { WishlistService } from '../commerce/wishlist/wishlist.service';
@@ -759,11 +759,22 @@ export class CustomerAuthService {
       offerId = booking.offerId.toString();
     }
 
+    const authorName = input.showName
+      ? reviewAuthorName(
+          await this.contactsService.getById(
+            organizationId,
+            customer.contactId,
+          ),
+        )
+      : undefined;
     return this.reviewsService.create(
       organizationId,
       customer.contactId,
       input,
-      offerId,
+      {
+        offerId,
+        authorName,
+      },
     );
   }
 
