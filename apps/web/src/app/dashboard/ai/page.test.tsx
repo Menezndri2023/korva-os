@@ -38,8 +38,19 @@ const pendingAction = {
   updatedAt: "2026-08-20T10:00:00.000Z",
 };
 
+const restaurantStatus = {
+  available: true,
+  paused: false,
+  assistant: {
+    name: "Assistant KORVA Restauration",
+    intro: "Je vous aide à suivre les commandes.",
+    suggestions: ["Quels plats se sont le plus vendus cette semaine ?"],
+  },
+};
+
 function mockGetByPath(overrides: Record<string, unknown> = {}) {
   return (path: string) => {
+    if (path === "/ai/status") return Promise.resolve(overrides.status ?? restaurantStatus);
     if (path === "/ai/conversations") return Promise.resolve([conversation]);
     if (path === "/ai/conversations/conv-1/messages") return Promise.resolve([]);
     if (path === "/ai/conversations/conv-1/pending-actions")
@@ -57,7 +68,7 @@ describe("AiPage — pending action confirm/reject", () => {
 
   async function openConversation(user: ReturnType<typeof userEvent.setup>) {
     renderWithProviders(<AiPage />);
-    await user.click(await screen.findByRole("button", { name: "Assistant général" }));
+    await user.click(await screen.findByRole("button", { name: "Assistant KORVA Restauration" }));
   }
 
   it("shows the pending action with Confirmer/Rejeter actions", async () => {
@@ -137,5 +148,36 @@ describe("AiPage — pending action confirm/reject", () => {
     await user.click(await screen.findByRole("button", { name: "Confirmer" }));
 
     expect(await screen.findByText(/Une erreur est survenue/)).toBeInTheDocument();
+  });
+});
+
+describe("AiPage — the business's KORVA IA assistant", () => {
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+  });
+
+  it("introduces the trade's assistant and sends a suggested question in one click", async () => {
+    getMock.mockImplementation(mockGetByPath());
+    postMock.mockResolvedValue({ conversationId: "conv-1", reply: "…", pendingActions: [] });
+    renderWithProviders(<AiPage />);
+    const user = userEvent.setup();
+
+    expect(await screen.findByText("Je vous aide à suivre les commandes.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Quels plats se sont le plus vendus cette semaine ?" }));
+    expect(postMock).toHaveBeenCalledWith("/ai/chat", {
+      conversationId: undefined,
+      agent: "general_assistant",
+      message: "Quels plats se sont le plus vendus cette semaine ?",
+    });
+  });
+
+  it("says plainly when KORVA IA is not active yet, and does not let a message go out", async () => {
+    getMock.mockImplementation(mockGetByPath({ status: { ...restaurantStatus, available: false } }));
+    renderWithProviders(<AiPage />);
+
+    expect(await screen.findByText(/KORVA IA n'est pas encore activée/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Votre message")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Envoyer" })).toBeDisabled();
   });
 });

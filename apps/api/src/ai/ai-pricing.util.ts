@@ -20,12 +20,18 @@ const CLAUDE_PRICING_USD_PER_MILLION_TOKENS: Record<
   'claude-fable-5': { input: 10, output: 50 },
 };
 
+/**
+ * `override` is the price declared in .env.production (AI_PRICE_*_PER_MILLION_USD) for a model
+ * this table does not know — any non-Claude model, and 0/0 for a free tier. It wins over the
+ * table, so a negotiated or changed price can be corrected without a release.
+ */
 export function estimateCostUsd(
   model: string,
   inputTokens: number,
   outputTokens: number,
+  override?: { input: number; output: number } | null,
 ): number | null {
-  const pricing = CLAUDE_PRICING_USD_PER_MILLION_TOKENS[model];
+  const pricing = override ?? CLAUDE_PRICING_USD_PER_MILLION_TOKENS[model];
   if (!pricing) return null;
   return (
     (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000

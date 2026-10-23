@@ -9,13 +9,14 @@ import {
   type AiConversation,
   type AiMessage,
   type AiPendingAction,
+  type KorvaAiStatus,
 } from "@korva/types";
-import { Button, Card } from "@korva/ui";
+import { Button, Card, Notice } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 
 const AGENT_LABELS: Record<AiAgent, string> = {
-  general_assistant: "Assistant général",
+  general_assistant: "Assistant KORVA",
   sales_agent: "Agent commercial",
   booking_agent: "Agent réservations",
   analytics_agent: "Agent analytique",
@@ -28,6 +29,16 @@ export default function AiPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const authReady = useAuthReady();
+
+  const { data: status } = useQuery({
+    queryKey: ["ai-status"],
+    queryFn: () => apiClient.get<KorvaAiStatus>("/ai/status"),
+    enabled: authReady,
+  });
+  const canChat = status ? status.available && !status.paused : true;
+  const assistant = status?.assistant;
+  const agentLabel = (a: AiAgent) =>
+    a === "general_assistant" && assistant ? assistant.name : AGENT_LABELS[a];
 
   const { data: conversations } = useQuery({
     queryKey: ["ai-conversations"],
@@ -64,6 +75,7 @@ export default function AiPage() {
       setMessage("");
       setError(null);
       invalidateConversation(data.conversationId);
+      void queryClient.invalidateQueries({ queryKey: ["ai-status"] });
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Erreur"),
   });
@@ -77,9 +89,10 @@ export default function AiPage() {
     onSuccess: () => conversationId && invalidateConversation(conversationId),
   });
 
-  function send() {
-    if (!message.trim() || chatMutation.isPending) return;
-    chatMutation.mutate({ message: message.trim() });
+  function send(text = message) {
+    if (!text.trim() || chatMutation.isPending || !canChat) return;
+    setMessage(text);
+    chatMutation.mutate({ message: text.trim() });
   }
 
   const pendingOnly = pendingActions?.filter((a) => a.status === "pending") ?? [];
@@ -106,7 +119,7 @@ export default function AiPage() {
           >
             {AI_AGENTS.map((a) => (
               <option key={a} value={a}>
-                {AGENT_LABELS[a]}
+                {agentLabel(a)}
               </option>
             ))}
           </select>
@@ -122,7 +135,7 @@ export default function AiPage() {
                     : "text-text hover:bg-surface-muted"
                 }`}
               >
-                {AGENT_LABELS[c.agent]}
+                {agentLabel(c.agent)}
               </button>
             </li>
           ))}
@@ -133,11 +146,49 @@ export default function AiPage() {
       </aside>
 
       <Card className="flex flex-1 flex-col">
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+          <span
+            aria-hidden
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary font-bold text-on-primary"
+          >
+            K
+          </span>
+          <div className="min-w-0">
+            <p className="font-semibold text-text">{assistant?.name ?? "KORVA IA"}</p>
+            <p className="truncate text-xs text-text-muted">KORVA IA · adapté à votre métier</p>
+          </div>
+        </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {!conversationId && (
-            <p className="text-sm text-text-muted">
-              Choisissez un agent à gauche, puis écrivez votre premier message.
-            </p>
+          {status && !status.available && (
+            <Notice tone="warning">
+              KORVA IA n&apos;est pas encore activée sur la plateforme. Elle arrive très bientôt ;
+              rien n&apos;est décompté de votre quota en attendant.
+            </Notice>
+          )}
+          {status?.paused && (
+            <Notice tone="warning">
+              KORVA IA fait une pause jusqu&apos;au début du mois prochain. Vos messages ne sont
+              pas décomptés pendant ce temps.
+            </Notice>
+          )}
+          {!conversationId && assistant && (
+            <div className="space-y-3">
+              <p className="text-sm text-text">{assistant.intro}</p>
+              <p className="text-xs text-text-muted">Pour commencer, par exemple :</p>
+              <div className="flex flex-wrap gap-2">
+                {assistant.suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    disabled={!canChat || chatMutation.isPending}
+                    onClick={() => send(suggestion)}
+                    className="rounded-full border border-border-input bg-surface px-3 py-1.5 text-left text-sm text-text hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {conversationId && messagesLoading && (
             <p className="text-sm text-text-muted">Chargement...</p>
@@ -204,10 +255,12 @@ export default function AiPage() {
                 }
               }}
               rows={2}
-              placeholder="Écrivez votre message..."
-              className="flex-1 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+              disabled={!canChat}
+              aria-label="Votre message"
+              placeholder={canChat ? "Posez votre question…" : "KORVA IA n'est pas disponible pour le moment"}
+              className="flex-1 rounded-md border border-border-input bg-surface px-3 py-2 text-sm focus:border-focus focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
             />
-            <Button onClick={send} loading={chatMutation.isPending}>
+            <Button onClick={() => send()} loading={chatMutation.isPending} disabled={!canChat}>
               {chatMutation.isPending ? "..." : "Envoyer"}
             </Button>
           </div>

@@ -8,6 +8,10 @@ function megabytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} Mo`;
 }
 
+function usd(value: number): string {
+  return `${value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
+}
+
 function duration(seconds: number): string {
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
@@ -87,6 +91,8 @@ export default function AdminSystemPage() {
         </Card>
       </div>
 
+      <KorvaAiCard ai={data.ai} />
+
       <Card className="overflow-hidden">
         <h2 className="px-6 pt-5 text-lg font-semibold">Tâches de fond</h2>
         {!data.queues ? (
@@ -121,5 +127,80 @@ export default function AdminSystemPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * KORVA IA from the platform's side: which brain answers (never the key), and what it has cost
+ * this month against the budget set in AI_MONTHLY_BUDGET_USD.
+ */
+function KorvaAiCard({ ai }: { ai: PlatformSystem["ai"] }) {
+  const share = ai.monthlyBudgetUsd ? ai.spentThisMonthUsd / ai.monthlyBudgetUsd : null;
+  return (
+    <Card className="space-y-4 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">KORVA IA</h2>
+          <p className="text-sm text-text-muted">
+            {ai.configured
+              ? `${ai.provider} · modèle ${ai.model}`
+              : `Non configurée : ${ai.reason ?? "aucun fournisseur"}.`}
+          </p>
+        </div>
+        <Badge variant={ai.configured ? "success" : "warning"}>{ai.configured ? "Active" : "Inactive"}</Badge>
+      </div>
+
+      {!ai.configured && (
+        <Notice tone="warning">
+          Les entreprises voient « KORVA IA arrive bientôt » et rien n&apos;est décompté. Pour
+          l&apos;activer, renseignez AI_PROVIDER, AI_API_KEY et AI_MODEL sur le serveur (voir
+          .env.production.example), puis redémarrez l&apos;API.
+        </Notice>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <p className="text-xs text-text-muted">Dépense du mois</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums">{usd(ai.spentThisMonthUsd)}</p>
+          <p className="text-xs text-text-muted">
+            {ai.monthlyBudgetUsd !== null ? `sur un budget de ${usd(ai.monthlyBudgetUsd)}` : "aucun budget plafond défini"}
+          </p>
+          {share !== null && (
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
+              <div
+                className={`h-full rounded-full ${share >= 0.8 ? "bg-warning" : "bg-primary"}`}
+                style={{ width: `${Math.min(100, share * 100)}%` }}
+              />
+            </div>
+          )}
+        </div>
+        <div>
+          <p className="text-xs text-text-muted">Appels au modèle ce mois-ci</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums">{ai.callsThisMonth}</p>
+          {ai.unpricedCalls > 0 && (
+            <p className="text-xs text-warning">
+              {ai.unpricedCalls} sans prix connu : renseignez AI_PRICE_INPUT/OUTPUT_PER_MILLION_USD.
+            </p>
+          )}
+        </div>
+        <div>
+          <p className="text-xs text-text-muted">Entreprises qui l&apos;utilisent le plus</p>
+          {ai.topOrganizations.length === 0 ? (
+            <p className="mt-1 text-sm text-text-muted">Personne ce mois-ci.</p>
+          ) : (
+            <ul className="mt-1 space-y-1 text-sm">
+              {ai.topOrganizations.map((org) => (
+                <li key={org.organizationId} className="flex justify-between gap-2">
+                  <span className="truncate">{org.name}</span>
+                  <span className="shrink-0 tabular-nums text-text-muted">
+                    {org.calls} · {usd(org.costUsd)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }

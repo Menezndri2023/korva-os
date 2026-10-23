@@ -29,6 +29,9 @@ import {
 } from './providers/ai-provider.interface';
 import { NullAIProvider } from './providers/null-ai.provider';
 import { AnthropicAIProvider } from './providers/anthropic-ai.provider';
+import { OpenAiCompatibleAIProvider } from './providers/openai-compatible-ai.provider';
+import { readKorvaAiConfig, type KorvaAiConfig } from './korva-ai.config';
+import { KORVA_AI_CONFIG } from './korva-ai.tokens';
 
 import { SearchContactsTool } from './tools/search-contacts.tool';
 import { GetCustomerTool } from './tools/get-customer.tool';
@@ -145,21 +148,27 @@ import { ActionCenterModule } from '../action-center/action-center.module';
     GetBusinessOverviewTool,
 
     {
+      provide: KORVA_AI_CONFIG,
+      useFactory: (configService: ConfigService): KorvaAiConfig =>
+        readKorvaAiConfig(configService),
+      inject: [ConfigService],
+    },
+    {
       provide: AI_PROVIDER,
-      useFactory: (configService: ConfigService): AIProvider => {
-        const apiKey = configService.get<string>('AI_API_KEY');
-        if (
-          configService.get<string>('AI_PROVIDER') === 'anthropic' &&
-          apiKey
-        ) {
-          return new AnthropicAIProvider(
-            apiKey,
-            configService.get<string>('AI_MODEL') ?? 'claude-sonnet-5',
+      useFactory: (config: KorvaAiConfig): AIProvider => {
+        if (config.provider === 'anthropic') {
+          return new AnthropicAIProvider(config.apiKey, config.model);
+        }
+        if (config.provider === 'openai_compatible') {
+          return new OpenAiCompatibleAIProvider(
+            config.baseUrl,
+            config.apiKey,
+            config.model,
           );
         }
         return new NullAIProvider();
       },
-      inject: [ConfigService],
+      inject: [KORVA_AI_CONFIG],
     },
   ],
 })

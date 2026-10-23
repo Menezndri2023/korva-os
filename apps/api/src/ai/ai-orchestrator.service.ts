@@ -6,7 +6,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
-import type { AiAgent } from '@korva/types';
+import {
+  korvaAiAssistantFor,
+  type AiAgent,
+  type KorvaAiStatus,
+} from '@korva/types';
 import { AiConversationsRepository } from './ai-conversations.repository';
 import { AiMessagesRepository } from './ai-messages.repository';
 import { AiPendingActionsRepository } from './ai-pending-actions.repository';
@@ -28,6 +32,19 @@ import { AuditService } from '../audit/audit.service';
 import { EntitlementsService } from '../subscriptions/entitlements.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { estimateCostUsd } from './ai-pricing.util';
+import { KORVA_AI_CONFIG } from './korva-ai.tokens';
+import type { KorvaAiConfig } from './korva-ai.config';
+import { KORVA_AI_UNAVAILABLE_MESSAGE } from './providers/null-ai.provider';
+import { AiProviderBusyError } from './providers/openai-compatible-ai.provider';
+
+const PAUSED_MESSAGE =
+  "KORVA IA fait une pause jusqu'au début du mois prochain : la plateforme a atteint son budget IA du mois. Ce message ne compte pas dans votre quota.";
+const BUSY_MESSAGE =
+  'KORVA IA est très sollicitée en ce moment. Réessayez dans une minute.';
+const FAILED_MESSAGE =
+  "KORVA IA n'a pas pu répondre pour le moment. Réessayez dans quelques instants.";
+/** The platform spend is re-read at most this often: one aggregate per minute, not per message. */
+const SPEND_CACHE_MS = 60_000;
 
 const MAX_TOOL_ITERATIONS = 5;
 
@@ -75,7 +92,65 @@ export class AiOrchestratorService {
     private readonly entitlementsService: EntitlementsService,
     private readonly organizationsService: OrganizationsService,
     @Inject(AI_PROVIDER) private readonly aiProvider: AIProvider,
+    @Inject(KORVA_AI_CONFIG) private readonly aiConfig: KorvaAiConfig,
   ) {}
+
+  private spendCache: { period: string; costUsd: number; at: number } | null =
+    null;
+
+  /** Whether KORVA's own monthly AI budget (AI_MONTHLY_BUDGET_USD) is used up. */
+  private async budgetExhausted(): Promise<boolean> {
+    const budget = this.aiConfig.monthlyBudgetUsd;
+    if (budget === null) return false;
+    const period = new Date().toISOString().slice(0, 7);
+    const now = Date.now();
+    if (
+      !this.spendCache ||
+      this.spendCache.period !== period ||
+      now - this.spendCache.at > SPEND_CACHE_MS
+    ) {
+      const { costUsd } =
+        await this.usageLogRepository.getPlatformMonthlyTotals(period);
+      this.spendCache = { period, costUsd, at: now };
+    }
+    return this.spendCache.costUsd >= budget;
+  }
+
+  async status(organizationId: string): Promise<KorvaAiStatus> {
+    const organization =
+      await this.organizationsService.getById(organizationId);
+    const available = this.aiProvider.name !== 'null';
+    return {
+      available,
+      paused: available && (await this.budgetExhausted()),
+      assistant: korvaAiAssistantFor(organization.businessModel),
+    };
+  }
+
+  /** A reply that is not the model's: written to the conversation like any other, and never
+   *  counted against the business's quota. */
+  private async platformReply(
+    organizationId: string,
+    conversation: AiConversationDocument,
+    text: string,
+    pendingActions: AiPendingActionDocument[] = [],
+  ): Promise<ChatTurnResult> {
+    await this.messagesRepository.create({
+      organizationId: new Types.ObjectId(organizationId),
+      conversationId: conversation._id,
+      role: 'assistant',
+      content: text,
+    });
+    await this.conversationsRepository.touch(
+      organizationId,
+      conversation.id as string,
+    );
+    return {
+      conversationId: conversation.id as string,
+      reply: text,
+      pendingActions,
+    };
+  }
 
   /**
    * Best-effort: a model call already happened and billed real money whether or not this write
@@ -101,6 +176,7 @@ export class AiOrchestratorService {
         model,
         usage.inputTokens,
         usage.outputTokens,
+        this.aiConfig.priceOverride,
       );
       await this.usageLogRepository.record({
         organizationId,
@@ -150,10 +226,15 @@ export class AiOrchestratorService {
     user: CallingUser,
     input: { conversationId?: string; agent?: AiAgent; message: string },
   ): Promise<ChatTurnResult> {
-    await this.entitlementsService.checkAndRecordUsage(
-      organizationId,
-      'ai_messages_per_month',
-    );
+    // Checked before the quota: a business is never charged a message KORVA could not answer.
+    const unavailable = this.aiProvider.name === 'null';
+    const paused = !unavailable && (await this.budgetExhausted());
+    if (!unavailable && !paused) {
+      await this.entitlementsService.checkAndRecordUsage(
+        organizationId,
+        'ai_messages_per_month',
+      );
+    }
 
     const conversation = await this.getOrCreateConversation(
       organizationId,
@@ -169,6 +250,14 @@ export class AiOrchestratorService {
       content: input.message,
     });
 
+    if (unavailable || paused) {
+      return this.platformReply(
+        organizationId,
+        conversation,
+        unavailable ? KORVA_AI_UNAVAILABLE_MESSAGE : PAUSED_MESSAGE,
+      );
+    }
+
     const history = await this.messagesRepository.findAllForConversation(
       organizationId,
       conversation.id as string,
@@ -177,19 +266,34 @@ export class AiOrchestratorService {
       organizationId,
       conversation.agent,
     );
+    const organization =
+      await this.organizationsService.getById(organizationId);
     const availableTools = this.toolsRegistry
-      .listForAgent(conversation.agent)
+      .listForConversation(conversation.agent, organization.businessModel)
       .filter((tool) => user.permissions.includes(tool.requiredPermission));
 
     const chatMessages: AiChatMessage[] = history.map(toChatMessage);
     const pendingActions: AiPendingActionDocument[] = [];
 
     for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration++) {
-      const result = await this.aiProvider.chat({
-        systemPrompt,
-        messages: chatMessages,
-        tools: availableTools.map((tool) => tool.definition),
-      });
+      let result: Awaited<ReturnType<AIProvider['chat']>>;
+      try {
+        result = await this.aiProvider.chat({
+          systemPrompt,
+          messages: chatMessages,
+          tools: availableTools.map((tool) => tool.definition),
+        });
+      } catch (error) {
+        this.logger.error(
+          `AI provider call failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return this.platformReply(
+          organizationId,
+          conversation,
+          error instanceof AiProviderBusyError ? BUSY_MESSAGE : FAILED_MESSAGE,
+          pendingActions,
+        );
+      }
       await this.recordUsage(organizationId, conversation, result.usage);
 
       if (result.type === 'text') {

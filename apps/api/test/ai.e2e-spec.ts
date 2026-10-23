@@ -1931,7 +1931,21 @@ describe('AI module (e2e) — default NullAIProvider (no AI_API_KEY)', () => {
       .send({ message: 'Bonjour' })
       .expect(201);
     const chat = asSuccess<AiChatResponsePayload>(res.body);
-    expect(chat.reply).toContain("n'est pas configuré");
+    expect(chat.reply).toContain("KORVA IA n'est pas encore activée");
     expect(chat.pendingActions).toHaveLength(0);
+
+    // The business is told plainly, and is not charged a message nobody answered.
+    const status = await request(server)
+      .get('/api/v1/ai/status')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .expect(200);
+    expect(asSuccess<{ available: boolean }>(status.body).available).toBe(
+      false,
+    );
+    const counted = await connection
+      .collection('usage')
+      .countDocuments({ organizationId: new Types.ObjectId(organizationId) });
+    expect(counted).toBe(0);
   });
 });

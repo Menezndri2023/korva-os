@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
-import { CURRENCY_FORMAT, type BillingCurrency, type BusinessModel, type Pagination } from "@korva/types";
+import {
+  CURRENCY_FORMAT,
+  type BillingCurrency,
+  type BusinessModel,
+  type KorvaAiSystemStatus,
+  type Pagination,
+} from "@korva/types";
 import { ApiError } from "./api-client";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
@@ -280,6 +286,7 @@ export interface PlatformSystem {
   database: { dataBytes: number; storageBytes: number; indexBytes: number; collections: number; freeTierCapBytes: number };
   email: { configured: boolean; provider: string; from: string | null };
   payments: { platformAccounts: number };
+  ai: KorvaAiSystemStatus;
   administrators: number;
   queues: { name: string; label: string; waiting: number; active: number; delayed: number; failed: number }[] | null;
 }

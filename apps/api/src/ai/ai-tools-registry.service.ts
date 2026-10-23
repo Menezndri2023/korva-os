@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { AiAgent } from '@korva/types';
+import type { AiAgent, BusinessModel } from '@korva/types';
+import { KORVA_AI_TRADE_PROFILES } from './korva-ai-trades';
 import type { AiTool } from './tools/tool.interface';
 
 import { SearchContactsTool } from './tools/search-contacts.tool';
@@ -169,6 +170,20 @@ export class AiToolsRegistryService {
 
   listForAgent(agent: AiAgent): AiTool[] {
     const names = new Set(AGENT_TOOL_NAMES[agent]);
+    return this.tools.filter((tool) => names.has(tool.definition.name));
+  }
+
+  /** The general assistant IS the business's KORVA IA assistant: it carries its trade's tools
+   *  only (korva-ai-trades.ts). The specialised agents keep their own lists, and a business whose
+   *  trade is unknown keeps every tool. */
+  listForConversation(
+    agent: AiAgent,
+    businessModel: BusinessModel | undefined,
+  ): AiTool[] {
+    if (agent !== 'general_assistant' || !businessModel) {
+      return this.listForAgent(agent);
+    }
+    const names = new Set(KORVA_AI_TRADE_PROFILES[businessModel].tools);
     return this.tools.filter((tool) => names.has(tool.definition.name));
   }
 

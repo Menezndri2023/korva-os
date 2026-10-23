@@ -31,6 +31,13 @@ import { RequireModule } from '../common/decorators/require-module.decorator';
 export class AiController {
   constructor(private readonly aiOrchestratorService: AiOrchestratorService) {}
 
+  /** Who the business's assistant is (its trade's KORVA IA) and whether it can answer now. */
+  @RequirePermissions('ai.use')
+  @Get('status')
+  status(@CurrentTenant() tenant: TenantContext) {
+    return this.aiOrchestratorService.status(tenant.organizationId);
+  }
+
   @RequirePermissions('ai.use')
   @Post('chat')
   chat(

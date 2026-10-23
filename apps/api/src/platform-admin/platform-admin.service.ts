@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { backgroundWorkersDisabled } from '../core/background/background-workers';
+import { readKorvaAiConfig } from '../ai/korva-ai.config';
 
 /** Every background queue the API runs, with what it does — for the Système page. */
 export const PLATFORM_QUEUES: { name: string; label: string }[] = [
@@ -34,6 +35,7 @@ import { AuditService } from '../audit/audit.service';
 import {
   BUSINESS_MODEL_DEFINITIONS,
   type BusinessModel,
+  type KorvaAiSystemStatus,
   type PrimaryChannel,
 } from '@korva/types';
 import {
@@ -318,12 +320,81 @@ export class PlatformAdminService {
         from: this.configService.get<string>('EMAIL_FROM') ?? null,
       },
       payments: { platformAccounts: platformPaymentAccounts },
+      ai: await this.aiStatus(),
       administrators: (
         this.configService.get<string>('PLATFORM_ADMIN_EMAILS') ?? ''
       )
         .split(',')
         .filter((email) => email.trim()).length,
       queues: await this.queueCounts(),
+    };
+  }
+
+  /**
+   * KORVA IA from the platform's side: which brain is configured (never the key), and what it has
+   * cost this month against AI_MONTHLY_BUDGET_USD. Read from ai_usage_logs directly, like the rest
+   * of this page, so the administration does not depend on the AI module.
+   */
+  private async aiStatus(): Promise<KorvaAiSystemStatus> {
+    const config = readKorvaAiConfig(this.configService);
+    const start = new Date(
+      `${new Date().toISOString().slice(0, 7)}-01T00:00:00.000Z`,
+    );
+    const logs = this.collection('ai_usage_logs');
+    const [[totals], top] = await Promise.all([
+      logs
+        .aggregate<{ costUsd: number; calls: number; unpricedCalls: number }>([
+          { $match: { createdAt: { $gte: start } } },
+          {
+            $group: {
+              _id: null,
+              costUsd: { $sum: { $ifNull: ['$costUsd', 0] } },
+              calls: { $sum: 1 },
+              unpricedCalls: {
+                $sum: { $cond: [{ $eq: ['$costUsd', null] }, 1, 0] },
+              },
+            },
+          },
+        ])
+        .toArray(),
+      logs
+        .aggregate<{ _id: Types.ObjectId; costUsd: number; calls: number }>([
+          { $match: { createdAt: { $gte: start } } },
+          {
+            $group: {
+              _id: '$organizationId',
+              costUsd: { $sum: { $ifNull: ['$costUsd', 0] } },
+              calls: { $sum: 1 },
+            },
+          },
+          { $sort: { costUsd: -1, calls: -1 } },
+          { $limit: 5 },
+        ])
+        .toArray(),
+    ]);
+    const names = new Map(
+      (
+        await this.organizationModel
+          .find({ _id: { $in: top.map((row) => row._id) } }, { name: 1 })
+          .lean()
+          .exec()
+      ).map((org) => [String(org._id), org.name]),
+    );
+    return {
+      configured: config.provider !== 'none',
+      provider: config.provider === 'none' ? 'aucun' : config.label,
+      model: config.provider === 'none' ? null : config.model,
+      reason: config.provider === 'none' ? config.reason : null,
+      monthlyBudgetUsd: config.monthlyBudgetUsd,
+      spentThisMonthUsd: totals?.costUsd ?? 0,
+      callsThisMonth: totals?.calls ?? 0,
+      unpricedCalls: totals?.unpricedCalls ?? 0,
+      topOrganizations: top.map((row) => ({
+        organizationId: String(row._id),
+        name: names.get(String(row._id)) ?? '—',
+        costUsd: row.costUsd,
+        calls: row.calls,
+      })),
     };
   }
 

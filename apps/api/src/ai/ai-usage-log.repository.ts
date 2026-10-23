@@ -81,4 +81,58 @@ export class AiUsageLogRepository {
       unpricedCalls: totals?.unpricedCalls ?? 0,
     };
   }
+
+  /** Every organization together — what KORVA itself pays the AI provider this month. Backs the
+   *  platform budget (AiOrchestratorService) and the administration's system page. */
+  async getPlatformMonthlyTotals(
+    period: string,
+  ): Promise<{ costUsd: number; calls: number; unpricedCalls: number }> {
+    const { start, end } = periodRange(period);
+    const [totals] = await this.aiUsageLogModel
+      .aggregate<{ costUsd: number; calls: number; unpricedCalls: number }>([
+        { $match: { createdAt: { $gte: start, $lt: end } } },
+        {
+          $group: {
+            _id: null,
+            costUsd: { $sum: { $ifNull: ['$costUsd', 0] } },
+            calls: { $sum: 1 },
+            unpricedCalls: {
+              $sum: { $cond: [{ $eq: ['$costUsd', null] }, 1, 0] },
+            },
+          },
+        },
+      ])
+      .exec();
+    return {
+      costUsd: totals?.costUsd ?? 0,
+      calls: totals?.calls ?? 0,
+      unpricedCalls: totals?.unpricedCalls ?? 0,
+    };
+  }
+
+  async getTopOrganizations(
+    period: string,
+    limit: number,
+  ): Promise<{ organizationId: string; costUsd: number; calls: number }[]> {
+    const { start, end } = periodRange(period);
+    const rows = await this.aiUsageLogModel
+      .aggregate<{ _id: Types.ObjectId; costUsd: number; calls: number }>([
+        { $match: { createdAt: { $gte: start, $lt: end } } },
+        {
+          $group: {
+            _id: '$organizationId',
+            costUsd: { $sum: { $ifNull: ['$costUsd', 0] } },
+            calls: { $sum: 1 },
+          },
+        },
+        { $sort: { costUsd: -1, calls: -1 } },
+        { $limit: limit },
+      ])
+      .exec();
+    return rows.map((row) => ({
+      organizationId: String(row._id),
+      costUsd: row.costUsd,
+      calls: row.calls,
+    }));
+  }
 }

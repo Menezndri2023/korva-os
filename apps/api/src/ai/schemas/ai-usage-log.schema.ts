@@ -41,3 +41,5 @@ export class AiUsageLog {
 
 export const AiUsageLogSchema = SchemaFactory.createForClass(AiUsageLog);
 AiUsageLogSchema.index({ organizationId: 1, createdAt: 1 });
+/** The platform's monthly AI spend, all organizations together (budget guard, admin page). */
+AiUsageLogSchema.index({ createdAt: 1 });
