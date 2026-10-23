@@ -132,4 +132,10 @@ export interface KorvaAiSystemStatus {
   /** Calls whose model has no known price — the spend above then undercounts. */
   unpricedCalls: number;
   topOrganizations: { organizationId: string; name: string; costUsd: number; calls: number }[];
+  /** Questions asked by businesses this month (the quota counter), not model calls. */
+  messagesThisMonth: number;
+  /** Businesses that asked at least one question this month. */
+  activeOrganizationsThisMonth: number;
+  /** The last 30 days, oldest first, every day present (zeros included). */
+  daily: { day: string; calls: number; costUsd: number; organizations: number }[];
 }

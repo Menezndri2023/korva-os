@@ -8,6 +8,7 @@ import { migration as m0006 } from './0006-plan-limits-v3';
 import { migration as m0007 } from './0007-create-new-indexes';
 import { migration as m0008 } from './0008-platform-review-indexes';
 import { migration as m0009 } from './0009-ai-usage-platform-index';
+import { migration as m0010 } from './0010-korva-ai-all-plans';
 
 /**
  * Every migration, registered explicitly.
@@ -33,4 +34,5 @@ export const MIGRATIONS: MigrationDefinition[] = [
   m0007,
   m0008,
   m0009,
+  m0010,
 ];

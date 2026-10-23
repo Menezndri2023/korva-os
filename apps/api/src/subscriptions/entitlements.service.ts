@@ -387,6 +387,17 @@ export class EntitlementsService {
     await this.usageRepository.increment(organizationId, metric, period);
   }
 
+  /** Undoes one checkAndRecordUsage when the thing counted did not happen after all — KORVA IA
+   *  uses it when the AI provider could not answer, so a business is never charged a message
+   *  nobody replied to. Same period as the count it undoes, unless the month just turned. */
+  async refundUsage(organizationId: string, metric: string): Promise<void> {
+    await this.usageRepository.decrement(
+      organizationId,
+      metric,
+      currentPeriod(),
+    );
+  }
+
   async getSummary(organizationId: string) {
     const subscription =
       await this.subscriptionsService.getForOrganization(organizationId);

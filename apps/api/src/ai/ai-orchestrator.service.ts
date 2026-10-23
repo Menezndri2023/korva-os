@@ -287,6 +287,10 @@ export class AiOrchestratorService {
         this.logger.error(
           `AI provider call failed: ${error instanceof Error ? error.message : String(error)}`,
         );
+        // Nobody answered: the message counted on the way in is given back.
+        await this.entitlementsService
+          .refundUsage(organizationId, 'ai_messages_per_month')
+          .catch(() => undefined);
         return this.platformReply(
           organizationId,
           conversation,

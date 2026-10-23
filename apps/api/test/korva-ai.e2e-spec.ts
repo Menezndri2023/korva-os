@@ -310,6 +310,69 @@ describe('KORVA IA (e2e)', () => {
       ],
     });
     expect(body.ai.spentThisMonthUsd as number).toBeCloseTo(0.0241, 6);
+    // Its evolution: questions asked (the quota counter, 1 answered), businesses, 30 days.
+    expect(body.ai).toMatchObject({
+      messagesThisMonth: 1,
+      activeOrganizationsThisMonth: 1,
+    });
+    const daily = body.ai.daily as { day: string; calls: number }[];
+    expect(daily).toHaveLength(30);
+    expect(daily[29]!.day).toBe(new Date().toISOString().slice(0, 10));
+    expect(daily[29]!.calls).toBe(3);
     expect(JSON.stringify(res.body)).not.toContain('stub-key');
+  });
+
+  it('is open on the Free plan, within its 30 messages a month', async () => {
+    const auth = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email: 'gratuit@korva.test', password: 'password123' })
+      .expect(201);
+    const token = asSuccess<{ accessToken: string }>(auth.body).accessToken;
+    const org = await request(server)
+      .post('/api/v1/organizations')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'Boutique Gratuite',
+        type: 'commerce',
+        country: 'CI',
+        currency: 'XOF',
+        timezone: 'Africa/Abidjan',
+        language: 'fr',
+      })
+      .expect(201);
+    const id = asSuccess<{ id: string; enabledModules: string[] }>(org.body);
+    // A new business on Free starts with KORVA IA switched on.
+    expect(id.enabledModules).toContain('ai');
+    const plan = await connection
+      .collection('plans')
+      .findOne({ key: 'free', priceCurrency: 'XOF' });
+    expect(plan?.limits).toMatchObject({ ai_messages_per_month: 30 });
+  });
+
+  it('migration 0010 opens KORVA IA to every existing business and plan', async () => {
+    const { migration } =
+      await import('./../src/migrations/0010-korva-ai-all-plans');
+    const legacy = await connection.collection('organizations').insertOne({
+      name: 'Ancienne boutique',
+      slug: 'ancienne-boutique',
+      enabledModules: ['crm', 'catalog'],
+    });
+    await connection
+      .collection('plans')
+      .updateOne(
+        { key: 'starter', priceCurrency: 'XOF' },
+        { $set: { modules: ['crm'], 'limits.ai_messages_per_month': 0 } },
+      );
+    await migration.up(connection);
+    await migration.up(connection);
+    const org = await connection
+      .collection('organizations')
+      .findOne({ _id: legacy.insertedId });
+    expect(org?.enabledModules).toEqual(['crm', 'catalog', 'ai']);
+    const starter = await connection
+      .collection('plans')
+      .findOne({ key: 'starter', priceCurrency: 'XOF' });
+    expect(starter?.modules).toContain('ai');
+    expect(starter?.limits).toMatchObject({ ai_messages_per_month: 150 });
   });
 });

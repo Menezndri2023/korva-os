@@ -158,6 +158,19 @@ function KorvaAiCard({ ai }: { ai: PlatformSystem["ai"] }) {
         </Notice>
       )}
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="text-xs text-text-muted">Questions posées ce mois-ci</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums">{ai.messagesThisMonth}</p>
+        </div>
+        <div>
+          <p className="text-xs text-text-muted">Entreprises qui l&apos;ont utilisée ce mois-ci</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums">{ai.activeOrganizationsThisMonth}</p>
+        </div>
+      </div>
+
+      <DailyActivity daily={ai.daily} />
+
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <p className="text-xs text-text-muted">Dépense du mois</p>
@@ -202,5 +215,36 @@ function KorvaAiCard({ ai }: { ai: PlatformSystem["ai"] }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+const dayLabel = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" });
+
+/** Model calls per day over the last 30 days — how KORVA IA's use is growing. */
+function DailyActivity({ daily }: { daily: PlatformSystem["ai"]["daily"] }) {
+  const max = Math.max(1, ...daily.map((day) => day.calls));
+  const total = daily.reduce((sum, day) => sum + day.calls, 0);
+  return (
+    <div>
+      <p className="text-xs text-text-muted">Activité des 30 derniers jours · {total} appels au modèle</p>
+      <div
+        className="mt-2 flex h-24 items-end gap-0.5 rounded-lg bg-surface-muted p-2"
+        role="img"
+        aria-label={`Appels par jour sur 30 jours, ${total} au total, au plus ${max} un même jour`}
+      >
+        {daily.map((day) => (
+          <div
+            key={day.day}
+            title={`${dayLabel.format(new Date(day.day))} : ${day.calls} appel(s), ${day.organizations} entreprise(s), ${usd(day.costUsd)}`}
+            className={`flex-1 rounded-sm ${day.calls > 0 ? "bg-primary" : "bg-border"}`}
+            style={{ height: `${Math.max(4, (day.calls / max) * 100)}%` }}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-xs text-text-muted">
+        <span>{daily[0] ? dayLabel.format(new Date(daily[0].day)) : ""}</span>
+        <span>aujourd&apos;hui</span>
+      </div>
+    </div>
   );
 }

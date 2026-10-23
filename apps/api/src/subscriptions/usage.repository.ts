@@ -39,4 +39,23 @@ export class UsageRepository {
       .exec();
     return usage.count;
   }
+
+  /** Gives one back — never below zero. See EntitlementsService.refundUsage. */
+  async decrement(
+    organizationId: string,
+    metric: string,
+    period: string,
+  ): Promise<void> {
+    await this.usageModel
+      .updateOne(
+        {
+          organizationId: new Types.ObjectId(organizationId),
+          metric,
+          period,
+          count: { $gt: 0 },
+        },
+        { $inc: { count: -1 } },
+      )
+      .exec();
+  }
 }

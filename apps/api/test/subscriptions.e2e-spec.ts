@@ -15,6 +15,15 @@ import {
 import { putOrganizationOnPlan } from './support/plan-tier';
 import { UsageRepository } from '../src/subscriptions/usage.repository';
 import { PLAN_LIMITS, PLAN_PRICES } from '@korva/types';
+import {
+  AI_PROVIDER,
+  type AIProvider,
+} from '../src/ai/providers/ai-provider.interface';
+
+const ANSWERING_AI_PROVIDER: AIProvider = {
+  name: 'test',
+  chat: () => Promise.resolve({ type: 'text', text: 'OK' }),
+};
 
 interface ApiSuccess<T> {
   success: true;
@@ -89,7 +98,12 @@ describe('Subscriptions module (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      // An assistant that answers: KORVA IA never counts a message when no provider is
+      // configured, and the quota tests below are about counting.
+      .overrideProvider(AI_PROVIDER)
+      .useValue(ANSWERING_AI_PROVIDER)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
@@ -191,28 +205,20 @@ describe('Subscriptions module (e2e)', () => {
   });
 
   describe('module gating driven by the active plan', () => {
-    it('rejects enabling a module the current plan does not include, after moving to "starter"', async () => {
+    it('rejects enabling a module the current plan does not include', async () => {
       const { accessToken, organizationId } = await registerOrgAndToken(
         'module-gate@korva.test',
         'Module Gate Org',
       );
 
-      await request(server)
-        .post('/api/v1/subscriptions/change-plan')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organizationId)
-        .send({ planKey: 'starter' })
-        .expect(201);
-
       const res = await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        // `ai` is a Pro module, so starter does not grant it. This sent `workflow` until
-        // 2026-10-13: the old demonstration catalog gave `free` all eleven modules and
-        // `starter` only nine, making free -> starter a downgrade that stripped `workflow`.
-        // The real ladder is monotonic, so `workflow` is now legitimately allowed on starter.
-        .send({ enabledModules: ['crm', 'ai'] })
+        // `finance` is a Starter module, so Free does not grant it. This moved to Starter and
+        // sent `ai` until 2026-10-23, when KORVA IA opened to every plan — Starter now grants
+        // every module, so the refusal is checked one rung lower.
+        .send({ enabledModules: ['crm', 'finance'] })
         .expect(403);
       expect(asError(res.body).code).toBe('MODULE_NOT_IN_PLAN');
 

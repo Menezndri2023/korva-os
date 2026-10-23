@@ -77,8 +77,8 @@ function quotaLines(plan: PlanKey): string[] {
 function aiLine(plan: PlanKey): string | null {
   const quota = PLAN_LIMITS[plan].ai_messages_per_month;
   if (!quota || quota === 0) return null;
-  if (quota === -1) return "Assistant IA sans limite";
-  return `${quota.toLocaleString("fr-FR")} messages d'assistant IA par mois`;
+  if (quota === -1) return "KORVA IA sans limite";
+  return `KORVA IA : ${quota.toLocaleString("fr-FR")} messages par mois`;
 }
 
 /**

@@ -119,7 +119,7 @@ describe('Signup trial (e2e)', () => {
           'catalog',
           'booking',
           'commerce',
-          'ai',
+          'marketing',
           'workflow',
           'website',
         ],
@@ -153,7 +153,9 @@ describe('Signup trial (e2e)', () => {
     expect(organization?.enabledModules).toEqual(
       expect.arrayContaining(['catalog', 'booking', 'workflow', 'website']),
     );
-    expect(organization?.enabledModules).not.toContain('ai');
+    // A paid module (marketing, Starter) is settled away; KORVA IA is on every plan since
+    // 2026-10-23 and would stay.
+    expect(organization?.enabledModules).not.toContain('marketing');
     expect(organization?.enabledModules).not.toContain('commerce');
 
     // Nothing created during the trial was deleted.

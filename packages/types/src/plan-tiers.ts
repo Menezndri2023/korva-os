@@ -139,7 +139,7 @@ export const MODULE_MIN_PLAN: Record<KorvaModule, PlanKey> = {
   // coherence rules vertical-templates.spec.ts enforces would be guarding dead configuration,
   // and "your workspace is already set up" would stop being true on the day it matters most.
   // The cost is that automations are uncapped on free until a workflow-count limit exists;
-  // paid differentiation sits on `finance` (Starter) and `marketing`/`ai` (Pro) instead.
+  // paid differentiation sits on `finance` and `marketing` (Starter) instead.
   workflow: "free",
   // Starter, not Pro. Starter otherwise added exactly ONE module (finance) over the free plan,
   // which reads as thin on a pricing page next to Pro's two modules plus the palette and font
@@ -147,7 +147,11 @@ export const MODULE_MIN_PLAN: Record<KorvaModule, PlanKey> = {
   // customers back — and leaves Pro selling the AI assistant and the refined storefront, which
   // are the two things that genuinely cost more to serve.
   marketing: "starter",
-  ai: "pro",
+  // Every plan since 2026-10-23 (KORVA IA): the assistant of the business's trade is what makes
+  // KORVA different from a website builder, so every business meets it — the plans differ by how
+  // many messages they get (PLAN_LIMITS.ai_messages_per_month), and AI_MONTHLY_BUDGET_USD caps
+  // what the platform as a whole can spend.
+  ai: "free",
 };
 
 /** The modules a tier grants. Used to seed Plan.modules and to filter onboarding's suggestions.
@@ -173,16 +177,13 @@ export function modulesForPlan(planKey: string): KorvaModule[] {
  * quota. Separating those two is its own piece of work; until it lands, an email allowance would
  * be a number nothing enforces.
  *
- * `ai_messages_per_month: 0` on free and starter is explicit rather than omitted: omitting it
- * would fall through checkAndRecordUsage's `?? -1` to UNLIMITED, which is the opposite of the
- * intent, and would matter the moment an operator granted an AI add-on with
- * scripts/set-product-overrides.ts. (That add-on then has no per-organization quota of its own —
- * limits live on the shared Plan, not the Subscription. Pre-existing, and worth knowing before
- * selling a one-off AI add-on.)
+ * `ai_messages_per_month` is set on EVERY tier, never omitted: omitting it would fall through
+ * checkAndRecordUsage's `?? -1` to UNLIMITED. Free gets a taste (30), Starter enough for a weekly
+ * habit (150), Pro and Business daily use. Limits live on the shared Plan, not the Subscription.
  */
 export const PLAN_LIMITS: Record<PlanKey, Record<string, number>> = {
-  free: { seats: 1, offers: 30, bookable_staff: 3, workflows: 1, ai_messages_per_month: 0 },
-  starter: { seats: 3, offers: -1, bookable_staff: -1, workflows: 5, ai_messages_per_month: 0 },
+  free: { seats: 1, offers: 30, bookable_staff: 3, workflows: 1, ai_messages_per_month: 30 },
+  starter: { seats: 3, offers: -1, bookable_staff: -1, workflows: 5, ai_messages_per_month: 150 },
   pro: { seats: 10, offers: -1, bookable_staff: -1, workflows: -1, ai_messages_per_month: 500 },
   // AI stays capped on every tier: it costs real money per token on every call, so an unlimited
   // tier would be an uncapped liability rather than a feature. Seats were unlimited on Business

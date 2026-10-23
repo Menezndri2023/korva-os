@@ -138,31 +138,21 @@ describe('Organizations module — default enabledModules on creation (e2e)', ()
     expect([...persisted.enabledModules].sort()).toEqual(expectedModules);
   });
 
-  it('still rejects enabling a module outside the plan after a plan change (entitlement enforcement unchanged)', async () => {
+  it('still rejects enabling a module outside the plan (entitlement enforcement unchanged)', async () => {
     const { accessToken, organization } = await registerOrgAndToken(
       'org-default-modules-gate@korva.test',
       'Default Modules Gate Org',
     );
 
-    await request(server)
-      .post('/api/v1/subscriptions/change-plan')
-      .set('Authorization', `Bearer ${accessToken}`)
-      .set('X-Organization-Id', organization.id)
-      .send({ planKey: 'starter' })
-      .expect(201);
-
-    // "starter" excludes "ai", which is a Pro module. This asserted "workflow" until
-    // 2026-10-13: under the old demonstration catalog `free` granted all eleven modules and
-    // `starter` granted nine, so moving to starter was a DOWNGRADE that stripped "workflow".
-    // The real ladder is monotonic — free's eight modules are a subset of starter's ten — so
-    // no module is lost going free -> starter and "workflow" is now legitimately allowed.
-    // What this test guards is unchanged: a module the active plan does not include is
-    // refused, whatever the organization had enabled before.
+    // On Free, "finance" (Starter) is outside the plan. This went through a move to Starter and
+    // sent "ai" until 2026-10-23, when KORVA IA opened to every plan and Starter came to grant
+    // every module. What this test guards is unchanged: a module the active plan does not
+    // include is refused, whatever the organization had enabled before.
     const res = await request(server)
       .patch('/api/v1/organizations/me')
       .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Organization-Id', organization.id)
-      .send({ enabledModules: ['crm', 'ai'] })
+      .send({ enabledModules: ['crm', 'finance'] })
       .expect(403);
     expect(asError(res.body).code).toBe('MODULE_NOT_IN_PLAN');
   });

@@ -372,6 +372,62 @@ export class PlatformAdminService {
         ])
         .toArray(),
     ]);
+    const since = new Date(Date.now() - 29 * 86_400_000);
+    since.setUTCHours(0, 0, 0, 0);
+    const period = start.toISOString().slice(0, 7);
+    const [dailyRows, [messages]] = await Promise.all([
+      logs
+        .aggregate<{
+          _id: string;
+          calls: number;
+          costUsd: number;
+          organizations: unknown[];
+        }>([
+          { $match: { createdAt: { $gte: since } } },
+          {
+            $group: {
+              _id: {
+                $dateToString: { format: '%Y-%m-%d', date: '$createdAt' },
+              },
+              calls: { $sum: 1 },
+              costUsd: { $sum: { $ifNull: ['$costUsd', 0] } },
+              organizations: { $addToSet: '$organizationId' },
+            },
+          },
+        ])
+        .toArray(),
+      this.collection('usage')
+        .aggregate<{ messages: number; organizations: number }>([
+          {
+            $match: {
+              metric: 'ai_messages_per_month',
+              period,
+              count: { $gt: 0 },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              messages: { $sum: '$count' },
+              organizations: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray(),
+    ]);
+    const byDay = new Map(dailyRows.map((row) => [row._id, row]));
+    const daily = Array.from({ length: 30 }, (_, index) => {
+      const day = new Date(since.getTime() + index * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      const row = byDay.get(day);
+      return {
+        day,
+        calls: row?.calls ?? 0,
+        costUsd: row?.costUsd ?? 0,
+        organizations: row?.organizations.length ?? 0,
+      };
+    });
     const names = new Map(
       (
         await this.organizationModel
@@ -395,6 +451,9 @@ export class PlatformAdminService {
         costUsd: row.costUsd,
         calls: row.calls,
       })),
+      messagesThisMonth: messages?.messages ?? 0,
+      activeOrganizationsThisMonth: messages?.organizations ?? 0,
+      daily,
     };
   }
 
