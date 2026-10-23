@@ -222,6 +222,27 @@ describe('KORVA IA (e2e)', () => {
     expect(second!.body.messages.some((m) => m.role === 'tool')).toBe(true);
   });
 
+  it('replays a conversation whose earlier tool call had no argument', async () => {
+    const [conversation] = asSuccess<{ id: string }[]>(
+      (await staff(request(server).get('/api/v1/ai/conversations')).expect(200))
+        .body,
+    );
+    stub.script.push(textReply('Avec plaisir.', [0, 0]));
+    const before = stub.requests.length;
+    await staff(request(server).post('/api/v1/ai/chat'))
+      .send({ conversationId: conversation!.id, message: 'Merci !' })
+      .expect(201);
+    const replayed = stub.requests[before]!.body.messages as unknown as {
+      tool_calls?: { function: { arguments: string } }[];
+    }[];
+    const call = replayed.find((m) => m.tool_calls)!.tool_calls![0]!;
+    expect(call.function.arguments).toBe('{}');
+    // Free of charge in this test: it only checks the replay, not the pricing below.
+    await connection
+      .collection('ai_usage_logs')
+      .deleteMany({ inputTokens: 0, outputTokens: 0 });
+  });
+
   it('prices each call from the .env, so KORVA knows what it spends', async () => {
     const logs = await connection
       .collection('ai_usage_logs')
@@ -310,9 +331,10 @@ describe('KORVA IA (e2e)', () => {
       ],
     });
     expect(body.ai.spentThisMonthUsd as number).toBeCloseTo(0.0241, 6);
-    // Its evolution: questions asked (the quota counter, 1 answered), businesses, 30 days.
+    // Its evolution: questions asked (the quota counter: 2 answered, the saturated one given
+    // back, the paused one never counted), businesses, 30 days.
     expect(body.ai).toMatchObject({
-      messagesThisMonth: 1,
+      messagesThisMonth: 2,
       activeOrganizationsThisMonth: 1,
     });
     const daily = body.ai.daily as { day: string; calls: number }[];

@@ -9,6 +9,8 @@ export type AiMessageDocument = HydratedDocument<AiMessage>;
   timestamps: { createdAt: true, updatedAt: false },
   collection: 'ai_messages',
   toJSON: idToJson,
+  // A tool called with no argument stores `input: {}` — minimize would drop it.
+  minimize: false,
 })
 export class AiMessage {
   @Prop({

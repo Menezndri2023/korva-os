@@ -14,6 +14,7 @@ import {
 import { Button, Card, Notice } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { AI_TOOL_LABELS, AiMessageText } from "@/components/ai-message-text";
 
 const AGENT_LABELS: Record<AiAgent, string> = {
   general_assistant: "Assistant KORVA",
@@ -155,7 +156,12 @@ export default function AiPage() {
           </span>
           <div className="min-w-0">
             <p className="font-semibold text-text">{assistant?.name ?? "KORVA IA"}</p>
-            <p className="truncate text-xs text-text-muted">KORVA IA · adapté à votre métier</p>
+            <p className="truncate text-xs text-text-muted">
+              KORVA IA · adapté à votre métier
+              {status && status.quota.limit > 0
+                ? ` · ${Math.max(0, status.quota.limit - status.quota.used)} message${status.quota.limit - status.quota.used > 1 ? "s" : ""} restant${status.quota.limit - status.quota.used > 1 ? "s" : ""} ce mois-ci`
+                : ""}
+            </p>
           </div>
         </div>
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -271,19 +277,11 @@ export default function AiPage() {
 }
 
 function MessageBubble({ message }: { message: AiMessage }) {
-  if (message.role === "tool") {
-    return (
-      <div className="text-xs text-text-muted">
-        🔧 {message.toolName} → {message.content}
-      </div>
-    );
-  }
+  // The data a tool returned is for the model, not for the merchant.
+  if (message.role === "tool") return null;
   if (message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0) {
-    return (
-      <div className="text-xs text-text-muted">
-        🔧 appel : {message.toolCalls.map((c) => c.name).join(", ")}
-      </div>
-    );
+    const steps = [...new Set(message.toolCalls.map((c) => AI_TOOL_LABELS[c.name] ?? "travaille"))];
+    return <p className="text-xs italic text-text-muted">KORVA IA {steps.join(", ")}…</p>;
   }
   const isUser = message.role === "user";
   return (
@@ -293,7 +291,7 @@ function MessageBubble({ message }: { message: AiMessage }) {
           isUser ? "bg-sidebar text-text-primary" : "bg-surface-muted text-text"
         }`}
       >
-        {message.content}
+        {isUser ? message.content : <AiMessageText text={message.content ?? ""} />}
       </div>
     </div>
   );

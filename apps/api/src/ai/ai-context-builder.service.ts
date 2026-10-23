@@ -3,6 +3,19 @@ import { korvaAiAssistantFor, type AiAgent } from '@korva/types';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { KORVA_AI_RULES, KORVA_AI_TRADE_PROFILES } from './korva-ai-trades';
 
+function todayInWords(timeZone: string): string {
+  const now = new Date();
+  const words = new Intl.DateTimeFormat('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone,
+  }).format(now);
+  const iso = new Intl.DateTimeFormat('en-CA', { timeZone }).format(now);
+  return `${words} (${iso})`;
+}
+
 const AGENT_PERSONAS: Record<Exclude<AiAgent, 'general_assistant'>, string> = {
   sales_agent:
     "Rôle du jour : assistant commercial. Tu aides l'équipe à suivre ses prospects, préparer des devis et relancer les clients.",
@@ -36,7 +49,10 @@ export class AiContextBuilderService {
       `Tu es « ${assistant.name} » pour ${organization.name}.`,
       trade,
       ...(agent === 'general_assistant' ? [] : [AGENT_PERSONAS[agent]]),
-      `Devise : ${organization.currency}. Fuseau horaire : ${organization.timezone}. Date du jour : ${new Date().toISOString().slice(0, 10)}.`,
+      `Devise : ${organization.currency}. Fuseau horaire : ${organization.timezone}.`,
+      // The weekday spelled out: given only "2026-10-23", a model computed "après-demain" right
+      // but called a Sunday "samedi" (seen with a real model on 2026-10-23).
+      `Aujourd'hui : ${todayInWords(organization.timezone)}.`,
     ].join('\n');
   }
 }

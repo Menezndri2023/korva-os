@@ -57,6 +57,9 @@ export function planLimitMessage(code: string, details: unknown): string | undef
     const subject = PLAN_LIMIT_SUBJECTS[d.metric] ?? d.metric;
     return `Votre formule permet ${d.limit} ${subject}. Passez à la formule supérieure pour en ajouter.`;
   }
+  if (code === "USAGE_LIMIT_REACHED" && d.metric === "ai_messages_per_month" && d.limit != null) {
+    return `Vous avez utilisé vos ${d.limit} messages KORVA IA de ce mois. Ils reviennent le 1er du mois prochain ; pour en avoir plus, passez à la formule supérieure.`;
+  }
   if (code === "SEAT_LIMIT_REACHED" && d.limit != null) {
     const base = `Votre formule permet ${d.limit} utilisateur${d.limit > 1 ? "s" : ""} du tableau de bord.`;
     const extra = d.extraSeat;

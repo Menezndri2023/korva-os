@@ -15,11 +15,14 @@ export class GetAvailabilityTool implements AiTool<
   readonly definition = {
     name: 'get_availability',
     description:
-      "Consulte les créneaux disponibles d'une ressource pour une date donnée (YYYY-MM-DD).",
+      "Consulte les créneaux disponibles d'une ressource pour une date donnée (YYYY-MM-DD). resourceId vient de list_resources.",
     inputSchema: {
       type: 'object',
       properties: {
-        resourceId: { type: 'string' },
+        resourceId: {
+          type: 'string',
+          description: 'Un id renvoyé par list_resources',
+        },
         date: { type: 'string', description: 'Date au format YYYY-MM-DD' },
       },
       required: ['resourceId', 'date'],
@@ -34,15 +37,25 @@ export class GetAvailabilityTool implements AiTool<
     return inputSchema.parse(raw);
   }
 
-  execute(
+  async execute(
     organizationId: string,
     _userId: string,
     input: z.infer<typeof inputSchema>,
   ) {
-    return this.availabilityService.getDayAvailability(
+    const availability = await this.availabilityService.getDayAvailability(
       organizationId,
       input.resourceId,
       input.date,
     );
+    // Spelled out for the model: the weekday of the date asked (computed, not guessed) and
+    // whether the place is simply closed that day.
+    return {
+      weekday: new Intl.DateTimeFormat('fr-FR', {
+        weekday: 'long',
+        timeZone: 'UTC',
+      }).format(new Date(`${input.date}T12:00:00Z`)),
+      closed: availability.windows.length === 0,
+      ...availability,
+    };
   }
 }

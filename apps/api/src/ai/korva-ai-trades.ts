@@ -31,7 +31,13 @@ const STOCK_TOOLS = [
   'detect_dead_stock',
   'analyze_suppliers',
 ];
-const BOOKING_TOOLS = ['get_availability', 'create_booking', 'cancel_booking'];
+const BOOKING_TOOLS = [
+  'list_resources',
+  'get_availability',
+  'search_bookings',
+  'create_booking',
+  'cancel_booking',
+];
 const PIPELINE_TOOLS = [
   'search_leads',
   'update_lead',
@@ -42,6 +48,7 @@ const PIPELINE_TOOLS = [
   'lose_deal',
   'create_quote',
   'get_quote',
+  'search_quotes',
   'get_invoice',
 ];
 

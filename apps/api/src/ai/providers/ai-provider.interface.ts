@@ -4,6 +4,10 @@ export interface AiChatToolCall {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  /** Opaque data the provider attached to this call and requires back on the next turn —
+   *  Gemini 3's `extra_content.google.thought_signature` (without it: HTTP 400 "Function call is
+   *  missing a thought_signature"). Stored with the conversation; only the provider reads it. */
+  providerData?: Record<string, unknown>;
 }
 
 export type AiChatMessage =

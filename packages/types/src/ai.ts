@@ -13,6 +13,8 @@ export interface AiToolCall {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  /** Opaque provider data required back on the next turn (Gemini's thought signature). */
+  providerData?: Record<string, unknown>;
 }
 
 export interface AiConversation {

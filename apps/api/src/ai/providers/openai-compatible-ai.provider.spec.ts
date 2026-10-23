@@ -127,4 +127,61 @@ describe('OpenAiCompatibleAIProvider', () => {
       provider.chat({ systemPrompt: '', messages: [], tools: [] }),
     ).rejects.toBeInstanceOf(AiProviderBusyError);
   });
+
+  it("keeps Gemini's thought signature and sends it back on the next turn", async () => {
+    const signature = { google: { thought_signature: 'sig==' } };
+    const first = new OpenAiCompatibleAIProvider(
+      'https://x.test/v1',
+      'key',
+      'm',
+      fakeFetch(200, {
+        choices: [
+          {
+            message: {
+              tool_calls: [
+                {
+                  id: 'c1',
+                  type: 'function',
+                  function: { name: 'get_order', arguments: '{}' },
+                  extra_content: signature,
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    const result = await first.chat({ systemPrompt: '', messages: [], tools });
+    if (result.type !== 'tool_calls') throw new Error('expected tool calls');
+    expect(result.toolCalls[0]!.providerData).toEqual({
+      extra_content: signature,
+    });
+
+    const fetchMock = fakeFetch(200, {
+      choices: [{ message: { content: 'OK' } }],
+    });
+    const next = new OpenAiCompatibleAIProvider(
+      'https://x.test/v1',
+      'key',
+      'm',
+      fetchMock,
+    );
+    await next.chat({
+      systemPrompt: '',
+      tools,
+      messages: [
+        { role: 'assistant', toolCalls: result.toolCalls },
+        {
+          role: 'tool',
+          toolCallId: 'c1',
+          toolName: 'get_order',
+          content: '{}',
+        },
+      ],
+    });
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0] as [string, { body: string }])[1].body,
+    ) as { messages: { tool_calls?: { extra_content?: unknown }[] }[] };
+    expect(body.messages[1]!.tool_calls![0]!.extra_content).toEqual(signature);
+  });
 });

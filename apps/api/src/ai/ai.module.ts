@@ -65,6 +65,9 @@ import { SuggestReorderTool } from './tools/suggest-reorder.tool';
 import { DetectDeadStockTool } from './tools/detect-dead-stock.tool';
 import { AnalyzeSuppliersTool } from './tools/analyze-suppliers.tool';
 import { GetBusinessOverviewTool } from './tools/get-business-overview.tool';
+import { ListResourcesTool } from './tools/list-resources.tool';
+import { SearchQuotesTool } from './tools/search-quotes.tool';
+import { SearchBookingsTool } from './tools/search-bookings.tool';
 
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -146,6 +149,9 @@ import { ActionCenterModule } from '../action-center/action-center.module';
     DetectDeadStockTool,
     AnalyzeSuppliersTool,
     GetBusinessOverviewTool,
+    ListResourcesTool,
+    SearchQuotesTool,
+    SearchBookingsTool,
 
     {
       provide: KORVA_AI_CONFIG,

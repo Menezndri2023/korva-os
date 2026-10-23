@@ -117,6 +117,8 @@ export interface KorvaAiStatus {
   /** true: the platform's monthly budget is used up; back on the 1st. */
   paused: boolean;
   assistant: KorvaAiTradeAssistant;
+  /** This month's messages: used and allowed by the plan (-1 = unlimited). */
+  quota: { used: number; limit: number };
 }
 
 /** The administration's view (GET /platform/system → ai). */

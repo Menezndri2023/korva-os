@@ -35,6 +35,9 @@ import { SuggestReorderTool } from './tools/suggest-reorder.tool';
 import { DetectDeadStockTool } from './tools/detect-dead-stock.tool';
 import { AnalyzeSuppliersTool } from './tools/analyze-suppliers.tool';
 import { GetBusinessOverviewTool } from './tools/get-business-overview.tool';
+import { ListResourcesTool } from './tools/list-resources.tool';
+import { SearchQuotesTool } from './tools/search-quotes.tool';
+import { SearchBookingsTool } from './tools/search-bookings.tool';
 
 const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
   sales_agent: [
@@ -53,6 +56,7 @@ const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
     'get_offer',
     'create_quote',
     'get_quote',
+    'search_quotes',
     'send_email',
     'send_whatsapp',
     'list_recommendations',
@@ -65,7 +69,9 @@ const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
     'get_customer',
     'search_offers',
     'get_offer',
+    'list_resources',
     'get_availability',
+    'search_bookings',
     'create_booking',
     'cancel_booking',
     'get_order',
@@ -76,6 +82,7 @@ const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
     'search_offers',
     'get_order',
     'get_quote',
+    'search_quotes',
     'get_invoice',
     'list_recommendations',
     'propose_recommendation',
@@ -124,6 +131,9 @@ export class AiToolsRegistryService {
     detectDeadStock: DetectDeadStockTool,
     analyzeSuppliers: AnalyzeSuppliersTool,
     getBusinessOverview: GetBusinessOverviewTool,
+    listResources: ListResourcesTool,
+    searchQuotes: SearchQuotesTool,
+    searchBookings: SearchBookingsTool,
   ) {
     this.tools = [
       searchContacts,
@@ -158,6 +168,9 @@ export class AiToolsRegistryService {
       detectDeadStock,
       analyzeSuppliers,
       getBusinessOverview,
+      listResources,
+      searchQuotes,
+      searchBookings,
     ];
     AGENT_TOOL_NAMES.general_assistant = this.tools.map(
       (tool) => tool.definition.name,

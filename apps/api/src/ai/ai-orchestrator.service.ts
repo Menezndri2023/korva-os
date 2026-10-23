@@ -46,7 +46,9 @@ const FAILED_MESSAGE =
 /** The platform spend is re-read at most this often: one aggregate per minute, not per message. */
 const SPEND_CACHE_MS = 60_000;
 
-const MAX_TOOL_ITERATIONS = 5;
+/** Model calls per question. A booking chains five lookups (client, service, resource,
+ *  availability, booking) before its answer: 5 cut it off mid-way with a real model. */
+const MAX_TOOL_ITERATIONS = 8;
 
 interface CallingUser {
   userId: string;
@@ -72,7 +74,15 @@ function toChatMessage(message: AiMessageDocument): AiChatMessage {
     };
   }
   if (message.toolCalls && message.toolCalls.length > 0) {
-    return { role: 'assistant', toolCalls: message.toolCalls };
+    // Mongoose drops empty objects when saving (minimize), so a call made with no argument comes
+    // back without `input` — and the next turn then replayed an invalid call to the provider.
+    return {
+      role: 'assistant',
+      toolCalls: message.toolCalls.map((call) => ({
+        ...call,
+        input: call.input ?? {},
+      })),
+    };
   }
   return { role: 'assistant', content: message.content ?? '' };
 }
@@ -120,10 +130,16 @@ export class AiOrchestratorService {
     const organization =
       await this.organizationsService.getById(organizationId);
     const available = this.aiProvider.name !== 'null';
+    const usage =
+      await this.entitlementsService.getUsageSummary(organizationId);
+    const messages = usage.find(
+      (item) => item.metric === 'ai_messages_per_month',
+    );
     return {
       available,
       paused: available && (await this.budgetExhausted()),
       assistant: korvaAiAssistantFor(organization.businessModel),
+      quota: { used: messages?.used ?? 0, limit: messages?.limit ?? 0 },
     };
   }
 

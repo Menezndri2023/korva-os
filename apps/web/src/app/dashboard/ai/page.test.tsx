@@ -41,6 +41,7 @@ const pendingAction = {
 const restaurantStatus = {
   available: true,
   paused: false,
+  quota: { used: 12, limit: 30 },
   assistant: {
     name: "Assistant KORVA Restauration",
     intro: "Je vous aide à suivre les commandes.",
@@ -164,6 +165,7 @@ describe("AiPage — the business's KORVA IA assistant", () => {
     const user = userEvent.setup();
 
     expect(await screen.findByText("Je vous aide à suivre les commandes.")).toBeInTheDocument();
+    expect(screen.getByText(/18 messages restants ce mois-ci/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Quels plats se sont le plus vendus cette semaine ?" }));
     expect(postMock).toHaveBeenCalledWith("/ai/chat", {
       conversationId: undefined,

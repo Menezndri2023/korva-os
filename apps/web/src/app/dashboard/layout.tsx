@@ -111,7 +111,7 @@ function navGroups(
           visible: on("booking") && screens.training,
           prefix: true,
         },
-        { href: "/dashboard/ai", label: "Assistant IA", icon: Sparkles, visible: on("ai") },
+        { href: "/dashboard/ai", label: "KORVA IA", icon: Sparkles, visible: on("ai") },
       ],
     },
   ];

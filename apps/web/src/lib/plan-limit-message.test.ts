@@ -19,6 +19,13 @@ describe("planLimitMessage", () => {
     expect(message).toContain("n'ont pas besoin de compte");
   });
 
+  it("says when the month's KORVA IA messages are used up, and when they come back", () => {
+    const message = planLimitMessage("USAGE_LIMIT_REACHED", { metric: "ai_messages_per_month", limit: 30 });
+    expect(message).toBe(
+      "Vous avez utilisé vos 30 messages KORVA IA de ce mois. Ils reviennent le 1er du mois prochain ; pour en avoir plus, passez à la formule supérieure.",
+    );
+  });
+
   it("leaves every other error to the API's own message", () => {
     expect(planLimitMessage("OFFER_IN_USE", {})).toBeUndefined();
   });

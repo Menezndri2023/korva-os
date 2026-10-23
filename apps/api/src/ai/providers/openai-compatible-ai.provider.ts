@@ -15,6 +15,8 @@ interface ChatCompletionToolCall {
   id: string;
   type: 'function';
   function: { name: string; arguments: string };
+  /** Gemini: { google: { thought_signature } } — must be sent back unchanged. */
+  extra_content?: Record<string, unknown>;
 }
 interface ChatCompletionResponse {
   choices?: {
@@ -45,8 +47,11 @@ function toChatCompletionMessages(
             type: 'function',
             function: {
               name: call.name,
-              arguments: JSON.stringify(call.input),
+              arguments: JSON.stringify(call.input ?? {}),
             },
+            ...(call.providerData?.extra_content
+              ? { extra_content: call.providerData.extra_content }
+              : {}),
           })),
         };
       }
@@ -150,6 +155,9 @@ export class OpenAiCompatibleAIProvider implements AIProvider {
           id: call.id || `call_${index}`,
           name: call.function.name,
           input: parseArguments(call.function.arguments),
+          ...(call.extra_content
+            ? { providerData: { extra_content: call.extra_content } }
+            : {}),
         }),
       );
       return { type: 'tool_calls', toolCalls, usage };
