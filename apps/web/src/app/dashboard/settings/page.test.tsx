@@ -4,11 +4,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // file runs well within Vitest's 5 s default; under the full suite's parallel load a few tests
 // crossed it, which failed runs for no defect. A heavier page gets a longer budget.
 vi.setConfig({ testTimeout: 15_000 });
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SettingsPage from "./page";
 import { renderWithProviders } from "@/test/render";
 import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
+
+// The same reason applies to each findBy/waitFor inside a test: the first render took 1.5 s under
+// that load, past Testing Library's 1 s default wait. Scoped to this file.
+configure({ asyncUtilTimeout: 5_000 });
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
