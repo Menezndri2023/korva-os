@@ -178,17 +178,23 @@ export function modulesForPlan(planKey: string): KorvaModule[] {
  * be a number nothing enforces.
  *
  * `ai_messages_per_month` is set on EVERY tier, never omitted: omitting it would fall through
- * checkAndRecordUsage's `?? -1` to UNLIMITED. Free gets a taste (30), Starter enough for a weekly
- * habit (150), Pro and Business daily use. Limits live on the shared Plan, not the Subscription.
+ * checkAndRecordUsage's `?? -1` to UNLIMITED. Limits live on the shared Plan, not the Subscription.
+ *
+ * Sized on measurements, 2026-10-23 (gemini-3.5-flash-lite, real questions on every trade): a
+ * question is 2–3 model calls, ~6 500 tokens in and ~100 out — about 0.002 USD at the paid price
+ * (0.30 / 2.50 USD per million). Fully used, a month costs KORVA about 0.2 / 1.1 / 4.4 / 13 USD
+ * per business on Free / Starter / Pro / Business, against 0 / 9 900 / 24 900 / 59 900 XOF of
+ * price. On the provider's free tier the binding limit is the platform's calls per minute, not
+ * these quotas; AI_MONTHLY_BUDGET_USD caps the platform either way.
  */
 export const PLAN_LIMITS: Record<PlanKey, Record<string, number>> = {
-  free: { seats: 1, offers: 30, bookable_staff: 3, workflows: 1, ai_messages_per_month: 30 },
-  starter: { seats: 3, offers: -1, bookable_staff: -1, workflows: 5, ai_messages_per_month: 150 },
-  pro: { seats: 10, offers: -1, bookable_staff: -1, workflows: -1, ai_messages_per_month: 500 },
+  free: { seats: 1, offers: 30, bookable_staff: 3, workflows: 1, ai_messages_per_month: 100 },
+  starter: { seats: 3, offers: -1, bookable_staff: -1, workflows: 5, ai_messages_per_month: 500 },
+  pro: { seats: 10, offers: -1, bookable_staff: -1, workflows: -1, ai_messages_per_month: 2000 },
   // AI stays capped on every tier: it costs real money per token on every call, so an unlimited
   // tier would be an uncapped liability rather than a feature. Seats were unlimited on Business
   // until 2026-10-19; 25 plus paid extra seats lets a large network be priced fairly.
-  business: { seats: 25, offers: -1, bookable_staff: -1, workflows: -1, ai_messages_per_month: 2000 },
+  business: { seats: 25, offers: -1, bookable_staff: -1, workflows: -1, ai_messages_per_month: 6000 },
 };
 
 /**

@@ -1,3 +1,4 @@
+import type { BusinessModel } from '@korva/types';
 import {
   BadRequestException,
   Injectable,
@@ -91,21 +92,28 @@ export class ResourcesService {
   async ensureDefaultResource(
     organizationId: string,
     organizationName: string,
+    businessModel?: BusinessModel,
   ): Promise<void> {
     if (
       (await this.resourcesRepository.countForOrganization(organizationId)) > 0
     )
       return;
+    // A place to stay is open every day and night: with a salon's Monday–Saturday 9–18, the
+    // assistant told a guest the residence was "closed on Sunday".
+    const lodging = businessModel === 'lodging';
     await this.resourcesRepository.upsertDefault(organizationId, {
       name: organizationName.slice(0, 120),
-      type: 'person',
+      type: lodging ? 'room' : 'person',
       capacity: 1,
       active: true,
       // 0 = Sunday, as in AvailabilityService.
-      weeklyAvailability: [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({
+      weeklyAvailability: (lodging
+        ? [0, 1, 2, 3, 4, 5, 6]
+        : [1, 2, 3, 4, 5, 6]
+      ).map((dayOfWeek) => ({
         dayOfWeek,
-        startTime: '09:00',
-        endTime: '18:00',
+        startTime: lodging ? '00:00' : '09:00',
+        endTime: lodging ? '23:59' : '18:00',
       })),
     });
   }

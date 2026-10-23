@@ -38,6 +38,7 @@ export class ListResourcesTool implements AiTool<z.infer<typeof inputSchema>> {
     await this.resourcesService.ensureDefaultResource(
       organizationId,
       organization.name,
+      organization.businessModel,
     );
     const resources = await this.resourcesService.list(organizationId, true);
     return resources.map((resource) => ({

@@ -15,6 +15,7 @@ const CORE_TOOLS = [
   'search_contacts',
   'get_customer',
   'create_customer',
+  'find_inactive_customers',
   'search_offers',
   'get_offer',
   'create_task',
@@ -39,6 +40,7 @@ const BOOKING_TOOLS = [
   'cancel_booking',
 ];
 const PIPELINE_TOOLS = [
+  'create_lead',
   'search_leads',
   'update_lead',
   'create_deal',

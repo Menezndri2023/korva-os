@@ -14,7 +14,7 @@ export class SearchOffersTool implements AiTool<z.infer<typeof inputSchema>> {
   readonly definition = {
     name: 'search_offers',
     description:
-      'Recherche des offres du catalogue (produits, services, réservations, ...) par nom ou par type.',
+      "Cherche dans le catalogue (produits, prestations, chambres, formations, biens…). Sans paramètre : tout le catalogue. search : un mot du nom. type ne sert qu'à restreindre ; en cas de doute, ne le donne pas.",
     inputSchema: {
       type: 'object',
       properties: {

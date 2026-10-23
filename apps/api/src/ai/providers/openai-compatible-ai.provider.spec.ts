@@ -3,13 +3,28 @@ import {
   OpenAiCompatibleAIProvider,
 } from './openai-compatible-ai.provider';
 
-function fakeFetch(status: number, body: unknown) {
-  return jest.fn().mockResolvedValue({
+function fakeResponse(
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+) {
+  const text = JSON.stringify(body);
+  const response = {
     ok: status < 400,
     status,
+    headers: new Headers(headers),
     json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
-  }) as unknown as typeof fetch & jest.Mock;
+    text: () => Promise.resolve(text),
+    clone: () => response,
+  };
+  return response;
+}
+
+function fakeFetch(status: number, body: unknown) {
+  return jest
+    .fn()
+    .mockResolvedValue(fakeResponse(status, body)) as unknown as typeof fetch &
+    jest.Mock;
 }
 
 describe('OpenAiCompatibleAIProvider', () => {
@@ -116,12 +131,51 @@ describe('OpenAiCompatibleAIProvider', () => {
     });
   });
 
+  it('waits what a saturated provider asks, and tries again', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        fakeResponse(429, [{ error: { details: [{ retryDelay: '2s' }] } }]),
+      )
+      .mockResolvedValueOnce(
+        fakeResponse(200, { choices: [{ message: { content: 'OK' } }] }),
+      ) as unknown as typeof fetch & jest.Mock;
+    const sleep = jest.fn().mockResolvedValue(undefined);
+    const provider = new OpenAiCompatibleAIProvider(
+      'https://x.test/v1',
+      'key',
+      'm',
+      fetchMock,
+      sleep,
+    );
+    await expect(
+      provider.chat({ systemPrompt: '', messages: [], tools: [] }),
+    ).resolves.toMatchObject({ type: 'text', text: 'OK' });
+    expect(sleep).toHaveBeenCalledWith(2000);
+  });
+
+  it('gives up at once when the provider asks for a long wait', async () => {
+    const sleep = jest.fn().mockResolvedValue(undefined);
+    const provider = new OpenAiCompatibleAIProvider(
+      'https://x.test/v1',
+      'key',
+      'm',
+      fakeFetch(429, [{ error: { details: [{ retryDelay: '40s' }] } }]),
+      sleep,
+    );
+    await expect(
+      provider.chat({ systemPrompt: '', messages: [], tools: [] }),
+    ).rejects.toBeInstanceOf(AiProviderBusyError);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
   it('reports a saturated provider distinctly', async () => {
     const provider = new OpenAiCompatibleAIProvider(
       'https://x.test/v1',
       'key',
       'm',
       fakeFetch(429, {}),
+      () => Promise.resolve(),
     );
     await expect(
       provider.chat({ systemPrompt: '', messages: [], tools: [] }),

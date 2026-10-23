@@ -48,6 +48,7 @@ export class ResourcesController {
     await this.resourcesService.ensureDefaultResource(
       tenant.organizationId,
       organization.name,
+      organization.businessModel,
     );
     return this.resourcesService.list(
       tenant.organizationId,

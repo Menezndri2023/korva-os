@@ -38,10 +38,14 @@ import { GetBusinessOverviewTool } from './tools/get-business-overview.tool';
 import { ListResourcesTool } from './tools/list-resources.tool';
 import { SearchQuotesTool } from './tools/search-quotes.tool';
 import { SearchBookingsTool } from './tools/search-bookings.tool';
+import { CreateLeadTool } from './tools/create-lead.tool';
+import { FindInactiveCustomersTool } from './tools/find-inactive-customers.tool';
 
 const AGENT_TOOL_NAMES: Record<AiAgent, string[]> = {
   sales_agent: [
     'search_contacts',
+    'create_lead',
+    'find_inactive_customers',
     'get_customer',
     'create_customer',
     'search_leads',
@@ -134,6 +138,8 @@ export class AiToolsRegistryService {
     listResources: ListResourcesTool,
     searchQuotes: SearchQuotesTool,
     searchBookings: SearchBookingsTool,
+    createLead: CreateLeadTool,
+    findInactiveCustomers: FindInactiveCustomersTool,
   ) {
     this.tools = [
       searchContacts,
@@ -171,6 +177,8 @@ export class AiToolsRegistryService {
       listResources,
       searchQuotes,
       searchBookings,
+      createLead,
+      findInactiveCustomers,
     ];
     AGENT_TOOL_NAMES.general_assistant = this.tools.map(
       (tool) => tool.definition.name,

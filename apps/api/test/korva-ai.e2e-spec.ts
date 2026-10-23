@@ -255,7 +255,13 @@ describe('KORVA IA (e2e)', () => {
   });
 
   it('answers calmly when the provider is saturated', async () => {
-    stub.script.push({ status: 429, body: { error: 'rate limited' } });
+    // Saturated beyond the provider's two automatic retries (1 s each here).
+    for (let i = 0; i < 3; i++) {
+      stub.script.push({
+        status: 429,
+        body: [{ error: { details: [{ retryDelay: '1s' }] } }],
+      });
+    }
     const res = await staff(request(server).post('/api/v1/ai/chat'))
       .send({ message: 'Et aujourd’hui ?' })
       .expect(201);
@@ -344,7 +350,7 @@ describe('KORVA IA (e2e)', () => {
     expect(JSON.stringify(res.body)).not.toContain('stub-key');
   });
 
-  it('is open on the Free plan, within its 30 messages a month', async () => {
+  it('is open on the Free plan, within its 100 messages a month', async () => {
     const auth = await request(server)
       .post('/api/v1/auth/register')
       .send({ email: 'gratuit@korva.test', password: 'password123' })
@@ -368,7 +374,7 @@ describe('KORVA IA (e2e)', () => {
     const plan = await connection
       .collection('plans')
       .findOne({ key: 'free', priceCurrency: 'XOF' });
-    expect(plan?.limits).toMatchObject({ ai_messages_per_month: 30 });
+    expect(plan?.limits).toMatchObject({ ai_messages_per_month: 100 });
   });
 
   it('migration 0010 opens KORVA IA to every existing business and plan', async () => {
@@ -395,6 +401,6 @@ describe('KORVA IA (e2e)', () => {
       .collection('plans')
       .findOne({ key: 'starter', priceCurrency: 'XOF' });
     expect(starter?.modules).toContain('ai');
-    expect(starter?.limits).toMatchObject({ ai_messages_per_month: 150 });
+    expect(starter?.limits).toMatchObject({ ai_messages_per_month: 500 });
   });
 });

@@ -68,6 +68,13 @@ import { GetBusinessOverviewTool } from './tools/get-business-overview.tool';
 import { ListResourcesTool } from './tools/list-resources.tool';
 import { SearchQuotesTool } from './tools/search-quotes.tool';
 import { SearchBookingsTool } from './tools/search-bookings.tool';
+import { CreateLeadTool } from './tools/create-lead.tool';
+import { FindInactiveCustomersTool } from './tools/find-inactive-customers.tool';
+import {
+  Booking,
+  BookingSchema,
+} from '../booking/bookings/schemas/booking.schema';
+import { Contact, ContactSchema } from '../crm/contacts/schemas/contact.schema';
 
 import { CrmModule } from '../crm/crm.module';
 import { CatalogModule } from '../catalog/catalog.module';
@@ -91,6 +98,9 @@ import { ActionCenterModule } from '../action-center/action-center.module';
       { name: AiPendingAction.name, schema: AiPendingActionSchema },
       { name: AiUsageLog.name, schema: AiUsageLogSchema },
       { name: Order.name, schema: OrderSchema },
+      // find_inactive_customers reads who did NOT buy — no service exposes that.
+      { name: Booking.name, schema: BookingSchema },
+      { name: Contact.name, schema: ContactSchema },
     ]),
     ConfigModule,
     CrmModule,
@@ -152,6 +162,8 @@ import { ActionCenterModule } from '../action-center/action-center.module';
     ListResourcesTool,
     SearchQuotesTool,
     SearchBookingsTool,
+    CreateLeadTool,
+    FindInactiveCustomersTool,
 
     {
       provide: KORVA_AI_CONFIG,

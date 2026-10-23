@@ -11,6 +11,25 @@ import type {
  *  AiOrchestratorService turns it into a calm "réessayez dans une minute" instead of an error. */
 export class AiProviderBusyError extends Error {}
 
+const MAX_RETRIES = 2;
+/** Past this, the business is told to come back in a minute rather than left waiting. */
+const MAX_RETRY_WAIT_MS = 10_000;
+
+/** How long the provider asks to wait (Retry-After header, or Gemini's "retryDelay": "7s" in the
+ *  body), clamped to at least 1 s; null when it asks for longer than MAX_RETRY_WAIT_MS. */
+export function retryWaitMs(headers: Headers, body: string): number | null {
+  const header = Number(headers.get('retry-after'));
+  const fromBody = /"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(body)?.[1];
+  const seconds =
+    Number.isFinite(header) && header > 0
+      ? header
+      : fromBody
+        ? Number(fromBody)
+        : 3;
+  const ms = Math.max(1_000, Math.ceil(seconds * 1000));
+  return ms > MAX_RETRY_WAIT_MS ? null : ms;
+}
+
 interface ChatCompletionToolCall {
   id: string;
   type: 'function';
@@ -93,6 +112,8 @@ export class OpenAiCompatibleAIProvider implements AIProvider {
     private readonly apiKey: string | undefined,
     readonly model: string,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly sleep: (ms: number) => Promise<void> = (ms) =>
+      new Promise((resolve) => setTimeout(resolve, ms)),
   ) {}
 
   async chat(input: {
@@ -100,32 +121,51 @@ export class OpenAiCompatibleAIProvider implements AIProvider {
     messages: AiChatMessage[];
     tools: AiToolDefinition[];
   }): Promise<AiChatResult> {
-    const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: this.model,
-        max_tokens: 1024,
-        messages: toChatCompletionMessages(input.systemPrompt, input.messages),
-        ...(input.tools.length > 0
-          ? {
-              tools: input.tools.map((tool) => ({
-                type: 'function',
-                function: {
-                  name: tool.name,
-                  description: tool.description,
-                  parameters: tool.inputSchema,
-                },
-              })),
-              tool_choice: 'auto',
-            }
-          : {}),
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
+    const send = () =>
+      this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 1024,
+          messages: toChatCompletionMessages(
+            input.systemPrompt,
+            input.messages,
+          ),
+          ...(input.tools.length > 0
+            ? {
+                tools: input.tools.map((tool) => ({
+                  type: 'function',
+                  function: {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.inputSchema,
+                  },
+                })),
+                tool_choice: 'auto',
+              }
+            : {}),
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+
+    // A free tier allows a few calls a minute for the whole platform (Gemini: 15 per model per
+    // minute), so short bursts are common: wait what the provider asks, up to MAX_RETRY_WAIT_MS,
+    // and try again before telling the business it is busy.
+    let response = await send();
+    for (
+      let retry = 0;
+      retry < MAX_RETRIES && response.status === 429;
+      retry++
+    ) {
+      const wait = retryWaitMs(response.headers, await response.clone().text());
+      if (wait === null) break;
+      await this.sleep(wait);
+      response = await send();
+    }
 
     if (!response.ok) {
       // The body may echo the request; it never contains the key, but keep the log short.

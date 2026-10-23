@@ -657,6 +657,7 @@ export class PublicService {
     await this.resourcesService.ensureDefaultResource(
       organization.id as string,
       organization.name,
+      organization.businessModel,
     );
     const resources = await this.resourcesService.list(
       organization.id as string,
