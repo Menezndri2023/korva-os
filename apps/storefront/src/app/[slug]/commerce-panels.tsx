@@ -26,7 +26,9 @@ import type {
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "Espèces / à la livraison ou au retrait",
-  online: "Paiement en ligne",
+  // The platform's online payment is mobile money first (GeniusPay: Wave, Orange Money, MTN,
+  // Moov) with cards — say it in the words customers here use.
+  online: "Mobile money ou carte (Wave, Orange Money, MTN, Moov)",
 };
 
 /** Lengths a visitor may pick for an offer with no duration of its own. An offer that has one
@@ -822,7 +824,7 @@ export function CheckoutPanel({
             : orderMutation.isPending || payMutation.isPending
               ? "Envoi..."
               : paymentMethod === "online"
-                ? "Payer en ligne"
+                ? "Payer par mobile money ou carte"
                 : "Confirmer la commande"}
         </Button>
       </form>

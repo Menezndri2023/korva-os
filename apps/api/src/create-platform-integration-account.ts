@@ -64,7 +64,17 @@
  *     -r tsconfig-paths/register src/create-platform-integration-account.ts ...
  *
  * Required flags: --domain (payment|messaging), --provider, --role
- * Optional flags: --market, --secret, --apply, --activate
+ * Optional flags: --market, --secret-prompt (preferred: typed without echo, never in the shell
+ *   history), --secret (legacy, avoid: visible in history and the process list), --apply,
+ *   --activate. With --apply, a payment provider's keys are tested (testConnection) and an
+ *   account whose keys fail is NOT activated.
+ *
+ * GeniusPay (mobile money, see geniuspay-payment.provider.ts) — one account for KORVA's own
+ * billing, and one per country where businesses sell (same keys):
+ *   ... run --rm --no-deps api node dist/create-platform-integration-account.js \
+ *     --domain payment --provider geniuspay --role subscription-billing --secret-prompt --apply --activate
+ *   ... --domain payment --provider geniuspay --role merchant-of-record --market CI \
+ *     --secret-prompt --apply --activate
  */
 import { NestFactory } from '@nestjs/core';
 
@@ -78,6 +88,8 @@ import { AppModule } from './app.module';
 import { IntegrationsService } from './integrations/integrations.service';
 import { IntegrationsRepository } from './integrations/integrations.repository';
 import type { IntegrationDomain } from './integrations/integrations.types';
+import { PaymentProviderRegistry } from './finance/payments/providers/payment-provider.registry';
+import { parseGeniusPayCredential } from './finance/payments/providers/geniuspay-payment.provider';
 
 interface ParsedArgs {
   domain: IntegrationDomain;
@@ -85,6 +97,7 @@ interface ParsedArgs {
   role: string;
   market: string | null;
   secret: string | null;
+  secretPrompt: boolean;
   apply: boolean;
   activate: boolean;
 }
@@ -112,13 +125,70 @@ function parseArgs(argv: string[]): ParsedArgs {
     role,
     market: get('--market') ?? null,
     secret: get('--secret') ?? null,
+    secretPrompt: argv.includes('--secret-prompt'),
     apply: argv.includes('--apply'),
     activate: argv.includes('--activate'),
   };
 }
 
+/** Typed without echo on a terminal, or the first line of piped input. Never an argument: a
+ *  command line lands in the shell history and the process list. */
+function readSecret(prompt: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stdin = process.stdin;
+    if (!stdin.isTTY) {
+      let data = '';
+      stdin.setEncoding('utf8');
+      stdin.on('data', (chunk: string | Buffer) => (data += chunk.toString()));
+      stdin.on('end', () =>
+        resolve(data.split('\n')[0]!.replace(/\r$/, '').trim()),
+      );
+      stdin.on('error', reject);
+      return;
+    }
+    process.stdout.write(prompt);
+    let value = '';
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+    const onData = (key: string) => {
+      for (const char of key) {
+        if (char === '\r' || char === '\n') {
+          stdin.setRawMode(false);
+          stdin.pause();
+          stdin.off('data', onData);
+          process.stdout.write('\n');
+          resolve(value.trim());
+          return;
+        }
+        if (char === '\u0003') {
+          process.stdout.write('\n');
+          process.exit(130);
+        }
+        value =
+          char === '\u007f' || char === '\b'
+            ? value.slice(0, -1)
+            : value + char;
+      }
+    };
+    stdin.on('data', onData);
+  });
+}
+
 async function run() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.secretPrompt) {
+    args.secret =
+      (await readSecret(
+        args.provider === 'geniuspay'
+          ? 'Clés GeniusPay (pk_… puis sk_…, séparées par un espace) : '
+          : 'Clé secrète : ',
+      )) || null;
+  }
+  // A malformed GeniusPay pair is refused here, before anything is written.
+  if (args.provider === 'geniuspay' && args.secret) {
+    parseGeniusPayCredential(args.secret);
+  }
 
   console.log(
     `${args.apply ? 'APPLY' : 'DRY RUN'} — platform IntegrationAccount`,
@@ -156,6 +226,29 @@ async function run() {
       market: args.market,
       secret: args.secret,
     });
+
+    // Prove the keys work before anything is switched on.
+    if (
+      args.domain === 'payment' &&
+      args.secret &&
+      args.provider !== 'manual'
+    ) {
+      const adapter = app
+        .get(PaymentProviderRegistry)
+        .resolve(args.provider, args.secret);
+      const check = (await adapter.testConnection?.()) ?? { ok: true };
+      console.log(
+        check.ok
+          ? `\nConnexion ${args.provider} : OK`
+          : `\nConnexion ${args.provider} : ÉCHEC — ${check.message ?? 'refusée'}`,
+      );
+      if (!check.ok && args.activate) {
+        console.log(
+          'Compte créé mais NON activé, puisque les clés ne fonctionnent pas.',
+        );
+        args.activate = false;
+      }
+    }
 
     if (args.activate) {
       const integrationsRepository = app.get(IntegrationsRepository);

@@ -213,3 +213,35 @@ the grace period to expire.
 2. **Atlas is still the free M0 tier, which has no backups of its own.** M10 is the first tier
    with continuous backups and point-in-time restore — the difference between going back to
    14:32 today and going back to last night.
+
+## Paiements mobile money : GeniusPay
+
+GeniusPay (pay.genius.ci) encaisse par Wave, Orange Money, MTN, Moov et carte, via une page de
+paiement hébergée. KORVA l'utilise pour deux choses : les entreprises qui paient leur formule
+(rôle `subscription-billing`) et les clients qui paient une commande sur une boutique (rôle
+`merchant-of-record`, un compte par pays où les boutiques vendent — mêmes clés).
+
+1. **Clés** : dans le tableau de bord GeniusPay, Paramètres > API — une clé publique `pk_…` et une
+   clé secrète `sk_…`. Commencez en `sandbox` (aucun argent réel), passez en `live` ensuite.
+2. **Enregistrement (sur le serveur, clés tapées sans s'afficher, testées avant activation)** :
+
+       ssh -t korva@<server> 'cd ~/korva-os && docker compose -f docker-compose.prod.yml \
+         --env-file .env.production run --rm --no-deps api node dist/create-platform-integration-account.js \
+         --domain payment --provider geniuspay --role subscription-billing --secret-prompt --apply --activate'
+
+   puis la même commande avec `--role merchant-of-record --market CI` (et `SN`, `BF`… pour chaque
+   pays ouvert). Saisissez `pk_… sk_…` séparés par un espace. Un compte dont les clés échouent au
+   test n'est pas activé.
+3. **Webhook** : dans GeniusPay, créez un webhook vers
+   `https://api.korvasuite.com/api/v1/webhooks/geniuspay` avec les événements `payment.*`.
+   Son secret `whsec_…` n'est affiché qu'une fois. Sur le serveur, ajoutez d'abord les deux noms
+   (set-secret.sh refuse un nom absent du fichier), puis posez le secret sans l'afficher :
+
+       cd ~/korva-os && printf 'GENIUSPAY_WEBHOOK_SECRET=\nBILLING_CHARGEABLE_CURRENCIES=XOF,EUR,USD\n' >> .env.production
+       ~/ops/set-secret.sh GENIUSPAY_WEBHOOK_SECRET
+
+   `BILLING_CHARGEABLE_CURRENCIES` limite les formules payantes aux devises que GeniusPay
+   accepte ; set-secret.sh redémarre l'API et vérifie qu'elle revient.
+
+Remboursements : GeniusPay ne publie pas d'API de remboursement — ils se font depuis son tableau de
+bord ; KORVA répond `PAYMENT_PROVIDER_REFUND_UNSUPPORTED` si on tente de rembourser depuis KORVA.

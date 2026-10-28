@@ -285,7 +285,8 @@ export class InvoicesService {
 
   async issue(
     organizationId: string,
-    userId: string,
+    /** Undefined when the system issues it (a customer paying online from the storefront). */
+    userId: string | undefined,
     id: string,
   ): Promise<InvoiceDocument> {
     const invoice = await this.getById(organizationId, id);

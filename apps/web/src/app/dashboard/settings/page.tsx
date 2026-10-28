@@ -1211,7 +1211,7 @@ export default function SettingsPage() {
                         }
                         {...registerOrg("acceptedPaymentMethods")}
                       />
-                      Paiement en ligne
+                      Paiement en ligne : mobile money (Wave, Orange Money, MTN, Moov) et carte
                       {!planFeatures.has("online_payment") && <PlanLock feature="online_payment" />}
                     </label>
                   </div>

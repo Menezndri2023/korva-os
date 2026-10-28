@@ -4,6 +4,7 @@ import type { PaymentProvider } from './payment-provider.interface';
 import { ManualPaymentProvider } from './manual-payment.provider';
 import { FlutterwaveProvider } from './flutterwave-payment.provider';
 import { PaystackProvider } from './paystack-payment.provider';
+import { GeniusPayProvider } from './geniuspay-payment.provider';
 
 /**
  * `secret` is the platform `IntegrationAccount`'s decrypted credential (see
@@ -41,6 +42,9 @@ export class PaymentProviderRegistry {
     ['manual', () => new ManualPaymentProvider()],
     ['flutterwave', (secret) => new FlutterwaveProvider(requireSecret(secret))],
     ['paystack', (secret) => new PaystackProvider(requireSecret(secret))],
+    // Mobile money (Wave, Orange Money, MTN, Moov) and cards in West/Central Africa. Its secret is
+    // the "pk_… sk_…" pair — see geniuspay-payment.provider.ts.
+    ['geniuspay', (secret) => new GeniusPayProvider(requireSecret(secret))],
     // Stage 2: ['charibaas', (secret) => new ChariBaaSProvider(requireSecret(secret))],
   ]);
 

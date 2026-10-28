@@ -111,6 +111,17 @@ export class SubscriptionInvoicesRepository {
   }
 
   /**
+   * The open invoice a provider's checkout reference belongs to — how a payment webhook (which
+   * only knows the provider's reference) finds which KORVA plan invoice was just paid. Not
+   * tenant-scoped: the webhook has no tenant; the reference itself is the provider's unique id.
+   */
+  findOpenByProviderReference(
+    providerReference: string,
+  ): Promise<SubscriptionInvoiceDocument | null> {
+    return this.model.findOne({ providerReference, status: 'open' }).exec();
+  }
+
+  /**
    * Open invoices across every organization, oldest period first — the worklist for the
    * auto-charge sweep. Not tenant-scoped on purpose: this is a platform-side collection job, the
    * same way the renewal sweep reads every subscription.

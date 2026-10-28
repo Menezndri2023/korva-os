@@ -1185,7 +1185,7 @@ export class PublicService {
       });
     }
 
-    const invoice = order.invoiceId
+    let invoice = order.invoiceId
       ? await this.invoicesService.getById(
           organizationId,
           order.invoiceId.toString(),
@@ -1195,6 +1195,16 @@ export class PublicService {
           undefined,
           orderId,
         );
+    // generateInvoice creates a DRAFT, and PaymentsService refuses to record a payment against a
+    // draft (INVOICE_NOT_PAYABLE) — so no storefront customer could ever pay online. A customer
+    // paying is the moment the invoice is due: issue it first.
+    if (invoice.status === 'draft') {
+      invoice = await this.invoicesService.issue(
+        organizationId,
+        undefined,
+        invoice.id as string,
+      );
+    }
 
     if (invoice.status === 'paid') {
       throw new BadRequestException({
