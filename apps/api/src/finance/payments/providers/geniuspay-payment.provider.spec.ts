@@ -137,8 +137,18 @@ describe('GeniusPayProvider', () => {
     await expect(
       new GeniusPayProvider(
         KEYS,
-        respond(401, { success: false, message: 'Invalid key' }),
+        respond(401, {
+          success: false,
+          error: {
+            code: 'INVALID_API_KEY',
+            message: 'The provided API key is invalid.',
+          },
+        }),
       ).testConnection(),
-    ).resolves.toMatchObject({ ok: false });
+    ).resolves.toEqual({
+      ok: false,
+      message:
+        'GeniusPay GET /account answered 401 — INVALID_API_KEY: The provided API key is invalid.',
+    });
   });
 });

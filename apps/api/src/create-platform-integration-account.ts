@@ -148,6 +148,7 @@ function readSecret(prompt: string): Promise<string> {
       return;
     }
     process.stdout.write(prompt);
+    // One * per character: with nothing on screen, people stop and wonder whether typing works.
     let value = '';
     stdin.setRawMode(true);
     stdin.resume();
@@ -166,10 +167,13 @@ function readSecret(prompt: string): Promise<string> {
           process.stdout.write('\n');
           process.exit(130);
         }
-        value =
-          char === '\u007f' || char === '\b'
-            ? value.slice(0, -1)
-            : value + char;
+        if (char === '\u007f' || char === '\b') {
+          if (value.length > 0) process.stdout.write('\b \b');
+          value = value.slice(0, -1);
+        } else {
+          value += char;
+          process.stdout.write('*');
+        }
       }
     };
     stdin.on('data', onData);
@@ -179,6 +183,12 @@ function readSecret(prompt: string): Promise<string> {
 async function run() {
   const args = parseArgs(process.argv.slice(2));
   if (args.secretPrompt) {
+    // Node prints its module warnings on a later tick: let them out BEFORE the question, or they
+    // land right after it and the prompt looks like a crash (seen in production, 2026-10-28).
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    console.log(
+      '\nCollez vos clés puis appuyez sur Entrée (une * s’affiche par caractère, jamais la clé).',
+    );
     args.secret =
       (await readSecret(
         args.provider === 'geniuspay'
@@ -188,7 +198,10 @@ async function run() {
   }
   // A malformed GeniusPay pair is refused here, before anything is written.
   if (args.provider === 'geniuspay' && args.secret) {
-    parseGeniusPayCredential(args.secret);
+    const { apiKey } = parseGeniusPayCredential(args.secret);
+    console.log(
+      `Clés reçues : publique + secrète, environnement « ${apiKey.split('_')[1]} ». Vérification…`,
+    );
   }
 
   console.log(

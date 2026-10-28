@@ -267,8 +267,18 @@ export class GeniusPayProvider implements PaymentProvider {
       this.logger.error(
         `GeniusPay ${method} ${path} answered ${response.status}`,
       );
+      // GeniusPay's own words — e.g. INVALID_API_KEY "The provided API key is invalid." — tell
+      // the operator what to fix far better than a status code.
+      const error =
+        isRecord(payload) && isRecord(payload.error)
+          ? payload.error
+          : undefined;
+      const detail =
+        error && typeof error.message === 'string'
+          ? ` — ${typeof error.code === 'string' ? `${error.code}: ` : ''}${error.message}`
+          : '';
       throw new GeniusPayApiError(
-        `GeniusPay ${method} ${path} answered ${response.status}`,
+        `GeniusPay ${method} ${path} answered ${response.status}${detail}`,
         response.status,
         payload,
       );
