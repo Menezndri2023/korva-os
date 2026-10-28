@@ -78,3 +78,45 @@ describe('EventsProcessor — connection lifecycle', () => {
     expect(disconnectMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('EventsProcessor — events with no organization', () => {
+  it('skips an event published as "unresolved" instead of failing it five times', async () => {
+    const { Worker } = jest.requireMock<{ Worker: jest.Mock }>('bullmq');
+    Worker.mockClear();
+    const handle = jest.fn().mockResolvedValue(undefined);
+    const service = new EventsProcessor(
+      {
+        getOrThrow: jest.fn().mockReturnValue('redis://localhost:6379'),
+        get: jest.fn().mockReturnValue(undefined),
+      } as unknown as ConfigService,
+      { handleEvent: handle } as unknown as WorkflowEngineService,
+      { handleEvent: handle } as unknown as DecisionEngineService,
+      {} as unknown as OrdersService,
+      { dispatchEvent: handle } as unknown as WebhookDispatchService,
+      {} as unknown as WaitlistService,
+    );
+    await service.onModuleInit();
+    const [, processJob] = (Worker.mock.calls as unknown[][])[0] as [
+      unknown,
+      (job: unknown) => Promise<void>,
+    ];
+
+    await processJob({
+      data: {
+        organizationId: 'unresolved',
+        name: 'payment.webhook_received',
+        payload: {},
+      },
+    });
+    expect(handle).not.toHaveBeenCalled();
+
+    await processJob({
+      data: {
+        organizationId: '64b000000000000000000001',
+        name: 'payment.webhook_received',
+        payload: {},
+      },
+    });
+    expect(handle).toHaveBeenCalledTimes(3);
+  });
+});

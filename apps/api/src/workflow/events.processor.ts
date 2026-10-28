@@ -63,6 +63,17 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     this.worker = new Worker<EventJobData>(
       EVENTS_QUEUE_NAME,
       async (job) => {
+        // Every consumer below works for ONE organization. An event published without one — the
+        // "unresolved" sentinel IntegrationWebhookService uses for a provider webhook it cannot
+        // attribute, e.g. GeniusPay's "Tester" button — has no reader: skip it. Running it made
+        // WebhookDispatchService build an ObjectId from "unresolved", fail five times and park
+        // the job as failed (production, 2026-10-28).
+        if (!isOrganizationId(job.data.organizationId)) {
+          this.logger.log(
+            `Skipping "${job.data.name}" with no organization (${job.data.organizationId})`,
+          );
+          return;
+        }
         // DecisionEngineService, syncBookingPaymentStatusFromInvoice, and dispatchEvent never
         // throw (see their own handleEvent/doc) — all are included in Promise.all purely so they
         // can run concurrently with the Workflow Engine, not because their failure needs
@@ -147,4 +158,8 @@ export class EventsProcessor implements OnModuleInit, OnModuleDestroy {
     await this.worker?.close();
     this.connection?.disconnect();
   }
+}
+
+function isOrganizationId(value: string): boolean {
+  return typeof value === 'string' && /^[0-9a-f]{24}$/i.test(value);
 }
