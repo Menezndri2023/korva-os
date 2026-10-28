@@ -69,11 +69,22 @@ export class PaymentProviderResolverService {
       market = organization.country;
     }
 
-    const account = await this.integrationAccountsReader.findPlatformAccount({
+    let account = await this.integrationAccountsReader.findPlatformAccount({
       domain: 'payment',
       role,
       market,
     });
+    // A merchant-of-record account registered WITHOUT a market serves every country that has no
+    // account of its own — one GeniusPay account for all of KORVA (the owner's choice,
+    // 2026-10-28). A country-specific account, active, still wins, so a market can later be
+    // given a different provider without touching the others.
+    if (market !== null && (!account || account.status !== 'active')) {
+      account = await this.integrationAccountsReader.findPlatformAccount({
+        domain: 'payment',
+        role,
+        market: null,
+      });
+    }
 
     if (!account || account.status !== 'active') {
       throw new UnprocessableEntityException({

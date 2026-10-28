@@ -121,13 +121,14 @@ describe('GeniusPay mobile money (e2e)', () => {
   let organizationId: string;
   let staffToken: string;
 
-  it('sets up GeniusPay for Côte d’Ivoire and a shop that accepts online payment', async () => {
+  it('sets up one GeniusPay account for every country, and an Ivorian shop that accepts online payment', async () => {
     const integrations = app.get(IntegrationsService);
     const account = await integrations.createPlatformAccount({
       domain: 'payment',
       provider: 'geniuspay',
       role: 'merchant-of-record',
-      market: 'CI',
+      // One account for every country (no market) — KORVA's actual setup.
+      market: null,
       secret: 'pk_sandbox_e2e sk_sandbox_e2e',
     });
     await app.get(IntegrationsRepository).updateStatus(account.id, 'active');
@@ -370,5 +371,46 @@ describe('GeniusPay mobile money (e2e)', () => {
       .collection('subscription_invoices')
       .findOne({ _id: insertedId });
     expect(invoice?.status).toBe('paid');
+  });
+
+  it('does not offer online payment to a shop selling in a currency GeniusPay does not charge', async () => {
+    const auth = await request(server)
+      .post('/api/v1/auth/register')
+      .send({ email: 'gp-maroc@korva.test', password: 'password123' })
+      .expect(201);
+    const token = asSuccess<{ accessToken: string }>(auth.body).accessToken;
+    const org = asSuccess<{ id: string; slug: string }>(
+      (
+        await request(server)
+          .post('/api/v1/organizations')
+          .set('Authorization', `Bearer ${token}`)
+          .send({
+            name: 'Boutique Casa',
+            type: 'commerce',
+            country: 'MA',
+            currency: 'MAD',
+            timezone: 'Africa/Casablanca',
+            language: 'fr',
+          })
+          .expect(201)
+      ).body,
+    );
+    await putOrganizationOnPlan(connection, org.id, 'starter');
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Organization-Id', org.id)
+      .send({
+        enabledModules: ['crm', 'catalog', 'commerce', 'finance', 'website'],
+        acceptedPaymentMethods: ['cash', 'online'],
+      })
+      .expect(200);
+    const site = await request(server)
+      .get(`/api/v1/public/${org.slug}`)
+      .expect(200);
+    expect(
+      asSuccess<{ acceptedPaymentMethods: string[] }>(site.body)
+        .acceptedPaymentMethods,
+    ).toEqual(['cash']);
   });
 });

@@ -219,7 +219,7 @@ the grace period to expire.
 GeniusPay (pay.genius.ci) encaisse par Wave, Orange Money, MTN, Moov et carte, via une page de
 paiement hébergée. KORVA l'utilise pour deux choses : les entreprises qui paient leur formule
 (rôle `subscription-billing`) et les clients qui paient une commande sur une boutique (rôle
-`merchant-of-record`, un compte par pays où les boutiques vendent — mêmes clés).
+`merchant-of-record`, un seul compte pour tous les pays).
 
 1. **Clés** : dans le tableau de bord GeniusPay, Paramètres > API — une clé publique `pk_…` et une
    clé secrète `sk_…`. Commencez en `sandbox` (aucun argent réel), passez en `live` ensuite.
@@ -229,9 +229,13 @@ paiement hébergée. KORVA l'utilise pour deux choses : les entreprises qui paie
          --env-file .env.production run --rm --no-deps api node dist/create-platform-integration-account.js \
          --domain payment --provider geniuspay --role subscription-billing --secret-prompt --apply --activate'
 
-   puis la même commande avec `--role merchant-of-record --market CI` (et `SN`, `BF`… pour chaque
-   pays ouvert). Saisissez `pk_… sk_…` séparés par un espace. Un compte dont les clés échouent au
+   puis la même commande avec `--role merchant-of-record` **sans `--market`** : ce compte sert les
+   boutiques de TOUS les pays (un compte propre à un pays, s'il en existe un actif, reste
+   prioritaire). Saisissez `pk_… sk_…` séparés par un espace. Un compte dont les clés échouent au
    test n'est pas activé.
+
+   Devises : GeniusPay encaisse en XOF, EUR et USD. Une boutique dans une autre devise (MAD, CAD)
+   ne propose simplement pas le paiement en ligne — espèces / à la livraison restent.
 3. **Webhook** : dans GeniusPay, créez un webhook vers
    `https://api.korvasuite.com/api/v1/webhooks/geniuspay` avec les événements `payment.*`.
    Son secret `whsec_…` n'est affiché qu'une fois. Sur le serveur, ajoutez d'abord les deux noms

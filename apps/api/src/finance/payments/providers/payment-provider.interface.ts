@@ -56,6 +56,10 @@ export interface PaymentProviderResult {
  */
 export interface PaymentProvider {
   readonly name: string;
+  /** ISO currencies this provider can charge; absent = no known restriction. A storefront whose
+   *  currency is not listed does not offer online payment at all (PublicService), rather than
+   *  sending its customers to a checkout that would refuse them. */
+  readonly supportedCurrencies?: readonly string[];
   createPayment(input: {
     amount: number;
     currency: string;

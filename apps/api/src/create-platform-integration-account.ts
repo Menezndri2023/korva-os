@@ -70,10 +70,11 @@
  *   account whose keys fail is NOT activated.
  *
  * GeniusPay (mobile money, see geniuspay-payment.provider.ts) — one account for KORVA's own
- * billing, and one per country where businesses sell (same keys):
+ * billing, and ONE merchant-of-record account without --market, which serves every country
+ * that has no account of its own (PaymentProviderResolverService):
  *   ... run --rm --no-deps api node dist/create-platform-integration-account.js \
  *     --domain payment --provider geniuspay --role subscription-billing --secret-prompt --apply --activate
- *   ... --domain payment --provider geniuspay --role merchant-of-record --market CI \
+ *   ... --domain payment --provider geniuspay --role merchant-of-record \
  *     --secret-prompt --apply --activate
  */
 import { NestFactory } from '@nestjs/core';

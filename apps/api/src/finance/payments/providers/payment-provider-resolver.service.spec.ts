@@ -275,3 +275,59 @@ describe('PaymentProviderResolverService', () => {
     });
   });
 });
+
+describe('PaymentProviderResolverService — one account for every country', () => {
+  it('falls back to the merchant-of-record account registered without a market', async () => {
+    const findPlatformAccount = jest
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        buildAccount({ market: null, provider: 'manual' }),
+      );
+    const { service } = buildService(findPlatformAccount, 'SN');
+    const provider = await service.resolve({
+      flow: 'commerce',
+      organizationId: ORG_ID,
+    });
+    expect(provider).toBeInstanceOf(ManualPaymentProvider);
+    expect(findPlatformAccount).toHaveBeenNthCalledWith(1, {
+      domain: 'payment',
+      role: 'merchant-of-record',
+      market: 'SN',
+    });
+    expect(findPlatformAccount).toHaveBeenNthCalledWith(2, {
+      domain: 'payment',
+      role: 'merchant-of-record',
+      market: null,
+    });
+  });
+
+  it("keeps a country's own active account first", async () => {
+    const findPlatformAccount = jest
+      .fn()
+      .mockResolvedValueOnce(buildAccount({ market: 'CI' }));
+    const { service } = buildService(findPlatformAccount, 'CI');
+    await service.resolve({ flow: 'commerce', organizationId: ORG_ID });
+    expect(findPlatformAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips an inactive country account for the worldwide one', async () => {
+    const findPlatformAccount = jest
+      .fn()
+      .mockResolvedValueOnce(buildAccount({ market: 'CI', status: 'disabled' }))
+      .mockResolvedValueOnce(buildAccount({ market: null }));
+    const { service } = buildService(findPlatformAccount, 'CI');
+    await expect(
+      service.resolve({ flow: 'commerce', organizationId: ORG_ID }),
+    ).resolves.toBeInstanceOf(ManualPaymentProvider);
+  });
+
+  it('still refuses when neither exists', async () => {
+    const findPlatformAccount = jest.fn().mockResolvedValue(null);
+    const { service } = buildService(findPlatformAccount, 'MA');
+    await expectUnprocessableCode(
+      service.resolve({ flow: 'commerce', organizationId: ORG_ID }),
+      'PAYMENT_PROVIDER_NOT_CONFIGURED',
+    );
+  });
+});

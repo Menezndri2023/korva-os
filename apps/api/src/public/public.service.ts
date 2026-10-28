@@ -292,6 +292,7 @@ export class PublicService {
     }
     const onlineAvailable = await this.isOnlinePaymentAvailable(
       organization.id as string,
+      organization.currency,
     );
     if (onlineAvailable) {
       return configured;
@@ -302,6 +303,7 @@ export class PublicService {
 
   private async isOnlinePaymentAvailable(
     organizationId: string,
+    currency: string,
   ): Promise<boolean> {
     // A paid-plan feature (PLAN_FEATURE_MIN_PLAN.online_payment): a free organization's
     // storefront offers cash only, and initiateOnlinePayment — which goes through here — is
@@ -309,11 +311,16 @@ export class PublicService {
     const plan = await this.subscriptionsService.getActivePlan(organizationId);
     if (!planHasFeature(plan.key, 'online_payment')) return false;
     try {
-      await this.paymentProviderResolver.resolve({
+      const provider = await this.paymentProviderResolver.resolve({
         flow: 'commerce',
         organizationId,
       });
-      return true;
+      // GeniusPay charges XOF, EUR and USD: a shop selling in MAD or CAD would send its customers
+      // to a checkout that refuses them — it keeps cash/on-delivery instead.
+      return (
+        !provider.supportedCurrencies ||
+        provider.supportedCurrencies.includes(currency.toUpperCase())
+      );
     } catch {
       return false;
     }
