@@ -16,7 +16,9 @@ import { CounterPaymentsService } from './counter-payments.service';
 @ApiTags('counter-payments')
 @Controller('counter-payments')
 export class CounterPaymentsController {
-  constructor(private readonly counterPaymentsService: CounterPaymentsService) {}
+  constructor(
+    private readonly counterPaymentsService: CounterPaymentsService,
+  ) {}
 
   @RequirePermissions('payments.read')
   @Get()

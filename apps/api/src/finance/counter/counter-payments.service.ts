@@ -62,7 +62,8 @@ export class CounterPaymentsService {
     userId: string,
     input: CreateCounterPaymentInput,
   ): Promise<CounterPayment> {
-    const organization = await this.organizationsService.getById(organizationId);
+    const organization =
+      await this.organizationsService.getById(organizationId);
     let provider;
     try {
       provider = await this.paymentProviderResolver.resolve({
@@ -77,7 +78,9 @@ export class CounterPaymentsService {
     }
     if (
       provider.supportedCurrencies &&
-      !provider.supportedCurrencies.includes(organization.currency.toUpperCase())
+      !provider.supportedCurrencies.includes(
+        organization.currency.toUpperCase(),
+      )
     ) {
       throw new BadRequestException({
         code: 'CURRENCY_NOT_CHARGEABLE',
@@ -128,7 +131,10 @@ export class CounterPaymentsService {
   }
 
   /** The cashier's screen polls this: an unresolved payment is checked with GeniusPay first. */
-  async get(organizationId: string, paymentId: string): Promise<CounterPayment> {
+  async get(
+    organizationId: string,
+    paymentId: string,
+  ): Promise<CounterPayment> {
     let payment = await this.findCounterPayment(organizationId, paymentId);
     if (
       (payment.status === 'pending' || payment.status === 'processing') &&
@@ -147,12 +153,18 @@ export class CounterPaymentsService {
       }
     }
     const invoice = await this.invoiceModel
-      .findOne({ _id: payment.invoiceId, organizationId: payment.organizationId })
+      .findOne({
+        _id: payment.invoiceId,
+        organizationId: payment.organizationId,
+      })
       .exec();
     return this.toView(payment, invoice);
   }
 
-  async listRecent(organizationId: string, limit = 20): Promise<CounterPayment[]> {
+  async listRecent(
+    organizationId: string,
+    limit = 20,
+  ): Promise<CounterPayment[]> {
     const payments = await this.paymentModel
       .find({
         organizationId: new Types.ObjectId(organizationId),
@@ -167,7 +179,9 @@ export class CounterPaymentsService {
         _id: { $in: payments.map((payment) => payment.invoiceId) },
       })
       .exec();
-    const byId = new Map(invoices.map((invoice) => [String(invoice._id), invoice]));
+    const byId = new Map(
+      invoices.map((invoice) => [String(invoice._id), invoice]),
+    );
     return payments.map((payment) =>
       this.toView(payment, byId.get(String(payment.invoiceId)) ?? null),
     );
@@ -196,7 +210,9 @@ export class CounterPaymentsService {
   }
 
   /** Found by tag, created on the first counter sale. */
-  private async walkInContact(organizationId: string): Promise<ContactDocument> {
+  private async walkInContact(
+    organizationId: string,
+  ): Promise<ContactDocument> {
     const existing = await this.contactModel
       .findOne({
         organizationId: new Types.ObjectId(organizationId),
@@ -225,7 +241,9 @@ export class CounterPaymentsService {
       currency: payment.currency,
       status: payment.status,
       checkoutUrl: payment.checkoutUrl,
-      createdAt: (payment as unknown as { createdAt: Date }).createdAt.toISOString(),
+      createdAt: (
+        payment as unknown as { createdAt: Date }
+      ).createdAt.toISOString(),
     };
   }
 }

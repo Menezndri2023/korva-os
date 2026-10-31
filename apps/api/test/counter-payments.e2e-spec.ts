@@ -181,7 +181,10 @@ describe('Caisse — QR mobile money (e2e)', () => {
     });
     expect(first.invoiceNumber).not.toBe('');
     // No e-mail at the counter: GeniusPay's page asks the customer for their number itself.
-    expect(lastPaymentBody.value).toMatchObject({ amount: 5000, currency: 'XOF' });
+    expect(lastPaymentBody.value).toMatchObject({
+      amount: 5000,
+      currency: 'XOF',
+    });
     expect(lastPaymentBody.value).not.toHaveProperty('customer');
     expect(String(lastPaymentBody.value?.success_url)).toContain(shop.org.slug);
   });
@@ -189,7 +192,9 @@ describe('Caisse — QR mobile money (e2e)', () => {
   it('sees the payment go through, pays the invoice and credits the Solde', async () => {
     const checked = asSuccess<CounterPayment>(
       (
-        await staff(request(server).get(`/api/v1/counter-payments/${first.id}`)).expect(200)
+        await staff(
+          request(server).get(`/api/v1/counter-payments/${first.id}`),
+        ).expect(200)
       ).body,
     );
     expect(checked.status).toBe('completed');
@@ -198,7 +203,11 @@ describe('Caisse — QR mobile money (e2e)', () => {
     const invoice = await connection
       .collection('invoices')
       .findOne({ _id: new Types.ObjectId(first.invoiceId) });
-    expect(invoice).toMatchObject({ status: 'paid', total: 5000, amountPaid: 5000 });
+    expect(invoice).toMatchObject({
+      status: 'paid',
+      total: 5000,
+      amountPaid: 5000,
+    });
 
     // 5 000 − 150 (GeniusPay) − 150 (3 % on Free) = 4 700
     const wallet = asSuccess<{ available: number }>(
@@ -218,13 +227,16 @@ describe('Caisse — QR mobile money (e2e)', () => {
     expect(second.label).toBe('Vente au comptoir');
     const checked = asSuccess<CounterPayment>(
       (
-        await staff(request(server).get(`/api/v1/counter-payments/${second.id}`)).expect(200)
+        await staff(
+          request(server).get(`/api/v1/counter-payments/${second.id}`),
+        ).expect(200)
       ).body,
     );
     expect(checked.status).toBe('pending');
 
     const list = asSuccess<CounterPayment[]>(
-      (await staff(request(server).get('/api/v1/counter-payments')).expect(200)).body,
+      (await staff(request(server).get('/api/v1/counter-payments')).expect(200))
+        .body,
     );
     expect(list.map((p) => [p.amount, p.status])).toEqual([
       [2500, 'pending'],
@@ -241,25 +253,41 @@ describe('Caisse — QR mobile money (e2e)', () => {
   });
 
   it('only shows counter sales, and only the business’s own', async () => {
-    await staff(request(server).get(`/api/v1/counter-payments/${new Types.ObjectId().toString()}`)).expect(404);
-    await staff(request(server).get('/api/v1/counter-payments/not-an-id')).expect(404);
+    await staff(
+      request(server).get(
+        `/api/v1/counter-payments/${new Types.ObjectId().toString()}`,
+      ),
+    ).expect(404);
+    await staff(
+      request(server).get('/api/v1/counter-payments/not-an-id'),
+    ).expect(404);
 
     const other = await business('owner@autre.ci', 'XOF');
-    await other.staff(request(server).get(`/api/v1/counter-payments/${first.id}`)).expect(404);
+    await other
+      .staff(request(server).get(`/api/v1/counter-payments/${first.id}`))
+      .expect(404);
     const list = asSuccess<CounterPayment[]>(
-      (await other.staff(request(server).get('/api/v1/counter-payments')).expect(200)).body,
+      (
+        await other
+          .staff(request(server).get('/api/v1/counter-payments'))
+          .expect(200)
+      ).body,
     );
     expect(list).toEqual([]);
   });
 
   it('refuses an amount of zero, and a currency GeniusPay cannot charge', async () => {
-    await staff(request(server).post('/api/v1/counter-payments')).send({ amount: 0 }).expect(400);
+    await staff(request(server).post('/api/v1/counter-payments'))
+      .send({ amount: 0 })
+      .expect(400);
 
     const moroccan = await business('owner@salon.ma', 'MAD');
     const res = await moroccan
       .staff(request(server).post('/api/v1/counter-payments'))
       .send({ amount: 100 })
       .expect(400);
-    expect((res.body as { error: { code: string } }).error.code).toBe('CURRENCY_NOT_CHARGEABLE');
+    expect((res.body as { error: { code: string } }).error.code).toBe(
+      'CURRENCY_NOT_CHARGEABLE',
+    );
   });
 });

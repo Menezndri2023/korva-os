@@ -24,10 +24,7 @@ import {
 // Order/Booking/Contact registrations for the identical class of problem — see recurring-
 // billing.service.ts/recurring-billing-scheduler.service.ts for the two read-only consumers.
 import { Offer, OfferSchema } from '../catalog/offers/schemas/offer.schema';
-import {
-  Contact,
-  ContactSchema,
-} from '../crm/contacts/schemas/contact.schema';
+import { Contact, ContactSchema } from '../crm/contacts/schemas/contact.schema';
 
 import { QuotesRepository } from './quotes/quotes.repository';
 import { QuotesService } from './quotes/quotes.service';
