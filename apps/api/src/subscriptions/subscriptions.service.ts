@@ -31,6 +31,9 @@ import {
 } from '../organizations/schemas/organization.schema';
 import { EventBusService } from '../core/events/event-bus.service';
 import { MembershipsService } from '../identity/memberships/memberships.service';
+import { SubscriptionInvoicesRepository } from './subscription-invoices.repository';
+import type { SubscriptionInvoiceDocument } from './schemas/subscription-invoice.schema';
+import { CountersService } from '../core/counters/counters.service';
 
 function addOneMonth(date: Date): Date {
   const result = new Date(date);
@@ -84,6 +87,8 @@ export class SubscriptionsService {
     // actually collect. Read through ConfigService rather than process.env because DI genuinely
     // exists here, unlike storage.constants.ts which runs before Nest's config layer.
     private readonly configService: ConfigService,
+    private readonly subscriptionInvoicesRepository: SubscriptionInvoicesRepository,
+    private readonly countersService: CountersService,
   ) {}
 
   /**
@@ -355,9 +360,9 @@ export class SubscriptionsService {
    */
   async changePlan(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     planKey: string,
-    options: { manualPayment?: boolean } = {},
+    options: { manualPayment?: boolean; prepaid?: boolean } = {},
   ): Promise<SubscriptionDocument> {
     // Resolved in the organization's own currency: a tier the platform prices in EUR but not in
     // this tenant's currency is simply not sellable to them, and PLAN_NOT_FOUND says so rather
@@ -383,6 +388,7 @@ export class SubscriptionsService {
     );
     if (
       !options.manualPayment &&
+      !options.prepaid &&
       plan.priceAmount > 0 &&
       !isCurrencyChargeable(plan.priceCurrency, chargeable)
     ) {
@@ -403,8 +409,10 @@ export class SubscriptionsService {
     // organization could go from Business (unlimited) to free (one seat) and keep every member
     // indefinitely. `-1` means unlimited and must not be read as a limit of minus one, which
     // would refuse every upgrade to the top tier.
+    // Already paid for (a plan-change invoice): refusing now would keep the money and not the
+    // plan. Seats are checked when the change is requested, before any payment.
     const seatLimit = plan.limits?.seats ?? -1;
-    if (seatLimit !== -1) {
+    if (seatLimit !== -1 && !options.prepaid) {
       const seatsUsed =
         await this.membershipsService.countSeatsForOrganization(organizationId);
       if (seatsUsed > seatLimit) {
@@ -450,7 +458,10 @@ export class SubscriptionsService {
     const previousPlan = existing
       ? await this.plansService.getById(existing.planId.toString())
       : undefined;
+    // A prepaid change was priced net of the unused paid period when its invoice was issued:
+    // carrying a proration on top would count that credit twice.
     if (
+      !options.prepaid &&
       existing &&
       previousPlan &&
       existing.currentPeriodEnd.getTime() > now.getTime()
@@ -500,6 +511,7 @@ export class SubscriptionsService {
         ...(options.manualPayment
           ? { manualPayment: true, by: 'platform_admin' }
           : {}),
+        ...(options.prepaid ? { prepaid: true } : {}),
       },
     });
 
@@ -510,6 +522,171 @@ export class SubscriptionsService {
     });
 
     return updated;
+  }
+
+  /**
+   * What a business gets when it picks a plan itself (POST /subscriptions/change-plan): pay
+   * first, then the plan opens. A free plan — or a change the unused paid period fully covers —
+   * applies at once. A paid one issues a plan-change invoice (the new plan's price, minus the
+   * unused part of the period already paid) and changes nothing until that invoice is settled
+   * (SubscriptionBillingService.settleAsPaid -> applyPaidPlanChange). Before 2026-10-31 the plan
+   * switched immediately and was billed at renewal, so a business could use Business for a
+   * month — or indefinitely, by switching back and forth — without paying.
+   */
+  async requestPlanChange(
+    organizationId: string,
+    userId: string,
+    planKey: string,
+  ): Promise<
+    | SubscriptionDocument
+    | { paymentRequired: true; invoice: SubscriptionInvoiceDocument }
+  > {
+    const plan = await this.plansService.getByKey(
+      planKey,
+      await this.organizationCurrency(organizationId),
+    );
+    if (plan.priceAmount <= 0) {
+      return this.changePlan(organizationId, userId, planKey);
+    }
+
+    const chargeable = parseChargeableCurrencies(
+      this.configService.get<string>('BILLING_CHARGEABLE_CURRENCIES'),
+    );
+    if (!isCurrencyChargeable(plan.priceCurrency, chargeable)) {
+      throw new UnprocessableEntityException({
+        code: 'CURRENCY_NOT_CHARGEABLE',
+        message: `KORVA cannot yet collect subscription payments in ${plan.priceCurrency}. Paid plans are available in ${chargeable.join(', ')} for now; the free plan is available everywhere.`,
+        details: { currency: plan.priceCurrency, chargeable },
+      });
+    }
+    const seatLimit = plan.limits?.seats ?? -1;
+    if (seatLimit !== -1) {
+      const seatsUsed =
+        await this.membershipsService.countSeatsForOrganization(organizationId);
+      if (seatsUsed > seatLimit) {
+        throw new ConflictException({
+          code: 'SEAT_LIMIT_EXCEEDED_BY_PLAN',
+          message: `The "${plan.name}" plan includes ${seatLimit} seat(s) and this organization uses ${seatsUsed}. Remove ${seatsUsed - seatLimit} member(s) before changing plan.`,
+          details: { plan: plan.key, seatLimit, seatsUsed },
+        });
+      }
+    }
+
+    const existing = await this.getForOrganization(organizationId);
+    if (
+      existing.planId.toString() === plan._id.toString() &&
+      existing.status === 'active'
+    ) {
+      // Already on it (a double click): nothing to pay, nothing to change.
+      return existing;
+    }
+
+    const now = new Date();
+    const credit = await this.unusedPaidCredit(
+      existing,
+      plan.priceCurrency,
+      now,
+    );
+    const amount = Math.max(
+      0,
+      Math.round((plan.priceAmount - credit) * 100) / 100,
+    );
+    if (amount === 0) {
+      return this.changePlan(organizationId, userId, planKey);
+    }
+
+    // One pending change at a time: picking another plan replaces the unpaid one.
+    await this.subscriptionInvoicesRepository.voidOpenPlanChanges(
+      organizationId,
+    );
+    const invoice = await this.subscriptionInvoicesRepository.issueForPeriod({
+      organizationId: new Types.ObjectId(organizationId),
+      subscriptionId: existing._id,
+      planId: plan._id,
+      kind: 'plan_change',
+      number: await this.countersService.nextFormatted(
+        organizationId,
+        'subscription-invoice',
+        'ABO',
+      ),
+      periodStart: now,
+      periodEnd: addOneMonth(now),
+      amount,
+      currency: plan.priceCurrency,
+      issuedAt: now,
+      dueAt: new Date(now.getTime() + 7 * 86_400_000),
+    });
+    if (!invoice) {
+      throw new ConflictException({
+        code: 'PLAN_CHANGE_IN_PROGRESS',
+        message: 'A plan change was just requested — try again in a moment',
+      });
+    }
+
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'SETTINGS_CHANGE',
+      entity: 'subscription',
+      entityId: existing.id as string,
+      metadata: {
+        reason: 'plan_change_payment_required',
+        plan: planKey,
+        invoiceNumber: invoice.number,
+        amount,
+        credit,
+      },
+    });
+    return { paymentRequired: true, invoice };
+  }
+
+  /** Called once a plan-change invoice is paid: the plan it was issued for opens now. */
+  async applyPaidPlanChange(
+    invoice: SubscriptionInvoiceDocument,
+  ): Promise<SubscriptionDocument> {
+    const plan = await this.plansService.getById(invoice.planId.toString());
+    return this.changePlan(
+      invoice.organizationId.toString(),
+      undefined,
+      plan.key,
+      {
+        prepaid: true,
+      },
+    );
+  }
+
+  /** Cancels a requested, still unpaid plan change. */
+  async cancelPendingPlanChange(organizationId: string): Promise<number> {
+    return this.subscriptionInvoicesRepository.voidOpenPlanChanges(
+      organizationId,
+    );
+  }
+
+  /**
+   * The unused part of the period the business actually PAID for — read from the paid invoice
+   * covering today, never from the plan's list price (a trial or a manual arrangement paid
+   * nothing, so it credits nothing).
+   */
+  private async unusedPaidCredit(
+    subscription: SubscriptionDocument,
+    currency: string,
+    now: Date,
+  ): Promise<number> {
+    const paid = await this.subscriptionInvoicesRepository.findPaidCovering(
+      subscription.id as string,
+      now,
+    );
+    if (
+      !paid ||
+      paid.currency !== currency ||
+      paid.planId.toString() !== subscription.planId.toString()
+    ) {
+      return 0;
+    }
+    const total = paid.periodEnd.getTime() - paid.periodStart.getTime();
+    if (total <= 0) return 0;
+    const left = Math.max(0, paid.periodEnd.getTime() - now.getTime());
+    return Math.round(((paid.amount * left) / total) * 100) / 100;
   }
 
   /**

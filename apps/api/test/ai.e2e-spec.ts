@@ -20,7 +20,10 @@ import { CancelBookingTool } from '../src/ai/tools/cancel-booking.tool';
 import { BookingsService } from '../src/booking/bookings/bookings.service';
 import type { AiTool } from '../src/ai/tools/tool.interface';
 import { AuditService } from '../src/audit/audit.service';
-import { putOrganizationOnPlan } from './support/plan-tier';
+import {
+  putOrganizationOnPlan,
+  payPendingPlanChange,
+} from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -895,6 +898,7 @@ describe('AI module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ planKey: 'pro' })
         .expect(201);
+      await payPendingPlanChange(app, organizationId);
 
       ({ accessToken: accessTokenB, organizationId: organizationIdB } =
         await registerFullOrg('ai-p4-b@korva.test', 'AI P4 Org B'));
@@ -929,6 +933,7 @@ describe('AI module (e2e)', () => {
         .set('X-Organization-Id', organizationIdB)
         .send({ planKey: 'pro' })
         .expect(201);
+      await payPendingPlanChange(app, organizationIdB);
     });
 
     /** Creates a fresh booking + the AI pending action to cancel it, on a never-reused hour. */

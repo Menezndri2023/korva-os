@@ -204,6 +204,8 @@ describe('SubscriptionsService — product overrides stay within the plan', () =
       // BILLING_CHARGEABLE_CURRENCIES unset: every supported currency stays chargeable, so the
       // guard never fires and these tests keep asserting what they were written for.
       { get: () => undefined } as never,
+      {} as never,
+      { nextFormatted: jest.fn().mockResolvedValue('ABO-0001') } as never,
     );
     return { service, update };
   }

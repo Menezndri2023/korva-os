@@ -5,7 +5,10 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
-import { putOrganizationOnPlan } from './support/plan-tier';
+import {
+  putOrganizationOnPlan,
+  payPendingPlanChange,
+} from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -341,6 +344,7 @@ describe('Customer Service module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ planKey: 'business' })
         .expect(201);
+      await payPendingPlanChange(app, organizationId);
       contactId = await createContact(ownerToken, organizationId, {
         email: 'rbac-contact@customer.test',
       });

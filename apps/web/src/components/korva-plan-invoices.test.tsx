@@ -16,6 +16,7 @@ const postMock = vi.mocked(apiClient.post);
 const invoice = {
   id: "inv-1",
   number: "ABO-0003",
+  kind: "renewal",
   status: "open",
   amount: 24900,
   currency: "XOF",
@@ -54,5 +55,16 @@ describe("KorvaPlanInvoices", () => {
     fireEvent.click(screen.getByRole("button", { name: "Payer par mobile money ou carte" }));
     await waitFor(() => expect(assign).toHaveBeenCalledWith("https://pay.genius.ci/c/1"));
     vi.unstubAllGlobals();
+  });
+
+  it("labels a plan change and lets the business drop it", async () => {
+    getMock.mockImplementation(async (path: string) =>
+      path === "/wallet" ? { currency: "XOF", available: 0 } : [{ ...invoice, kind: "plan_change" }],
+    );
+    postMock.mockResolvedValue({ cancelled: 1 });
+    renderWithProviders(<KorvaPlanInvoices />);
+    expect(await screen.findByText(/activé dès le paiement/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Annuler ce changement" }));
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith("/subscriptions/plan-change/cancel"));
   });
 });

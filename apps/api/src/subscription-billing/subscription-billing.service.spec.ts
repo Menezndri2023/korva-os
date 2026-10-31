@@ -121,6 +121,9 @@ function buildHarness(
     refundSubscriptionPaidTwice: jest.fn().mockResolvedValue(true),
     subscriptionAutopayEnabled: jest.fn().mockResolvedValue(true),
   };
+  const subscriptionsService = {
+    applyPaidPlanChange: jest.fn().mockResolvedValue({}),
+  };
   const service = new SubscriptionBillingService(
     invoices as unknown as SubscriptionInvoicesRepository,
     subscriptions as unknown as SubscriptionsRepository,
@@ -131,6 +134,7 @@ function buildHarness(
     } as unknown as ConfigService,
     audit as unknown as AuditService,
     wallet as unknown as WalletService,
+    subscriptionsService as never,
   );
   return {
     service,

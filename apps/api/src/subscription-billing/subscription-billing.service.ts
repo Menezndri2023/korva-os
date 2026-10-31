@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SubscriptionInvoicesRepository } from '../subscriptions/subscription-invoices.repository';
 import { SubscriptionsRepository } from '../subscriptions/subscriptions.repository';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { PaymentMandatesRepository } from '../subscriptions/payment-mandates.repository';
 import { PaymentProviderResolverService } from '../finance/payments/providers/payment-provider-resolver.service';
 import { AuditService } from '../audit/audit.service';
@@ -43,6 +44,7 @@ export class SubscriptionBillingService {
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
     private readonly walletService: WalletService,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   /**
@@ -267,6 +269,8 @@ export class SubscriptionBillingService {
     }
     // A checkout the payer may be completing right now is left alone.
     if (invoice.providerReference) return false;
+    // A plan change is paid by the person who asked for it, never automatically.
+    if (invoice.kind === 'plan_change') return false;
     try {
       return await this.debitAndSettle(organizationId, invoice, 'auto');
     } catch (error) {
@@ -391,6 +395,12 @@ export class SubscriptionBillingService {
         ...context,
       },
     });
+
+    // A plan the business picked opens once it is paid for (pay first, then the plan).
+    if (paid.kind === 'plan_change') {
+      await this.subscriptionsService.applyPaidPlanChange(paid);
+      return true;
+    }
 
     // Paying the overdue invoice is what ends a suspension. No-op (null) when the subscription
     // was never past_due, which is the common case — an invoice paid on time.

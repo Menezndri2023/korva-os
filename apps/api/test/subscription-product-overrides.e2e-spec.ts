@@ -5,7 +5,10 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
-import { putOrganizationOnPlan } from './support/plan-tier';
+import {
+  putOrganizationOnPlan,
+  payPendingPlanChange,
+} from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -114,6 +117,7 @@ describe('Subscription product overrides (e2e)', () => {
       .set('X-Organization-Id', organizationId)
       .send({ planKey: 'starter' })
       .expect(201);
+    await payPendingPlanChange(app, organizationId);
 
     await request(server)
       .patch('/api/v1/subscriptions/product-overrides')
@@ -280,6 +284,7 @@ describe('Subscription product overrides (e2e)', () => {
       .set('X-Organization-Id', organizationId)
       .send({ planKey: 'pro' })
       .expect(201);
+    await payPendingPlanChange(app, organizationId);
 
     await request(server)
       .patch('/api/v1/subscriptions/product-overrides')
@@ -301,6 +306,7 @@ describe('Subscription product overrides (e2e)', () => {
       .set('X-Organization-Id', organizationId)
       .send({ planKey: 'starter' })
       .expect(201);
+    await payPendingPlanChange(app, organizationId);
 
     const res = await request(server)
       .get('/api/v1/organizations/me')

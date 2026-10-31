@@ -33,6 +33,11 @@ export class SubscriptionInvoice {
   @Prop({ required: true })
   number!: string;
 
+  /** 'renewal': the next period of the current plan (issued by the period sweep).
+   *  'plan_change': paying for a plan the business picked — the plan opens once it is paid. */
+  @Prop({ type: String, enum: ['renewal', 'plan_change'], default: 'renewal' })
+  kind!: 'renewal' | 'plan_change';
+
   @Prop({ type: String, default: 'open' })
   status!: SubscriptionInvoiceStatus;
 

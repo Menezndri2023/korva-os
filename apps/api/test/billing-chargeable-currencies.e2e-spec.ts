@@ -5,7 +5,10 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
-import { putOrganizationOnPlan } from './support/plan-tier';
+import {
+  putOrganizationOnPlan,
+  payPendingPlanChange,
+} from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -160,6 +163,7 @@ describe('Billing — chargeable currencies (e2e)', () => {
     );
 
     await changePlan(accessToken, organizationId, 'starter').expect(201);
+    await payPendingPlanChange(app, organizationId);
 
     const summary = await request(server)
       .get('/api/v1/subscriptions/me')

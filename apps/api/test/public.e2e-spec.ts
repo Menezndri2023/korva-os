@@ -5,7 +5,10 @@ import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
-import { putOrganizationOnPlan } from './support/plan-tier';
+import {
+  putOrganizationOnPlan,
+  payPendingPlanChange,
+} from './support/plan-tier';
 
 interface ApiSuccess<T> {
   success: true;
@@ -743,13 +746,6 @@ describe('Public storefront API (e2e)', () => {
       // Paid-plan features are scaffolding here, not what is tested (PLAN_FEATURE_MIN_PLAN).
       await putOrganizationOnPlan(connection, organization.id, 'starter');
 
-      await request(server)
-        .post('/api/v1/subscriptions/change-plan')
-        .set('Authorization', `Bearer ${accessToken}`)
-        .set('X-Organization-Id', organization.id)
-        .send({ planKey: 'starter' })
-        .expect(201);
-
       const res = await request(server)
         .get(`/api/v1/public/${organization.slug}`)
         .expect(200);
@@ -823,6 +819,7 @@ describe('Public storefront API (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ planKey: 'business' })
         .expect(201);
+      await payPendingPlanChange(app, organizationId);
 
       await request(server)
         .patch('/api/v1/organizations/me')
@@ -897,6 +894,7 @@ describe('Public storefront API (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ planKey: 'starter' })
         .expect(201);
+      await payPendingPlanChange(app, organizationId);
 
       const res = await request(server)
         .patch('/api/v1/organizations/me')
@@ -920,6 +918,7 @@ describe('Public storefront API (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ planKey: 'pro' })
         .expect(201);
+      await payPendingPlanChange(app, organizationId);
 
       await request(server)
         .patch('/api/v1/organizations/me')

@@ -1,6 +1,9 @@
 import { Types } from 'mongoose';
 import type { Connection } from 'mongoose';
+import type { INestApplication } from '@nestjs/common';
+import { getConnectionToken } from '@nestjs/mongoose';
 import type { PlanKey } from '@korva/types';
+import { SubscriptionBillingService } from '../../src/subscription-billing/subscription-billing.service';
 
 /**
  * Points an organization's subscription at a plan tier, by writing the collections directly.
@@ -67,4 +70,34 @@ export async function putOrganizationOnPlan(
       `putOrganizationOnPlan: organization ${organizationId} has no subscription`,
     );
   }
+}
+
+/**
+ * Settles the plan-change invoice POST /subscriptions/change-plan just issued, through the real
+ * settlement path (SubscriptionBillingService.settleAsPaid -> applyPaidPlanChange). Since
+ * 2026-10-31 a paid plan opens only once paid; specs that pick a paid plan through the API as
+ * scaffolding call this right after, standing in for the payer completing the checkout.
+ */
+export async function payPendingPlanChange(
+  app: INestApplication,
+  organizationId: string,
+): Promise<void> {
+  const connection = app.get<Connection>(getConnectionToken());
+  const invoice = await connection.collection('subscription_invoices').findOne({
+    organizationId: new Types.ObjectId(organizationId),
+    kind: 'plan_change',
+    status: 'open',
+  });
+  // None: the change applied at once (a downgrade the unused paid period fully covers).
+  if (!invoice) return;
+  await app
+    .get(SubscriptionBillingService)
+    .settleAsPaid(
+      organizationId,
+      invoice._id.toString(),
+      invoice.number as string,
+      {
+        collection: 'e2e',
+      },
+    );
 }

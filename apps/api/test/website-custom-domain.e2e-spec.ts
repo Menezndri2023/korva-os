@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
 import request from 'supertest';
+import { payPendingPlanChange } from './support/plan-tier';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
@@ -97,6 +98,7 @@ describe('Website custom domain (Phase E3, e2e)', () => {
       .set('X-Organization-Id', organizationId)
       .send({ planKey: 'starter' })
       .expect(201);
+    await payPendingPlanChange(app, organizationId);
 
     await request(server)
       .patch('/api/v1/organizations/me')

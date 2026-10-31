@@ -57,6 +57,10 @@ export function KorvaPlanInvoices() {
     mutationFn: (id: string) => apiClient.post(`/subscriptions/invoices/${id}/pay-from-wallet`),
     onSuccess: refresh,
   });
+  const cancelChange = useMutation({
+    mutationFn: () => apiClient.post("/subscriptions/plan-change/cancel"),
+    onSuccess: refresh,
+  });
   const verify = useMutation({
     mutationFn: (id: string) =>
       apiClient.post<{ invoiceNumber: string; status: string }>(`/subscriptions/invoices/${id}/verify`),
@@ -103,12 +107,18 @@ export function KorvaPlanInvoices() {
             <li key={invoice.id} className="space-y-2 py-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>
+                  {invoice.kind === "plan_change" && (
+                    <span className="block text-xs font-medium text-text">
+                      Changement de formule — activé dès le paiement
+                    </span>
+                  )}
                   <span className="font-medium">{invoice.number}</span>{" "}
                   <span className="tabular-nums">{formatCurrency(invoice.amount, invoice.currency)}</span>
                   <span className="block text-xs text-text-muted">
                     Du {new Date(invoice.periodStart).toLocaleDateString("fr-FR")} au{" "}
                     {new Date(invoice.periodEnd).toLocaleDateString("fr-FR")}
                     {invoice.status === "open" &&
+                      invoice.kind !== "plan_change" &&
                       ` — à régler avant le ${new Date(invoice.dueAt).toLocaleDateString("fr-FR")}`}
                   </span>
                 </span>
@@ -129,6 +139,17 @@ export function KorvaPlanInvoices() {
                   >
                     Payer avec mon Solde ({formatCurrency(available, wallet.data?.currency ?? invoice.currency)})
                   </Button>
+                  {invoice.kind === "plan_change" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={cancelChange.isPending}
+                      disabled={busy}
+                      onClick={() => cancelChange.mutate()}
+                    >
+                      Annuler ce changement
+                    </Button>
+                  )}
                 </div>
               )}
             </li>

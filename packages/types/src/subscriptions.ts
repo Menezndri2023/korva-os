@@ -128,6 +128,9 @@ export interface SubscriptionInvoice {
   planId: string;
   /** Per-organization sequence, "ABO-0001" (CountersService, key 'subscription-invoice'). */
   number: string;
+  /** 'renewal': the next period of the current plan. 'plan_change': paying for a plan the
+   *  business picked — that plan opens once this is paid. */
+  kind: "renewal" | "plan_change";
   status: SubscriptionInvoiceStatus;
   /** The period this invoice covers — equal to the Subscription period it was issued for. */
   periodStart: string;

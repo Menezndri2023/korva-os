@@ -62,7 +62,7 @@ import {
   type CreateWebhookSubscriptionInput,
   type UpdateOrganizationInput,
 } from "@korva/validation";
-import { Badge, Button, Dialog, Input, Select } from "@korva/ui";
+import { Badge, Button, Dialog, Input, Notice, Select } from "@korva/ui";
 import type { BadgeVariant } from "@korva/ui";
 import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
 import { OrderReceptionSettings } from "@/components/order-reception-settings";
@@ -353,10 +353,12 @@ export default function SettingsPage() {
     },
   });
 
+  // A paid plan opens once paid: the answer is then the invoice to settle, shown in
+  // KorvaPlanInvoices right below the plans.
   const changePlanMutation = useMutation({
     mutationFn: (planKey: string) =>
-      apiClient.post("/subscriptions/change-plan", { planKey }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["subscriptions", "me"] }),
+      apiClient.post<{ paymentRequired?: boolean }>("/subscriptions/change-plan", { planKey }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["subscriptions"] }),
   });
 
   // Organization profile edit (name/legalName/type/country/currency/timezone/language/logo/
@@ -1314,6 +1316,12 @@ export default function SettingsPage() {
                 ))}
               </div>
 
+              {changePlanMutation.data?.paymentRequired && (
+                <Notice tone="accent">
+                  Réglez la facture ci-dessous : la nouvelle formule s&apos;active dès le paiement
+                  confirmé.
+                </Notice>
+              )}
               {changePlanMutation.isError && (
                 <p className="text-xs text-destructive">
                   {changePlanMutation.error instanceof ApiError

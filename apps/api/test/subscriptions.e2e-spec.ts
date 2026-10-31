@@ -12,7 +12,10 @@ import {
   SUBSCRIPTION_PERIOD_QUEUE_NAME,
   SUBSCRIPTION_PERIOD_SCHEDULER_ID,
 } from '../src/subscriptions/subscription-period-scheduler.service';
-import { putOrganizationOnPlan } from './support/plan-tier';
+import {
+  putOrganizationOnPlan,
+  payPendingPlanChange,
+} from './support/plan-tier';
 import { UsageRepository } from '../src/subscriptions/usage.repository';
 import { PLAN_LIMITS, PLAN_PRICES } from '@korva/types';
 import {
@@ -741,8 +744,8 @@ describe('Subscriptions module (e2e)', () => {
     });
   });
 
-  describe('proration on plan change', () => {
-    it('a mid-period upgrade stores a positive prorationAmount; a same-plan "change" right after a fresh period stores null', async () => {
+  describe('pay first, then the plan', () => {
+    it('a paid plan opens only once its invoice is paid, and the next upgrade credits the unused paid month', async () => {
       const { accessToken, organizationId } = await registerOrgAndToken(
         'proration-e2e@korva.test',
         'Proration E2E Org',
@@ -754,21 +757,75 @@ describe('Subscriptions module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ planKey: 'pro' })
         .expect(201);
-      const body = asSuccess<
-        SubscriptionPayload & {
-          prorationAmount: number | null;
-          prorationCurrency: string | null;
-        }
-      >(res.body);
-      // A brand-new "free" subscription's period just started (createDefaultSubscription runs
-      // moments before this request in the same test), so there is a full month remaining —
-      // proration should be close to the full price delta (free=0 -> pro).
-      //
-      // Derived from PLAN_PRICES rather than written out: this read `> 90` against a Pro price
-      // of 99 until 2026-10-13, and silently became a failing test the moment the catalog was
-      // repriced. Expressed as a fraction of the real price, it follows the catalog instead.
-      expect(body.prorationCurrency).toBe('EUR');
-      expect(body.prorationAmount).toBeGreaterThan(PLAN_PRICES.EUR.pro * 0.9);
+      // Pay first, then the plan: a free organization paid nothing, so it owes Pro's full price,
+      // and stays on free until that invoice is settled.
+      const pending = asSuccess<{
+        paymentRequired: boolean;
+        invoice: {
+          kind: string;
+          amount: number;
+          currency: string;
+          status: string;
+        };
+      }>(res.body);
+      expect(pending.paymentRequired).toBe(true);
+      expect(pending.invoice).toMatchObject({
+        kind: 'plan_change',
+        amount: PLAN_PRICES.EUR.pro,
+        currency: 'EUR',
+        status: 'open',
+      });
+      const summary = () =>
+        request(server)
+          .get('/api/v1/subscriptions/me')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .expect(200);
+      expect(
+        asSuccess<{ plan: { key: string } }>((await summary()).body).plan.key,
+      ).toBe('free');
+
+      // Picking another plan replaces the unpaid change rather than piling up invoices.
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'starter' })
+        .expect(201);
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'pro' })
+        .expect(201);
+      expect(
+        await connection.collection('subscription_invoices').countDocuments({
+          organizationId: new Types.ObjectId(organizationId),
+          kind: 'plan_change',
+          status: 'open',
+        }),
+      ).toBe(1);
+
+      await payPendingPlanChange(app, organizationId);
+      expect(
+        asSuccess<{ plan: { key: string } }>((await summary()).body).plan.key,
+      ).toBe('pro');
+
+      // Moving up again is credited with the unused part of the Pro month just paid.
+      const upgrade = await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'business' })
+        .expect(201);
+      const credited = asSuccess<{ invoice: { amount: number } }>(upgrade.body)
+        .invoice.amount;
+      expect(credited).toBeLessThan(
+        PLAN_PRICES.EUR.business - PLAN_PRICES.EUR.pro * 0.9,
+      );
+      expect(credited).toBeGreaterThan(
+        PLAN_PRICES.EUR.business - PLAN_PRICES.EUR.pro - 1,
+      );
     });
   });
 
@@ -814,6 +871,7 @@ describe('Subscriptions module (e2e)', () => {
         .set('X-Organization-Id', organizationId)
         .send({ planKey: 'pro' })
         .expect(201);
+      await payPendingPlanChange(app, organizationId);
 
       const executions = await waitFor(async () => {
         const res = await request(server)

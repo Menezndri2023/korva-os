@@ -160,6 +160,10 @@ export class SubscriptionAutoChargeSchedulerService
   ): Promise<'charged' | 'declined' | 'skipped'> {
     const organizationId = invoice.organizationId.toString();
 
+    // A plan change is paid by the person who asked for it (and may be abandoned): never
+    // charged in the background.
+    if (invoice.kind === 'plan_change') return 'skipped';
+
     // The business chose to pay its plan from its Solde KORVA: tried first, no card needed.
     if (await this.billingService.tryAutoPayFromWallet(invoice))
       return 'charged';

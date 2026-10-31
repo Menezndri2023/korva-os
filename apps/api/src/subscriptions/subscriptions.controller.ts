@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   changePlanSchema,
@@ -80,11 +88,23 @@ export class SubscriptionsController {
     @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(changePlanSchema)) body: ChangePlanInput,
   ) {
-    return this.subscriptionsService.changePlan(
+    return this.subscriptionsService.requestPlanChange(
       tenant.organizationId,
       user.userId,
       body.planKey,
     );
+  }
+
+  /** Drops a requested plan change that was not paid. */
+  @RequirePermissions('settings.manage')
+  @Post('subscriptions/plan-change/cancel')
+  @HttpCode(200)
+  async cancelPlanChange(@CurrentTenant() tenant: TenantContext) {
+    return {
+      cancelled: await this.subscriptionsService.cancelPendingPlanChange(
+        tenant.organizationId,
+      ),
+    };
   }
 
   @RequirePermissions('settings.manage')

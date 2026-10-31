@@ -8,7 +8,12 @@ import {
 
 /** Fields the schema fills in itself, so an issuer never has to supply them. */
 type DefaultedFields =
-  'status' | 'paidAt' | 'providerReference' | 'checkoutUrl' | 'payerEmail';
+  | 'status'
+  | 'kind'
+  | 'paidAt'
+  | 'providerReference'
+  | 'checkoutUrl'
+  | 'payerEmail';
 
 export type IssueSubscriptionInvoiceInput = Omit<
   SubscriptionInvoice,
@@ -46,8 +51,47 @@ export class SubscriptionInvoicesRepository {
   findLatestForSubscription(
     subscriptionId: string,
   ): Promise<SubscriptionInvoiceDocument | null> {
+    return (
+      this.model
+        // A plan change waiting for payment is not a period the business owes: leaving it unpaid
+        // must never make the subscription past_due.
+        .findOne({
+          subscriptionId: new Types.ObjectId(subscriptionId),
+          kind: { $ne: 'plan_change' },
+        })
+        .sort({ periodStart: -1 })
+        .exec()
+    );
+  }
+
+  /** Unpaid plan-change invoices are dropped when another plan is picked (or the change is
+   *  cancelled). Returns how many. */
+  async voidOpenPlanChanges(organizationId: string): Promise<number> {
+    const result = await this.model
+      .updateMany(
+        {
+          organizationId: new Types.ObjectId(organizationId),
+          kind: 'plan_change',
+          status: 'open',
+        },
+        { status: 'void' },
+      )
+      .exec();
+    return result.modifiedCount;
+  }
+
+  /** The paid invoice whose period contains `at` — what a plan change credits. */
+  findPaidCovering(
+    subscriptionId: string,
+    at: Date,
+  ): Promise<SubscriptionInvoiceDocument | null> {
     return this.model
-      .findOne({ subscriptionId: new Types.ObjectId(subscriptionId) })
+      .findOne({
+        subscriptionId: new Types.ObjectId(subscriptionId),
+        status: 'paid',
+        periodStart: { $lte: at },
+        periodEnd: { $gt: at },
+      })
       .sort({ periodStart: -1 })
       .exec();
   }
