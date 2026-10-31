@@ -31,6 +31,7 @@ const summary: WalletSummary = {
   autoPayout: { enabled: false, frequency: "weekly", minimum: 5000 },
   openPayout: null,
   manualPayoutsLeftThisWeek: 1,
+  autoPaySubscription: false,
 };
 
 function serve(wallet: WalletSummary) {
@@ -91,11 +92,19 @@ describe("WalletPage", () => {
     serve(summary);
     patchMock.mockResolvedValue(summary);
     renderWithProviders(<WalletPage />);
-    fireEvent.click(await screen.findByRole("checkbox"));
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Verser automatiquement/ }));
     expect(screen.getByRole("option", { name: /Chaque jour \(à partir de Pro\)/ })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
     await waitFor(() =>
       expect(patchMock).toHaveBeenCalledWith("/wallet/auto-payout", { enabled: true, frequency: "weekly", minimum: 5000 }),
     );
+  });
+
+  it("lets the business pay its KORVA plan from the balance automatically", async () => {
+    serve(summary);
+    patchMock.mockResolvedValue({ ...summary, autoPaySubscription: true });
+    renderWithProviders(<WalletPage />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Régler automatiquement mes factures KORVA/ }));
+    await waitFor(() => expect(patchMock).toHaveBeenCalledWith("/wallet/subscription-autopay", { enabled: true }));
   });
 });

@@ -6,6 +6,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -185,6 +186,7 @@ export class WalletService {
         frequency: settings?.autoPayoutFrequency ?? 'weekly',
         minimum: settings?.autoPayoutMinimum ?? 5000,
       },
+      autoPaySubscription: settings?.autoPaySubscription ?? false,
       openPayout: openPayout
         ? (openPayout.toJSON() as unknown as WalletSummary['openPayout'])
         : null,
@@ -498,6 +500,133 @@ export class WalletService {
         { upsert: true },
       )
       .exec();
+  }
+
+  /* ─────────────────────────── KORVA plan ─────────────────────────── */
+
+  async updateSubscriptionAutopay(
+    organizationId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await this.settingsModel
+      .updateOne(
+        { organizationId: new Types.ObjectId(organizationId) },
+        { $set: { autoPaySubscription: enabled } },
+        { upsert: true },
+      )
+      .exec();
+  }
+
+  async subscriptionAutopayEnabled(organizationId: string): Promise<boolean> {
+    return (await this.settings(organizationId))?.autoPaySubscription ?? false;
+  }
+
+  /**
+   * Takes a KORVA plan invoice's amount off the balance and returns the ledger line's id. The
+   * caller settles the invoice and gives the amount back (refundSubscriptionDebit) if the invoice
+   * turned out already paid. Each attempt has its own sourceKey: the invoice's status:'open'
+   * guard — not this line — is what makes paying twice impossible. A concurrent withdrawal that
+   * left the balance below zero is caught right after writing, and the line is given back.
+   */
+  async debitForSubscription(
+    organizationId: string,
+    invoice: { id: string; number: string; amount: number; currency: string },
+  ): Promise<string> {
+    const organization =
+      await this.organizationsService.getById(organizationId);
+    if (organization.currency !== invoice.currency) {
+      throw new UnprocessableEntityException({
+        code: 'WALLET_CURRENCY_MISMATCH',
+        message: `This invoice is in ${invoice.currency} and your balance in ${organization.currency}`,
+      });
+    }
+    const insufficient = (available: number) =>
+      new UnprocessableEntityException({
+        code: 'WALLET_INSUFFICIENT_BALANCE',
+        message: 'Your available balance does not cover this invoice',
+        details: { available, amount: invoice.amount },
+      });
+    const before = await this.balances(organizationId);
+    if (before.available < invoice.amount) throw insufficient(before.available);
+
+    const entryId = new Types.ObjectId();
+    await this.entryModel.create({
+      _id: entryId,
+      organizationId: new Types.ObjectId(organizationId),
+      kind: 'subscription',
+      amount: -round2(invoice.amount),
+      currency: invoice.currency,
+      availableAt: new Date(),
+      sourceKey: `subscription:${invoice.id}:${entryId.toString()}`,
+      note: `Facture ${invoice.number}`,
+    });
+
+    const after = await this.balances(organizationId);
+    if (after.available < 0) {
+      await this.refundSubscriptionDebit(organizationId, entryId.toString());
+      throw insufficient(round2(after.available + invoice.amount));
+    }
+    return entryId.toString();
+  }
+
+  /** Gives a subscription debit back, once. */
+  async refundSubscriptionDebit(
+    organizationId: string,
+    entryId: string,
+    note = 'Montant rendu',
+  ): Promise<void> {
+    const entry = await this.entryModel
+      .findOne({
+        _id: new Types.ObjectId(entryId),
+        organizationId: new Types.ObjectId(organizationId),
+        kind: 'subscription',
+      })
+      .lean()
+      .exec();
+    if (!entry) return;
+    await this.addEntry({
+      organizationId,
+      kind: 'subscription_reversal',
+      amount: -entry.amount,
+      currency: entry.currency,
+      availableAt: new Date(),
+      sourceKey: `subscription-reversal:${entryId}`,
+      note,
+    });
+  }
+
+  /**
+   * An invoice paid from the balance whose old GeniusPay link was ALSO paid afterwards: KORVA
+   * received the money twice, so the balance gets its debit back. Called when GeniusPay reports
+   * that payment, on an invoice that is no longer open.
+   */
+  async refundSubscriptionPaidTwice(
+    organizationId: string,
+    invoiceId: string,
+  ): Promise<boolean> {
+    const debits = await this.entryModel
+      .find({
+        organizationId: new Types.ObjectId(organizationId),
+        kind: 'subscription',
+        sourceKey: { $regex: `^subscription:${invoiceId}:` },
+      })
+      .lean()
+      .exec();
+    for (const debit of debits) {
+      const id = debit._id.toString();
+      const reversed = await this.entryModel
+        .exists({ sourceKey: `subscription-reversal:${id}` })
+        .exec();
+      if (!reversed) {
+        await this.refundSubscriptionDebit(
+          organizationId,
+          id,
+          'Facture aussi payée par GeniusPay — montant rendu',
+        );
+        return true;
+      }
+    }
+    return false;
   }
 
   /* ─────────────────────────── withdrawals ─────────────────────────── */

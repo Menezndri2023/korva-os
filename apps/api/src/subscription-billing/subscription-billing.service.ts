@@ -10,6 +10,8 @@ import { SubscriptionsRepository } from '../subscriptions/subscriptions.reposito
 import { PaymentMandatesRepository } from '../subscriptions/payment-mandates.repository';
 import { PaymentProviderResolverService } from '../finance/payments/providers/payment-provider-resolver.service';
 import { AuditService } from '../audit/audit.service';
+import { WalletService } from '../finance/wallet/wallet.service';
+import type { SubscriptionInvoiceDocument } from '../subscriptions/schemas/subscription-invoice.schema';
 
 export interface CheckoutResult {
   invoiceNumber: string;
@@ -40,6 +42,7 @@ export class SubscriptionBillingService {
     private readonly paymentProviderResolver: PaymentProviderResolverService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly walletService: WalletService,
   ) {}
 
   /**
@@ -156,6 +159,9 @@ export class SubscriptionBillingService {
       });
     }
     if (invoice.status !== 'open') {
+      if (invoice.status === 'paid' && invoice.providerReference) {
+        await this.refundIfAlsoPaidByProvider(organizationId, invoice);
+      }
       return { invoiceNumber: invoice.number, status: invoice.status };
     }
     if (!invoice.providerReference) {
@@ -209,6 +215,146 @@ export class SubscriptionBillingService {
       collection: 'checkout',
     });
     return { invoiceNumber: invoice.number, status: 'paid' };
+  }
+
+  /**
+   * Pays an open invoice from the business's Solde KORVA. A checkout already started for it is
+   * asked first: if GeniusPay says it was paid, that payment settles the invoice and nothing is
+   * taken from the balance. If the invoice is settled by another path between the debit and
+   * settleAsPaid (a webhook, a double click), the debit is given back.
+   */
+  async payFromWallet(
+    organizationId: string,
+    invoiceId: string,
+  ): Promise<{ invoiceNumber: string; status: string }> {
+    const invoice = await this.invoicesRepository.findOwnedById(
+      organizationId,
+      invoiceId,
+    );
+    if (!invoice) {
+      throw new NotFoundException({
+        code: 'SUBSCRIPTION_INVOICE_NOT_FOUND',
+        message: 'Subscription invoice not found',
+      });
+    }
+    if (invoice.status !== 'open') {
+      throw new UnprocessableEntityException({
+        code: 'SUBSCRIPTION_INVOICE_NOT_PAYABLE',
+        message: `This invoice is ${invoice.status} — only an open invoice can be paid`,
+      });
+    }
+    if (invoice.providerReference) {
+      const verified = await this.verifyPayment(organizationId, invoiceId);
+      if (verified.status === 'paid') return verified;
+    }
+    await this.debitAndSettle(organizationId, invoice, 'manual');
+    return { invoiceNumber: invoice.number, status: 'paid' };
+  }
+
+  /**
+   * The auto-charge sweep's first try: when the business switched on "pay my plan from my
+   * balance" and the balance covers the invoice. Returns whether it was paid this way; any
+   * refusal (balance too low, other currency) just leaves the invoice to the usual means.
+   */
+  async tryAutoPayFromWallet(
+    invoice: SubscriptionInvoiceDocument,
+  ): Promise<boolean> {
+    const organizationId = invoice.organizationId.toString();
+    if (
+      !(await this.walletService.subscriptionAutopayEnabled(organizationId))
+    ) {
+      return false;
+    }
+    // A checkout the payer may be completing right now is left alone.
+    if (invoice.providerReference) return false;
+    try {
+      return await this.debitAndSettle(organizationId, invoice, 'auto');
+    } catch (error) {
+      if (error instanceof UnprocessableEntityException) return false;
+      throw error;
+    }
+  }
+
+  private async debitAndSettle(
+    organizationId: string,
+    invoice: SubscriptionInvoiceDocument,
+    trigger: 'manual' | 'auto',
+  ): Promise<boolean> {
+    const invoiceId = String(invoice.id);
+    const entryId = await this.walletService.debitForSubscription(
+      organizationId,
+      {
+        id: invoiceId,
+        number: invoice.number,
+        amount: invoice.amount,
+        currency: invoice.currency,
+      },
+    );
+    let settled = false;
+    try {
+      settled = await this.settleAsPaid(
+        organizationId,
+        invoiceId,
+        invoice.number,
+        {
+          collection: 'wallet',
+          trigger,
+        },
+      );
+    } finally {
+      if (!settled) {
+        await this.walletService.refundSubscriptionDebit(
+          organizationId,
+          entryId,
+        );
+      }
+    }
+    if (!settled) {
+      throw new UnprocessableEntityException({
+        code: 'SUBSCRIPTION_INVOICE_NOT_PAYABLE',
+        message:
+          'This invoice was paid in the meantime — your balance was not charged',
+      });
+    }
+    return true;
+  }
+
+  /** See WalletService.refundSubscriptionPaidTwice. Never fatal to the caller. */
+  private async refundIfAlsoPaidByProvider(
+    organizationId: string,
+    invoice: SubscriptionInvoiceDocument,
+  ): Promise<void> {
+    try {
+      const provider = await this.paymentProviderResolver.resolve({
+        flow: 'subscription',
+        organizationId,
+      });
+      const result = await provider.verifyPayment(invoice.providerReference!);
+      if (result.status !== 'completed') return;
+      const invoiceId = String(invoice.id);
+      if (
+        await this.walletService.refundSubscriptionPaidTwice(
+          organizationId,
+          invoiceId,
+        )
+      ) {
+        await this.auditService.record({
+          organizationId,
+          action: 'UPDATE',
+          entity: 'subscription',
+          entityId: invoiceId,
+          metadata: {
+            reason: 'subscription_invoice_paid_twice_refunded_to_wallet',
+            invoiceNumber: invoice.number,
+          },
+        });
+      }
+    } catch (error) {
+      this.logger.error(
+        `Could not check invoice ${invoice.number} for a double payment`,
+        error,
+      );
+    }
   }
 
   /**

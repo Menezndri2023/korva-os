@@ -1,0 +1,140 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { SubscriptionInvoice, WalletSummary } from "@korva/types";
+import { Badge, Button, Notice } from "@korva/ui";
+import { apiClient, ApiError } from "@/lib/api-client";
+import { formatCurrency } from "@/lib/analytics-format";
+import { useAuthReady } from "@/lib/use-auth-ready";
+
+const STATUS: Record<string, { label: string; variant: "default" | "success" | "warning" }> = {
+  open: { label: "À payer", variant: "warning" },
+  paid: { label: "Payée", variant: "success" },
+  void: { label: "Annulée", variant: "default" },
+};
+
+const ERRORS: Record<string, string> = {
+  WALLET_INSUFFICIENT_BALANCE: "Votre solde disponible ne couvre pas cette facture.",
+  WALLET_CURRENCY_MISMATCH: "Cette facture n'est pas dans la devise de votre solde.",
+  SUBSCRIPTION_INVOICE_NOT_PAYABLE: "Cette facture est déjà réglée.",
+  PAYMENT_PROVIDER_NOT_CONFIGURED: "Le paiement en ligne de la formule n'est pas encore disponible. Contactez KORVA.",
+};
+
+function errorText(error: unknown): string {
+  return (error instanceof ApiError && ERRORS[error.code]) || "Le paiement n'a pas abouti. Réessayez.";
+}
+
+/**
+ * KORVA's own invoices for the business's plan, with the two ways to pay one: GeniusPay's hosted
+ * page (mobile money or card), or the Solde KORVA. Coming back from GeniusPay
+ * (?subscriptionInvoice=ABO-…), the invoice is checked with GeniusPay — never assumed paid.
+ */
+export function KorvaPlanInvoices() {
+  const authReady = useAuthReady();
+  const queryClient = useQueryClient();
+  const invoices = useQuery({
+    queryKey: ["subscriptions", "invoices"],
+    queryFn: () => apiClient.get<SubscriptionInvoice[]>("/subscriptions/invoices"),
+    enabled: authReady,
+  });
+  const wallet = useQuery({
+    queryKey: ["wallet"],
+    queryFn: () => apiClient.get<WalletSummary>("/wallet"),
+    enabled: authReady,
+  });
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+    void queryClient.invalidateQueries({ queryKey: ["wallet"] });
+  };
+
+  const checkout = useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post<{ checkoutUrl: string }>(`/subscriptions/invoices/${id}/checkout`),
+    onSuccess: ({ checkoutUrl }) => window.location.assign(checkoutUrl),
+  });
+  const fromWallet = useMutation({
+    mutationFn: (id: string) => apiClient.post(`/subscriptions/invoices/${id}/pay-from-wallet`),
+    onSuccess: refresh,
+  });
+  const verify = useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post<{ invoiceNumber: string; status: string }>(`/subscriptions/invoices/${id}/verify`),
+    onSuccess: refresh,
+  });
+
+  // Back from GeniusPay: check that invoice once.
+  const checked = useRef(false);
+  useEffect(() => {
+    if (checked.current || !invoices.data) return;
+    const number = new URLSearchParams(window.location.search).get("subscriptionInvoice");
+    const returned = number && invoices.data.find((invoice) => invoice.number === number);
+    if (returned && returned.status === "open") {
+      checked.current = true;
+      verify.mutate(returned.id);
+    }
+  }, [invoices.data, verify]);
+
+  if (!invoices.data || invoices.data.length === 0) return null;
+  const available = wallet.data?.available ?? 0;
+  const busy = checkout.isPending || fromWallet.isPending;
+
+  return (
+    <div className="space-y-3 border-t border-border pt-4">
+      <h3 className="text-sm font-semibold text-text">Factures KORVA</h3>
+      {verify.data && (
+        <Notice tone={verify.data.status === "paid" ? "accent" : "warning"}>
+          {verify.data.status === "paid"
+            ? `Facture ${verify.data.invoiceNumber} payée. Merci !`
+            : `Le paiement de la facture ${verify.data.invoiceNumber} n'est pas encore confirmé par GeniusPay. Revenez dans quelques minutes.`}
+        </Notice>
+      )}
+      {(checkout.isError || fromWallet.isError) && (
+        <p className="text-sm text-destructive" role="alert">
+          {errorText(checkout.error ?? fromWallet.error)}
+        </p>
+      )}
+      <ul className="divide-y divide-border">
+        {invoices.data.map((invoice) => {
+          const status = STATUS[invoice.status] ?? { label: invoice.status, variant: "default" as const };
+          const coveredByWallet =
+            wallet.data?.currency === invoice.currency && available >= invoice.amount;
+          return (
+            <li key={invoice.id} className="space-y-2 py-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  <span className="font-medium">{invoice.number}</span>{" "}
+                  <span className="tabular-nums">{formatCurrency(invoice.amount, invoice.currency)}</span>
+                  <span className="block text-xs text-text-muted">
+                    Du {new Date(invoice.periodStart).toLocaleDateString("fr-FR")} au{" "}
+                    {new Date(invoice.periodEnd).toLocaleDateString("fr-FR")}
+                    {invoice.status === "open" &&
+                      ` — à régler avant le ${new Date(invoice.dueAt).toLocaleDateString("fr-FR")}`}
+                  </span>
+                </span>
+                <Badge variant={status.variant}>{status.label}</Badge>
+              </div>
+              {invoice.status === "open" && (
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" loading={checkout.isPending} disabled={busy} onClick={() => checkout.mutate(invoice.id)}>
+                    Payer par mobile money ou carte
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={fromWallet.isPending}
+                    disabled={busy || !coveredByWallet}
+                    title={coveredByWallet ? undefined : "Votre solde disponible ne couvre pas cette facture"}
+                    onClick={() => fromWallet.mutate(invoice.id)}
+                  >
+                    Payer avec mon Solde ({formatCurrency(available, wallet.data?.currency ?? invoice.currency)})
+                  </Button>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}

@@ -108,6 +108,7 @@ async function buildHarness(
   };
   const billingService = {
     settleAsPaid: jest.fn().mockResolvedValue(true),
+    tryAutoPayFromWallet: jest.fn().mockResolvedValue(false),
   };
 
   const service = new SubscriptionAutoChargeSchedulerService(

@@ -68,6 +68,10 @@ export class WalletSettings {
 
   @Prop()
   lastAutoPayoutAt?: Date;
+
+  /** Pay KORVA plan invoices from the balance when it covers them (opt-in). */
+  @Prop({ default: false })
+  autoPaySubscription!: boolean;
 }
 
 export const WalletSettingsSchema =

@@ -114,6 +114,7 @@ export default function WalletPage() {
           <WithdrawCard summary={summary} money={money} onDone={refresh} />
           <DestinationCard summary={summary} onDone={refresh} />
           <AutoPayoutCard summary={summary} onDone={refresh} />
+          <SubscriptionAutopayCard summary={summary} onDone={refresh} />
         </>
       )}
 
@@ -445,6 +446,39 @@ function AutoPayoutCard({ summary, onDone }: { summary: WalletSummary; onDone: (
         </Button>
         {save.isSuccess && <span className="ml-2 text-sm text-text-muted">Enregistré.</span>}
       </form>
+    </Card>
+  );
+}
+
+function SubscriptionAutopayCard({ summary, onDone }: { summary: WalletSummary; onDone: () => void }) {
+  const save = useMutation({
+    mutationFn: (enabled: boolean) => apiClient.patch<WalletSummary>("/wallet/subscription-autopay", { enabled }),
+    onSuccess: onDone,
+  });
+  return (
+    <Card className="p-5">
+      <h2 className="text-base font-semibold text-text">Payer ma formule KORVA</h2>
+      <label className="mt-3 flex items-start gap-2 text-sm text-text">
+        <input
+          type="checkbox"
+          checked={save.isPending ? Boolean(save.variables) : summary.autoPaySubscription}
+          disabled={save.isPending}
+          onChange={(event) => save.mutate(event.target.checked)}
+          className="mt-0.5 h-4 w-4"
+        />
+        <span>
+          Régler automatiquement mes factures KORVA avec mon solde
+          <span className="block text-xs text-text-muted">
+            Quand le solde disponible couvre la facture. Sinon, vous la payez par mobile money ou carte
+            depuis Paramètres &gt; Abonnement.
+          </span>
+        </span>
+      </label>
+      {save.isError && (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {errorText(save.error)}
+        </p>
+      )}
     </Card>
   );
 }

@@ -3,6 +3,9 @@ import { Module } from '@nestjs/common';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { AuditModule } from '../audit/audit.module';
+// WalletService: paying a plan from the Solde KORVA. FinanceModule imports neither this module
+// nor anything that does, so no cycle.
+import { FinanceModule } from '../finance/finance.module';
 import { SubscriptionBillingController } from './subscription-billing.controller';
 import { SubscriptionBillingService } from './subscription-billing.service';
 import { SubscriptionAutoChargeSchedulerService } from './subscription-auto-charge-scheduler.service';
@@ -17,7 +20,12 @@ import { SubscriptionAutoChargeSchedulerService } from './subscription-auto-char
  * else imports closes no cycle, so this needs no forwardRef() on either side.
  */
 @Module({
-  imports: [SubscriptionsModule, IntegrationsModule, AuditModule],
+  imports: [
+    SubscriptionsModule,
+    IntegrationsModule,
+    AuditModule,
+    FinanceModule,
+  ],
   controllers: [SubscriptionBillingController],
   providers: [
     SubscriptionBillingService,

@@ -437,4 +437,78 @@ describe('Solde KORVA (e2e)', () => {
     // The business cannot reach the administration's routes.
     await staff(request(server).get('/api/v1/platform/payouts')).expect(403);
   });
+
+  it('pays a KORVA plan invoice from the balance — once, and never beyond it', async () => {
+    await admin(
+      request(server).post(
+        `/api/v1/platform/organizations/${organizationId}/wallet/adjustments`,
+      ),
+    )
+      .send({ amount: 12000, note: 'Test du paiement de formule' })
+      .expect(200);
+    const subscription = await connection
+      .collection('subscriptions')
+      .findOne({ organizationId: new Types.ObjectId(organizationId) });
+    const invoice = (number: string) => {
+      const now = new Date();
+      return connection.collection('subscription_invoices').insertOne({
+        organizationId: new Types.ObjectId(organizationId),
+        subscriptionId: subscription!._id,
+        planId: subscription!.planId,
+        number,
+        status: 'open',
+        periodStart: now,
+        periodEnd: new Date(now.getTime() + 30 * 86_400_000),
+        amount: 9900,
+        currency: 'XOF',
+        issuedAt: now,
+        dueAt: now,
+        paidAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+    };
+
+    const first = (await invoice('ABO-WALLET-1')).insertedId.toString();
+    await staff(
+      request(server).post(
+        `/api/v1/subscriptions/invoices/${first}/pay-from-wallet`,
+      ),
+    ).expect(200);
+    expect(
+      (
+        await connection
+          .collection('subscription_invoices')
+          .findOne({ number: 'ABO-WALLET-1' })
+      )?.status,
+    ).toBe('paid');
+    expect((await summary()).available).toBe(2100);
+
+    const again = await staff(
+      request(server).post(
+        `/api/v1/subscriptions/invoices/${first}/pay-from-wallet`,
+      ),
+    ).expect(422);
+    expect((again.body as { error: { code: string } }).error.code).toBe(
+      'SUBSCRIPTION_INVOICE_NOT_PAYABLE',
+    );
+
+    const second = (await invoice('ABO-WALLET-2')).insertedId.toString();
+    const short = await staff(
+      request(server).post(
+        `/api/v1/subscriptions/invoices/${second}/pay-from-wallet`,
+      ),
+    ).expect(422);
+    expect((short.body as { error: { code: string } }).error.code).toBe(
+      'WALLET_INSUFFICIENT_BALANCE',
+    );
+    expect(
+      (
+        await connection
+          .collection('subscription_invoices')
+          .findOne({ number: 'ABO-WALLET-2' })
+      )?.status,
+    ).toBe('open');
+    expect((await summary()).available).toBe(2100);
+  });
 });

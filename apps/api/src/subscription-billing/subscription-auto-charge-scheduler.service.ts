@@ -160,6 +160,10 @@ export class SubscriptionAutoChargeSchedulerService
   ): Promise<'charged' | 'declined' | 'skipped'> {
     const organizationId = invoice.organizationId.toString();
 
+    // The business chose to pay its plan from its Solde KORVA: tried first, no card needed.
+    if (await this.billingService.tryAutoPayFromWallet(invoice))
+      return 'charged';
+
     // A provider that is not configured for subscription billing throws
     // PAYMENT_PROVIDER_NOT_CONFIGURED by design. That is a normal state for a deployment that
     // has not set it up yet, not an error worth a stack trace every hour, so it is a skip.

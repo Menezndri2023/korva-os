@@ -9,6 +9,8 @@ import type { SubscriptionsRepository } from '../subscriptions/subscriptions.rep
 import type { PaymentMandatesRepository } from '../subscriptions/payment-mandates.repository';
 import type { PaymentProviderResolverService } from '../finance/payments/providers/payment-provider-resolver.service';
 import type { AuditService } from '../audit/audit.service';
+import type { WalletService } from '../finance/wallet/wallet.service';
+import type { SubscriptionInvoiceDocument } from '../subscriptions/schemas/subscription-invoice.schema';
 
 const ORG = 'org-1';
 const INVOICE_ID = 'invoice-1';
@@ -42,6 +44,12 @@ interface Harness {
   };
   resolve: jest.Mock;
   audit: { record: jest.Mock };
+  wallet: {
+    debitForSubscription: jest.Mock;
+    refundSubscriptionDebit: jest.Mock;
+    refundSubscriptionPaidTwice: jest.Mock;
+    subscriptionAutopayEnabled: jest.Mock;
+  };
 }
 
 function buildHarness(
@@ -107,6 +115,12 @@ function buildHarness(
       : jest.fn().mockResolvedValue(undefined),
   };
 
+  const wallet = {
+    debitForSubscription: jest.fn().mockResolvedValue('entry-1'),
+    refundSubscriptionDebit: jest.fn().mockResolvedValue(undefined),
+    refundSubscriptionPaidTwice: jest.fn().mockResolvedValue(true),
+    subscriptionAutopayEnabled: jest.fn().mockResolvedValue(true),
+  };
   const service = new SubscriptionBillingService(
     invoices as unknown as SubscriptionInvoicesRepository,
     subscriptions as unknown as SubscriptionsRepository,
@@ -116,6 +130,7 @@ function buildHarness(
       get: jest.fn().mockReturnValue('https://app.korva.test'),
     } as unknown as ConfigService,
     audit as unknown as AuditService,
+    wallet as unknown as WalletService,
   );
   return {
     service,
@@ -125,6 +140,7 @@ function buildHarness(
     provider,
     resolve,
     audit,
+    wallet,
   };
 }
 
@@ -319,5 +335,76 @@ describe('SubscriptionBillingService — verifyPayment', () => {
     await expect(h.service.verifyPayment(ORG, INVOICE_ID)).rejects.toThrow(
       UnprocessableEntityException,
     );
+  });
+});
+
+describe('SubscriptionBillingService — paying from the Solde KORVA', () => {
+  it('takes the amount off the balance and settles the invoice', async () => {
+    const h = buildHarness();
+    await expect(h.service.payFromWallet(ORG, INVOICE_ID)).resolves.toEqual({
+      invoiceNumber: 'ABO-0001',
+      status: 'paid',
+    });
+    expect(h.wallet.debitForSubscription).toHaveBeenCalledWith(ORG, {
+      id: INVOICE_ID,
+      number: 'ABO-0001',
+      amount: 2900,
+      currency: 'EUR',
+    });
+    expect(h.invoices.markPaidIfOpen).toHaveBeenCalledWith(ORG, INVOICE_ID);
+    expect(h.wallet.refundSubscriptionDebit).not.toHaveBeenCalled();
+  });
+
+  it('gives the amount back when the invoice got paid in the meantime', async () => {
+    const h = buildHarness();
+    h.invoices.markPaidIfOpen.mockResolvedValue(null);
+    await expect(
+      h.service.payFromWallet(ORG, INVOICE_ID),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(h.wallet.refundSubscriptionDebit).toHaveBeenCalledWith(
+      ORG,
+      'entry-1',
+    );
+  });
+
+  it('settles from a checkout GeniusPay already completed, without touching the balance', async () => {
+    const h = buildHarness({
+      invoice: openInvoice({ providerReference: 'MTX-1' }),
+    });
+    await expect(
+      h.service.payFromWallet(ORG, INVOICE_ID),
+    ).resolves.toMatchObject({ status: 'paid' });
+    expect(h.wallet.debitForSubscription).not.toHaveBeenCalled();
+  });
+
+  it('gives the balance back when an invoice paid from it is also paid by its old link', async () => {
+    const h = buildHarness({
+      invoice: openInvoice({ status: 'paid', providerReference: 'MTX-1' }),
+    });
+    await expect(h.service.verifyPayment(ORG, INVOICE_ID)).resolves.toEqual({
+      invoiceNumber: 'ABO-0001',
+      status: 'paid',
+    });
+    expect(h.wallet.refundSubscriptionPaidTwice).toHaveBeenCalledWith(
+      ORG,
+      INVOICE_ID,
+    );
+  });
+
+  it('auto-pays only when switched on, and leaves a too-low balance to the usual means', async () => {
+    const h = buildHarness();
+    const invoice = {
+      ...openInvoice(),
+      organizationId: ORG,
+    } as unknown as SubscriptionInvoiceDocument;
+    h.wallet.subscriptionAutopayEnabled.mockResolvedValueOnce(false);
+    await expect(h.service.tryAutoPayFromWallet(invoice)).resolves.toBe(false);
+    expect(h.wallet.debitForSubscription).not.toHaveBeenCalled();
+
+    h.wallet.debitForSubscription.mockRejectedValueOnce(
+      new UnprocessableEntityException({ code: 'WALLET_INSUFFICIENT_BALANCE' }),
+    );
+    await expect(h.service.tryAutoPayFromWallet(invoice)).resolves.toBe(false);
+    await expect(h.service.tryAutoPayFromWallet(invoice)).resolves.toBe(true);
   });
 });

@@ -15,11 +15,13 @@ import {
   requestPayoutSchema,
   setPayoutDestinationSchema,
   updateAutoPayoutSchema,
+  updateSubscriptionAutopaySchema,
   type ConfirmPayoutDestinationInput,
   type ListWalletQuery,
   type RequestPayoutInput,
   type SetPayoutDestinationInput,
   type UpdateAutoPayoutInput,
+  type UpdateSubscriptionAutopayInput,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -119,6 +121,20 @@ export class WalletController {
     body: UpdateAutoPayoutInput,
   ) {
     await this.walletService.updateAutoPayout(tenant.organizationId, body);
+    return this.walletService.summary(tenant.organizationId);
+  }
+
+  /** Pay KORVA plan invoices from the balance when it covers them. */
+  @Patch('subscription-autopay')
+  async subscriptionAutopay(
+    @CurrentTenant() tenant: TenantContext,
+    @Body(new ZodValidationPipe(updateSubscriptionAutopaySchema))
+    body: UpdateSubscriptionAutopayInput,
+  ) {
+    await this.walletService.updateSubscriptionAutopay(
+      tenant.organizationId,
+      body.enabled,
+    );
     return this.walletService.summary(tenant.organizationId);
   }
 }

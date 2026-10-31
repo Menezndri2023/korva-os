@@ -61,6 +61,8 @@ export const WALLET_ENTRY_KINDS = [
   "payout",
   "payout_fee",
   "payout_reversal",
+  "subscription",
+  "subscription_reversal",
   "adjustment",
 ] as const;
 export type WalletEntryKind = (typeof WALLET_ENTRY_KINDS)[number];
@@ -72,6 +74,8 @@ export const WALLET_ENTRY_LABELS: Record<WalletEntryKind, string> = {
   payout: "Retrait",
   payout_fee: "Frais de retrait",
   payout_reversal: "Retrait annulé — montant rendu",
+  subscription: "Formule KORVA payée depuis le solde",
+  subscription_reversal: "Formule KORVA — montant rendu",
   adjustment: "Correction par KORVA",
 };
 
@@ -133,6 +137,8 @@ export interface WalletSummary {
   /** A destination change waiting for its e-mailed code. */
   pendingDestination: { provider: PayoutProvider; account: string } | null;
   autoPayout: { enabled: boolean; frequency: PayoutFrequency; minimum: number };
+  /** KORVA plan invoices are paid from the balance when it covers them. */
+  autoPaySubscription: boolean;
   openPayout: Payout | null;
   /** Manual withdrawals still allowed in the current 7 days; null = unlimited. */
   manualPayoutsLeftThisWeek: number | null;

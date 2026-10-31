@@ -1,4 +1,4 @@
-import { Controller, Param, Post } from '@nestjs/common';
+import { Controller, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { TenantContext } from '@korva/types';
 import type { AuthenticatedUser } from '../core/tenant/request-context.types';
@@ -36,5 +36,16 @@ export class SubscriptionBillingController {
   @Post(':id/verify')
   verify(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
     return this.billingService.verifyPayment(tenant.organizationId, id);
+  }
+
+  /** Pays the invoice from the business's Solde KORVA. */
+  @RequirePermissions('settings.manage')
+  @Post(':id/pay-from-wallet')
+  @HttpCode(200)
+  payFromWallet(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+  ) {
+    return this.billingService.payFromWallet(tenant.organizationId, id);
   }
 }

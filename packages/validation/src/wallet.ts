@@ -29,6 +29,11 @@ export const updateAutoPayoutSchema = z.object({
 });
 export type UpdateAutoPayoutInput = z.infer<typeof updateAutoPayoutSchema>;
 
+export const updateSubscriptionAutopaySchema = z.object({
+  enabled: z.boolean(),
+});
+export type UpdateSubscriptionAutopayInput = z.infer<typeof updateSubscriptionAutopaySchema>;
+
 export const listWalletQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
