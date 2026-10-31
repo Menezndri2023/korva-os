@@ -12,7 +12,7 @@ export type CardProps = HTMLAttributes<HTMLDivElement>;
 // enough to justify them (see F2-B.3 report §2).
 export function Card({ className, children, ...props }: CardProps) {
   return (
-    <div className={cn("rounded-2xl border border-border bg-surface", className)} {...props}>
+    <div className={cn("rounded-xl border border-border bg-surface", className)} {...props}>
       {children}
     </div>
   );

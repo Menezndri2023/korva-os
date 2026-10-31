@@ -12,7 +12,7 @@ export interface NoticeProps extends HTMLAttributes<HTMLDivElement> {
 const TONE_CLASSES: Record<NoticeTone, string> = {
   info: "border-border bg-surface-muted text-text",
   warning: "border-transparent bg-warning-soft text-text",
-  accent: "border-transparent bg-accent-soft text-text",
+  accent: "border-transparent bg-action-soft text-text",
 };
 
 export function Notice({ tone = "info", className, children, ...props }: NoticeProps) {

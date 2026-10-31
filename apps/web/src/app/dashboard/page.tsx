@@ -310,11 +310,11 @@ function GettingStarted({
   if (remaining === 0) return null;
 
   return (
-    <section className="rounded-2xl bg-primary p-6 text-on-primary">
+    <section className="rounded-2xl bg-sidebar p-6 text-white">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Pour bien démarrer</h2>
-          <p className="mt-1 text-sm opacity-80">
+          <p className="mt-1 text-sm text-sidebar-text">
             {remaining === 1 ? "Plus qu'une étape" : `Encore ${remaining} étapes`} avant que vos
             clients trouvent votre activité en ligne.
           </p>
@@ -324,7 +324,7 @@ function GettingStarted({
             href={`${STOREFRONT_URL}/${slug}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg bg-sidebar px-4 py-2 text-sm font-semibold text-white hover:bg-sidebar-hover"
+            className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-sidebar hover:bg-white/90"
           >
             Voir mon site
           </a>
@@ -336,13 +336,13 @@ function GettingStarted({
             <Link
               href={step.href}
               className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
-                step.done ? "bg-white/25 line-through opacity-70" : "bg-white/60 hover:bg-white/80"
+                step.done ? "bg-white/5 text-sidebar-text line-through" : "bg-sidebar-hover hover:bg-white/15"
               }`}
             >
               <span
                 aria-hidden="true"
-                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-on-primary ${
-                  step.done ? "bg-on-primary text-primary" : ""
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-primary ${
+                  step.done ? "bg-primary text-on-primary" : ""
                 }`}
               >
                 {step.done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}

@@ -24,6 +24,19 @@
   --color-on-primary: var(--kt-accent-contrast, #ffffff);
 }
 
+/* Since 2026-10-31 a primary Button fills with --color-action (KORVA petrol, light teal in dark
+ * mode), so the tenant accent goes there too. The selector list matches the specificity of the
+ * dark-mode blocks in tokens.css, which would otherwise put KORVA's teal on a tenant's site for
+ * every visitor whose phone is in dark mode. */
+:root,
+:root:not([data-theme="light"]),
+:root[data-theme="dark"] {
+  --color-action: var(--kt-accent, #18181b);
+  --color-action-hover: color-mix(in srgb, var(--kt-accent, #18181b) 85%, #000000);
+  --color-on-action: var(--kt-accent-contrast, #ffffff);
+  --color-action-soft: color-mix(in srgb, var(--kt-accent, #18181b) 12%, transparent);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

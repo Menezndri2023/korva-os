@@ -110,7 +110,7 @@ export default function ReviewsPage() {
             />
             <span
               aria-hidden
-              className="relative h-6 w-11 rounded-full bg-border transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-primary peer-checked:after:translate-x-5 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus"
+              className="relative h-6 w-11 rounded-full bg-border transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-action peer-checked:after:translate-x-5 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus"
             />
             {stats.requestsEnabled ? "Activé" : "Désactivé"}
           </label>
@@ -129,7 +129,7 @@ export default function ReviewsPage() {
             }}
             className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
               filter === key
-                ? "border-primary bg-primary font-semibold text-on-primary"
+                ? "border-action bg-action font-semibold text-on-action"
                 : "border-border-input bg-surface hover:bg-surface-muted"
             }`}
           >

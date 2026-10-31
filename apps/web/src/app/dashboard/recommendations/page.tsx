@@ -93,7 +93,7 @@ export default function RecommendationsPage() {
             }}
             className={`rounded-md px-3 py-1.5 text-sm ${
               status === filter.value
-                ? "bg-primary text-primary-foreground"
+                ? "bg-action text-on-action"
                 : "text-text-muted hover:bg-surface-muted"
             }`}
           >

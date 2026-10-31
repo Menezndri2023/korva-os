@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes } from "react";
 import { cn } from "../cn.ts";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -14,19 +14,22 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 // the "bg-zinc-900 text-white hover:bg-zinc-800" pattern (31 occurrences), secondary the
 // "border border-zinc-300" pattern (16 occurrences), ghost the discreet "text-only" pattern
 // used for e.g. the dashboard logout button.
-// V3 identity (2026-10-21): the primary action is saffron with petrol text (white on saffron
-// fails contrast); secondary is a quiet outlined surface; ghost stays text-only.
+// Pro identity (2026-10-31): the primary action is petrol (saffron is now a signal, never a
+// button); secondary is a quiet outlined surface; ghost stays text-only; danger is for the
+// irreversible (suspend, delete).
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: "bg-primary font-semibold text-on-primary hover:bg-primary-hover",
-  secondary: "border border-border-input bg-surface text-text hover:bg-surface-muted",
+  primary: "bg-action font-semibold text-on-action hover:bg-action-hover",
+  secondary: "border border-border-input bg-surface font-semibold text-text hover:bg-surface-muted",
   ghost: "text-text-muted hover:bg-surface-muted hover:text-text",
+  danger: "bg-destructive font-semibold text-white hover:opacity-90",
 };
 
-// The 3 padding scales already in consistent use across apps/web (F2-A audit §4).
+// Minimum heights, so a one-line button and an Input of the same size line up in a row: md is 44 px, the
+// minimum comfortable touch target on a phone; sm (36 px) is for dense rows and tables.
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-sm",
-  md: "px-4 py-2 text-sm",
-  lg: "px-5 py-2.5 text-base",
+  sm: "min-h-9 px-3 py-1 text-sm",
+  md: "min-h-11 px-4 py-2 text-sm",
+  lg: "min-h-12 px-5 py-2 text-base",
 };
 
 export function Button({

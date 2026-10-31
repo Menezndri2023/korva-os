@@ -92,7 +92,7 @@ export default function AdminPayoutsPage() {
             onClick={() => setFilter(key)}
             className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
               filter === key
-                ? "border-primary bg-primary font-semibold text-on-primary"
+                ? "border-action bg-action font-semibold text-on-action"
                 : "border-border-input bg-surface hover:bg-surface-muted"
             }`}
           >

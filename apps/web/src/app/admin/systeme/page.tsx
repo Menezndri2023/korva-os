@@ -71,7 +71,7 @@ export default function AdminSystemPage() {
           <p className="mt-1 font-display text-2xl font-semibold">{megabytes(data.database.storageBytes)}</p>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
             <div
-              className={`h-full rounded-full ${dbShare > 0.7 ? "bg-warning" : "bg-primary"}`}
+              className={`h-full rounded-full ${dbShare > 0.7 ? "bg-warning" : "bg-action"}`}
               style={{ width: `${Math.min(100, dbShare * 100)}%` }}
             />
           </div>
@@ -181,7 +181,7 @@ function KorvaAiCard({ ai }: { ai: PlatformSystem["ai"] }) {
           {share !== null && (
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-muted">
               <div
-                className={`h-full rounded-full ${share >= 0.8 ? "bg-warning" : "bg-primary"}`}
+                className={`h-full rounded-full ${share >= 0.8 ? "bg-warning" : "bg-action"}`}
                 style={{ width: `${Math.min(100, share * 100)}%` }}
               />
             </div>
@@ -236,7 +236,7 @@ function DailyActivity({ daily }: { daily: PlatformSystem["ai"]["daily"] }) {
           <div
             key={day.day}
             title={`${dayLabel.format(new Date(day.day))} : ${day.calls} appel(s), ${day.organizations} entreprise(s), ${usd(day.costUsd)}`}
-            className={`flex-1 rounded-sm ${day.calls > 0 ? "bg-primary" : "bg-border"}`}
+            className={`flex-1 rounded-sm ${day.calls > 0 ? "bg-action" : "bg-border"}`}
             style={{ height: `${Math.max(4, (day.calls / max) * 100)}%` }}
           />
         ))}

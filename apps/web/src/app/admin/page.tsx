@@ -108,7 +108,7 @@ export default function AdminOverviewPage() {
                         <span className="tabular-nums text-text-muted">{count}</span>
                       </div>
                       <div className="mt-1 h-2 overflow-hidden rounded-full bg-surface-muted">
-                        <div className="h-full rounded-full bg-primary" style={{ width: `${share}%` }} />
+                        <div className="h-full rounded-full bg-action" style={{ width: `${share}%` }} />
                       </div>
                     </li>
                   );

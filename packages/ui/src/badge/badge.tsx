@@ -28,7 +28,7 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   success: "bg-success-soft text-success",
   warning: "bg-warning-soft text-warning",
   destructive: "bg-destructive-soft text-destructive",
-  accent: "bg-accent-soft text-accent",
+  accent: "bg-action-soft text-action",
 };
 
 export function Badge({ variant = "default", className, children, ...props }: BadgeProps) {

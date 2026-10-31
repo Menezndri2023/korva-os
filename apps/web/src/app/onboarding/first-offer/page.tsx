@@ -113,7 +113,7 @@ export default function FirstOfferPage() {
                       aria-pressed={name === suggestion.name}
                       className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
                         name === suggestion.name
-                          ? "border-primary bg-primary font-semibold text-on-primary"
+                          ? "border-action bg-action font-semibold text-on-action"
                           : "border-border-input bg-surface hover:bg-surface-muted"
                       }`}
                     >
@@ -219,7 +219,7 @@ function SiteIsLive({ organization, offerName }: { organization: Organization; o
             href={siteUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-on-primary hover:bg-primary-hover"
+            className="inline-flex items-center justify-center rounded-lg bg-action px-5 py-2.5 font-semibold text-on-action hover:bg-action-hover"
           >
             Voir mon site
           </a>
