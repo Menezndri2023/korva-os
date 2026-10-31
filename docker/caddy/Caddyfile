@@ -29,6 +29,15 @@
 	reverse_proxy web:3000
 }
 
+# --- Bare domain and www ------------------------------------------------------
+# korvasuite.com / www.korvasuite.com: the landing page lives on the dashboard's "/", so both send
+# visitors there, keeping the path. Without this block they fell into the tenant catch-all below,
+# whose `ask` (rightly) refuses a domain no shop owns — so the bare domain could never get a
+# certificate. Their DNS A records must point at this host too, proxy OFF.
+{$MARKETING_DOMAIN}, www.{$MARKETING_DOMAIN} {
+	redir https://{$DASHBOARD_DOMAIN}{uri} permanent
+}
+
 # --- API ---------------------------------------------------------------------
 {$API_DOMAIN} {
 	encode zstd gzip

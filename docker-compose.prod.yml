@@ -132,6 +132,7 @@ services:
       - "443:443"
     environment:
       DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN}
+      MARKETING_DOMAIN: ${MARKETING_DOMAIN:?set MARKETING_DOMAIN in .env.production - the bare domain, e.g. korvasuite.com}
       API_DOMAIN: ${API_DOMAIN}
       STOREFRONT_DOMAIN: ${STOREFRONT_DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
