@@ -230,7 +230,7 @@ describe('Plan features (e2e)', () => {
       .expect(201);
   });
 
-  it('shows the KORVA mention, closes new customer accounts and refuses online payment on Free', async () => {
+  it('shows the KORVA mention, closes new customer accounts but allows online payment on Free', async () => {
     const { organization, auth } = await freeOrganization(
       'features-site@korva.test',
       'commerce',
@@ -265,14 +265,11 @@ describe('Plan features (e2e)', () => {
       'customer_accounts',
     );
 
-    expectFeatureRefused(
-      (
-        await auth(request(server).patch('/api/v1/organizations/me'))
-          .send({ acceptedPaymentMethods: ['cash', 'online'] })
-          .expect(403)
-      ).body,
-      'online_payment',
-    );
+    // Online payment is open on Free (2026-10-30, Solde KORVA): KORVA earns its 3 % commission
+    // on each sale instead of a subscription.
+    await auth(request(server).patch('/api/v1/organizations/me'))
+      .send({ acceptedPaymentMethods: ['cash', 'online'] })
+      .expect(200);
 
     await putOrganizationOnPlan(connection, organization.id, 'starter');
     const paid = asSuccess<{

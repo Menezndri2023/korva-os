@@ -17,6 +17,7 @@ import { IntegrationWebhookService } from '../../../integrations/webhooks/integr
 import { PaymentsRepository } from '../payments.repository';
 import { PaymentsService } from '../payments.service';
 import { GeniusPayWebhookVerifier } from './geniuspay-webhook-verifier';
+import { WalletService } from '../../wallet/wallet.service';
 import { SubscriptionInvoicesRepository } from '../../../subscriptions/subscription-invoices.repository';
 import { SubscriptionBillingService } from '../../../subscription-billing/subscription-billing.service';
 
@@ -47,6 +48,7 @@ export class GeniusPayWebhookController {
     private readonly paymentsRepository: PaymentsRepository,
     private readonly paymentsService: PaymentsService,
     private readonly moduleRef: ModuleRef,
+    private readonly walletService: WalletService,
   ) {}
 
   @Throttle(GENIUSPAY_WEBHOOK_THROTTLE)
@@ -109,6 +111,22 @@ export class GeniusPayWebhookController {
       });
     }
 
+    if (signatureVerified) {
+      // payout.completed / payout.failed: a withdrawal to a business. Again only a trigger —
+      // the payout's status is read back from GeniusPay.
+      const payoutReference = extractPayoutReference(rawBody);
+      if (payoutReference) {
+        await this.walletService
+          .syncPayoutByReference(payoutReference)
+          .catch((error: unknown) =>
+            this.logger.error(
+              `Payout sync failed for ${payoutReference} — the sweep will retry`,
+              error,
+            ),
+          );
+        return { received: true };
+      }
+    }
     if (reference) await this.reconcile(reference);
     return { received: true };
   }
@@ -182,6 +200,31 @@ export function extractReference(rawBody: Buffer): string | undefined {
       unknown
     >;
     const reference = dataOf(payload)?.reference;
+    return typeof reference === 'string' && reference ? reference : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A payout event (`payout.*`) names the withdrawal at `data.payout.reference`. */
+export function extractPayoutReference(rawBody: Buffer): string | undefined {
+  try {
+    const payload = JSON.parse(rawBody.toString('utf8')) as Record<
+      string,
+      unknown
+    >;
+    if (
+      typeof payload.event !== 'string' ||
+      !payload.event.startsWith('payout.')
+    ) {
+      return undefined;
+    }
+    const data = dataOf(payload);
+    const payout =
+      data && typeof data.payout === 'object' && data.payout !== null
+        ? (data.payout as Record<string, unknown>)
+        : data;
+    const reference = payout?.reference;
     return typeof reference === 'string' && reference ? reference : undefined;
   } catch {
     return undefined;

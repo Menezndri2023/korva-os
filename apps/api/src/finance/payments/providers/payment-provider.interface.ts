@@ -46,6 +46,29 @@ export interface PaymentProviderResult {
    * one-off bank transfer, a mobile-money push).
    */
   mandateReference?: string;
+  /**
+   * What the provider kept on this payment, in the payment's currency — GeniusPay's `fees`
+   * ("gateway + plateforme"). Read by the Solde KORVA so a business is credited exactly what KORVA
+   * received, never an estimate. Only set by `verifyPayment()`, only when the provider says it.
+   */
+  providerFee?: number;
+}
+
+/** A withdrawal sent to a business's mobile money account — see the Solde KORVA (finance/wallet). */
+export interface PayoutRequest {
+  amount: number;
+  currency: string;
+  /** KORVA's payout id: stable across retries, so a retry is the same payout, never a second. */
+  reference: string;
+  destination: { provider: string; account: string; holderName: string };
+  description: string;
+}
+
+export interface PayoutResult {
+  providerReference: string;
+  status: 'pending' | 'completed' | 'failed';
+  fee?: number;
+  failureReason?: string;
 }
 
 /**
@@ -139,6 +162,9 @@ export interface PaymentProvider {
    * MessagingProvider.testConnection's doc for the same contract shape and rationale.
    */
   testConnection?(): Promise<{ ok: boolean; message?: string }>;
+  /** Sends money from KORVA's provider balance to a business (GeniusPay's Payout API). */
+  createPayout?(input: PayoutRequest): Promise<PayoutResult>;
+  getPayout?(providerReference: string): Promise<PayoutResult>;
 }
 
 /**

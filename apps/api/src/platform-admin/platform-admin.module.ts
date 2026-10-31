@@ -20,6 +20,8 @@ import { IdentityModule } from '../identity/identity.module';
 import { PlatformAdminController } from './platform-admin.controller';
 import { PlatformReviewsModule } from '../platform-reviews/platform-reviews.module';
 import { PlatformReviewsAdminController } from './platform-reviews-admin.controller';
+import { PlatformPayoutsAdminController } from './platform-payouts-admin.controller';
+import { FinanceModule } from '../finance/finance.module';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { PlatformAdminService } from './platform-admin.service';
 
@@ -42,6 +44,7 @@ import { PlatformAdminService } from './platform-admin.service';
     ActivationModule,
     IdentityModule,
     PlatformReviewsModule,
+    FinanceModule,
     // Signing keys are passed per call (PlatformAdminAuthService.signingKey): no module default.
     JwtModule.register({}),
   ],
@@ -49,6 +52,7 @@ import { PlatformAdminService } from './platform-admin.service';
     PlatformAdminController,
     PlatformAdminAuthController,
     PlatformReviewsAdminController,
+    PlatformPayoutsAdminController,
   ],
   providers: [
     PlatformAdminService,

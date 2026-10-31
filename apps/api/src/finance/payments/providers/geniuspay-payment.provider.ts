@@ -3,6 +3,8 @@ import type { PaymentStatus } from '@korva/types';
 import type {
   PaymentProvider,
   PaymentProviderResult,
+  PayoutRequest,
+  PayoutResult,
 } from './payment-provider.interface';
 
 /**
@@ -195,7 +197,12 @@ export class GeniusPayProvider implements PaymentProvider {
         response,
       );
     }
-    return { providerReference, status: mapGeniusPayStatus(status) };
+    const fees = Number(data?.fees);
+    return {
+      providerReference,
+      status: mapGeniusPayStatus(status),
+      ...(Number.isFinite(fees) && fees >= 0 ? { providerFee: fees } : {}),
+    };
   }
 
   async getPaymentStatus(providerReference: string): Promise<PaymentStatus> {
@@ -209,6 +216,48 @@ export class GeniusPayProvider implements PaymentProvider {
         code: 'PAYMENT_PROVIDER_REFUND_UNSUPPORTED',
         message: `GeniusPay offers no refund API: refund payment "${providerReference}" from the GeniusPay dashboard`,
       }),
+    );
+  }
+
+  /**
+   * POST /payouts (https://pay.genius.ci/docs/payout-api): from the GeniusPay wallet named by
+   * GENIUSPAY_PAYOUT_WALLET_ID to a mobile money account. `reference` doubles as GeniusPay's
+   * `idempotency_key`, so a retried request never pays twice. Their payout page documents a
+   * Bearer token while the payment API uses X-API-Key/X-API-Secret: both are sent.
+   */
+  async createPayout(input: PayoutRequest): Promise<PayoutResult> {
+    const walletId = process.env.GENIUSPAY_PAYOUT_WALLET_ID;
+    if (!walletId) {
+      throw new GeniusPayApiError(
+        'GENIUSPAY_PAYOUT_WALLET_ID is not set — the GeniusPay wallet withdrawals are paid from',
+      );
+    }
+    const response = await this.request('/payouts', 'POST', {
+      wallet_id: walletId,
+      amount: Math.round(input.amount),
+      currency: input.currency,
+      description: input.description.slice(0, 250),
+      idempotency_key: input.reference,
+      metadata: { korva_payout_id: input.reference },
+      recipient: {
+        name: input.destination.holderName,
+        phone: input.destination.account,
+      },
+      destination: {
+        type: 'mobile_money',
+        provider: input.destination.provider,
+        account: input.destination.account,
+      },
+    });
+    return toPayoutResult(response);
+  }
+
+  async getPayout(providerReference: string): Promise<PayoutResult> {
+    return toPayoutResult(
+      await this.request(
+        `/payouts/${encodeURIComponent(providerReference)}`,
+        'GET',
+      ),
     );
   }
 
@@ -240,6 +289,7 @@ export class GeniusPayProvider implements PaymentProvider {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method,
         headers: {
+          Authorization: `Bearer ${this.credential.apiSecret}`,
           'X-API-Key': this.credential.apiKey,
           'X-API-Secret': this.credential.apiSecret,
           'Content-Type': 'application/json',
@@ -285,4 +335,39 @@ export class GeniusPayProvider implements PaymentProvider {
     }
     return isRecord(payload) ? payload : {};
   }
+}
+
+/** GeniusPay's payout statuses: "pending" and "completed" in its examples, "failed" as an event;
+ *  anything else still in flight reads as pending, and the sweep asks again. */
+function toPayoutResult(response: GeniusPayEnvelope): PayoutResult {
+  const data = isRecord(response.data)
+    ? isRecord(response.data.payout)
+      ? response.data.payout
+      : response.data
+    : undefined;
+  const reference = data?.reference;
+  if (typeof reference !== 'string' || !reference) {
+    throw new GeniusPayApiError(
+      'GeniusPay did not return a payout reference',
+      undefined,
+      response,
+    );
+  }
+  const raw = typeof data?.status === 'string' ? data.status : 'pending';
+  const status =
+    raw === 'completed' || raw === 'success'
+      ? 'completed'
+      : raw === 'failed' || raw === 'cancelled' || raw === 'rejected'
+        ? 'failed'
+        : 'pending';
+  const fee = Number(data?.fees);
+  const reason = data?.failure_reason ?? data?.message;
+  return {
+    providerReference: reference,
+    status,
+    ...(Number.isFinite(fee) && fee >= 0 ? { fee } : {}),
+    ...(status === 'failed' && typeof reason === 'string'
+      ? { failureReason: reason }
+      : {}),
+  };
 }

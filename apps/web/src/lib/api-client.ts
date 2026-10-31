@@ -15,7 +15,7 @@ export class ApiError extends Error {
 }
 
 interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   withOrganization?: boolean;
 }
@@ -230,6 +230,8 @@ export const apiClient = {
     request<T>(path, { ...options, method: "POST", body }).then((payload) => payload.data as T),
   patch: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, { ...options, method: "PATCH", body }).then((payload) => payload.data as T),
+  put: <T>(path: string, body?: unknown, options?: Omit<RequestOptions, "method" | "body">) =>
+    request<T>(path, { ...options, method: "PUT", body }).then((payload) => payload.data as T),
   delete: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, { ...options, method: "DELETE" }).then((payload) => payload.data as T),
 };

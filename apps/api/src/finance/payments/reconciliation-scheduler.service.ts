@@ -3,11 +3,13 @@ import {
   Logger,
   OnModuleDestroy,
   OnModuleInit,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { PaymentReconciliationService } from './payment-reconciliation.service';
+import { WalletService } from '../wallet/wallet.service';
 import { backgroundWorkersDisabled } from '../../core/background/background-workers';
 
 export const RECONCILIATION_QUEUE_NAME = 'payment-reconciliation';
@@ -65,6 +67,9 @@ export class ReconciliationSchedulerService
   constructor(
     private readonly configService: ConfigService,
     private readonly reconciliationService: PaymentReconciliationService,
+    // Le Solde KORVA rides on this sweep (credits missed, withdrawals followed, automatic
+    // withdrawals) rather than adding one more permanent Redis loop.
+    @Optional() private readonly walletService?: WalletService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -156,6 +161,20 @@ export class ReconciliationSchedulerService
       );
     } catch (error) {
       this.logger.error('Reconciliation sweep: Refunds sweep failed', error);
+      failure ??= error;
+    }
+
+    try {
+      const wallet = (await this.walletService?.runSweep()) ?? {
+        credited: 0,
+        synced: 0,
+        automatic: 0,
+      };
+      this.logger.log(
+        `Wallet swept: credited=${wallet.credited} payoutsSynced=${wallet.synced} automaticPayouts=${wallet.automatic}`,
+      );
+    } catch (error) {
+      this.logger.error('Reconciliation sweep: wallet sweep failed', error);
       failure ??= error;
     }
 

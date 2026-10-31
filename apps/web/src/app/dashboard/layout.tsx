@@ -29,6 +29,7 @@ import {
   Star,
   Undo2,
   Users,
+  Wallet,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -102,6 +103,7 @@ function navGroups(
       title: "Gestion",
       items: [
         { href: "/dashboard/finance", label: "Devis & Factures", icon: Receipt, visible: on("finance"), prefix: true },
+        { href: "/dashboard/solde", label: "Solde KORVA", icon: Wallet, visible: true },
         { href: "/dashboard/analytics", label: "Statistiques", icon: ChartColumn, visible: on("analytics") },
         { href: "/dashboard/workflows", label: "Workflows", icon: Workflow, visible: on("workflow"), prefix: true },
         {

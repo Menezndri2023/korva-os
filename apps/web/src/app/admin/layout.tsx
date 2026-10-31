@@ -13,6 +13,7 @@ import {
   Star,
   Tags,
   Users,
+  Wallet,
 } from "lucide-react";
 import { Button, Card, EmptyState, ThemeToggle } from "@korva/ui";
 import { ApiError } from "@/lib/api-client";
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/admin/utilisateurs", label: "Utilisateurs", icon: Users, exact: false },
   { href: "/admin/abonnements", label: "Abonnements", icon: CreditCard, exact: false },
   { href: "/admin/formules", label: "Formules", icon: Tags, exact: false },
+  { href: "/admin/reversements", label: "Reversements", icon: Wallet, exact: false },
   { href: "/admin/avis", label: "Avis sur KORVA", icon: Star, exact: false },
   { href: "/admin/journal", label: "Journal", icon: ScrollText, exact: false },
   { href: "/admin/systeme", label: "Système", icon: Activity, exact: false },

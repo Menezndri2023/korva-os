@@ -25,6 +25,7 @@ export * from "./storefront-themes.ts";
 export * from "./webhook-subscriptions.ts";
 export * from "./reviews.ts";
 export * from "./korva-ai.ts";
+export * from "./wallet.ts";
 export * from "./projects.ts";
 export * from "./courses.ts";
 export * from "./kitchen.ts";

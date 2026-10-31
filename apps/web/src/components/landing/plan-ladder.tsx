@@ -12,9 +12,11 @@ import {
   PLAN_KEYS,
   PLAN_LIMITS,
   PLAN_NAMES,
+  PLAN_PAYOUT_RULES,
   PLAN_FEATURE_LABELS,
   PLAN_FEATURE_MIN_PLAN,
   PLAN_PRICES,
+  commissionPercentLabel,
   SIGNUP_TRIAL,
   countryFromTimeZone,
   currencyForCountry,
@@ -79,6 +81,20 @@ function aiLine(plan: PlanKey): string | null {
   if (!quota || quota === 0) return null;
   if (quota === -1) return "KORVA IA sans limite";
   return `KORVA IA : ${quota.toLocaleString("fr-FR")} messages par mois`;
+}
+
+/** Le Solde KORVA: the commission on online sales and how withdrawals work, from the same
+ *  tables WalletService applies (PLAN_COMMISSION_BASIS_POINTS, PLAN_PAYOUT_RULES). */
+function paymentLines(plan: PlanKey): string[] {
+  const rules = PLAN_PAYOUT_RULES[plan];
+  return [
+    `Paiement en ligne (Wave, Orange Money, MTN, Moov, carte) : commission ${commissionPercentLabel(plan)} + frais GeniusPay`,
+    [
+      rules.manualPerWeek === null ? "Retraits à la demande" : `${rules.manualPerWeek} retrait à la demande par semaine`,
+      rules.dailyAutoPayout ? "retrait automatique quotidien" : "retrait automatique hebdomadaire",
+      ...(rules.payoutFeeIncluded ? ["frais de retrait offerts"] : []),
+    ].join(", "),
+  ];
 }
 
 /**
@@ -236,6 +252,14 @@ export function PlanLadder() {
                   </span>
                 </li>
                 {quotas.map((line) => (
+                  <li key={line} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
+                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
+                      ✓
+                    </span>
+                    {line}
+                  </li>
+                ))}
+                {paymentLines(plan).map((line) => (
                   <li key={line} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
                     <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                       ✓

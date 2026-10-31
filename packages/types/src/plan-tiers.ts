@@ -94,7 +94,10 @@ export const CUSTOM_DOMAIN_MIN_PLAN: PlanKey = "starter";
  * of adding more is refused.
  */
 export const PLAN_FEATURE_MIN_PLAN = {
-  online_payment: "starter",
+  // Every plan since 2026-10-28 ("formule B"): KORVA collects and takes a commission per sale
+  // (PLAN_COMMISSION_BASIS_POINTS in wallet.ts — 3 % on Free), so a free business selling online
+  // earns KORVA money instead of none.
+  online_payment: "free",
   no_korva_branding: "starter",
   customer_accounts: "starter",
   kitchen_display: "starter",

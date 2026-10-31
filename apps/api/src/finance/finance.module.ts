@@ -79,6 +79,20 @@ import { IdentityModule } from '../identity/identity.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { DocumentsModule } from '../documents/documents.module';
 
+import { WalletService } from './wallet/wallet.service';
+import { WalletController } from './wallet/wallet.controller';
+import {
+  WalletEntry,
+  WalletEntrySchema,
+} from './wallet/schemas/wallet-entry.schema';
+import { Payout, PayoutSchema } from './wallet/schemas/payout.schema';
+import {
+  WalletSettings,
+  WalletSettingsSchema,
+} from './wallet/schemas/wallet-settings.schema';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { EmailModule } from '../shared/email/email.module';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -91,7 +105,14 @@ import { DocumentsModule } from '../documents/documents.module';
       { name: DiscountCode.name, schema: DiscountCodeSchema },
       { name: RecurringBilling.name, schema: RecurringBillingSchema },
       { name: Offer.name, schema: OfferSchema },
+      { name: WalletEntry.name, schema: WalletEntrySchema },
+      { name: Payout.name, schema: PayoutSchema },
+      { name: WalletSettings.name, schema: WalletSettingsSchema },
     ]),
+    // Le Solde KORVA reads the plan (commission, withdrawal rules) and e-mails the withdrawal
+    // number's confirmation code. Neither module imports FinanceModule.
+    SubscriptionsModule,
+    EmailModule,
     CrmModule,
     CountersModule,
     AuditModule,
@@ -112,8 +133,10 @@ import { DocumentsModule } from '../documents/documents.module';
     FlutterwaveWebhookController,
     PaystackWebhookController,
     GeniusPayWebhookController,
+    WalletController,
   ],
   providers: [
+    WalletService,
     QuotesRepository,
     QuotesService,
     QuoteExpirySchedulerService,
@@ -144,6 +167,7 @@ import { DocumentsModule } from '../documents/documents.module';
     RecurringBillingSchedulerService,
   ],
   exports: [
+    WalletService,
     InvoicesService,
     QuotesService,
     PaymentReconciliationService,

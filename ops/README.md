@@ -249,3 +249,30 @@ paiement hébergée. KORVA l'utilise pour deux choses : les entreprises qui paie
 
 Remboursements : GeniusPay ne publie pas d'API de remboursement — ils se font depuis son tableau de
 bord ; KORVA répond `PAYMENT_PROVIDER_REFUND_UNSUPPORTED` si on tente de rembourser depuis KORVA.
+
+### Le Solde KORVA : reversements aux entreprises
+
+Les paiements en ligne des boutiques arrivent sur le compte GeniusPay `merchant-of-record` de KORVA.
+Chaque vente crédite le Solde de l'entreprise : montant − frais GeniusPay − commission de sa formule
+(Free 3 %, Starter 1,5 %, Pro 1 %, Business 0,5 %). Après `WALLET_HOLD_DAYS` jours (3 par défaut),
+l'entreprise retire vers son numéro Wave / Orange Money / MTN / Moov, confirmé par un code envoyé à
+son e-mail — à la demande, ou automatiquement (le balayage de réconciliation, toutes les 5 minutes).
+
+1. **Avant tout** : obtenir de GeniusPay, par écrit, que les retraits vers des tiers (les numéros
+   des entreprises) sont autorisés sur le compte, et relever leurs vrais frais d'encaissement et de
+   retrait.
+2. **Migration** (index uniques anti-double crédit, obligatoires — autoIndex est coupé en
+   production) : `migrate.js` puis `migrate.js --apply`, comme pour toute mise à jour.
+3. **Variables** (sur le serveur, ajouter les noms puis poser la valeur) :
+
+       cd ~/korva-os && printf 'PAYOUT_APPROVAL=manual\nGENIUSPAY_PAYOUT_WALLET_ID=\n' >> .env.production
+       ~/ops/set-secret.sh GENIUSPAY_PAYOUT_WALLET_ID
+
+4. **Webhook** : ajouter les événements `payout.*` au webhook GeniusPay existant (même URL).
+5. **Validation** : avec `PAYOUT_APPROVAL=manual`, chaque retrait attend dans Administration >
+   Reversements (« Valider et envoyer » ou « Refuser », le montant est alors rendu au Solde). Un
+   retrait échoué chez GeniusPay est rendu automatiquement. Passer à `auto` seulement après
+   quelques semaines de retraits validés à la main sans incident.
+
+Le montant « Dû aux entreprises » de la page Reversements doit toujours rester couvert par le
+solde du portefeuille GeniusPay : le comparer chaque semaine.
