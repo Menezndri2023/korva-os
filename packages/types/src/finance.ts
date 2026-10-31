@@ -208,3 +208,22 @@ export interface RecurringBilling {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * A sale paid at the counter by scanning a QR code: KORVA issues a one-line invoice and a
+ * GeniusPay payment, the QR code opens GeniusPay's page on the customer's phone, and the money
+ * lands in the Solde KORVA like any other online sale.
+ */
+export interface CounterPayment {
+  /** The Payment's id. */
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  label: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  /** GeniusPay's payment page — what the QR code encodes. */
+  checkoutUrl?: string;
+  createdAt: string;
+}

@@ -24,6 +24,10 @@ import {
 // Order/Booking/Contact registrations for the identical class of problem — see recurring-
 // billing.service.ts/recurring-billing-scheduler.service.ts for the two read-only consumers.
 import { Offer, OfferSchema } from '../catalog/offers/schemas/offer.schema';
+import {
+  Contact,
+  ContactSchema,
+} from '../crm/contacts/schemas/contact.schema';
 
 import { QuotesRepository } from './quotes/quotes.repository';
 import { QuotesService } from './quotes/quotes.service';
@@ -79,6 +83,8 @@ import { IdentityModule } from '../identity/identity.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { DocumentsModule } from '../documents/documents.module';
 
+import { CounterPaymentsService } from './counter/counter-payments.service';
+import { CounterPaymentsController } from './counter/counter-payments.controller';
 import { WalletService } from './wallet/wallet.service';
 import { WalletController } from './wallet/wallet.controller';
 import {
@@ -105,6 +111,7 @@ import { EmailModule } from '../shared/email/email.module';
       { name: DiscountCode.name, schema: DiscountCodeSchema },
       { name: RecurringBilling.name, schema: RecurringBillingSchema },
       { name: Offer.name, schema: OfferSchema },
+      { name: Contact.name, schema: ContactSchema },
       { name: WalletEntry.name, schema: WalletEntrySchema },
       { name: Payout.name, schema: PayoutSchema },
       { name: WalletSettings.name, schema: WalletSettingsSchema },
@@ -134,9 +141,11 @@ import { EmailModule } from '../shared/email/email.module';
     PaystackWebhookController,
     GeniusPayWebhookController,
     WalletController,
+    CounterPaymentsController,
   ],
   providers: [
     WalletService,
+    CounterPaymentsService,
     QuotesRepository,
     QuotesService,
     QuoteExpirySchedulerService,

@@ -84,6 +84,13 @@ export const createPaymentSchema = z.object({
 });
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 
+/** A counter sale paid by QR code (see CounterPayment in @korva/types). */
+export const createCounterPaymentSchema = z.object({
+  amount: z.number().positive().max(100_000_000),
+  label: z.string().trim().max(120).optional(),
+});
+export type CreateCounterPaymentInput = z.infer<typeof createCounterPaymentSchema>;
+
 export const createRefundSchema = z.object({
   paymentId: z.string().min(1),
   amount: z.number().positive(),

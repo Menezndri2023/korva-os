@@ -155,7 +155,8 @@ export class PaymentsService {
     idempotencyKey?: string,
     online?: {
       provider: PaymentProvider;
-      customerEmail: string;
+      /** Absent for a counter sale: nobody typed an e-mail (GeniusPay doesn't need one). */
+      customerEmail?: string;
       redirectUrl: string;
     },
   ): Promise<PaymentDocument> {

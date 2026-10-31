@@ -22,6 +22,7 @@ import {
   Megaphone,
   MessageCircle,
   Package,
+  QrCode,
   Receipt,
   Settings,
   ShoppingBag,
@@ -103,6 +104,7 @@ function navGroups(
       title: "Gestion",
       items: [
         { href: "/dashboard/finance", label: "Devis & Factures", icon: Receipt, visible: on("finance"), prefix: true },
+        { href: "/dashboard/caisse", label: "Caisse", icon: QrCode, visible: true },
         { href: "/dashboard/solde", label: "Solde KORVA", icon: Wallet, visible: true },
         { href: "/dashboard/analytics", label: "Statistiques", icon: ChartColumn, visible: on("analytics") },
         { href: "/dashboard/workflows", label: "Workflows", icon: Workflow, visible: on("workflow"), prefix: true },
