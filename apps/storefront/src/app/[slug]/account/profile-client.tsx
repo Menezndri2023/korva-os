@@ -10,24 +10,30 @@ import { useCustomerAuth } from "@/lib/use-customer-auth";
 import { usePublicOrganization } from "@/lib/use-public-organization";
 import type { PublicOrganization } from "@/lib/public-types";
 import { AccountShell } from "./account-shell";
+import { tradeVocabulary, type BusinessModel } from "@korva/types";
 
 /**
  * The account sections this business actually has: a clothing shop's customer has no "Mes
- * formations", a salon's no "Mes retours". Until the business is known, every section is listed
- * (each page handles being empty on its own).
+ * formations", a salon's no "Mes retours", and each says it in the trade's words ("Mes
+ * rendez-vous", "Mes visites"). Until the business is known, every section is listed (each page
+ * handles being empty on its own).
  */
 export function accountLinks(organization: PublicOrganization | undefined): { path: string; label: string }[] {
   const on = (module: string) => !organization || organization.enabledModules.includes(module);
+  const model = organization?.businessModel;
+  // Returns are for goods sent back; a wishlist is for products or properties one comes back to.
+  const tradeIs = (...models: BusinessModel[]) => !model || models.includes(model);
+  const bookings = tradeVocabulary(model).bookings.toLowerCase();
   const links: { path: string; label: string; shown: boolean }[] = [
     { path: "orders", label: "Mes commandes", shown: on("commerce") },
-    { path: "bookings", label: "Mes réservations", shown: on("booking") },
-    { path: "quotes", label: "Mes devis", shown: on("finance") || organization?.businessModel === "quotes" },
-    { path: "returns", label: "Mes retours", shown: on("commerce") && organization?.businessModel !== "restaurant" },
-    { path: "wishlist", label: "Ma liste de souhaits", shown: on("catalog") && on("commerce") },
+    { path: "bookings", label: `Mes ${bookings}`, shown: on("booking") },
+    { path: "quotes", label: "Mes devis", shown: on("finance") || model === "quotes" },
+    { path: "returns", label: "Mes retours", shown: on("commerce") && tradeIs("retail") },
+    { path: "wishlist", label: "Mes favoris", shown: on("catalog") && tradeIs("retail", "real_estate") },
     {
       path: "learning",
       label: "Mes formations",
-      shown: !organization || organization.businessModel === "training",
+      shown: !organization || model === "training",
     },
   ];
   return links.filter((link) => link.shown);
@@ -88,14 +94,24 @@ export default function ProfileClient({ slug }: { slug: string }) {
 
   return (
     <AccountShell slug={slug} title="Mon compte">
-      <nav aria-label="Mon espace client" className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+      <p className="text-sm text-text-muted">
+        Bonjour{customer.firstName ? ` ${customer.firstName}` : ""}, retrouvez ici tout ce qui vous concerne.
+      </p>
+      {/* The sections first, as tiles: what the customer came for. The profile comes after. */}
+      <nav aria-label="Mon espace client" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {accountLinks(organizationQuery.data).map(({ path, label }) => (
-          <Link key={path} href={`/${slug}/account/${path}`} className="font-medium text-text hover:underline">
+          <Link
+            key={path}
+            href={`/${slug}/account/${path}`}
+            className="flex min-h-14 items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-sm font-semibold text-text transition-colors hover:border-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          >
             {label}
+            <span aria-hidden className="text-text-muted">→</span>
           </Link>
         ))}
       </nav>
 
+      <h2 className="pt-2 text-sm font-semibold text-text">Mes informations</h2>
       <Card className="p-4">
         <form onSubmit={handleSubmit} className="space-y-3 text-sm">
           <label className="block">

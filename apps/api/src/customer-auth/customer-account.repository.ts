@@ -70,6 +70,45 @@ export class CustomerAccountRepository {
       .exec();
   }
 
+  async recordLogin(id: string): Promise<void> {
+    await this.model.updateOne({ _id: id }, { lastLoginAt: new Date() }).exec();
+  }
+
+  /** The business's own list: newest first, optionally by e-mail. */
+  list(
+    organizationId: string,
+    search: string | undefined,
+    limit: number,
+  ): Promise<CustomerAccountDocument[]> {
+    const filter: Record<string, unknown> = {
+      organizationId: new Types.ObjectId(organizationId),
+    };
+    if (search) {
+      filter.email = {
+        $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        $options: 'i',
+      };
+    }
+    return this.model.find(filter).sort({ createdAt: -1 }).limit(limit).exec();
+  }
+
+  async setDisabled(
+    organizationId: string,
+    id: string,
+    disabled: boolean,
+  ): Promise<CustomerAccountDocument | null> {
+    return this.model
+      .findOneAndUpdate(
+        {
+          _id: new Types.ObjectId(id),
+          organizationId: new Types.ObjectId(organizationId),
+        },
+        { disabledAt: disabled ? new Date() : null },
+        { new: true },
+      )
+      .exec();
+  }
+
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     await this.model.updateOne({ _id: id }, { passwordHash }).exec();
   }

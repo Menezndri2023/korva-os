@@ -40,7 +40,7 @@ export default function WishlistClient({ slug }: { slug: string }) {
   });
 
   return (
-    <AccountShell slug={slug} title="Ma liste de souhaits">
+    <AccountShell slug={slug} title="Mes favoris">
       <Link href={`/${slug}/account`} className="text-sm text-text-muted hover:underline">
         ← Mon compte
       </Link>

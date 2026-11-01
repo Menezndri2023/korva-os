@@ -36,9 +36,11 @@ Le tableau de bord et les sites : `pnpm --filter web exec next start -p 3000` et
 Base vide d'abord (`korva_screens` uniquement), puis, depuis `apps/api`, avec la même
 `MONGODB_URI` réécrite : `CREDENTIALS_FILE=/chemin/creds.json pnpm seed:screenshots`.
 
-Quatre entreprises : un salon en Pro, une boutique en Business avec deux établissements et le
-thème premium Jade + Prestige, un restaurant en Starter, un cabinet de conseil en Gratuit, plus un
-administrateur. Les mots de passe sont écrits dans `CREDENTIALS_FILE` (droits 0600), jamais
+Une entreprise par métier : un salon et un hôtel en Pro, une boutique en Business avec deux
+établissements et le thème premium Jade + Prestige, un restaurant, une académie, une agence
+immobilière et une association en Starter, un cabinet de conseil en Gratuit, plus un
+administrateur. Pour repartir d'une base vide : API arrêtée, `RESET=1` (même commande), puis API
+démarrée et remplissage normal. Les mots de passe sont écrits dans `CREDENTIALS_FILE` (droits 0600), jamais
 affichés.
 
 ## 3. Prendre les captures
@@ -52,3 +54,14 @@ a été trouvé le 2026-10-21.
 
 L'API limite chaque adresse à 120 requêtes par minute ; le parcours attend et recharge la page
 quand il atteint cette limite, d'où une durée de dix minutes environ.
+
+## 4. Rejouer le parcours d'un client sur chaque site
+
+Depuis `apps/web` : `CREDENTIALS_FILE=/chemin/creds.json OUT_DIR=/chemin/parcours node scripts/customer-journeys.mjs`
+
+Sur le site de chaque entreprise, comme un client : trouver « Se connecter » dans l'en-tête
+(ordinateur et téléphone), créer un compte, ouvrir chaque rubrique de l'espace client, se
+déconnecter, se reconnecter, demander un nouveau mot de passe. Un site en formule Gratuit ne doit
+proposer aucun compte. `ONLY=hotel,formation` rejoue seulement ces entreprises ; une pause de
+20 s sépare deux sites (`PAUSE_MS`) pour rester sous la limite de requêtes de l'API.
+

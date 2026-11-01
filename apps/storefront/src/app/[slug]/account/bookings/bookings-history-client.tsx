@@ -9,7 +9,8 @@ import { publicApiClient } from "@/lib/public-api-client";
 import { formatOfferPrice } from "@/lib/offer-labels";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { CustomerBookingSummary } from "@/lib/public-types";
-import type { BookingStatus } from "@korva/types";
+import { tradeVocabulary, type BookingStatus } from "@korva/types";
+import { usePublicOrganization } from "@/lib/use-public-organization";
 import { AccountShell } from "../account-shell";
 
 const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
@@ -20,6 +21,8 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
 };
 
 export default function BookingsHistoryClient({ slug }: { slug: string }) {
+  // "Mes rendez-vous", "Mes visites", "Mes séjours"… — the trade's word, as in the account menu.
+  const title = `Mes ${tradeVocabulary(usePublicOrganization(slug).data?.businessModel).bookings.toLowerCase()}`;
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
 
@@ -41,7 +44,7 @@ export default function BookingsHistoryClient({ slug }: { slug: string }) {
   const formatter = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
 
   return (
-    <AccountShell slug={slug} title="Mes réservations">
+    <AccountShell slug={slug} title={title}>
       <Link href={`/${slug}/account`} className="text-sm text-text-muted hover:underline">
         ← Mon compte
       </Link>

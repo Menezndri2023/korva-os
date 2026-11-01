@@ -9,6 +9,7 @@
 const MESSAGES: Record<string, string> = {
   // Customer account
   INVALID_CREDENTIALS: "Adresse e-mail ou mot de passe incorrect.",
+  ACCOUNT_DISABLED: "Votre compte a été suspendu par l'établissement. Contactez-le pour le rétablir.",
   ACCOUNT_LOCKED:
     "Trop de tentatives de connexion. Votre compte est bloqué pendant 15 minutes, réessayez ensuite.",
   EMAIL_TAKEN: "Un compte existe déjà avec cette adresse e-mail. Connectez-vous ou réinitialisez votre mot de passe.",

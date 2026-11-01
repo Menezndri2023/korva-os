@@ -192,6 +192,8 @@ export class CustomerAuthService {
       contactId: new Types.ObjectId(contact.id as string),
       email: input.email,
       passwordHash,
+      // Creating the account signs the customer in.
+      lastLoginAt: new Date(),
     });
 
     // Best-effort, never allowed to affect the outcome — same posture as AuthService.register's
@@ -265,12 +267,22 @@ export class CustomerAuthService {
       });
     }
 
+    // Checked only once the password is right, so a stranger cannot learn the account exists.
+    if (account.disabledAt) {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_DISABLED',
+        message:
+          'This account has been suspended by the business. Contact it to restore access.',
+      });
+    }
+
     if (account.failedLoginAttempts > 0 || account.lockedUntil) {
       await this.customerAccountRepository.resetFailedAttempts(
         account.id as string,
       );
     }
 
+    await this.customerAccountRepository.recordLogin(account.id as string);
     const contact = await this.contactsService.getById(
       organizationId,
       account.contactId.toString(),
@@ -297,7 +309,7 @@ export class CustomerAuthService {
     const account = await this.customerAccountRepository.findById(
       session.customerAccountId.toString(),
     );
-    if (!account) {
+    if (!account || account.disabledAt) {
       throw new UnauthorizedException({
         code: 'INVALID_REFRESH_TOKEN',
         message: 'Refresh token is invalid or expired',

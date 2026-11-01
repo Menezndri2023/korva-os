@@ -45,6 +45,7 @@ const TOURS = {
     ["caisse", "/dashboard/caisse"],
     ["factures", "/dashboard/finance/invoices"],
     ["parametres-modules", "/dashboard/settings#abonnement"],
+    ["espaces-clients", "/dashboard/crm/comptes"],
   ],
   boutique: [
     ["accueil", "/dashboard"],

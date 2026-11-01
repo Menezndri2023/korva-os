@@ -19,6 +19,7 @@ import { OfferPrice } from "@/templates/sections/OfferPrice";
 import { OfferImage } from "../sections/OfferImage";
 import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
+import { siteWording } from "../wording";
 import { Confirmation } from "../sections/Confirmation";
 
 /**
@@ -45,7 +46,15 @@ export function VitrineTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
-  const links = siteLinks(slug, catalogVisible, { catalog: "Tous nos services", track: "Suivi" });
+  // Also the estate agency's and the association's template: words follow the trade.
+  const words = siteWording(organization.businessModel, {
+    catalogLink: "Tous nos services",
+    eyebrow: "Ce que nous faisons",
+    title: "Nos services",
+    heroCta: "",
+    book: "Réserver",
+  });
+  const links = siteLinks(slug, catalogVisible, { catalog: words.catalogLink, track: "Suivi" });
 
   return (
     <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
@@ -82,7 +91,7 @@ export function VitrineTemplate({
       </section>
 
       <main id="services" className="mx-auto w-full max-w-5xl scroll-mt-20 px-4 py-14 sm:px-6 sm:py-16">
-        <SectionHeading eyebrow="Ce que nous faisons" title="Nos services" />
+        <SectionHeading eyebrow={words.eyebrow} title={words.title} />
 
         <Confirmation message={confirmation} />
 
@@ -111,6 +120,7 @@ export function VitrineTemplate({
                 bookingEnabled={bookingEnabled}
                 commerceEnabled={commerceEnabled}
                 onBook={() => onBook(offer)}
+                bookLabel={words.book}
                 onAddToCart={() => onAddToCart(offer)}
               />
             ))}
@@ -140,6 +150,7 @@ function ServiceCard({
   commerceEnabled,
   onBook,
   onAddToCart,
+  bookLabel,
 }: {
   slug: string;
   offer: PublicOffer;
@@ -147,6 +158,7 @@ function ServiceCard({
   commerceEnabled: boolean;
   onBook: () => void;
   onAddToCart: () => void;
+  bookLabel: string;
 }) {
   return (
     <li className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
@@ -165,7 +177,7 @@ function ServiceCard({
         <div className="mt-auto flex items-center justify-between gap-3 pt-4">
           <span className="font-semibold"><OfferPrice offer={offer} /></span>
           {offer.type === "booking" && bookingEnabled && (
-            <Button size="sm" onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>Réserver</Button>
+            <Button size="sm" onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>{bookLabel}</Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
             <Button variant="secondary" size="sm" onClick={onAddToCart}>Ajouter au panier</Button>

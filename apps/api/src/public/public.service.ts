@@ -256,6 +256,14 @@ export class PublicService {
       // Whether a visitor can CREATE a customer account (CustomerAuthService.register checks
       // the same thing); signing in to an existing one is never taken away.
       customerAccountsEnabled: planHasFeature(plan.key, 'customer_accounts'),
+      // Whether "Se connecter" leads anywhere: accounts can be created, or some exist from a
+      // former paid plan. A Free site with neither offered a sign-in page with no way in.
+      customerSignInAvailable:
+        planHasFeature(plan.key, 'customer_accounts') ||
+        (await this.contactModel.db
+          .collection('customer_accounts')
+          .countDocuments({ organizationId: organization._id }, { limit: 1 })) >
+          0,
       acceptedPaymentMethods:
         await this.resolveAvailablePaymentMethods(organization),
       // Unlike the content sections below, SEO overrides are never plan-gated — basic SEO

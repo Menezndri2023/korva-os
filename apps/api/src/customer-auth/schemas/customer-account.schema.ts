@@ -49,6 +49,15 @@ export class CustomerAccount {
 
   @Prop({ type: Date, default: null })
   lockedUntil!: Date | null;
+
+  /** Set by the business (Clients › Espaces clients): sign-in refused and sessions ended until it
+   *  turns it back on. Nothing of the customer's history is touched. */
+  @Prop({ type: Date, default: null })
+  disabledAt!: Date | null;
+
+  /** Last successful sign-in, shown to the business. */
+  @Prop({ type: Date, default: null })
+  lastLoginAt!: Date | null;
 }
 
 export const CustomerAccountSchema =

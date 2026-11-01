@@ -48,6 +48,8 @@ export interface PublicOrganization {
   poweredByKorva?: boolean;
   /** Whether a visitor can CREATE a customer account here; signing in is never taken away. */
   customerAccountsEnabled?: boolean;
+  /** Whether the site offers "Se connecter": accounts can be created, or some already exist. */
+  customerSignInAvailable?: boolean;
   /** Flat shipping rate charged at checkout — undefined means no shipping cost. */
   shippingFlatRate?: number;
   /** Mirrors Organization's fulfillment settings. `fulfillmentModes` undefined means the shop

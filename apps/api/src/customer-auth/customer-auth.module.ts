@@ -49,6 +49,9 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
  * FinanceModule/CatalogModule/DocumentsModule/ReviewsModule/CustomerServiceModule (this module is
  * brand new, so nothing could import it back — re-verified via grep before each addition).
  */
+import { CustomerAccountsAdminService } from './customer-accounts-admin.service';
+import { CustomerAccountsAdminController } from './customer-accounts-admin.controller';
+
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -84,12 +87,13 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
       }),
     }),
   ],
-  controllers: [CustomerAuthController],
+  controllers: [CustomerAuthController, CustomerAccountsAdminController],
   providers: [
     CustomerAccountRepository,
     CustomerSessionRepository,
     CustomerPasswordResetRepository,
     CustomerAuthService,
+    CustomerAccountsAdminService,
     CustomerJwtStrategy,
     CustomerAuthGuard,
   ],

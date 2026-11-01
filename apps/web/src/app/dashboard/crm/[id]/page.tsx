@@ -41,6 +41,7 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency, LEAD_STATUS_LABELS, DEAL_STATUS_LABELS } from "@/lib/analytics-format";
 import { RelationSection } from "@/components/relation-section";
+import { ContactAccountCard } from "@/components/customer-account-actions";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
@@ -641,6 +642,8 @@ export default function ContactDetailPage() {
           )}
         </Card>
       )}
+
+      <ContactAccountCard contactId={id} />
 
       <RelationSection<BusinessGraphTimelineEntry>
         title="Chronologie"

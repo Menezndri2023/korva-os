@@ -52,6 +52,8 @@ export function SiteHeader({
     : `border-b ${KT.border} ${KT.surface} ${KT.text}`;
   const linkTone = accent ? "opacity-90 hover:opacity-100" : `${KT.textMuted} hover:text-[var(--kt-text)]`;
   const accountHref = `/${slug}/account${isAuthenticated ? "" : "/login"}`;
+  // No account can exist here (Free plan, none created before): no sign-in to offer.
+  const accountsOffered = isAuthenticated || organization.customerSignInAvailable !== false;
   const accountLabel = isAuthenticated ? (customerFirstName ?? "Mon compte") : "Se connecter";
 
   return (
@@ -70,7 +72,7 @@ export function SiteHeader({
               {link.label}
             </Link>
           ))}
-          {authHydrated && (
+          {authHydrated && accountsOffered && (
             <Link href={accountHref} className={`inline-flex items-center gap-1.5 transition-colors ${linkTone}`}>
               <UserRound aria-hidden className="h-4 w-4" />
               {accountLabel}
@@ -105,7 +107,7 @@ export function SiteHeader({
 
         <MobileMenu
           links={links}
-          accountHref={authHydrated ? accountHref : undefined}
+          accountHref={authHydrated && accountsOffered ? accountHref : undefined}
           accountLabel={accountLabel}
           accent={accent}
         />

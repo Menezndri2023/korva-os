@@ -52,3 +52,16 @@ export interface ApiKeySummary {
 export interface CreatedApiKey extends ApiKeySummary {
   key: string;
 }
+
+/** A customer's account on a business's site, as the business sees it (no password, ever). */
+export interface CustomerAccountSummary {
+  id: string;
+  contactId: string;
+  email: string;
+  name?: string;
+  phone?: string;
+  createdAt: string;
+  lastLoginAt?: string;
+  /** Set while the business has suspended the account. */
+  disabledAt?: string;
+}

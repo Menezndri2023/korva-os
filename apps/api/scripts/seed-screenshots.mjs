@@ -113,6 +113,46 @@ const PERSONAS = [
     modules: ['crm', 'catalog', 'website', 'analytics', 'communication'],
     offers: [{ type: 'service', name: 'Audit de gestion', amount: 250000 }],
   },
+  {
+    key: 'hotel',
+    email: 'yao@hotel.screens.korva.test',
+    firstName: 'Yao',
+    lastName: 'Kouadio',
+    plan: 'pro',
+    establishments: [{ name: 'Résidence Lagune', type: 'hôtellerie', businessModel: 'lodging' }],
+    modules: ['crm', 'catalog', 'booking', 'website', 'analytics', 'communication'],
+    offers: [{ type: 'booking', name: 'Chambre double vue lagune', amount: 35000 }],
+  },
+  {
+    key: 'formation',
+    email: 'ines@academie.screens.korva.test',
+    firstName: 'Inès',
+    lastName: 'Traoré',
+    plan: 'starter',
+    establishments: [{ name: 'Académie Digitale', type: 'formation', businessModel: 'training' }],
+    modules: ['crm', 'catalog', 'booking', 'website', 'analytics', 'communication'],
+    offers: [{ type: 'booking', name: 'Atelier marketing digital', amount: 45000, durationMinutes: 180 }],
+  },
+  {
+    key: 'immobilier',
+    email: 'serge@immo.screens.korva.test',
+    firstName: 'Serge',
+    lastName: 'Aka',
+    plan: 'starter',
+    establishments: [{ name: 'Aka Immobilier', type: 'immobilier', businessModel: 'real_estate' }],
+    modules: ['crm', 'catalog', 'booking', 'website', 'analytics', 'communication'],
+    offers: [{ type: 'booking', name: 'Villa 4 pièces Riviera', amount: 0, durationMinutes: 60 }],
+  },
+  {
+    key: 'association',
+    email: 'mariama@asso.screens.korva.test',
+    firstName: 'Mariama',
+    lastName: 'Cissé',
+    plan: 'starter',
+    establishments: [{ name: 'Association Avenir Jeunes', type: 'association', businessModel: 'association' }],
+    modules: ['crm', 'catalog', 'commerce', 'website', 'analytics', 'communication'],
+    offers: [{ type: 'product', name: 'Adhésion annuelle', amount: 10000 }],
+  },
 ];
 
 const CUSTOMERS = [
@@ -125,6 +165,15 @@ const CUSTOMERS = [
 
 await mongoose.connect(MONGODB_URI);
 const db = mongoose.connection.db;
+// RESET=1: start from an empty demo database (the name check above makes this *_screens only).
+// Run it with the API stopped, then start the API (it recreates the indexes and the plan
+// catalog) and seed without RESET.
+if (process.env.RESET === '1') {
+  await db.dropDatabase();
+  console.log(`Base ${dbName} vidée. Démarrez l'API, puis relancez sans RESET.`);
+  await mongoose.disconnect();
+  process.exit(0);
+}
 const oid = (id) => new mongoose.Types.ObjectId(id);
 
 async function putOnPlan(organizationId, planKey, currency) {

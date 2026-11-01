@@ -17,6 +17,7 @@ import { OfferPrice } from "@/templates/sections/OfferPrice";
 import { OfferImage } from "../sections/OfferImage";
 import { Monogram, SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
+import { siteWording } from "../wording";
 import { Confirmation } from "../sections/Confirmation";
 
 /** Beauty & wellness, non-medical health, fitness, hospitality, personal services — booking is
@@ -42,7 +43,15 @@ export function SalonTemplate({
 }: StorefrontTemplateProps) {
   const bookableOffers = (offers ?? []).filter((o) => o.type === "booking");
   const otherOffers = (offers ?? []).filter((o) => o.type !== "booking");
-  const links = siteLinks(slug, catalogVisible, { catalog: "Tous nos services", track: "Suivre ma réservation" });
+  // Also the guesthouse template: its words follow the trade (siteWording).
+  const words = siteWording(organization.businessModel, {
+    catalogLink: "Tous nos services",
+    eyebrow: "Sur rendez-vous",
+    title: "Nos prestations",
+    heroCta: "Prendre rendez-vous",
+    book: "Réserver",
+  });
+  const links = siteLinks(slug, catalogVisible, { catalog: words.catalogLink, track: "Suivre ma réservation" });
   const hasHeroImage = Boolean(organization.heroImage);
 
   return (
@@ -95,7 +104,7 @@ export function SalonTemplate({
               href="#services"
               className={`mt-2 inline-flex rounded-full px-7 py-3 text-sm font-semibold shadow-lg transition-shadow hover:shadow-xl ${KT.accentBg} ${KT.accentContrastText}`}
             >
-              Prendre rendez-vous
+              {words.heroCta}
             </a>
           )}
         </div>
@@ -127,7 +136,7 @@ export function SalonTemplate({
 
         {catalogVisible && bookableOffers.length > 0 && (
           <section>
-            <SectionHeading eyebrow="Sur rendez-vous" title="Nos prestations" />
+            <SectionHeading eyebrow={words.eyebrow} title={words.title} />
             <ul className="space-y-3">
               {bookableOffers.map((offer) => (
                 <ServiceCard key={offer.id} slug={slug} offer={offer} primary onBook={() => onBook(offer)} />

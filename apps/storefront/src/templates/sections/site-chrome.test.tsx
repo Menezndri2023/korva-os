@@ -55,6 +55,20 @@ describe("SiteHeader", () => {
     expect(screen.queryByRole("button", { name: /panier/i })).toBeNull();
   });
 
+  it("offers no sign-in where no account can exist (Free plan, none created before)", () => {
+    renderHeader({ organization: { ...organization, customerSignInAvailable: false } });
+    expect(screen.queryByRole("link", { name: /Se connecter/ })).not.toBeInTheDocument();
+  });
+
+  it("still shows a signed-in customer their account on such a site", () => {
+    renderHeader({
+      organization: { ...organization, customerSignInAvailable: false },
+      isAuthenticated: true,
+      customerFirstName: "Awa",
+    });
+    expect(screen.getAllByRole("link", { name: /Awa/ }).length).toBeGreaterThan(0);
+  });
+
   it("offers every link in the phone menu too, with the account last", () => {
     renderHeader();
     // Desktop nav + mobile menu: each link is rendered in both.
