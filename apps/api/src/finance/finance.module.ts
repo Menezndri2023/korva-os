@@ -66,6 +66,10 @@ import { RecurringBillingController } from './recurring-billing/recurring-billin
 import { RecurringBillingSchedulerService } from './recurring-billing/recurring-billing-scheduler.service';
 
 import { CrmModule } from '../crm/crm.module';
+// For ConversationsService (InvoiceReminderService's outbound send). Safe: CommunicationModule
+// imports Crm/Identity/Audit/Email/Integrations modules, none of which imports FinanceModule.
+import { CommunicationModule } from '../communication/communication.module';
+import { InvoiceReminderService } from './invoices/invoice-reminder.service';
 import { CountersModule } from '../core/counters/counters.module';
 import { AuditModule } from '../audit/audit.module';
 import { IntegrationWebhookModule } from '../integrations/webhooks/integration-webhook.module';
@@ -124,6 +128,7 @@ import { EmailModule } from '../shared/email/email.module';
     SubscriptionsModule,
     EmailModule,
     CrmModule,
+    CommunicationModule,
     CountersModule,
     AuditModule,
     IntegrationWebhookModule,
@@ -150,6 +155,7 @@ import { EmailModule } from '../shared/email/email.module';
     WalletService,
     CounterPaymentsService,
     TillService,
+    InvoiceReminderService,
     QuotesRepository,
     QuotesService,
     QuoteExpirySchedulerService,

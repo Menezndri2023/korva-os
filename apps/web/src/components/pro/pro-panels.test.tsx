@@ -4,6 +4,7 @@ import { renderWithProviders } from "@/test/render";
 import { apiClient } from "@/lib/api-client";
 import { InsightsPanel } from "./insights-panel";
 import { ExportPanel } from "./export-panel";
+import { PrioritySupportCard } from "./priority-support-card";
 
 vi.mock("@/lib/api-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api-client")>();
@@ -84,5 +85,31 @@ describe("ExportPanel", () => {
     await waitFor(() => expect(click).toHaveBeenCalled());
     expect(createObjectURL).toHaveBeenCalled();
     click.mockRestore();
+  });
+});
+
+describe("PrioritySupportCard", () => {
+  beforeEach(() => {
+    getMock.mockReset();
+  });
+
+  it("gives Business the direct WhatsApp and e-mail line to KORVA", async () => {
+    onPlan("business");
+    renderWithProviders(<PrioritySupportCard />);
+    expect(await screen.findByRole("link", { name: /WhatsApp/ })).toHaveAttribute(
+      "href",
+      "https://wa.me/212607742672",
+    );
+    expect(screen.getByRole("link", { name: "contact@vit-global.tech" })).toHaveAttribute(
+      "href",
+      "mailto:contact@vit-global.tech",
+    );
+  });
+
+  it("shows nothing below Business", async () => {
+    onPlan("pro");
+    const { container } = renderWithProviders(<PrioritySupportCard />);
+    await waitFor(() => expect(getMock).toHaveBeenCalledWith("/subscriptions/me"));
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -11,6 +11,7 @@ import { InvoicesRepository } from './invoices.repository';
 import { AuditService } from '../../audit/audit.service';
 import { EventBusService } from '../../core/events/event-bus.service';
 import { backgroundWorkersDisabled } from '../../core/background/background-workers';
+import { InvoiceReminderService } from './invoice-reminder.service';
 
 export const INVOICE_OVERDUE_QUEUE_NAME = 'invoice-overdue';
 export const INVOICE_OVERDUE_JOB_NAME = 'sweep';
@@ -55,6 +56,7 @@ export class InvoiceOverdueSchedulerService
     private readonly invoicesRepository: InvoicesRepository,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    private readonly invoiceReminderService: InvoiceReminderService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -141,6 +143,11 @@ export class InvoiceOverdueSchedulerService
             total: candidate.total,
             amountPaid: candidate.amountPaid,
           },
+        );
+        // Pro: tell the customer (never throws, see InvoiceReminderService).
+        await this.invoiceReminderService.remindOverdue(
+          candidate.organizationId.toString(),
+          candidate.id as string,
         );
       } catch (error) {
         this.logger.error(

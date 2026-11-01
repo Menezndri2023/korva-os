@@ -92,6 +92,8 @@ export const CUSTOM_DOMAIN_MIN_PLAN: PlanKey = "starter";
  *   advanced_analytics -> AnalyticsController insights (PlanFeatureGuard)
  *   data_export        -> ExportsController (PlanFeatureGuard)
  *   cash_closing       -> CounterPaymentsController report/closings (PlanFeatureGuard)
+ *   payment_reminders  -> InvoiceReminderService (checked before each reminder)
+ *   custom_roles       -> RolesService.create (organizations created before the gate keep it)
  *   network_overview   -> OrganizationsController network (checked per organization listed)
  *   accounting_export  -> ExportsController sales journal (PlanFeatureGuard)
  *
@@ -115,8 +117,10 @@ export const PLAN_FEATURE_MIN_PLAN = {
   advanced_analytics: "pro",
   data_export: "pro",
   cash_closing: "pro",
+  payment_reminders: "pro",
   // Business: run several places and hand the books to an accountant.
   network_overview: "business",
+  custom_roles: "business",
   accounting_export: "business",
 } as const satisfies Record<string, PlanKey>;
 export type PlanFeature = keyof typeof PLAN_FEATURE_MIN_PLAN;
@@ -135,12 +139,36 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   advanced_analytics: "Statistiques avancées : comparaison, meilleurs clients et ventes",
   data_export: "Export Excel de vos ventes, réservations et clients",
   cash_closing: "Rapport et clôture de caisse du jour, par employé",
+  payment_reminders: "Relance automatique des factures impayées, par WhatsApp ou e-mail",
   network_overview: "Vue d'ensemble de tous vos établissements",
+  custom_roles: "Rôles et droits personnalisés pour votre équipe",
   accounting_export: "Exports comptables : journal des ventes et TVA",
 };
 
 export function planHasFeature(planKey: string, feature: PlanFeature): boolean {
   return planMeetsMinimum(planKey, PLAN_FEATURE_MIN_PLAN[feature]);
+}
+
+/**
+ * Features moved up to a higher plan after organizations already had them: an organization
+ * created BEFORE the date keeps the feature whatever its plan, so nobody loses a tool they may be
+ * using. Validated 2026-11-01 for custom roles ("réservés aux nouvelles inscriptions Business").
+ */
+export const PLAN_FEATURE_OPEN_BEFORE: Partial<Record<PlanFeature, string>> = {
+  custom_roles: "2026-11-02T00:00:00.000Z",
+};
+
+/** planHasFeature, plus the PLAN_FEATURE_OPEN_BEFORE exception for older organizations. */
+export function organizationHasFeature(
+  planKey: string,
+  feature: PlanFeature,
+  organizationCreatedAt: string | Date | undefined,
+): boolean {
+  if (planHasFeature(planKey, feature)) return true;
+  const openBefore = PLAN_FEATURE_OPEN_BEFORE[feature];
+  return Boolean(
+    openBefore && organizationCreatedAt && new Date(organizationCreatedAt) < new Date(openBefore),
+  );
 }
 
 export const MODULE_MIN_PLAN: Record<KorvaModule, PlanKey> = {
@@ -464,3 +492,14 @@ export const CURRENCY_FORMAT: Record<
   USD: { locale: "en-US", display: (a) => `$${a.toLocaleString("en-US")}` },
   CAD: { locale: "fr-CA", display: (a) => `${a.toLocaleString("fr-FR")} $ CA` },
 };
+
+/**
+ * KORVA's support contact (given by the owner on 2026-11-01). Business organizations are shown it
+ * as their priority line on the dashboard home.
+ */
+export const KORVA_SUPPORT = {
+  phoneDisplay: "+212 6 07 74 26 72",
+  /** wa.me wants the international number, digits only, without the national trunk 0. */
+  whatsappUrl: "https://wa.me/212607742672",
+  email: "contact@vit-global.tech",
+} as const;

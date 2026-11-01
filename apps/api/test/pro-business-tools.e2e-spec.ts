@@ -13,6 +13,7 @@ import type {
 } from '@korva/types';
 import { AppModule } from './../src/app.module';
 import { putOrganizationOnPlan } from './support/plan-tier';
+import { InvoiceReminderService } from '../src/finance/invoices/invoice-reminder.service';
 
 /**
  * The Pro and Business tools of 2026-11-01: advanced statistics, Excel exports and the till
@@ -356,5 +357,165 @@ describe('Pro and Business tools (e2e)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .set('X-Organization-Id', second.id)
       .expect(403);
+  });
+
+  it('reminds the customer of an overdue invoice once, on Pro only', async () => {
+    const email = 'reminders@korva.test';
+    const accessToken = asSuccess<{ accessToken: string }>(
+      (
+        await request(server)
+          .post('/api/v1/auth/register')
+          .send({ email, password: 'password123' })
+          .expect(201)
+      ).body,
+    ).accessToken;
+    const organization = asSuccess<{ id: string }>(
+      (
+        await request(server)
+          .post('/api/v1/organizations')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send({
+            name: 'Cabinet Relance',
+            type: 'conseil',
+            country: 'CI',
+            currency: 'XOF',
+            timezone: 'Africa/Abidjan',
+            language: 'fr',
+          })
+          .expect(201)
+      ).body,
+    );
+    const orgId = new Types.ObjectId(organization.id);
+    const contactId = new Types.ObjectId();
+    await connection.collection('contacts').insertOne({
+      _id: contactId,
+      organizationId: orgId,
+      type: 'person',
+      firstName: 'Kofi',
+      email: 'kofi@client.test',
+      tags: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const invoiceId = new Types.ObjectId();
+    await connection.collection('invoices').insertOne({
+      _id: invoiceId,
+      organizationId: orgId,
+      contactId,
+      number: 'FAC-0042',
+      status: 'overdue',
+      items: [{ description: 'Audit', quantity: 1, unitPrice: 50000 }],
+      currency: 'XOF',
+      subtotal: 50000,
+      taxTotal: 0,
+      discountTotal: 0,
+      total: 50000,
+      amountPaid: 20000,
+      dueDate: new Date(Date.now() - 2 * DAY_MS),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const reminders = app.get(InvoiceReminderService);
+
+    // Free: nothing is sent.
+    expect(
+      await reminders.remindOverdue(organization.id, invoiceId.toString()),
+    ).toBeUndefined();
+
+    await putOrganizationOnPlan(connection, organization.id, 'pro');
+    // No WhatsApp consent on file: the e-mail carries it.
+    expect(
+      await reminders.remindOverdue(organization.id, invoiceId.toString()),
+    ).toBe('email');
+    const invoice = await connection
+      .collection('invoices')
+      .findOne({ _id: invoiceId });
+    expect(invoice?.reminderChannel).toBe('email');
+    expect(invoice?.reminderSentAt).toBeInstanceOf(Date);
+    const conversation = await connection
+      .collection('conversations')
+      .findOne({ organizationId: orgId, contactId, channel: 'email' });
+    const message = await connection
+      .collection('messages')
+      .findOne({ conversationId: conversation?._id });
+    expect(message?.body).toContain('Bonjour Kofi');
+    expect(message?.body).toContain('FAC-0042');
+    expect(message?.body).toMatch(/30\s000\sF/);
+
+    // Once only.
+    expect(
+      await reminders.remindOverdue(organization.id, invoiceId.toString()),
+    ).toBeUndefined();
+  });
+
+  it('offers the premium site themes on Pro, on any sector template, and never by default', async () => {
+    const email = 'premium-theme@korva.test';
+    const accessToken = asSuccess<{ accessToken: string }>(
+      (
+        await request(server)
+          .post('/api/v1/auth/register')
+          .send({ email, password: 'password123' })
+          .expect(201)
+      ).body,
+    ).accessToken;
+    const organization = asSuccess<{ id: string; slug: string }>(
+      (
+        await request(server)
+          .post('/api/v1/organizations')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .send({
+            name: 'Boutique Prestige',
+            type: 'commerce',
+            country: 'CI',
+            currency: 'XOF',
+            timezone: 'Africa/Abidjan',
+            language: 'fr',
+          })
+          .expect(201)
+      ).body,
+    );
+    const patch = (body: Record<string, unknown>) =>
+      request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organization.id)
+        .send(body);
+    const theme = async () =>
+      asSuccess<{
+        storefrontTheme: { palette?: string; fontPairing?: string };
+      }>(
+        (
+          await request(server)
+            .get(`/api/v1/public/${organization.slug}`)
+            .expect(200)
+        ).body,
+      ).storefrontTheme;
+
+    await putOrganizationOnPlan(connection, organization.id, 'starter');
+    await patch({
+      storefrontTemplate: 'boutique',
+      storefrontPalette: 'jade',
+    }).expect(403);
+
+    await putOrganizationOnPlan(connection, organization.id, 'pro');
+    const before = await theme();
+    expect(['ivoire', 'jade', 'bordeaux']).not.toContain(before.palette);
+    expect(before.fontPairing).not.toBe('prestige');
+
+    await patch({
+      storefrontTemplate: 'boutique',
+      storefrontPalette: 'jade',
+      storefrontFontPairing: 'prestige',
+    }).expect(200);
+    expect(await theme()).toMatchObject({
+      palette: 'jade',
+      fontPairing: 'prestige',
+    });
+
+    // Back on Starter the site falls back to its template's own look, nothing is deleted.
+    await putOrganizationOnPlan(connection, organization.id, 'starter');
+    const after = await theme();
+    expect(after.palette).not.toBe('jade');
+    expect(after.fontPairing).not.toBe('prestige');
   });
 });

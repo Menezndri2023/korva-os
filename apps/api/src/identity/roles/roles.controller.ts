@@ -19,6 +19,7 @@ import { RolesService } from './roles.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { RequirePlanFeature } from '../../common/decorators/require-plan-feature.decorator';
 
 /**
  * Custom (organization-defined) role management — distinct from the thin, addMember-oriented
@@ -38,7 +39,10 @@ export class RolesController {
     return this.rolesService.listFull(tenant.organizationId);
   }
 
+  /** Business since 2026-11-01; older organizations keep it (PLAN_FEATURE_OPEN_BEFORE). Editing
+   *  and deleting an existing role stay open to every plan: nothing created is taken away. */
   @RequirePermissions('settings.manage')
+  @RequirePlanFeature('custom_roles')
   @Post()
   create(
     @CurrentTenant() tenant: TenantContext,

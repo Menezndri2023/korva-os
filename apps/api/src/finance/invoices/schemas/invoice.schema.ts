@@ -64,6 +64,14 @@ export class Invoice {
 
   @Prop()
   notes?: string;
+
+  /** When the customer was reminded that it is overdue (Pro, InvoiceReminderService) — and by
+   *  which channel. Absent: never reminded. */
+  @Prop()
+  reminderSentAt?: Date;
+
+  @Prop()
+  reminderChannel?: string;
 }
 
 export const InvoiceSchema = SchemaFactory.createForClass(Invoice);

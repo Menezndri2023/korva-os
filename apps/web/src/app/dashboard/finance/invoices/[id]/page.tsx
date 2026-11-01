@@ -187,6 +187,15 @@ export default function InvoiceDetailPage() {
               <dd className="mt-0.5">{new Date(invoice.dueDate).toLocaleDateString("fr-FR")}</dd>
             </div>
           )}
+          {invoice.reminderSentAt && (
+            <div>
+              <dt className="text-text-muted">Relance envoyée</dt>
+              <dd className="mt-0.5">
+                {new Date(invoice.reminderSentAt).toLocaleDateString("fr-FR")} par{" "}
+                {invoice.reminderChannel === "whatsapp" ? "WhatsApp" : "e-mail"}
+              </dd>
+            </div>
+          )}
           {invoice.quoteId && (
             <div>
               <dt className="text-text-muted">Devis d&apos;origine</dt>

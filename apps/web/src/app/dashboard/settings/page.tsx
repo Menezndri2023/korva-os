@@ -22,7 +22,11 @@ import {
   STOREFRONT_FONT_PAIRINGS,
   SUPPORTED_BILLING_CURRENCIES,
   SYSTEM_EVENTS,
+  organizationHasFeature,
   planMeetsMinimum,
+  PREMIUM_FONT_PAIRING_KEYS,
+  PREMIUM_PALETTE_KEYS,
+  PREMIUM_THEME_MIN_PLAN,
   type StorefrontFontPairingKey,
   type StorefrontPaletteKey,
   type StorefrontTemplateKey,
@@ -2291,6 +2295,13 @@ function RolesManagementSection() {
   const authReady = useAuthReady();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
+  const planFeatures = usePlanFeatures();
+  const { data: organization } = useActiveOrganization();
+  // Business for new sign-ups; an organization created before the gate keeps it (and every
+  // existing role stays editable whatever the plan).
+  const canCreate =
+    !planFeatures.planKey ||
+    organizationHasFeature(planFeatures.planKey, "custom_roles", organization?.createdAt);
   const { data: roles, isLoading } = useQuery({
     queryKey: ["roles"],
     enabled: authReady,
@@ -2331,12 +2342,16 @@ function RolesManagementSection() {
             vos équipes ont besoin.
           </p>
         </div>
-        <Button type="button" variant="secondary" size="sm" onClick={() => setCreateOpen((v) => !v)}>
-          {createOpen ? "Annuler" : "Créer un rôle"}
-        </Button>
+        {canCreate ? (
+          <Button type="button" variant="secondary" size="sm" onClick={() => setCreateOpen((v) => !v)}>
+            {createOpen ? "Annuler" : "Créer un rôle"}
+          </Button>
+        ) : (
+          <PlanLock feature="custom_roles" />
+        )}
       </div>
 
-      {createOpen && (
+      {createOpen && canCreate && (
         <form
           onSubmit={handleSubmit((values) => createMutation.mutate(values))}
           className="mt-4 space-y-3 rounded-md border border-border p-4"
@@ -3269,6 +3284,16 @@ function StorefrontThemePicker({
   const currentTemplate =
     STOREFRONT_TEMPLATES.find((t) => t.key === effectiveTemplateKey) ?? STOREFRONT_TEMPLATES[0];
   const canRefine = !planKey || planMeetsMinimum(planKey, currentTemplate.refinedChoiceMinPlan);
+  const canPremium = !planKey || planMeetsMinimum(planKey, PREMIUM_THEME_MIN_PLAN);
+  // The template's own choices, then the premium ones every sector template offers on Pro.
+  const paletteChoices = [
+    ...currentTemplate.palettes.map((key, index) => ({ key, premium: false, allowed: index === 0 || canRefine })),
+    ...PREMIUM_PALETTE_KEYS.map((key) => ({ key, premium: true, allowed: canPremium })),
+  ];
+  const fontChoices = [
+    ...currentTemplate.fontPairings.map((key, index) => ({ key, premium: false, allowed: index === 0 || canRefine })),
+    ...PREMIUM_FONT_PAIRING_KEYS.map((key) => ({ key, premium: true, allowed: canPremium })),
+  ];
 
   return (
     <div>
@@ -3305,9 +3330,8 @@ function StorefrontThemePicker({
           <div>
             <p className="mb-1 text-xs font-medium text-text">Palette de couleurs</p>
             <div className="flex flex-wrap gap-2">
-              {currentTemplate.palettes.map((paletteKey, index) => {
+              {paletteChoices.map(({ key: paletteKey, premium, allowed: isAllowed }) => {
                 const palette = STOREFRONT_PALETTES[paletteKey];
-                const isAllowed = index === 0 || canRefine;
                 const isSelected = (selectedPalette ?? currentTemplate.palettes[0]) === paletteKey;
                 return (
                   <button
@@ -3325,6 +3349,7 @@ function StorefrontThemePicker({
                       style={{ backgroundColor: palette.accent }}
                     />
                     {palette.label}
+                    {premium && <span className="font-semibold text-action">Premium</span>}
                   </button>
                 );
               })}
@@ -3333,9 +3358,8 @@ function StorefrontThemePicker({
           <div>
             <p className="mb-1 text-xs font-medium text-text">Police</p>
             <div className="flex flex-wrap gap-2">
-              {currentTemplate.fontPairings.map((fontKey, index) => {
+              {fontChoices.map(({ key: fontKey, premium, allowed: isAllowed }) => {
                 const font = STOREFRONT_FONT_PAIRINGS[fontKey];
-                const isAllowed = index === 0 || canRefine;
                 const isSelected = (selectedFontPairing ?? currentTemplate.fontPairings[0]) === fontKey;
                 return (
                   <button
@@ -3348,6 +3372,7 @@ function StorefrontThemePicker({
                     } ${!isAllowed ? "opacity-50" : ""}`}
                   >
                     {font.label}
+                    {premium && <span className="ml-1 font-semibold text-action">Premium</span>}
                   </button>
                 );
               })}

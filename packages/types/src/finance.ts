@@ -75,6 +75,9 @@ export interface Invoice {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  /** Set when the customer was sent an overdue reminder (Pro). */
+  reminderSentAt?: string;
+  reminderChannel?: "whatsapp" | "email";
 }
 
 export interface Payment {

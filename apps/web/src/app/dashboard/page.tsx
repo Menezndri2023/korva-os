@@ -10,6 +10,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useAnalyticsActivity, useAnalyticsOverview } from "@/lib/use-analytics";
+import { PrioritySupportCard } from "@/components/pro/priority-support-card";
 import { ACTIVITY_ENTITY_LABELS, activityActionLabel, formatCurrency } from "@/lib/analytics-format";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
 import { KorvaReviewPrompt } from "@/components/korva-review-prompt";
@@ -211,6 +212,8 @@ export default function DashboardPage() {
           </div>
         </Card>
       )}
+
+      <PrioritySupportCard />
     </div>
   );
 }

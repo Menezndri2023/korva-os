@@ -15,6 +15,8 @@ import {
   STOREFRONT_SECTIONS,
   verticalForOrganizationType,
   getStorefrontTemplate,
+  selectableFontPairings,
+  selectablePalettes,
   planHasFeature,
   pickDeterministic,
   planMeetsMinimum,
@@ -376,14 +378,20 @@ export class PublicService {
       : templateDef.fontPairings.slice(0, 1);
 
     const seed = organization.id as string;
+    // A saved choice is honoured if the plan still allows it, premium ones included; the default
+    // is drawn from the template's own list only, so premium never appears by itself.
     const palette =
       organization.storefrontPalette &&
-      allowedPalettes.includes(organization.storefrontPalette)
+      selectablePalettes(templateDef, planKey).includes(
+        organization.storefrontPalette,
+      )
         ? organization.storefrontPalette
         : pickDeterministic(seed, allowedPalettes);
     const fontPairing =
       organization.storefrontFontPairing &&
-      allowedFontPairings.includes(organization.storefrontFontPairing)
+      selectableFontPairings(templateDef, planKey).includes(
+        organization.storefrontFontPairing,
+      )
         ? organization.storefrontFontPairing
         : pickDeterministic(`${seed}:font`, allowedFontPairings);
 

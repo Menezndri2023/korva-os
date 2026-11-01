@@ -37,7 +37,7 @@ export default function EstablishmentsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Mes établissements"
-        description="Tous vos points de vente et sites sur les 30 derniers jours."
+        description="Tous vos points de vente et sites sur les 30 derniers jours. Chaque établissement a sa propre formule."
         actions={
           <Link
             href="/onboarding"

@@ -17,8 +17,12 @@ import {
   EXTRA_SEAT_PURCHASABLE,
   PLAN_FEATURE_LABELS,
   PLAN_FEATURE_MIN_PLAN,
+  organizationHasFeature,
   planHasFeature,
+  PLAN_FEATURE_OPEN_BEFORE,
   getStorefrontTemplate,
+  selectableFontPairings,
+  selectablePalettes,
   planMeetsMinimum,
   resolveEffectiveModules,
 } from '@korva/types';
@@ -101,7 +105,27 @@ export class EntitlementsService {
     feature: PlanFeature,
   ): Promise<boolean> {
     const plan = await this.subscriptionsService.getActivePlan(organizationId);
-    return planHasFeature(plan.key, feature);
+    if (planHasFeature(plan.key, feature)) return true;
+    return this.openedBeforeGate(organizationId, feature);
+  }
+
+  /** PLAN_FEATURE_OPEN_BEFORE: an organization older than the gate keeps the feature. */
+  private async openedBeforeGate(
+    organizationId: string,
+    feature: PlanFeature,
+  ): Promise<boolean> {
+    if (!PLAN_FEATURE_OPEN_BEFORE[feature]) return false;
+    const organization = await this.connection
+      .collection('organizations')
+      .findOne(
+        { _id: new Types.ObjectId(organizationId) },
+        { projection: { createdAt: 1 } },
+      );
+    return organizationHasFeature(
+      'free',
+      feature,
+      organization?.createdAt as Date | undefined,
+    );
   }
 
   /** Refuses an action the active plan does not include. See PLAN_FEATURE_MIN_PLAN. */
@@ -112,6 +136,7 @@ export class EntitlementsService {
     await this.assertSubscriptionActive(organizationId);
     const plan = await this.subscriptionsService.getActivePlan(organizationId);
     if (planHasFeature(plan.key, feature)) return;
+    if (await this.openedBeforeGate(organizationId, feature)) return;
     const minPlan = PLAN_FEATURE_MIN_PLAN[feature];
     throw new ForbiddenException({
       code: 'PLAN_FEATURE_NOT_INCLUDED',
@@ -265,16 +290,9 @@ export class EntitlementsService {
       });
     }
 
-    const canRefine = planMeetsMinimum(
-      plan.key,
-      templateDef.refinedChoiceMinPlan,
-    );
-    const allowedPalettes = canRefine
-      ? templateDef.palettes
-      : templateDef.palettes.slice(0, 1);
-    const allowedFontPairings = canRefine
-      ? templateDef.fontPairings
-      : templateDef.fontPairings.slice(0, 1);
+    // The template's own choices (all of them from its refined plan) plus the premium ones.
+    const allowedPalettes = selectablePalettes(templateDef, plan.key);
+    const allowedFontPairings = selectableFontPairings(templateDef, plan.key);
 
     if (theme.palette && !allowedPalettes.includes(theme.palette)) {
       throw new ForbiddenException({

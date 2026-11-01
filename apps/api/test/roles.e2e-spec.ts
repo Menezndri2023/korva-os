@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -83,6 +83,9 @@ describe('Custom roles (e2e)', () => {
       })
       .expect(201);
     organizationId = asSuccess<OrganizationPayload>(orgRes.body).id;
+    // Custom roles are Business (PLAN_FEATURE_OPEN_BEFORE spares organizations created before
+    // the gate — on a test run before that date this would pass anyway, and silently stop).
+    await putOrganizationOnPlan(connection, organizationId, 'business');
   });
 
   afterAll(async () => {
@@ -166,6 +169,48 @@ describe('Custom roles (e2e)', () => {
     expect(
       asSuccess<RolePayload[]>(listRes.body).some((r) => r.id === role.id),
     ).toBe(false);
+  });
+
+  it('refuses a new custom role below Business, except to an organization older than the gate', async () => {
+    const organizations = connection.collection('organizations');
+    const orgObjectId = new Types.ObjectId(organizationId);
+    const original = await organizations.findOne({ _id: orgObjectId });
+    await putOrganizationOnPlan(connection, organizationId, 'pro');
+    try {
+      await organizations.updateOne(
+        { _id: orgObjectId },
+        { $set: { createdAt: new Date('2026-12-01T00:00:00.000Z') } },
+      );
+      const refused = await request(server)
+        .post('/api/v1/roles')
+        .set('Authorization', `Bearer ${ownerAccessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name: 'Caissier', permissions: ['payments.read'] })
+        .expect(403);
+      expect(asError(refused.body).code).toBe('PLAN_FEATURE_NOT_INCLUDED');
+
+      await organizations.updateOne(
+        { _id: orgObjectId },
+        { $set: { createdAt: new Date('2026-10-01T00:00:00.000Z') } },
+      );
+      const kept = await request(server)
+        .post('/api/v1/roles')
+        .set('Authorization', `Bearer ${ownerAccessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ name: 'Caissier ancien', permissions: ['payments.read'] })
+        .expect(201);
+      await request(server)
+        .delete(`/api/v1/roles/${asSuccess<{ id: string }>(kept.body).id}`)
+        .set('Authorization', `Bearer ${ownerAccessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .expect(200);
+    } finally {
+      await organizations.updateOne(
+        { _id: orgObjectId },
+        { $set: { createdAt: original?.createdAt as Date } },
+      );
+      await putOrganizationOnPlan(connection, organizationId, 'business');
+    }
   });
 
   it('rejects an invalid permission string', async () => {

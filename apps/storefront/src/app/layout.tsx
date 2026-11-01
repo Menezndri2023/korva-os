@@ -1,5 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Playfair_Display, Fraunces, Space_Grotesk, Poppins } from "next/font/google";
+import {
+  Geist,
+  Geist_Mono,
+  Playfair_Display,
+  Fraunces,
+  Space_Grotesk,
+  Poppins,
+  Cormorant_Garamond,
+} from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -27,6 +35,12 @@ const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
   subsets: ["latin"],
 });
+// The premium "Prestige" pairing (Pro).
+const cormorantGaramond = Cormorant_Garamond({
+  variable: "--font-cormorant-garamond",
+  weight: ["500", "600", "700"],
+  subsets: ["latin"],
+});
 const poppins = Poppins({
   variable: "--font-poppins",
   weight: ["500", "600", "700"],
@@ -42,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} ${playfairDisplay.variable} ${fraunces.variable} ${spaceGrotesk.variable} ${poppins.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${playfairDisplay.variable} ${fraunces.variable} ${spaceGrotesk.variable} ${poppins.variable} ${cormorantGaramond.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>

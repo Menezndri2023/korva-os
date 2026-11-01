@@ -40,6 +40,10 @@ export const STOREFRONT_PALETTE_KEYS = [
   "marine",
   "indigo",
   "ocre",
+  // Premium (Pro, every sector template) — see PREMIUM_PALETTE_KEYS.
+  "ivoire",
+  "jade",
+  "bordeaux",
 ] as const;
 export type StorefrontPaletteKey = (typeof STOREFRONT_PALETTE_KEYS)[number];
 
@@ -144,6 +148,39 @@ export const STOREFRONT_PALETTES: Record<StorefrontPaletteKey, StorefrontPalette
     accent: "#B08A2E",
     accentContrast: "#FFFFFF",
   },
+  ivoire: {
+    key: "ivoire",
+    label: "Ivoire et or",
+    background: "#FBF8F1",
+    surface: "#FFFFFF",
+    border: "#E9DFC8",
+    text: "#26221A",
+    textMuted: "#7A6F58",
+    accent: "#9A7524",
+    accentContrast: "#FFFFFF",
+  },
+  jade: {
+    key: "jade",
+    label: "Jade",
+    background: "#F5F8F4",
+    surface: "#FFFFFF",
+    border: "#D5E2DA",
+    text: "#14281F",
+    textMuted: "#5A7266",
+    accent: "#1E6A57",
+    accentContrast: "#FFFFFF",
+  },
+  bordeaux: {
+    key: "bordeaux",
+    label: "Bordeaux",
+    background: "#FBF6F5",
+    surface: "#FFFFFF",
+    border: "#EBD9D7",
+    text: "#2A1618",
+    textMuted: "#7C5F62",
+    accent: "#7A2236",
+    accentContrast: "#FFFFFF",
+  },
 };
 
 export const STOREFRONT_FONT_PAIRING_KEYS = [
@@ -152,6 +189,8 @@ export const STOREFRONT_FONT_PAIRING_KEYS = [
   "chaleureux",
   "geometrique",
   "arrondi",
+  // Premium (Pro) — see PREMIUM_FONT_PAIRING_KEYS.
+  "prestige",
 ] as const;
 export type StorefrontFontPairingKey = (typeof STOREFRONT_FONT_PAIRING_KEYS)[number];
 
@@ -172,6 +211,7 @@ export const STOREFRONT_FONT_PAIRINGS: Record<StorefrontFontPairingKey, Storefro
   chaleureux: { key: "chaleureux", label: "Chaleureux", headingFont: "fraunces", bodyFont: "geistSans" },
   geometrique: { key: "geometrique", label: "Géométrique", headingFont: "spaceGrotesk", bodyFont: "geistSans" },
   arrondi: { key: "arrondi", label: "Arrondi", headingFont: "poppins", bodyFont: "geistSans" },
+  prestige: { key: "prestige", label: "Prestige", headingFont: "cormorantGaramond", bodyFont: "geistSans" },
 };
 
 export interface StorefrontTemplateDefinition {
@@ -263,6 +303,47 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplateDefinition[] = [
     customAccentMinPlan: "business",
   },
 ];
+
+/**
+ * Premium site themes (Pro, 2026-11-01): palettes and a font pairing offered on EVERY sector
+ * template on top of its own, for a site that does not look like the sector's default. Never
+ * part of the default pick (PublicService.pickDeterministic draws from the template's own lists),
+ * so no existing site changes colour on its own — only an owner choosing one applies it.
+ * "essentiel" has no palettes (it uses the brand colour) and gets none.
+ */
+export const PREMIUM_PALETTE_KEYS: readonly StorefrontPaletteKey[] = ["ivoire", "jade", "bordeaux"];
+export const PREMIUM_FONT_PAIRING_KEYS: readonly StorefrontFontPairingKey[] = ["prestige"];
+export const PREMIUM_THEME_MIN_PLAN: PlanKey = "pro";
+
+/** Every palette an organization on `planKey` may choose for this template. */
+export function selectablePalettes(
+  template: StorefrontTemplateDefinition,
+  planKey: string,
+): StorefrontPaletteKey[] {
+  const own = planMeetsMinimum(planKey, template.refinedChoiceMinPlan)
+    ? template.palettes
+    : template.palettes.slice(0, 1);
+  const premium =
+    template.palettes.length > 0 && planMeetsMinimum(planKey, PREMIUM_THEME_MIN_PLAN)
+      ? PREMIUM_PALETTE_KEYS
+      : [];
+  return [...own, ...premium];
+}
+
+/** Every font pairing an organization on `planKey` may choose for this template. */
+export function selectableFontPairings(
+  template: StorefrontTemplateDefinition,
+  planKey: string,
+): StorefrontFontPairingKey[] {
+  const own = planMeetsMinimum(planKey, template.refinedChoiceMinPlan)
+    ? template.fontPairings
+    : template.fontPairings.slice(0, 1);
+  const premium =
+    template.palettes.length > 0 && planMeetsMinimum(planKey, PREMIUM_THEME_MIN_PLAN)
+      ? PREMIUM_FONT_PAIRING_KEYS
+      : [];
+  return [...own, ...premium];
+}
 
 export function getStorefrontTemplate(key: string): StorefrontTemplateDefinition {
   return (

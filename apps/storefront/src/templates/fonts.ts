@@ -9,6 +9,7 @@ export const FONT_VARS: Record<string, string> = {
   fraunces: "var(--font-fraunces)",
   spaceGrotesk: "var(--font-space-grotesk)",
   poppins: "var(--font-poppins)",
+  cormorantGaramond: "var(--font-cormorant-garamond)",
 };
 
 export function fontVar(logicalName: string): string {
