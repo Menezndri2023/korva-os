@@ -290,3 +290,67 @@ export interface PlatformSystem {
   administrators: number;
   queues: { name: string; label: string; waiting: number; active: number; delayed: number; failed: number }[] | null;
 }
+
+/** GET /platform/todo — the counters behind "À traiter aujourd'hui" and the menu badges. */
+export interface PlatformTodo {
+  payoutsToApprove: number;
+  overdueInvoices: number;
+  reviewsToModerate: number;
+  pastDueSubscriptions: number;
+}
+
+export interface PlatformFinance {
+  periodDays: number;
+  plansPaid: { currency: string; total: number; count: number }[];
+  onlineSales: { currency: string; total: number; count: number; commissions: number; providerFees: number };
+  payoutsPaid: { total: number; fees: number; count: number };
+  held: { currency: string; available: number; pending: number };
+  openInvoices: {
+    id: string;
+    organizationId: string;
+    organizationName: string;
+    number: string;
+    amount: number;
+    currency: string;
+    dueAt: string;
+    overdue: boolean;
+  }[];
+}
+
+export interface PlatformSearchResults {
+  organizations: { id: string; name: string; slug: string }[];
+  users: { id: string; email: string; name: string | null }[];
+  invoices: { id: string; number: string; status: string; organizationId: string; organizationName: string }[];
+}
+
+export interface PlatformNote {
+  id: string;
+  text: string;
+  authorEmail: string;
+  createdAt: string;
+}
+
+export interface PlatformPaymentAccounts {
+  payoutApproval: "manual" | "auto";
+  accounts: {
+    id: string;
+    provider: string;
+    role: string;
+    market: string | null;
+    status: string;
+    lastVerifiedAt: string | null;
+    lastErrorAt: string | null;
+    lastErrorMessage: string | null;
+    lastWebhookAt: string | null;
+    webhooksLast24h: number;
+  }[];
+}
+
+/** Shared by the layout badges and the overview — one request, cached under one key. */
+export function usePlatformTodo() {
+  return useQuery({
+    queryKey: ["platform", "todo"],
+    queryFn: () => adminApi.get<PlatformTodo>("/platform/todo"),
+    refetchInterval: 60_000,
+  });
+}

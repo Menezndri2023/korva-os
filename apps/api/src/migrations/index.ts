@@ -11,6 +11,7 @@ import { migration as m0009 } from './0009-ai-usage-platform-index';
 import { migration as m0010 } from './0010-korva-ai-all-plans';
 import { migration as m0011 } from './0011-korva-ai-quotas-v2';
 import { migration as m0012 } from './0012-solde-korva-indexes';
+import { migration as m0013 } from './0013-platform-notes-index';
 
 /**
  * Every migration, registered explicitly.
@@ -39,4 +40,5 @@ export const MIGRATIONS: MigrationDefinition[] = [
   m0010,
   m0011,
   m0012,
+  m0013,
 ];

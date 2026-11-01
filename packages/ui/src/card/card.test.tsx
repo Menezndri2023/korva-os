@@ -20,7 +20,7 @@ describe("Card", () => {
 
   it("applies the shared border/background/radius styling", () => {
     render(<Card data-testid="card">Contenu</Card>);
-    expect(screen.getByTestId("card")).toHaveClass("rounded-2xl", "border-border", "bg-surface");
+    expect(screen.getByTestId("card")).toHaveClass("rounded-xl", "border-border", "bg-surface");
   });
 
   it("merges a caller-supplied className without dropping the component's own classes", () => {
@@ -30,7 +30,7 @@ describe("Card", () => {
       </Card>,
     );
     const card = screen.getByTestId("card");
-    expect(card).toHaveClass("p-6", "rounded-2xl");
+    expect(card).toHaveClass("p-6", "rounded-xl");
   });
 
   it("forwards native div props", () => {

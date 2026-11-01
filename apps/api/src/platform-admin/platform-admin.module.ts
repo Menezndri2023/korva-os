@@ -24,6 +24,13 @@ import { PlatformPayoutsAdminController } from './platform-payouts-admin.control
 import { FinanceModule } from '../finance/finance.module';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { PlatformAdminService } from './platform-admin.service';
+import { PlatformInsightsService } from './platform-insights.service';
+import { PlatformInsightsController } from './platform-insights.controller';
+import {
+  PlatformNote,
+  PlatformNoteSchema,
+} from './schemas/platform-note.schema';
+import { IntegrationsModule } from '../integrations/integrations.module';
 
 /**
  * L'Administration de KORVA OS: the team running the platform sees every organization, its
@@ -37,6 +44,7 @@ import { PlatformAdminService } from './platform-admin.service';
     MongooseModule.forFeature([
       { name: Organization.name, schema: OrganizationSchema },
       { name: PlatformAdmin.name, schema: PlatformAdminSchema },
+      { name: PlatformNote.name, schema: PlatformNoteSchema },
     ]),
     SubscriptionsModule,
     SubscriptionBillingModule,
@@ -45,6 +53,7 @@ import { PlatformAdminService } from './platform-admin.service';
     IdentityModule,
     PlatformReviewsModule,
     FinanceModule,
+    IntegrationsModule,
     // Signing keys are passed per call (PlatformAdminAuthService.signingKey): no module default.
     JwtModule.register({}),
   ],
@@ -53,9 +62,11 @@ import { PlatformAdminService } from './platform-admin.service';
     PlatformAdminAuthController,
     PlatformReviewsAdminController,
     PlatformPayoutsAdminController,
+    PlatformInsightsController,
   ],
   providers: [
     PlatformAdminService,
+    PlatformInsightsService,
     PlatformAdminGuard,
     PlatformAdminAuthService,
   ],

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card, Input, PageHeader } from "@korva/ui";
 import { formatDay, type PlatformUserRow, adminApi } from "@/lib/platform-admin";
@@ -14,6 +14,12 @@ import { formatDay, type PlatformUserRow, adminApi } from "@/lib/platform-admin"
 export default function AdminUsersPage() {
   const [search, setSearch] = useState("");
   const q = useDeferredValue(search.trim());
+  // Opened from the global search (?q=awa@…): start on that person.
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("q");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the address bar after hydration
+    if (fromUrl) setSearch(fromUrl);
+  }, []);
   const query = useQuery({
     queryKey: ["platform", "users", q],
     queryFn: () =>

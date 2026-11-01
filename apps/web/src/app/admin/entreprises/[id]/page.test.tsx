@@ -4,6 +4,7 @@ import AdminShopPage from "./page";
 import { renderWithProviders } from "@/test/render";
 import { adminApi } from "@/lib/platform-admin";
 import type { PlatformOrganization } from "@/lib/platform-admin";
+import type { WalletSummary } from "@korva/types";
 
 vi.mock("next/navigation", () => ({ useParams: () => ({ id: "org-1" }) }));
 
@@ -14,6 +15,21 @@ vi.mock("@/lib/platform-admin", async (importOriginal) => {
 
 const getMock = vi.mocked(adminApi.get);
 const postMock = vi.mocked(adminApi.post);
+
+const wallet: WalletSummary = {
+  currency: "XOF",
+  available: 48300,
+  pending: 0,
+  plan: "pro",
+  commissionBasisPoints: 100,
+  holdDays: 0,
+  destination: { provider: "wave", account: "+225 07 07 07 07 07" },
+  pendingDestination: null,
+  autoPayout: { enabled: true, frequency: "daily", minimum: 5000 },
+  openPayout: null,
+  manualPayoutsLeftThisWeek: null,
+  autoPaySubscription: false,
+} as WalletSummary;
 
 const shop: PlatformOrganization = {
   id: "org-1",
@@ -60,11 +76,20 @@ function renderPage() {
   return renderWithProviders(<AdminShopPage />);
 }
 
+/** Each tab asks for its own data: the business, its notes, its Solde. */
+function serve(organization: PlatformOrganization) {
+  getMock.mockImplementation(async (path: string) => {
+    if (path.endsWith("/notes")) return [];
+    if (path.endsWith("/wallet")) return wallet;
+    return organization;
+  });
+}
+
 describe("AdminShopPage", () => {
   beforeEach(() => {
     getMock.mockReset();
     postMock.mockReset();
-    getMock.mockResolvedValue(shop);
+    serve(shop);
     postMock.mockResolvedValue({});
     vi.spyOn(window, "confirm").mockReturnValue(true);
   });
@@ -72,7 +97,7 @@ describe("AdminShopPage", () => {
   it("shows the shop's subscription, counts and owner", async () => {
     renderPage();
     expect(await screen.findByRole("heading", { name: "Boutique Abidjan" })).toBeInTheDocument();
-    expect(screen.getByText("Gratuit")).toBeInTheDocument();
+    expect(screen.getAllByText("Gratuit").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /owner@korva\.test/ })).toHaveAttribute("href", "mailto:owner@korva.test");
   });
 
@@ -128,12 +153,36 @@ describe("AdminShopPage", () => {
   });
 
   it("offers reactivation for a suspended business", async () => {
-    getMock.mockResolvedValue({ ...shop, suspendedAt: "2026-10-20T00:00:00Z", suspensionReason: "Impayé" });
+    serve({ ...shop, suspendedAt: "2026-10-20T00:00:00Z", suspensionReason: "Impayé" });
     renderPage();
     expect(await screen.findByText(/Entreprise suspendue depuis le/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Réactiver" }));
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/reactivate"),
+    );
+  });
+
+  it("keeps an internal note on the business", async () => {
+    renderPage();
+    fireEvent.change(await screen.findByLabelText("Ajouter une note"), { target: { value: "Appelée : veut son domaine." } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer la note" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/notes", { text: "Appelée : veut son domaine." }),
+    );
+  });
+
+  it("adjusts the Solde only after a second, explicit confirmation", async () => {
+    renderPage();
+    fireEvent.change(await screen.findByLabelText("Montant"), { target: { value: "-1500" } });
+    fireEvent.change(screen.getByLabelText("Motif"), { target: { value: "Frais remboursés en double" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ajuster le Solde" }));
+    expect(postMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Confirmer le débit/ }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/wallet/adjustments", {
+        amount: -1500,
+        note: "Frais remboursés en double",
+      }),
     );
   });
 });

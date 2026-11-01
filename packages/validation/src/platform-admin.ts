@@ -32,3 +32,13 @@ export const platformAdminPasswordSchema = z.object({
   newPassword: z.string().min(12).max(200),
 });
 export type PlatformAdminPasswordInput = z.infer<typeof platformAdminPasswordSchema>;
+
+export const createPlatformNoteSchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+});
+export type CreatePlatformNoteInput = z.infer<typeof createPlatformNoteSchema>;
+
+export const platformFinanceQuerySchema = z.object({
+  days: z.coerce.number().int().refine((value) => [7, 30, 90, 365].includes(value)).default(30),
+});
+export type PlatformFinanceQuery = z.infer<typeof platformFinanceQuerySchema>;
