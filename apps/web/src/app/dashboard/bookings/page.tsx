@@ -265,8 +265,8 @@ export default function BookingsPage() {
                     {staffName(booking.staffMembershipId)}
                   </td>
                   <td className="px-4 py-2 text-text-muted">{contactName(booking.contactId)}</td>
-                  <td className="px-4 py-2 text-text-muted">{new Date(booking.startAt).toLocaleString()}</td>
-                  <td className="px-4 py-2 text-text-muted">{new Date(booking.endAt).toLocaleString()}</td>
+                  <td className="px-4 py-2 text-text-muted">{new Date(booking.startAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</td>
+                  <td className="px-4 py-2 text-text-muted">{new Date(booking.endAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</td>
                   <td className="px-4 py-2">
                     <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-text">
                       {STATUS_LABELS[booking.status]}

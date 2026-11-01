@@ -39,9 +39,12 @@ export function StatTile({ label, value, hint, trend, tone = "default", classNam
         <span
           className={cn(
             "text-sm",
-            trend === "positive" && "text-success",
-            trend === "negative" && "text-destructive",
-            !trend && (emphasis ? "text-sidebar-text" : "text-text-muted"),
+            // On the petrol tile the green and red text tokens are too dark to read: the trend
+            // stays light there and says itself through its sign (+12 % / −8 %).
+            emphasis && (trend ? "font-medium text-white" : "text-sidebar-text"),
+            !emphasis && trend === "positive" && "text-success",
+            !emphasis && trend === "negative" && "text-destructive",
+            !emphasis && !trend && "text-text-muted",
           )}
         >
           {hint}

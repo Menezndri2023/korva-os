@@ -83,20 +83,25 @@ async function refreshAccessToken(): Promise<void> {
   const tokenBeforeRefresh = useAuthStore.getState().accessToken;
 
   let payload: ApiResponse<RefreshResponse>;
+  let status: number;
   try {
     const response = await fetch(`${API_URL}${REFRESH_PATH}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
     });
+    status = response.status;
     payload = (await response.json()) as ApiResponse<RefreshResponse>;
   } catch {
-    useAuthStore.getState().clear();
+    // A dropped connection says nothing about the session: keep it, the next request retries.
+    // Clearing here signed people out on every network blip.
     throw new ApiError("NETWORK_ERROR", "Unable to reach the server");
   }
 
   if (!payload.success) {
-    useAuthStore.getState().clear();
+    // Only the server saying the session is gone ends it. "Too many requests" (many customers
+    // behind one mobile operator address share the rate limit) or a server error is temporary.
+    if (status === 401 || status === 403) useAuthStore.getState().clear();
     throw toApiError(payload);
   }
 

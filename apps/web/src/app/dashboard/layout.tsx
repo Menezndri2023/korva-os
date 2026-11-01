@@ -497,12 +497,12 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
         aria-expanded={open}
         className="hidden sm:inline-flex"
       >
-        Ma boutique en ligne
+        Mon site en ligne
       </Button>
       <Button
         variant="secondary"
         size="sm"
-        aria-label="Ma boutique en ligne"
+        aria-label="Mon site en ligne"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className="p-2 sm:hidden"
@@ -513,7 +513,7 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
       {open && (
         <>
           <button
-            aria-label="Fermer le menu boutique en ligne"
+            aria-label="Fermer le menu du site"
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40"
           />
@@ -525,7 +525,7 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
               onClick={() => setOpen(false)}
               className="block rounded-md px-3 py-2 text-sm font-medium text-text hover:bg-surface-muted"
             >
-              Ouvrir ma boutique →
+              Ouvrir mon site
             </a>
             <button
               onClick={() => {
@@ -543,7 +543,7 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
               onClick={() => setOpen(false)}
               className="block rounded-md px-3 py-2 text-sm text-text-muted hover:bg-surface-muted"
             >
-              Personnaliser ma boutique
+              Personnaliser mon site
             </Link>
           </div>
         </>

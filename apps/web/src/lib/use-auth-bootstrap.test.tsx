@@ -86,13 +86,19 @@ describe("useAuthBootstrap", () => {
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
-  it("Test 6: a network error is never treated as a successful login", async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error("offline")) as unknown as typeof fetch;
+  it("Test 6: a network error is never treated as a successful login, even after its retries", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = vi.fn().mockRejectedValue(new Error("offline"));
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     renderHook(() => useAuthBootstrap(), { wrapper: StrictMode });
+    // The passing failure is tried again a few times, then the page gives up.
+    await vi.advanceTimersByTimeAsync(90_000);
 
     await waitFor(() => expect(useAuthStore.getState().bootstrapped).toBe(true));
     expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    vi.useRealTimers();
   });
 
   it("skips the refresh entirely when nobody ever signed in from this browser", async () => {
@@ -103,4 +109,41 @@ describe("useAuthBootstrap", () => {
     await waitFor(() => expect(useAuthStore.getState().bootstrapped).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("tries again after a passing failure (rate limit) instead of sending a valid session to sign-in", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        jsonResponse({ success: false, error: { code: "TOO_MANY_REQUESTS", message: "slow" } }, 429),
+      )
+      .mockImplementation(() =>
+        jsonResponse({ success: true, data: { accessToken: "restored-token" } }, 201),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    renderHook(() => useAuthBootstrap());
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    await waitFor(() => expect(useAuthStore.getState().bootstrapped).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(useAuthStore.getState().accessToken).toBe("restored-token");
+    vi.useRealTimers();
+  });
+
+  it("gives up at once when the server refuses the session", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        jsonResponse({ success: false, error: { code: "INVALID_REFRESH_TOKEN", message: "no" } }, 401),
+      );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    renderHook(() => useAuthBootstrap());
+
+    await waitFor(() => expect(useAuthStore.getState().bootstrapped).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().user).toBeNull();
+  });
 });
+

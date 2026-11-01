@@ -50,8 +50,9 @@ export default function AnalyticsPage() {
   // The Pro tools follow the trade, like the menu: no orders to analyse or export for a salon.
   const tools = visibleTradeTools(organization?.businessModel, organization?.extraTools);
   const enabled = new Set(organization?.enabledModules ?? []);
-  const showOrders = tools.has("orders") && enabled.has("commerce");
-  const showBookings = tools.has("bookings") && enabled.has("booking");
+  // Until the organization is known, everything shows, as before this followed the trade.
+  const showOrders = !organization || (tools.has("orders") && enabled.has("commerce"));
+  const showBookings = !organization || (tools.has("bookings") && enabled.has("booking"));
   const exportKinds: DataExportKind[] = [
     ...(showOrders ? (["orders"] as const) : []),
     ...(showBookings ? (["bookings"] as const) : []),
@@ -104,23 +105,28 @@ export default function AnalyticsPage() {
 
       {overviewQuery.data && (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
             <KpiCard
               label="Prospects"
               value={overviewQuery.data.leads.total}
               breakdown={overviewQuery.data.leads.byStatus}
               labels={LEAD_STATUS_LABELS}
             />
-            <KpiCard
-              label="Réservations"
-              value={overviewQuery.data.bookings.total}
-              detail={`${overviewQuery.data.bookings.upcoming} à venir`}
-            />
-            <KpiCard
-              label="Chiffre d'affaires"
-              value={formatCurrency(overviewQuery.data.orders.revenue, overviewQuery.data.orders.currency)}
-              detail={`${overviewQuery.data.orders.total} commande${overviewQuery.data.orders.total > 1 ? "s" : ""}`}
-            />
+            {/* Each figure only for a trade that has it: no orders for a salon, no bookings for a shop. */}
+            {showBookings && (
+              <KpiCard
+                label="Réservations"
+                value={overviewQuery.data.bookings.total}
+                detail={`${overviewQuery.data.bookings.upcoming} à venir`}
+              />
+            )}
+            {showOrders && (
+              <KpiCard
+                label="Chiffre d'affaires"
+                value={formatCurrency(overviewQuery.data.orders.revenue, overviewQuery.data.orders.currency)}
+                detail={`${overviewQuery.data.orders.total} commande${overviewQuery.data.orders.total > 1 ? "s" : ""}`}
+              />
+            )}
             <KpiCard
               label="Encours factures"
               value={formatCurrency(
@@ -131,6 +137,7 @@ export default function AnalyticsPage() {
             />
           </div>
 
+          {showOrders && (
           <Card className="p-6">
             <h2 className="text-sm font-medium text-text">Chiffre d&apos;affaires</h2>
             <div className="mt-4">
@@ -151,14 +158,17 @@ export default function AnalyticsPage() {
               )}
             </div>
           </Card>
+          )}
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <StatusBreakdownCard
-              title="Commandes par statut"
-              byStatus={overviewQuery.data.orders.byStatus}
-              labels={ORDER_STATUS_LABELS}
-              emptyMessage="Aucune commande sur cette période."
-            />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
+            {showOrders && (
+              <StatusBreakdownCard
+                title="Commandes par statut"
+                byStatus={overviewQuery.data.orders.byStatus}
+                labels={ORDER_STATUS_LABELS}
+                emptyMessage="Aucune commande sur cette période."
+              />
+            )}
             <StatusBreakdownCard
               title="Prospects par statut"
               byStatus={overviewQuery.data.leads.byStatus}

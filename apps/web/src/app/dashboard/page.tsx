@@ -69,7 +69,13 @@ export default function DashboardPage() {
     overviewQuery.error instanceof ApiError && overviewQuery.error.code === "MODULE_NOT_ENABLED";
   const hasAnalytics = (organization?.enabledModules.includes("analytics") ?? false) && !isPermissionDenied;
   // The summary follows the trade's tools, like the menu: a salon has no orders to count.
-  const tools = visibleTradeTools(organization?.businessModel, organization?.extraTools);
+  const enabledModules = new Set(organization?.enabledModules ?? []);
+  const trade = visibleTradeTools(organization?.businessModel, organization?.extraTools);
+  // A figure needs the trade's tool AND its module: a consultancy whose bookings are off has no
+  // appointments to count.
+  const tools = new Set(
+    [...trade].filter((tool) => enabledModules.has(tool === "bookings" ? "booking" : "commerce")),
+  );
   const words = tradeVocabulary(organization?.businessModel);
   const totalActivity =
     (overviewQuery.data?.leads.total ?? 0) +
@@ -155,7 +161,8 @@ export default function DashboardPage() {
       )}
 
       {overviewQuery.data && totalActivity > 0 && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
+          {/* auto-fit: three or four figures depending on the trade, always filling the row. */}
           <SummaryCard label="Prospects" value={overviewQuery.data.leads.total} href="/dashboard/crm/leads" />
           {tools.has("bookings") && (
             <SummaryCard

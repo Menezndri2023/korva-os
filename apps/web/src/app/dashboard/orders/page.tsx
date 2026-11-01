@@ -15,6 +15,7 @@ import { FULFILLMENT_MODE_LABELS, type Contact, type Order, type Resource } from
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 
 const STATUS_LABELS: Record<Order["status"], string> = {
   open: "Addition ouverte",
@@ -30,6 +31,7 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
+  const { data: organization } = useActiveOrganization();
 
   const { data: ordersPage, isLoading } = useQuery({
     queryKey: ["orders", page],
@@ -45,7 +47,8 @@ export default function OrdersPage() {
   const { data: resources } = useQuery({
     queryKey: ["resources", ""],
     queryFn: () => apiClient.get<Resource[]>("/resources"),
-    enabled: authReady,
+    // Tables are booking resources: a shop without the booking module has none to name.
+    enabled: authReady && Boolean(organization?.enabledModules.includes("booking")),
   });
   function resourceName(resourceId?: string): string {
     if (!resourceId) return "—";

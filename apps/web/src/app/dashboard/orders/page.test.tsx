@@ -14,6 +14,10 @@ vi.mock("@/lib/api-client", async (importOriginal) => {
 });
 
 vi.mock("@/lib/use-auth-ready", () => ({ useAuthReady: () => true }));
+// A restaurant: its tables are booking resources, loaded only with the booking module on.
+vi.mock("@/lib/use-active-organization", () => ({
+  useActiveOrganization: () => ({ data: { id: "org-1", enabledModules: ["commerce", "booking"] } }),
+}));
 
 const getMock = vi.mocked(apiClient.get);
 const getListMock = vi.mocked(apiClient.getList);

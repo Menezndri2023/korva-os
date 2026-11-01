@@ -288,7 +288,8 @@ export default function SettingsPage() {
   } = useQuery({
     queryKey: ["ai", "usage-summary"],
     queryFn: () => apiClient.get<AiUsageSummary>("/ai/usage-summary"),
-    enabled: authReady,
+    // The AI routes answer MODULE_NOT_ENABLED while KORVA IA is off: nothing to ask then.
+    enabled: authReady && Boolean(organization?.enabledModules.includes("ai")),
   });
   const aiUsagePermissionDenied =
     aiUsageError instanceof ApiError && aiUsageError.code === "PERMISSION_DENIED";
@@ -303,7 +304,7 @@ export default function SettingsPage() {
     queryKey: ["ai", "sensitive-tools"],
     queryFn: () =>
       apiClient.get<{ name: string; description: string }[]>("/ai/sensitive-tools"),
-    enabled: authReady,
+    enabled: authReady && Boolean(organization?.enabledModules.includes("ai")),
   });
   const sensitiveToolsPermissionDenied =
     sensitiveToolsError instanceof ApiError &&

@@ -33,7 +33,7 @@ export function useAuthBootstrap(): void {
     }
     let cancelled = false;
 
-    getRefreshedAccessToken()
+    refreshWithRetries(() => cancelled)
       .catch(() => {
         // A missing/expired/already-rotated-away refresh token is a normal "not logged in"
         // outcome here — getRefreshedAccessToken() has already cleared the store.
@@ -47,3 +47,31 @@ export function useAuthBootstrap(): void {
     };
   }, [bootstrapped, setBootstrapped]);
 }
+
+/** Waits between attempts when the refresh failed for a passing reason. Together they outlast
+ *  the API's rate-limit window (one minute), so a limited address is not sent to sign-in. */
+const RETRY_DELAYS_MS = [1_000, 3_000, 8_000, 20_000, 45_000];
+
+/**
+ * A refresh that fails because the server REFUSED the session clears the store (see
+ * refreshAccessToken), and that is final. One that fails for a passing reason — no network, the
+ * API's rate limit, a server error — leaves the saved user in place: then try again a few times
+ * before giving up, instead of sending someone with a valid session to the sign-in page because
+ * of one dropped request on a mobile network.
+ */
+async function refreshWithRetries(isCancelled: () => boolean): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await getRefreshedAccessToken();
+      return;
+    } catch (error) {
+      const { user, viewOnly } = useAuthStore.getState();
+      const passing = user !== null && viewOnly === null;
+      if (!passing || attempt >= RETRY_DELAYS_MS.length || isCancelled()) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+      // Unmounted while waiting: the page that wanted the session is gone.
+      if (isCancelled()) throw error;
+    }
+  }
+}
+

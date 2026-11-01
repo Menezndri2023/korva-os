@@ -84,11 +84,20 @@ export function InsightsPanel({
               </>
             )}
             {showBookings && (
-              <StatTile
-                label="Réservations"
-                value={data.bookingsCount.current}
-                {...comparison(data.bookingsCount, days)}
-              />
+              <>
+                {/* Without orders, what the bookings brought in IS the period's sales figure. */}
+                <StatTile
+                  tone={showOrders ? "default" : "emphasis"}
+                  label="Montant des réservations"
+                  value={formatCurrency(data.bookingsValue.current, data.currency)}
+                  {...comparison(data.bookingsValue, days)}
+                />
+                <StatTile
+                  label="Réservations"
+                  value={data.bookingsCount.current}
+                  {...comparison(data.bookingsCount, days)}
+                />
+              </>
             )}
             <StatTile
               label="Nouveaux clients"

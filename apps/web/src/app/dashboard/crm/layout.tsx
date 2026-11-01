@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { tradeVocabulary } from "@korva/types";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 
 const TABS = [
   { href: "/dashboard/crm", label: "Clients" },
@@ -13,11 +15,12 @@ const TABS = [
 
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { data: organization } = useActiveOrganization();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">CRM</h1>
+        <h1 className="text-2xl font-semibold">{tradeVocabulary(organization?.businessModel).crm}</h1>
         <nav className="mt-3 flex gap-1 overflow-x-auto border-b border-border">
           {TABS.map((tab) => (
             <Link

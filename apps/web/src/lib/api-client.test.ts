@@ -78,10 +78,30 @@ describe("getRefreshedAccessToken — shared refresh dedup", () => {
     expect(useAuthStore.getState().accessToken).toBe("restored-token");
   });
 
-  it("Test: a network error rejects and clears the session instead of being treated as success", async () => {
+  it("Test: a network error rejects instead of being treated as success, and keeps the session", async () => {
+    // Keeping it matters on a flaky mobile network: a blip used to sign the person out.
     useAuthStore.setState({ accessToken: "stale-token" });
     global.fetch = vi.fn().mockRejectedValue(new Error("offline")) as unknown as typeof fetch;
 
+    await expect(getRefreshedAccessToken()).rejects.toBeInstanceOf(ApiError);
+    expect(useAuthStore.getState().accessToken).toBe("stale-token");
+  });
+
+  it("keeps the session when the API is only rate-limiting, ends it when the session is refused", async () => {
+    useAuthStore.setState({ accessToken: "stale-token" });
+    global.fetch = vi
+      .fn()
+      .mockImplementation(() =>
+        jsonResponse({ success: false, error: { code: "TOO_MANY_REQUESTS", message: "slow down" } }, 429),
+      ) as unknown as typeof fetch;
+    await expect(getRefreshedAccessToken()).rejects.toBeInstanceOf(ApiError);
+    expect(useAuthStore.getState().accessToken).toBe("stale-token");
+
+    global.fetch = vi
+      .fn()
+      .mockImplementation(() =>
+        jsonResponse({ success: false, error: { code: "INVALID_REFRESH_TOKEN", message: "expired" } }, 401),
+      ) as unknown as typeof fetch;
     await expect(getRefreshedAccessToken()).rejects.toBeInstanceOf(ApiError);
     expect(useAuthStore.getState().accessToken).toBeNull();
   });

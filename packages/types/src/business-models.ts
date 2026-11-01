@@ -55,6 +55,9 @@ export interface BusinessModelDefinition {
   tools: readonly TradeTool[];
   /** The trade's own words for the shared screens. */
   vocabulary: TradeVocabulary;
+  /** Sells goods it keeps in stock: shows warehouses, suppliers and purchase orders in the
+   *  catalogue. A salon or a consultancy has none of them. */
+  stock: boolean;
 }
 
 /**
@@ -98,6 +101,7 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: false, training: false },
     tools: ["orders", "returns"],
     vocabulary: { catalog: "Produits", bookings: "Réservations", crm: "Clients" },
+    stock: true,
   },
   restaurant: {
     key: "restaurant",
@@ -110,6 +114,7 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: true, training: false },
     tools: ["orders", "bookings"],
     vocabulary: { catalog: "Menu", bookings: "Réservations de table", crm: "Clients" },
+    stock: true,
   },
   appointments: {
     key: "appointments",
@@ -122,6 +127,7 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: false, training: false },
     tools: ["bookings"],
     vocabulary: { catalog: "Prestations", bookings: "Rendez-vous", crm: "Clients" },
+    stock: false,
   },
   lodging: {
     key: "lodging",
@@ -134,6 +140,7 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: false, training: false },
     tools: ["bookings"],
     vocabulary: { catalog: "Chambres et séjours", bookings: "Réservations", crm: "Clients" },
+    stock: false,
   },
   training: {
     key: "training",
@@ -146,6 +153,7 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: false, training: true },
     tools: ["orders", "bookings"],
     vocabulary: { catalog: "Formations et offres", bookings: "Inscriptions", crm: "Apprenants" },
+    stock: false,
   },
   quotes: {
     key: "quotes",
@@ -158,6 +166,7 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: false, training: false },
     tools: ["bookings"],
     vocabulary: { catalog: "Prestations", bookings: "Rendez-vous", crm: "Prospects et clients" },
+    stock: false,
   },
   real_estate: {
     key: "real_estate",
@@ -170,6 +179,7 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: false, training: false },
     tools: ["bookings"],
     vocabulary: { catalog: "Biens", bookings: "Visites", crm: "Prospects et clients" },
+    stock: false,
   },
   association: {
     key: "association",
@@ -182,6 +192,7 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     screens: { kitchen: false, training: false },
     tools: ["orders", "bookings"],
     vocabulary: { catalog: "Adhésions et dons", bookings: "Événements", crm: "Membres" },
+    stock: false,
   },
 };
 
