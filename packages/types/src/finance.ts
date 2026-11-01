@@ -227,3 +227,38 @@ export interface CounterPayment {
   checkoutUrl?: string;
   createdAt: string;
 }
+
+/**
+ * The till report of one day (plan feature `cash_closing`): every completed payment taken that day
+ * in the organization's timezone, by method and by the staff member who took it, and the day's
+ * closing once someone has counted the cash drawer.
+ */
+export interface TillReport {
+  /** YYYY-MM-DD, in the organization's timezone. */
+  day: string;
+  currency: string;
+  total: number;
+  count: number;
+  byMethod: { method: string; label: string; total: number; count: number }[];
+  byStaff: { userId: string | null; name: string; total: number; count: number }[];
+  /** Counter QR codes shown that day and never paid — usually a customer who walked away. */
+  counterUnpaid: number;
+  /** What should be in the drawer: the day's payments recorded as cash. */
+  expectedCash: number;
+  closing: TillClosing | null;
+}
+
+export interface TillClosing {
+  id: string;
+  day: string;
+  closedAt: string;
+  closedByName: string;
+  /** What was counted in the drawer. */
+  countedCash: number;
+  expectedCash: number;
+  /** countedCash − expectedCash: negative when cash is missing. */
+  difference: number;
+  /** All payments of the day at the moment of closing, every method. */
+  total: number;
+  note?: string;
+}

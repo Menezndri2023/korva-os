@@ -48,6 +48,12 @@ export class Payment {
   @Prop()
   method?: string;
 
+  /** The staff member who took the payment (counter QR or a payment recorded by hand), for the
+   *  till report. Absent for a customer paying online on their own, and for payments recorded
+   *  before 2026-11-01. */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  recordedBy?: Types.ObjectId;
+
   /**
    * Gratuity collected alongside this payment — deliberately NOT folded into `amount` or
    * validated against the invoice's remaining balance (the tip isn't part of what's owed on the

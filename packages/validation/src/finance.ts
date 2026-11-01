@@ -214,3 +214,21 @@ export const listRecurringBillingsQuerySchema = z.object({
 export type ListRecurringBillingsQuery = z.infer<
   typeof listRecurringBillingsQuerySchema
 >;
+
+/** A till report's day; today in the organization's timezone when omitted. */
+export const tillReportQuerySchema = z.object({
+  day: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
+    .optional(),
+});
+export type TillReportQuery = z.infer<typeof tillReportQuerySchema>;
+
+/** Closing a day's till: what was counted in the drawer. One closing per day. */
+export const closeTillSchema = z.object({
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD"),
+  countedCash: z.number().min(0).max(1_000_000_000),
+  note: z.string().trim().max(500).optional(),
+});
+export type CloseTillInput = z.infer<typeof closeTillSchema>;
+

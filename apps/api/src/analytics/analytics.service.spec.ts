@@ -50,6 +50,7 @@ describe('AnalyticsService — tenant isolation', () => {
       organizationModel as never,
       offerModel as never,
       stockMovementModel as never,
+      makeAggregateModel([]) as never,
       auditService,
     );
 

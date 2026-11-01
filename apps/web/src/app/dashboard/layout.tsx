@@ -21,6 +21,7 @@ import { usePlanFeatures } from "@/lib/use-plan-features";
 import { useTheme } from "@/lib/theme-provider";
 import {
   BellRing,
+  Building2,
   CalendarDays,
   ChartColumn,
   ChefHat,
@@ -65,6 +66,8 @@ function navGroups(
   hasKitchen: boolean,
   tools: Set<TradeTool>,
   words: TradeVocabulary,
+  /** Business, or several establishments to compare (then the page invites to Business). */
+  showNetwork: boolean,
 ): { title: string | null; items: NavItem[] }[] {
   const on = (module: KorvaModule) => enabledModules.has(module);
   // A trade tool needs its module AND the trade (or the owner, via Autres outils) — see
@@ -119,6 +122,7 @@ function navGroups(
         { href: "/dashboard/finance", label: "Devis & Factures", icon: Receipt, visible: on("finance"), prefix: true },
         { href: "/dashboard/caisse", label: "Caisse", icon: QrCode, visible: true },
         { href: "/dashboard/solde", label: "Solde KORVA", icon: Wallet, visible: true },
+        { href: "/dashboard/etablissements", label: "Mes établissements", icon: Building2, visible: showNetwork },
         { href: "/dashboard/analytics", label: "Statistiques", icon: ChartColumn, visible: on("analytics") },
         { href: "/dashboard/workflows", label: "Workflows", icon: Workflow, visible: on("workflow"), prefix: true },
         {
@@ -281,6 +285,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             planFeatures.has("kitchen_display"),
             visibleTradeTools(organization?.businessModel, organization?.extraTools),
             tradeVocabulary(organization?.businessModel),
+            (planFeatures.planKey !== undefined && planFeatures.has("network_overview")) ||
+              (organizations?.length ?? 0) > 1,
           ).map((group) => {
             const items = group.items.filter((item) => item.visible);
             if (items.length === 0) return null;

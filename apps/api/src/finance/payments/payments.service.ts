@@ -233,6 +233,7 @@ export class PaymentsService {
           status: 'processing',
           provider: provider.name,
           method: input.method,
+          ...recordedBy(userId),
           idempotencyKey,
         });
         claimedPaymentId = claimed.id as string;
@@ -327,6 +328,7 @@ export class PaymentsService {
       providerReference: result.providerReference,
       checkoutUrl: result.checkoutUrl,
       method: input.method,
+      ...recordedBy(userId),
       tipAmount: input.tipAmount,
       tipStaffMembershipId: input.tipStaffMembershipId
         ? new Types.ObjectId(input.tipStaffMembershipId)
@@ -1211,4 +1213,11 @@ function isDuplicateIdempotencyKeyError(error: unknown): boolean {
     typeof message === 'string' &&
     message.includes('idempotencyKey')
   );
+}
+
+/** Who took the payment, for the till report — absent for a customer's own online payment. */
+function recordedBy(userId: string | undefined): Partial<Payment> {
+  return userId && Types.ObjectId.isValid(userId)
+    ? { recordedBy: new Types.ObjectId(userId) }
+    : {};
 }

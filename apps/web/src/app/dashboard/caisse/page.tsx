@@ -8,6 +8,7 @@ import { Badge, Button, Card, Input, Notice, PageHeader } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { TillPanel } from "@/components/pro/till-panel";
 
 const ERRORS: Record<string, string> = {
   ONLINE_PAYMENT_NOT_AVAILABLE: "Le paiement mobile money n'est pas encore disponible pour votre entreprise. Contactez KORVA.",
@@ -184,6 +185,8 @@ export default function CounterPage() {
           })}
         </ul>
       </Card>
+
+      <TillPanel />
     </div>
   );
 }

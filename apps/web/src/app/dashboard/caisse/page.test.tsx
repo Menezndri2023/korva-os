@@ -38,6 +38,8 @@ describe("CounterPage", () => {
   it("shows the QR code for the amount typed, then turns to Payé once the customer has paid", async () => {
     let paid = false;
     getMock.mockImplementation(async (path: string) => {
+      // Starter: the Pro till report is offered, not loaded.
+      if (path === "/subscriptions/me") return { plan: { key: "starter" }, subscription: {} };
       if (path === "/counter-payments") return paid ? [{ ...pending, status: "completed" }] : [];
       return { ...pending, status: paid ? "completed" : "pending" };
     });
@@ -67,12 +69,64 @@ describe("CounterPage", () => {
   }, 10_000);
 
   it("explains when mobile money is not available", async () => {
-    getMock.mockResolvedValue([]);
+    getMock.mockImplementation(async (path: string) =>
+      path === "/subscriptions/me" ? { plan: { key: "free" }, subscription: {} } : [],
+    );
     postMock.mockRejectedValue(new ApiError("ONLINE_PAYMENT_NOT_AVAILABLE", "nope"));
     renderWithProviders(<CounterPage />);
 
     fireEvent.change(await screen.findByLabelText("Montant à encaisser"), { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: "Afficher le QR code" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("pas encore disponible");
+  });
+
+  it("shows the day's till by method and staff member on Pro, and closes it with the counted cash", async () => {
+    getMock.mockImplementation(async (path: string) => {
+      if (path === "/subscriptions/me") return { plan: { key: "pro" }, subscription: {} };
+      if (path === "/counter-payments/till") {
+        return {
+          day: "2026-11-01",
+          currency: "XOF",
+          total: 12000,
+          count: 3,
+          byMethod: [
+            { method: "online", label: "Mobile money (QR et en ligne)", total: 7000, count: 1 },
+            { method: "cash", label: "Espèces", total: 5000, count: 2 },
+          ],
+          byStaff: [{ userId: "u-1", name: "Mariam Diallo", total: 5000, count: 2 }],
+          counterUnpaid: 1,
+          expectedCash: 5000,
+          closing: null,
+        };
+      }
+      return [];
+    });
+    postMock.mockResolvedValue({});
+    renderWithProviders(<CounterPage />);
+
+    expect(await screen.findByText("Mariam Diallo")).toBeInTheDocument();
+    expect(screen.getByText("Espèces")).toBeInTheDocument();
+    expect(screen.getByText("Clients partis sans payer ?")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Espèces comptées"), { target: { value: "4500" } });
+    fireEvent.click(screen.getByRole("button", { name: "Fermer la caisse" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/counter-payments/till/closings", {
+        day: "2026-11-01",
+        countedCash: 4500,
+      }),
+    );
+  });
+
+  it("offers the till report as a Pro upgrade below Pro", async () => {
+    getMock.mockImplementation(async (path: string) =>
+      path === "/subscriptions/me" ? { plan: { key: "starter" }, subscription: {} } : [],
+    );
+    renderWithProviders(<CounterPage />);
+    expect(await screen.findByRole("link", { name: "Passer à Pro" })).toHaveAttribute(
+      "href",
+      "/dashboard/settings#abonnement",
+    );
+    expect(getMock).not.toHaveBeenCalledWith("/counter-payments/till");
   });
 });

@@ -89,6 +89,11 @@ export const CUSTOM_DOMAIN_MIN_PLAN: PlanKey = "starter";
  *   both_channels      -> EntitlementsService.assertModulesAllowed (booking AND commerce)
  *   warehouses         -> WarehousesController writes (PlanFeatureGuard)
  *   suppliers          -> SuppliersController / PurchaseOrdersController writes (PlanFeatureGuard)
+ *   advanced_analytics -> AnalyticsController insights (PlanFeatureGuard)
+ *   data_export        -> ExportsController (PlanFeatureGuard)
+ *   cash_closing       -> CounterPaymentsController report/closings (PlanFeatureGuard)
+ *   network_overview   -> OrganizationsController network (checked per organization listed)
+ *   accounting_export  -> ExportsController sales journal (PlanFeatureGuard)
  *
  * Downgrading never deletes: data created under a higher plan stays readable, and only the act
  * of adding more is refused.
@@ -106,6 +111,13 @@ export const PLAN_FEATURE_MIN_PLAN = {
   both_channels: "starter",
   warehouses: "pro",
   suppliers: "pro",
+  // Pro (2026-11-01): see further, take the data out, close the till.
+  advanced_analytics: "pro",
+  data_export: "pro",
+  cash_closing: "pro",
+  // Business: run several places and hand the books to an accountant.
+  network_overview: "business",
+  accounting_export: "business",
 } as const satisfies Record<string, PlanKey>;
 export type PlanFeature = keyof typeof PLAN_FEATURE_MIN_PLAN;
 
@@ -120,6 +132,11 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   both_channels: "Réservations et commandes en même temps",
   warehouses: "Plusieurs entrepôts",
   suppliers: "Fournisseurs et bons de commande",
+  advanced_analytics: "Statistiques avancées : comparaison, meilleurs clients et ventes",
+  data_export: "Export Excel de vos ventes, réservations et clients",
+  cash_closing: "Rapport et clôture de caisse du jour, par employé",
+  network_overview: "Vue d'ensemble de tous vos établissements",
+  accounting_export: "Exports comptables : journal des ventes et TVA",
 };
 
 export function planHasFeature(planKey: string, feature: PlanFeature): boolean {

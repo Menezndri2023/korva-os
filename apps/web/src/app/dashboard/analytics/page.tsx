@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { Badge, Card } from "@korva/ui";
-import type { AnalyticsRevenuePoint } from "@korva/types";
+import { visibleTradeTools, type AnalyticsRevenuePoint, type DataExportKind } from "@korva/types";
+import { useActiveOrganization } from "@/lib/use-active-organization";
+import { InsightsPanel } from "@/components/pro/insights-panel";
+import { ExportPanel } from "@/components/pro/export-panel";
 import {
   useAnalyticsActivity,
   useAnalyticsOverview,
@@ -43,6 +46,18 @@ export default function AnalyticsPage() {
   const turnoverQuery = useInventoryTurnover(30);
   const deadStockQuery = useInventoryDeadStock(90);
   const valuationQuery = useInventoryValuation();
+  const { data: organization } = useActiveOrganization();
+  // The Pro tools follow the trade, like the menu: no orders to analyse or export for a salon.
+  const tools = visibleTradeTools(organization?.businessModel, organization?.extraTools);
+  const enabled = new Set(organization?.enabledModules ?? []);
+  const showOrders = tools.has("orders") && enabled.has("commerce");
+  const showBookings = tools.has("bookings") && enabled.has("booking");
+  const exportKinds: DataExportKind[] = [
+    ...(showOrders ? (["orders"] as const) : []),
+    ...(showBookings ? (["bookings"] as const) : []),
+    "contacts",
+    "sales-journal",
+  ];
 
   return (
     <div className="space-y-6">
@@ -70,6 +85,8 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      <InsightsPanel days={period.days} showOrders={showOrders} showBookings={showBookings} />
 
       {overviewQuery.isLoading && <KpiCardsSkeleton />}
 
@@ -197,6 +214,8 @@ export default function AnalyticsPage() {
           )}
         </>
       )}
+
+      <ExportPanel kinds={exportKinds} />
     </div>
   );
 }

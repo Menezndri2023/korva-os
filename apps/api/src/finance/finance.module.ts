@@ -81,6 +81,11 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { DocumentsModule } from '../documents/documents.module';
 
 import { CounterPaymentsService } from './counter/counter-payments.service';
+import { TillService } from './counter/till.service';
+import {
+  TillClosing,
+  TillClosingSchema,
+} from './counter/schemas/till-closing.schema';
 import { CounterPaymentsController } from './counter/counter-payments.controller';
 import { WalletService } from './wallet/wallet.service';
 import { WalletController } from './wallet/wallet.controller';
@@ -109,6 +114,7 @@ import { EmailModule } from '../shared/email/email.module';
       { name: RecurringBilling.name, schema: RecurringBillingSchema },
       { name: Offer.name, schema: OfferSchema },
       { name: Contact.name, schema: ContactSchema },
+      { name: TillClosing.name, schema: TillClosingSchema },
       { name: WalletEntry.name, schema: WalletEntrySchema },
       { name: Payout.name, schema: PayoutSchema },
       { name: WalletSettings.name, schema: WalletSettingsSchema },
@@ -143,6 +149,7 @@ import { EmailModule } from '../shared/email/email.module';
   providers: [
     WalletService,
     CounterPaymentsService,
+    TillService,
     QuotesRepository,
     QuotesService,
     QuoteExpirySchedulerService,

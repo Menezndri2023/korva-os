@@ -2,11 +2,13 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   analyticsActivityQuerySchema,
+  analyticsInsightsQuerySchema,
   analyticsOverviewQuerySchema,
   analyticsRevenueQuerySchema,
   inventoryDeadStockQuerySchema,
   inventoryTurnoverQuerySchema,
   type AnalyticsActivityQuery,
+  type AnalyticsInsightsQuery,
   type AnalyticsOverviewQuery,
   type AnalyticsRevenueQuery,
   type InventoryDeadStockQuery,
@@ -18,6 +20,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { RequireModule } from '../common/decorators/require-module.decorator';
+import { RequirePlanFeature } from '../common/decorators/require-plan-feature.decorator';
 
 @ApiTags('analytics')
 @RequireModule('analytics')
@@ -50,6 +53,18 @@ export class AnalyticsController {
       tenant.organizationId,
       query,
     );
+  }
+
+  /** Pro: this period against the one before, top customers and offers. */
+  @RequirePermissions('analytics.read')
+  @RequirePlanFeature('advanced_analytics')
+  @Get('insights')
+  getInsights(
+    @CurrentTenant() tenant: TenantContext,
+    @Query(new ZodValidationPipe(analyticsInsightsQuerySchema))
+    query: AnalyticsInsightsQuery,
+  ) {
+    return this.analyticsService.getInsights(tenant.organizationId, query.days);
   }
 
   @RequirePermissions('analytics.read')

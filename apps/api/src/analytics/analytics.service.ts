@@ -3,6 +3,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import type {
   AnalyticsActivityEntry,
+  AnalyticsComparedFigure,
+  AnalyticsInsights,
   AnalyticsOverview,
   AnalyticsRevenuePoint,
   AnalyticsRevenueTimeseries,
@@ -35,6 +37,10 @@ import {
   StockMovement,
   StockMovementDocument,
 } from '../catalog/offers/schemas/stock-movement.schema';
+import {
+  Contact,
+  ContactDocument,
+} from '../crm/contacts/schemas/contact.schema';
 import { AuditService } from '../audit/audit.service';
 
 /** An offer with no variants keeps its stock on its own `stockOnHand`; one with variants keeps
@@ -53,6 +59,10 @@ function totalStock(offer: {
 /** Orders only count as revenue once the sale is real — matches the AI module's
  *  get_sales_report tool, the only other place this business rule already exists. */
 const REVENUE_ORDER_STATUSES: OrderStatus[] = ['confirmed', 'fulfilled'];
+/** Bookings that are a sale: taken and kept (or already delivered). */
+const SOLD_BOOKING_STATUSES = ['confirmed', 'completed'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TOP_SIZE = 5;
 /** Invoices still owed money — excludes draft (not yet sent) and cancelled/paid. */
 const OUTSTANDING_INVOICE_STATUSES: InvoiceStatus[] = [
   'issued',
@@ -76,8 +86,291 @@ export class AnalyticsService {
     @InjectModel(Offer.name) private readonly offerModel: Model<OfferDocument>,
     @InjectModel(StockMovement.name)
     private readonly stockMovementModel: Model<StockMovementDocument>,
+    @InjectModel(Contact.name)
+    private readonly contactModel: Model<ContactDocument>,
     private readonly auditService: AuditService,
   ) {}
+
+  /**
+   * The Pro statistics: the last `days` days against the `days` before them, and the customers
+   * and offers that sold the most in the current period. Bookings count on the day they were
+   * taken (createdAt), like orders, so both sides of a comparison measure the same thing.
+   */
+  async getInsights(
+    organizationId: string,
+    days: number,
+  ): Promise<AnalyticsInsights> {
+    const organizationObjectId = new Types.ObjectId(organizationId);
+    const now = Date.now();
+    const current = {
+      $gte: new Date(now - days * DAY_MS),
+      $lte: new Date(now),
+    };
+    const previous = {
+      $gte: new Date(now - 2 * days * DAY_MS),
+      $lt: current.$gte,
+    };
+
+    const figures = async (createdAt: Record<string, Date>) => {
+      const [orders, bookings, newContacts] = await Promise.all([
+        this.orderModel.aggregate<{ revenue: number; count: number }>([
+          {
+            $match: {
+              organizationId: organizationObjectId,
+              status: { $in: REVENUE_ORDER_STATUSES },
+              createdAt,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              revenue: { $sum: '$total' },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+        this.bookingModel.aggregate<{ value: number; count: number }>([
+          {
+            $match: {
+              organizationId: organizationObjectId,
+              status: { $in: SOLD_BOOKING_STATUSES },
+              createdAt,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              value: { $sum: '$pricing.amount' },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+        this.contactModel.countDocuments({
+          organizationId: organizationObjectId,
+          createdAt,
+        }),
+      ]);
+      const revenue = orders[0]?.revenue ?? 0;
+      const count = orders[0]?.count ?? 0;
+      return {
+        revenue,
+        count,
+        average: count > 0 ? Math.round(revenue / count) : 0,
+        bookingsValue: bookings[0]?.value ?? 0,
+        bookingsCount: bookings[0]?.count ?? 0,
+        newContacts,
+      };
+    };
+
+    const [
+      organization,
+      thisPeriod,
+      lastPeriod,
+      customerOrders,
+      customerBookings,
+    ] = await Promise.all([
+      this.organizationModel.findById(organizationObjectId).lean(),
+      figures(current),
+      figures(previous),
+      this.orderModel.aggregate<{
+        _id: Types.ObjectId;
+        total: number;
+        count: number;
+      }>([
+        {
+          $match: {
+            organizationId: organizationObjectId,
+            status: { $in: REVENUE_ORDER_STATUSES },
+            createdAt: current,
+          },
+        },
+        {
+          $group: {
+            _id: '$contactId',
+            total: { $sum: '$total' },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      this.bookingModel.aggregate<{
+        _id: Types.ObjectId;
+        total: number;
+        count: number;
+      }>([
+        {
+          $match: {
+            organizationId: organizationObjectId,
+            status: { $in: SOLD_BOOKING_STATUSES },
+            createdAt: current,
+          },
+        },
+        {
+          $group: {
+            _id: '$contactId',
+            total: { $sum: '$pricing.amount' },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const [offerLines, offerBookings] = await Promise.all([
+      this.orderModel.aggregate<{
+        _id: { offerId: Types.ObjectId | null; name: string };
+        total: number;
+        quantity: number;
+      }>([
+        {
+          $match: {
+            organizationId: organizationObjectId,
+            status: { $in: REVENUE_ORDER_STATUSES },
+            createdAt: current,
+          },
+        },
+        { $unwind: '$items' },
+        {
+          $group: {
+            _id: {
+              offerId: { $ifNull: ['$items.offerId', null] },
+              name: '$items.description',
+            },
+            total: {
+              $sum: { $multiply: ['$items.quantity', '$items.unitPrice'] },
+            },
+            quantity: { $sum: '$items.quantity' },
+          },
+        },
+      ]),
+      this.bookingModel.aggregate<{
+        _id: Types.ObjectId;
+        total: number;
+        quantity: number;
+      }>([
+        {
+          $match: {
+            organizationId: organizationObjectId,
+            status: { $in: SOLD_BOOKING_STATUSES },
+            createdAt: current,
+          },
+        },
+        {
+          $group: {
+            _id: '$offerId',
+            total: { $sum: '$pricing.amount' },
+            quantity: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    // Customers: orders and bookings of the same contact add up.
+    const byContact = new Map<string, { total: number; count: number }>();
+    for (const row of [...customerOrders, ...customerBookings]) {
+      if (!row._id) continue;
+      const key = row._id.toString();
+      const entry = byContact.get(key) ?? { total: 0, count: 0 };
+      entry.total += row.total;
+      entry.count += row.count;
+      byContact.set(key, entry);
+    }
+    const topContactIds = [...byContact.entries()]
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, TOP_SIZE);
+    const contacts = await this.contactModel
+      .find({
+        _id: { $in: topContactIds.map(([id]) => new Types.ObjectId(id)) },
+      })
+      .select({ firstName: 1, lastName: 1, company: 1, email: 1, phone: 1 })
+      .lean();
+    const contactName = new Map(
+      contacts.map((contact) => [
+        contact._id.toString(),
+        [contact.firstName, contact.lastName].filter(Boolean).join(' ') ||
+          contact.company ||
+          contact.email ||
+          contact.phone ||
+          'Client',
+      ]),
+    );
+
+    // Offers: an order line keyed by its offer (or by its wording when it has none), a booking
+    // by its offer; the same offer sold both ways adds up.
+    const byOffer = new Map<
+      string,
+      { offerId: string | null; name: string; total: number; quantity: number }
+    >();
+    for (const row of offerLines) {
+      const offerId = row._id.offerId ? row._id.offerId.toString() : null;
+      const key = offerId ?? `line:${row._id.name}`;
+      const entry = byOffer.get(key) ?? {
+        offerId,
+        name: row._id.name,
+        total: 0,
+        quantity: 0,
+      };
+      entry.total += row.total;
+      entry.quantity += row.quantity;
+      byOffer.set(key, entry);
+    }
+    for (const row of offerBookings) {
+      if (!row._id) continue;
+      const key = row._id.toString();
+      const entry = byOffer.get(key) ?? {
+        offerId: key,
+        name: '',
+        total: 0,
+        quantity: 0,
+      };
+      entry.total += row.total;
+      entry.quantity += row.quantity;
+      byOffer.set(key, entry);
+    }
+    const topOffers = [...byOffer.values()]
+      .sort((a, b) => b.total - a.total)
+      .slice(0, TOP_SIZE);
+    const offerIds = topOffers
+      .map((offer) => offer.offerId)
+      .filter((id): id is string => id !== null);
+    const offers = await this.offerModel
+      .find({ _id: { $in: offerIds.map((id) => new Types.ObjectId(id)) } })
+      .select({ name: 1 })
+      .lean();
+    const offerName = new Map(
+      offers.map((offer) => [offer._id.toString(), offer.name]),
+    );
+
+    const compare = (
+      pick: (f: Awaited<ReturnType<typeof figures>>) => number,
+    ): AnalyticsComparedFigure => ({
+      current: pick(thisPeriod),
+      previous: pick(lastPeriod),
+    });
+
+    return {
+      periodDays: days,
+      currency: organization?.currency ?? null,
+      ordersRevenue: compare((f) => f.revenue),
+      ordersCount: compare((f) => f.count),
+      averageOrder: compare((f) => f.average),
+      bookingsValue: compare((f) => f.bookingsValue),
+      bookingsCount: compare((f) => f.bookingsCount),
+      newContacts: compare((f) => f.newContacts),
+      topCustomers: topContactIds.map(([contactId, entry]) => ({
+        contactId,
+        name: contactName.get(contactId) ?? 'Client supprimé',
+        total: entry.total,
+        count: entry.count,
+      })),
+      topOffers: topOffers.map((offer) => ({
+        offerId: offer.offerId,
+        name:
+          (offer.offerId ? offerName.get(offer.offerId) : undefined) ??
+          (offer.name || 'Offre supprimée'),
+        total: offer.total,
+        quantity: offer.quantity,
+      })),
+    };
+  }
 
   async getOverview(
     organizationId: string,

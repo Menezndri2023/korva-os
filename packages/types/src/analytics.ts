@@ -1,6 +1,7 @@
 import type { LeadStatus } from "./crm.ts";
 import type { OrderStatus } from "./commerce.ts";
 import type { InvoiceStatus } from "./finance.ts";
+import type { BusinessModel } from "./business-models.ts";
 
 export interface AnalyticsOverview {
   leads: {
@@ -103,4 +104,66 @@ export interface SupplierAnalysisEntry {
   purchaseOrderCount: number;
   totalSpend: number;
   onTimeDeliveryRate: number | null;
+}
+
+/** One figure of AnalyticsInsights, this period beside the one just before it. */
+export interface AnalyticsComparedFigure {
+  current: number;
+  previous: number;
+}
+
+/**
+ * Pro statistics (plan feature `advanced_analytics`): the chosen period against the period of the
+ * same length just before it, and who and what sold the most in it. Sales are confirmed or
+ * fulfilled orders, plus confirmed or completed bookings — never a cancelled one.
+ */
+export interface AnalyticsInsights {
+  periodDays: number;
+  currency: string | null;
+  ordersRevenue: AnalyticsComparedFigure;
+  ordersCount: AnalyticsComparedFigure;
+  averageOrder: AnalyticsComparedFigure;
+  bookingsValue: AnalyticsComparedFigure;
+  bookingsCount: AnalyticsComparedFigure;
+  newContacts: AnalyticsComparedFigure;
+  topCustomers: { contactId: string; name: string; total: number; count: number }[];
+  topOffers: { offerId: string | null; name: string; total: number; quantity: number }[];
+}
+
+/** The kinds of file the dashboard can export (plan features `data_export` and, for the sales
+ *  journal, `accounting_export`). */
+export const DATA_EXPORT_KINDS = ["orders", "bookings", "contacts", "sales-journal"] as const;
+export type DataExportKind = (typeof DATA_EXPORT_KINDS)[number];
+
+/**
+ * An export, ready to save: semicolon-separated with a UTF-8 byte order mark and decimal commas,
+ * which is what Excel opens correctly in French without an import wizard.
+ */
+export interface DataExport {
+  filename: string;
+  csv: string;
+  rows: number;
+  /** True when the period held more rows than one file carries (EXPORT_ROW_LIMIT). */
+  truncated: boolean;
+}
+
+/**
+ * Business (plan feature `network_overview`): every establishment the signed-in person runs, side
+ * by side over the last 30 days. Each one in its own currency — figures are never added across
+ * currencies.
+ */
+export interface NetworkOverview {
+  periodDays: number;
+  establishments: {
+    organizationId: string;
+    name: string;
+    slug: string;
+    businessModel?: BusinessModel;
+    currency: string;
+    sales: number;
+    orders: number;
+    bookings: number;
+    collected: number;
+    newContacts: number;
+  }[];
 }
