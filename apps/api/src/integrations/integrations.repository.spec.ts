@@ -253,6 +253,8 @@ describe('IntegrationsRepository', () => {
         domain: 'payment',
         role: 'merchant-of-record',
         market: 'CI',
+        // Never a rotated-out (revoked) row.
+        isLive: true,
       });
       expect(record).not.toBeNull();
       expect(record).not.toHaveProperty('secretEncrypted');
@@ -299,6 +301,7 @@ describe('IntegrationsRepository', () => {
         organizationId: orgId,
         domain: 'messaging',
         provider: '360dialog',
+        isLive: true,
       });
       expect(record).not.toBeNull();
       expect(record).not.toHaveProperty('secretEncrypted');

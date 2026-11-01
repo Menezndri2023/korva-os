@@ -196,12 +196,16 @@ export class IntegrationsRepository implements IntegrationAccountsReader {
     role: string;
     market: string | null;
   }): Promise<IntegrationAccountRecord | null> {
+    // isLive: after a key rotation the revoked row is still there, and an unfiltered findOne
+    // returned it first — every payment then failed with "no active provider" (production,
+    // 2026-11-01). The partial unique index guarantees at most one live row.
     const doc = await this.model
       .findOne({
         scope: 'platform',
         domain: input.domain,
         role: input.role,
         market: input.market,
+        isLive: true,
       })
       .exec();
     return doc ? toIntegrationAccountRecord(doc) : null;
@@ -219,6 +223,8 @@ export class IntegrationsRepository implements IntegrationAccountsReader {
         organizationId: new Types.ObjectId(input.organizationId),
         domain: input.domain,
         provider: input.provider,
+        // Same reason as findPlatformAccount: never a rotated-out row.
+        isLive: true,
       })
       .exec();
     return doc ? toIntegrationAccountRecord(doc) : null;

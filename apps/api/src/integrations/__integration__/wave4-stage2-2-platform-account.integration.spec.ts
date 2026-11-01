@@ -187,6 +187,15 @@ describe('Wave 4 Stage 2.2 — platform IntegrationAccount creation mechanism (r
       .toArray();
     expect(live.map((doc) => doc._id.toString())).toEqual([rotated.id]);
 
+    // What a payment asks for — the resolver's lookup — finds the NEW key, never the revoked one.
+    const served = await repository.findPlatformAccount({
+      domain: 'payment',
+      role: 'subscription-billing',
+      market: null,
+    });
+    expect(served?.id).toBe(rotated.id);
+    expect(served?.status).toBe('active');
+
     // And again: a second rotation works the same way.
     const again = await service.rotatePlatformAccountSecret(
       rotated.id,
