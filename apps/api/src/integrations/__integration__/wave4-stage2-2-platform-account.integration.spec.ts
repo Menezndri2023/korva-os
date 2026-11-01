@@ -149,4 +149,51 @@ describe('Wave 4 Stage 2.2 — platform IntegrationAccount creation mechanism (r
     // token appears anywhere in the class source.
     expect(serviceSource).not.toMatch(/EventBus/);
   });
+
+  it('rotates a live platform key without breaking the one-live-account index, and the new key is the one served', async () => {
+    // This test needs the real partial unique index the rotation must live with.
+    await connection.collection('integration_accounts').deleteMany({});
+    await connection.model('IntegrationAccount').createIndexes();
+
+    const created = await service.createPlatformAccount({
+      domain: 'payment',
+      provider: 'geniuspay',
+      role: 'subscription-billing',
+      market: null,
+      secret: 'old-key-pair',
+    });
+    await repository.updateStatus(created.id, 'active');
+
+    const rotated = await service.rotatePlatformAccountSecret(
+      created.id,
+      'new-key-pair',
+    );
+
+    expect(rotated.status).toBe('active');
+    expect(rotated.id).not.toBe(created.id);
+    expect(await service.getDecryptedPlatformSecret(rotated.id)).toBe(
+      'new-key-pair',
+    );
+    const accounts = await service.listPlatformAccounts('payment');
+    expect(accounts.find((a) => a.id === created.id)?.status).toBe('revoked');
+    // Exactly one live account for that role: the new one.
+    const live = await connection
+      .collection('integration_accounts')
+      .find({
+        provider: 'geniuspay',
+        role: 'subscription-billing',
+        isLive: true,
+      })
+      .toArray();
+    expect(live.map((doc) => doc._id.toString())).toEqual([rotated.id]);
+
+    // And again: a second rotation works the same way.
+    const again = await service.rotatePlatformAccountSecret(
+      rotated.id,
+      'third-key-pair',
+    );
+    expect(await service.getDecryptedPlatformSecret(again.id)).toBe(
+      'third-key-pair',
+    );
+  });
 });

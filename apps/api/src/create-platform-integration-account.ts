@@ -101,6 +101,10 @@ interface ParsedArgs {
   secretPrompt: boolean;
   apply: boolean;
   activate: boolean;
+  /** Test the live account's current key, read-only. */
+  check: boolean;
+  /** Replace the live account's key: the new key is tested first, the old one kept if it fails. */
+  rotate: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -129,6 +133,8 @@ function parseArgs(argv: string[]): ParsedArgs {
     secretPrompt: argv.includes('--secret-prompt'),
     apply: argv.includes('--apply'),
     activate: argv.includes('--activate'),
+    check: argv.includes('--check'),
+    rotate: argv.includes('--rotate'),
   };
 }
 
@@ -180,6 +186,78 @@ function readSecret(prompt: string): Promise<string> {
   });
 }
 
+/**
+ * --check and --rotate work on the account that already exists for --domain/--provider/--role
+ * (/--market). Neither ever prints a key.
+ */
+async function checkOrRotate(args: ParsedArgs): Promise<void> {
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: false,
+  });
+  try {
+    const integrations = app.get(IntegrationsService);
+    const accounts = await integrations.listPlatformAccounts(args.domain);
+    const current = accounts.find(
+      (account) =>
+        account.provider === args.provider &&
+        account.role === args.role &&
+        (account.market ?? null) === args.market &&
+        account.status !== 'revoked',
+    );
+    if (!current) {
+      console.log(
+        `Aucun compte ${args.provider} « ${args.role} »${args.market ? ` (${args.market})` : ''} : créez-le d'abord (sans --rotate).`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const registry = app.get(PaymentProviderRegistry);
+    const test = async (secret: string | null) =>
+      secret
+        ? ((await registry
+            .resolve(args.provider, secret)
+            .testConnection?.()) ?? {
+            ok: true,
+          })
+        : { ok: false, message: 'aucune clé enregistrée' };
+
+    if (args.check) {
+      const result = await test(
+        await integrations.getDecryptedPlatformSecret(current.id),
+      );
+      console.log(
+        result.ok
+          ? `Clé actuelle « ${args.role} » : OK`
+          : `Clé actuelle « ${args.role} » : REFUSÉE — ${result.message ?? ''}`,
+      );
+      process.exitCode = result.ok ? 0 : 1;
+      return;
+    }
+
+    // --rotate: the new key must work before the old one is retired.
+    const result = await test(args.secret);
+    if (!result.ok) {
+      console.log(
+        `Nouvelle clé REFUSÉE — ${result.message ?? ''}. Rien n'a été changé.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (!args.apply) {
+      console.log(
+        'Nouvelle clé : OK. Simulation seulement — relancez avec --apply pour remplacer la clé.',
+      );
+      return;
+    }
+    await integrations.rotatePlatformAccountSecret(current.id, args.secret!);
+    console.log(
+      `Nouvelle clé : OK. Clé « ${args.role} » remplacée ; l'ancienne est révoquée (gardée pour l'historique).`,
+    );
+  } finally {
+    await app.close();
+  }
+}
+
 async function run() {
   const args = parseArgs(process.argv.slice(2));
   if (args.secretPrompt) {
@@ -202,6 +280,14 @@ async function run() {
     console.log(
       `Clés reçues : publique + secrète, environnement « ${apiKey.split('_')[1]} ». Vérification…`,
     );
+  }
+
+  if (args.check || args.rotate) {
+    if (args.rotate && !args.secret) {
+      throw new Error('--rotate needs the new key: add --secret-prompt');
+    }
+    await checkOrRotate(args);
+    return;
   }
 
   console.log(

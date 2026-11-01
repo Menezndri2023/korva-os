@@ -23,6 +23,9 @@ export interface CreateIntegrationAccountInput {
   status?: IntegrationAccountStatus;
   secretEncrypted?: string | null;
   metadata?: Record<string, unknown>;
+  /** False to create a row outside the uniqueness slot (a rotation's replacement, promoted with
+   *  setLive once the old row is revoked). Defaults to live. */
+  isLive?: boolean;
 }
 
 /**
@@ -142,6 +145,17 @@ export class IntegrationsRepository implements IntegrationAccountsReader {
    *  `isLive` so the row stops occupying its uniqueness slot in `uniq_platform_account` /
    *  `uniq_tenant_account` (see integration-account.schema.ts's doc comment on that field for
    *  why `status: 'revoked'` alone can't be the partial-index filter). */
+  /** Puts a row back into (or out of) its uniqueness slot — see rotatePlatformAccountSecret. */
+  async setLive(
+    id: string,
+    isLive: boolean,
+    status?: IntegrationAccountStatus,
+  ): Promise<void> {
+    await this.model
+      .updateOne({ _id: id }, { isLive, ...(status ? { status } : {}) })
+      .exec();
+  }
+
   async revoke(id: string): Promise<void> {
     await this.model
       .updateOne({ _id: id }, { status: 'revoked', isLive: false })

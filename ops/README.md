@@ -234,6 +234,17 @@ paiement hébergée. KORVA l'utilise pour deux choses : les entreprises qui paie
    prioritaire). Saisissez `pk_… sk_…` séparés par un espace. Un compte dont les clés échouent au
    test n'est pas activé.
 
+   **Vérifier ou changer les clés** (clés régénérées dans GeniusPay, ou refusées : les journaux
+   disent `INVALID_API_KEY`) — mêmes options `--domain/--provider/--role`, sur le compte existant :
+
+       ... create-platform-integration-account.js --domain payment --provider geniuspay \
+         --role merchant-of-record --check
+       ... --role merchant-of-record --rotate --secret-prompt --apply
+
+   `--check` teste la clé enregistrée sans rien changer. `--rotate` teste d'abord la nouvelle clé
+   et ne remplace l'ancienne que si elle fonctionne ; l'ancienne est révoquée, gardée pour
+   l'historique. À faire pour chacun des deux rôles. Aucune clé n'est jamais affichée.
+
    Devises : GeniusPay encaisse en XOF, EUR et USD. Une boutique dans une autre devise (MAD, CAD)
    ne propose simplement pas le paiement en ligne — espèces / à la livraison restent.
 3. **Webhook** : dans GeniusPay, créez un webhook vers

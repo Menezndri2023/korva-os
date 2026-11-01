@@ -328,6 +328,10 @@ export class IntegrationsService {
       });
     }
 
+    // The unique index allows ONE live row per (domain, provider, role, market): creating the
+    // replacement live while the old one still is answered E11000 every time. So the new row is
+    // written outside the slot, the old one leaves it, and the new one takes it. Should that last
+    // step fail, the old row is put back: the platform is never left without a live account.
     const rotated = await this.integrationsRepository.create({
       scope: 'platform',
       organizationId: null,
@@ -338,11 +342,19 @@ export class IntegrationsService {
       status: 'active',
       secretEncrypted: this.credentialEncryptionService.encrypt(newSecret),
       metadata: existing.metadata,
+      isLive: false,
     });
-
     await this.integrationsRepository.revoke(id);
+    try {
+      await this.integrationsRepository.setLive(rotated.id as string, true);
+    } catch (error) {
+      await this.integrationsRepository.setLive(id, true, existing.status);
+      await this.integrationsRepository.revoke(rotated.id as string);
+      throw error;
+    }
 
-    return toIntegrationAccountRecord(rotated);
+    const live = await this.requirePlatformAccount(rotated.id as string);
+    return toIntegrationAccountRecord(live);
   }
 
   async revokePlatformAccount(id: string): Promise<IntegrationAccountRecord> {
