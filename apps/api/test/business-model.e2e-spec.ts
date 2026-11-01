@@ -6,6 +6,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { migration as businessModelBackfill } from '../src/migrations/0005-business-model-backfill';
+import { migration as keepUsedTradeTools } from '../src/migrations/0014-trade-tools-keep-used';
 
 /**
  * Organization.businessModel — the stored type of activity (docs/KORVA_OS_V3_STRUCTURE_PRODUIT.md
@@ -22,6 +23,7 @@ interface OrganizationPayload {
   slug: string;
   type: string;
   businessModel?: string;
+  extraTools?: string[];
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -188,5 +190,82 @@ describe('Organization business model (e2e)', () => {
     expect(await read(shop)).toBe('retail');
     expect(await read(chosen)).toBe('association');
     expect(await read(unknown)).toBeUndefined();
+  });
+
+  it('stores the trade tools an owner brings back into the menu, and refuses unknown ones', async () => {
+    const { accessToken, organization } = await createOrganization(
+      'bm-extra-tools@korva.test',
+      { name: 'Salon Extra', type: 'beauté' },
+    );
+    expect(organization.extraTools).toBeUndefined();
+    const patched = await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ extraTools: ['orders'] })
+      .expect(200);
+    expect(asSuccess<OrganizationPayload>(patched.body).extraTools).toEqual([
+      'orders',
+    ]);
+    await request(server)
+      .patch('/api/v1/organizations/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organization.id)
+      .send({ extraTools: ['kitchen'] })
+      .expect(400);
+  });
+
+  it('keeps in the menu every tool an organization already used outside its trade', async () => {
+    const organizations = connection.collection('organizations');
+    const now = new Date();
+    const base = {
+      country: 'FR',
+      currency: 'EUR',
+      timezone: 'Europe/Paris',
+      language: 'fr',
+      type: 'beauté',
+      enabledModules: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    const sellingSalon = new Types.ObjectId();
+    const quietSalon = new Types.ObjectId();
+    const noModel = new Types.ObjectId();
+    await organizations.insertMany([
+      {
+        _id: sellingSalon,
+        ...base,
+        name: 'Salon vend',
+        slug: 'tt-selling',
+        businessModel: 'appointments',
+      },
+      {
+        _id: quietSalon,
+        ...base,
+        name: 'Salon calme',
+        slug: 'tt-quiet',
+        businessModel: 'appointments',
+      },
+      { _id: noModel, ...base, name: 'Sans type', slug: 'tt-none' },
+    ]);
+    // An order and a booking for the selling salon (bookings are its own tool: not recorded);
+    // an order for the organization with no type of activity (it sees everything anyway).
+    await connection.collection('orders').insertMany([
+      { organizationId: sellingSalon, number: 'TT-1', createdAt: now },
+      { organizationId: noModel, number: 'TT-2', createdAt: now },
+    ]);
+    await connection
+      .collection('bookings')
+      .insertOne({ organizationId: sellingSalon, createdAt: now });
+
+    await keepUsedTradeTools.up(connection);
+    await keepUsedTradeTools.up(connection);
+
+    const read = async (id: Types.ObjectId) =>
+      (await organizations.findOne({ _id: id }))?.extraTools as
+        string[] | undefined;
+    expect(await read(sellingSalon)).toEqual(['orders']);
+    expect(await read(quietSalon)).toBeUndefined();
+    expect(await read(noModel)).toBeUndefined();
   });
 });

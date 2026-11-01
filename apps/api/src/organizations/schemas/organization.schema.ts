@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
-import { BUSINESS_MODELS, FULFILLMENT_MODES } from '@korva/types';
+import { BUSINESS_MODELS, FULFILLMENT_MODES, TRADE_TOOLS } from '@korva/types';
 import type {
   BusinessModel,
   DeliveryZone,
@@ -16,6 +16,7 @@ import type {
   StorefrontTemplateKey,
   TeamMember,
   Testimonial,
+  TradeTool,
 } from '@korva/types';
 import { idToJson } from '../../core/mongoose/schema-options';
 
@@ -206,6 +207,14 @@ export class Organization {
 
   @Prop({ type: [String], default: [] })
   enabledModules!: KorvaModule[];
+
+  /**
+   * Trade tools the owner brought back into the menu although their type of activity does not
+   * use them (BusinessModelDefinition.tools). Menu only — never a permission. `default:
+   * undefined` so existing documents are not filled with `[]`.
+   */
+  @Prop({ type: [String], enum: TRADE_TOOLS, default: undefined })
+  extraTools?: TradeTool[];
 
   /**
    * AI autonomy level 4 (docs/KORVA_OS_V2_AUDIT.md §2.3): tool names from this list skip the

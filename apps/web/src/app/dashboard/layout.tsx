@@ -4,7 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BUSINESS_MODEL_DEFINITIONS, type KorvaModule, type Organization } from "@korva/types";
+import {
+  BUSINESS_MODEL_DEFINITIONS,
+  tradeVocabulary,
+  visibleTradeTools,
+  type KorvaModule,
+  type Organization,
+  type TradeTool,
+  type TradeVocabulary,
+} from "@korva/types";
 import { Button, Notice, ThemeToggle } from "@korva/ui";
 import { ApiError, apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
@@ -55,8 +63,13 @@ function navGroups(
   enabledModules: Set<KorvaModule>,
   screens: { kitchen: boolean; training: boolean },
   hasKitchen: boolean,
+  tools: Set<TradeTool>,
+  words: TradeVocabulary,
 ): { title: string | null; items: NavItem[] }[] {
   const on = (module: KorvaModule) => enabledModules.has(module);
+  // A trade tool needs its module AND the trade (or the owner, via Autres outils) — see
+  // BusinessModelDefinition.tools. The page itself stays reachable: this is the menu only.
+  const tool = (name: TradeTool, module: KorvaModule) => on(module) && tools.has(name);
   return [
     {
       title: null,
@@ -68,16 +81,16 @@ function navGroups(
     {
       title: "Vendre",
       items: [
-        { href: "/dashboard/catalog", label: "Catalogue", icon: Package, visible: on("catalog"), prefix: true },
-        { href: "/dashboard/orders", label: "Commandes", icon: ShoppingBag, visible: on("commerce"), prefix: true },
-        { href: "/dashboard/bookings", label: "Réservations", icon: CalendarDays, visible: on("booking"), prefix: true },
+        { href: "/dashboard/catalog", label: words.catalog, icon: Package, visible: on("catalog"), prefix: true },
+        { href: "/dashboard/orders", label: "Commandes", icon: ShoppingBag, visible: tool("orders", "commerce"), prefix: true },
+        { href: "/dashboard/bookings", label: words.bookings, icon: CalendarDays, visible: tool("bookings", "booking"), prefix: true },
         {
           href: "/dashboard/kitchen",
           label: "Cuisine",
           icon: ChefHat,
-          visible: on("commerce") && screens.kitchen && hasKitchen,
+          visible: tool("orders", "commerce") && screens.kitchen && hasKitchen,
         },
-        { href: "/dashboard/returns", label: "Retours", icon: Undo2, visible: on("commerce") },
+        { href: "/dashboard/returns", label: "Retours", icon: Undo2, visible: tool("returns", "commerce") },
         {
           href: "/dashboard/reviews",
           label: "Avis clients",
@@ -89,7 +102,7 @@ function navGroups(
     {
       title: "Clients",
       items: [
-        { href: "/dashboard/crm", label: "CRM", icon: Users, visible: on("crm"), prefix: true },
+        { href: "/dashboard/crm", label: words.crm, icon: Users, visible: on("crm"), prefix: true },
         { href: "/dashboard/marketing", label: "Marketing", icon: Megaphone, visible: on("marketing"), prefix: true },
         {
           href: "/dashboard/communication",
@@ -262,7 +275,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 space-y-5 overflow-y-auto pb-4">
-          {navGroups(enabledModules, screens, planFeatures.has("kitchen_display")).map((group) => {
+          {navGroups(
+            enabledModules,
+            screens,
+            planFeatures.has("kitchen_display"),
+            visibleTradeTools(organization?.businessModel, organization?.extraTools),
+            tradeVocabulary(organization?.businessModel),
+          ).map((group) => {
             const items = group.items.filter((item) => item.visible);
             if (items.length === 0) return null;
             return (

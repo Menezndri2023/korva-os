@@ -1,5 +1,5 @@
 import type { DeliveryZone, FulfillmentMode } from "./commerce.ts";
-import type { BusinessModel } from "./business-models.ts";
+import type { BusinessModel, TradeTool } from "./business-models.ts";
 import type {
   StorefrontFontPairingKey,
   StorefrontPaletteKey,
@@ -171,6 +171,9 @@ export interface Organization {
   faqItems?: FaqItem[];
   settings: OrganizationSettings;
   enabledModules: KorvaModule[];
+  /** Trade tools the owner brought back into the menu although their trade does not use them
+   *  (Settings › Autres outils) — see BusinessModelDefinition.tools. */
+  extraTools?: TradeTool[];
   /** AI autonomy level 4 — tool names allowed to run without the usual pending-confirmation
    *  step. See Organization schema's own doc comment (apps/api) for the full design. */
   aiAutoApprovedTools?: string[];

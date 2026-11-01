@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   BUSINESS_MODELS,
+  TRADE_TOOLS,
   FULFILLMENT_MODES,
   KORVA_MODULES,
   PAYMENT_METHODS,
@@ -128,6 +129,8 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
    *  offering no payment method at all isn't a valid checkout configuration. */
   acceptedPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).min(1).optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
+  /** Whole-array replace: the trade tools brought back into the menu (Settings › Autres outils). */
+  extraTools: z.array(z.enum(TRADE_TOOLS)).max(TRADE_TOOLS.length).optional(),
   /** Long-form "about us" text for the public storefront — Pro plan and above. */
   aboutText: z.string().max(4000).optional(),
   /** Google typically truncates a title around 60 chars and a description around 155-160 —

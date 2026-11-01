@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { KorvaPlanInvoices } from "@/components/korva-plan-invoices";
+import { OtherToolsSettings } from "@/components/other-tools-settings";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1494,6 +1495,8 @@ export default function SettingsPage() {
             </div>
           )}
         </section>
+
+        {organization && <OtherToolsSettings organization={organization} />}
       </SettingsTabPanel>
 
       <SettingsTabPanel tab="equipe" active={activeTab}>

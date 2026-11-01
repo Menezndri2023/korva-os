@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import type { ActionCenterItem, ActionCenterSummary, Offer } from "@korva/types";
+import { tradeVocabulary, visibleTradeTools, type ActionCenterItem, type ActionCenterSummary, type Offer } from "@korva/types";
 import { Check } from "lucide-react";
 import { Badge, Card, EmptyState } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
@@ -67,6 +67,9 @@ export default function DashboardPage() {
   const isModuleNotEnabled =
     overviewQuery.error instanceof ApiError && overviewQuery.error.code === "MODULE_NOT_ENABLED";
   const hasAnalytics = (organization?.enabledModules.includes("analytics") ?? false) && !isPermissionDenied;
+  // The summary follows the trade's tools, like the menu: a salon has no orders to count.
+  const tools = visibleTradeTools(organization?.businessModel, organization?.extraTools);
+  const words = tradeVocabulary(organization?.businessModel);
   const totalActivity =
     (overviewQuery.data?.leads.total ?? 0) +
     (overviewQuery.data?.bookings.total ?? 0) +
@@ -153,16 +156,20 @@ export default function DashboardPage() {
       {overviewQuery.data && totalActivity > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard label="Prospects" value={overviewQuery.data.leads.total} href="/dashboard/crm/leads" />
-          <SummaryCard
-            label="Réservations à venir"
-            value={overviewQuery.data.bookings.upcoming}
-            href="/dashboard/bookings"
-          />
-          <SummaryCard
-            label="Chiffre d'affaires"
-            value={formatCurrency(overviewQuery.data.orders.revenue, overviewQuery.data.orders.currency)}
-            href="/dashboard/orders"
-          />
+          {tools.has("bookings") && (
+            <SummaryCard
+              label={`${words.bookings} à venir`}
+              value={overviewQuery.data.bookings.upcoming}
+              href="/dashboard/bookings"
+            />
+          )}
+          {tools.has("orders") && (
+            <SummaryCard
+              label="Chiffre d'affaires"
+              value={formatCurrency(overviewQuery.data.orders.revenue, overviewQuery.data.orders.currency)}
+              href="/dashboard/orders"
+            />
+          )}
           <SummaryCard
             label="Encours factures"
             value={formatCurrency(overviewQuery.data.invoices.outstanding, overviewQuery.data.invoices.currency)}

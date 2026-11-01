@@ -46,12 +46,13 @@ const getMock = vi.mocked(apiClient.get);
 
 let enabledModules: string[] = [];
 let businessModel: string | undefined;
+let extraTools: string[] | undefined;
 let organizationError: unknown = null;
 vi.mock("@/lib/use-active-organization", () => ({
   useActiveOrganization: () =>
     organizationError
       ? { data: undefined, error: organizationError }
-      : { data: { name: "Org de test", enabledModules, businessModel }, error: null },
+      : { data: { name: "Org de test", enabledModules, businessModel, extraTools }, error: null },
 }));
 
 const orgA = { id: "org-1", name: "Org A" };
@@ -63,6 +64,7 @@ describe("DashboardLayout", () => {
     getMock.mockResolvedValue([]);
     document.body.style.overflow = "";
     businessModel = undefined;
+    extraTools = undefined;
   });
 
   function navHrefs() {
@@ -117,6 +119,34 @@ describe("DashboardLayout", () => {
     enabledModules = ["crm", "catalog", "website"];
     renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
     expect(screen.queryByText(/Votre site public n'est pas en ligne/)).not.toBeInTheDocument();
+  });
+
+  it("shows each trade only its own tools, in its own words", () => {
+    enabledModules = ["commerce", "booking", "catalog", "crm"];
+    businessModel = "appointments";
+    const salon = renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(navHrefs()).toContain("/dashboard/bookings");
+    expect(navHrefs()).not.toContain("/dashboard/orders");
+    expect(navHrefs()).not.toContain("/dashboard/returns");
+    expect(screen.getByRole("link", { name: "Rendez-vous" })).toHaveAttribute("href", "/dashboard/bookings");
+    expect(screen.getByRole("link", { name: "Prestations" })).toHaveAttribute("href", "/dashboard/catalog");
+    salon.unmount();
+
+    businessModel = "retail";
+    renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(navHrefs()).toContain("/dashboard/orders");
+    expect(navHrefs()).toContain("/dashboard/returns");
+    expect(navHrefs()).not.toContain("/dashboard/bookings");
+    expect(screen.getByRole("link", { name: "Produits" })).toBeInTheDocument();
+  });
+
+  it("brings back a tool the owner re-enabled from Autres outils", () => {
+    enabledModules = ["commerce", "booking"];
+    businessModel = "appointments";
+    extraTools = ["orders"];
+    renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(navHrefs()).toContain("/dashboard/orders");
+    expect(navHrefs()).not.toContain("/dashboard/returns");
   });
 
   it("keeps both screens for an organization with no type of activity, as before", () => {

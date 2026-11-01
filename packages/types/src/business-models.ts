@@ -46,7 +46,45 @@ export interface BusinessModelDefinition {
   offerTypes: OfferType[];
   /** Trade-specific dashboard screens. Everything else follows enabled modules as before. */
   screens: { kitchen: boolean; training: boolean };
+  /**
+   * The sales tools this trade works with (TRADE_TOOLS). The others are hidden from its menu even
+   * when their module is on — a salon has no use for "Retours" — and the owner can bring one back
+   * from Settings › Autres outils (Organization.extraTools). Hiding never removes data or blocks
+   * the API: it is the menu, not a permission.
+   */
+  tools: readonly TradeTool[];
+  /** The trade's own words for the shared screens. */
+  vocabulary: TradeVocabulary;
 }
+
+/**
+ * Menu entries a trade may not need. Everything else in the menu (clients, cash desk, Solde,
+ * statistics, marketing, KORVA IA…) is useful to every trade and only follows its module.
+ */
+export const TRADE_TOOLS = ["orders", "returns", "bookings"] as const;
+export type TradeTool = (typeof TRADE_TOOLS)[number];
+
+export const TRADE_TOOL_LABELS: Record<TradeTool, string> = {
+  orders: "Commandes",
+  returns: "Retours",
+  bookings: "Réservations",
+};
+
+export interface TradeVocabulary {
+  /** The catalogue: "Produits", "Menu", "Prestations"… */
+  catalog: string;
+  /** The bookings screen: "Rendez-vous", "Réservations de table", "Visites"… */
+  bookings: string;
+  /** The CRM: "Clients", "Prospects et clients", "Membres". */
+  crm: string;
+}
+
+/** Wording for an organization with no type of activity: the generic names it always had. */
+export const DEFAULT_TRADE_VOCABULARY: TradeVocabulary = {
+  catalog: "Catalogue",
+  bookings: "Réservations",
+  crm: "CRM",
+};
 
 export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefinition> = {
   retail: {
@@ -58,6 +96,8 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     defaultStorefrontTemplate: "boutique",
     offerTypes: ["product", "package", "digital_product", "subscription"],
     screens: { kitchen: false, training: false },
+    tools: ["orders", "returns"],
+    vocabulary: { catalog: "Produits", bookings: "Réservations", crm: "Clients" },
   },
   restaurant: {
     key: "restaurant",
@@ -68,6 +108,8 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     defaultStorefrontTemplate: "table",
     offerTypes: ["product", "package", "booking"],
     screens: { kitchen: true, training: false },
+    tools: ["orders", "bookings"],
+    vocabulary: { catalog: "Menu", bookings: "Réservations de table", crm: "Clients" },
   },
   appointments: {
     key: "appointments",
@@ -78,6 +120,8 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     defaultStorefrontTemplate: "salon",
     offerTypes: ["booking", "package", "subscription", "product"],
     screens: { kitchen: false, training: false },
+    tools: ["bookings"],
+    vocabulary: { catalog: "Prestations", bookings: "Rendez-vous", crm: "Clients" },
   },
   lodging: {
     key: "lodging",
@@ -88,6 +132,8 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     defaultStorefrontTemplate: "salon",
     offerTypes: ["booking", "package", "product"],
     screens: { kitchen: false, training: false },
+    tools: ["bookings"],
+    vocabulary: { catalog: "Chambres et séjours", bookings: "Réservations", crm: "Clients" },
   },
   training: {
     key: "training",
@@ -98,6 +144,8 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     defaultStorefrontTemplate: "academie",
     offerTypes: ["booking", "package", "digital_product", "subscription"],
     screens: { kitchen: false, training: true },
+    tools: ["orders", "bookings"],
+    vocabulary: { catalog: "Formations et offres", bookings: "Inscriptions", crm: "Apprenants" },
   },
   quotes: {
     key: "quotes",
@@ -108,6 +156,8 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     defaultStorefrontTemplate: "vitrine",
     offerTypes: ["service", "package", "subscription", "booking"],
     screens: { kitchen: false, training: false },
+    tools: ["bookings"],
+    vocabulary: { catalog: "Prestations", bookings: "Rendez-vous", crm: "Prospects et clients" },
   },
   real_estate: {
     key: "real_estate",
@@ -118,6 +168,8 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     defaultStorefrontTemplate: "vitrine",
     offerTypes: ["service", "booking"],
     screens: { kitchen: false, training: false },
+    tools: ["bookings"],
+    vocabulary: { catalog: "Biens", bookings: "Visites", crm: "Prospects et clients" },
   },
   association: {
     key: "association",
@@ -128,8 +180,26 @@ export const BUSINESS_MODEL_DEFINITIONS: Record<BusinessModel, BusinessModelDefi
     defaultStorefrontTemplate: "vitrine",
     offerTypes: ["subscription", "product", "booking"],
     screens: { kitchen: false, training: false },
+    tools: ["orders", "bookings"],
+    vocabulary: { catalog: "Adhésions et dons", bookings: "Événements", crm: "Membres" },
   },
 };
+
+/**
+ * The trade tools shown in the menu: the trade's own, plus any the owner brought back. An
+ * organization with no type of activity sees them all, as before this existed.
+ */
+export function visibleTradeTools(
+  businessModel: BusinessModel | undefined,
+  extraTools: readonly TradeTool[] | undefined,
+): Set<TradeTool> {
+  if (!businessModel) return new Set(TRADE_TOOLS);
+  return new Set([...BUSINESS_MODEL_DEFINITIONS[businessModel].tools, ...(extraTools ?? [])]);
+}
+
+export function tradeVocabulary(businessModel: BusinessModel | undefined): TradeVocabulary {
+  return businessModel ? BUSINESS_MODEL_DEFINITIONS[businessModel].vocabulary : DEFAULT_TRADE_VOCABULARY;
+}
 
 /**
  * Guided characteristics for the offers of some types of activity: a room's capacity and
