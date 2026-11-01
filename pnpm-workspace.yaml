@@ -40,11 +40,12 @@ overrides:
   handlebars: ">=4.7.10" # JS injection via AST type confusion / own-property-check bypass
   # high
   sharp: ">=0.35.4" # libheif
-  multer: ">=2.3.0" # DoS via crafted multipart
+  multer: ">=2.5.0 <3" # DoS via crafted multipart; DoS via a pending async file filter (2026-11-01)
   compression: ">=1.8.2" # DoS
   engine.io: ">=6.6.10" # Engine.IO protocol revision mismatch DoS
   source-map-js: ">=1.2.2" # event-loop DoS
-  undici: ">=8.10.2" # DoS via unrequested data
+  undici: ">=8.12.2 <9" # DoS, cache poisoning, TLS validation bypass (2026-11-01; jsdom, test-only)
+  body-parser: ">=2.4.0 <3" # DoS via trailing bytes after a JSON body (express, 2026-11-01)
   # moderate (2026-10-21) — capped below the next major on purpose (see the vite note below)
   qs: ">=6.16.0 <7" # array-limit bypass + DoS via isBuffer (express > body-parser)
   js-yaml: ">=5.4.1 <6" # CPU exhaustion via empty merge sources (@nestjs/swagger)
@@ -64,3 +65,10 @@ auditConfig:
     # rather than merely unfixed: the advisory names patched_versions ">=3.0.4" and 3.0.4 has
     # never been published (3.0.3 is the latest release). Drop this entry when it ships.
     - GHSA-vfj7-8cjw-p6xm
+    # zod memory exhaustion while collecting issues for a huge failing array (2026-11-01). Fixed
+    # only in zod 4.6.6 — a major migration of every schema in packages/validation, planned
+    # separately rather than forced by an override. Reachability in the meantime: the API parses
+    # JSON bodies with Nest's default 100 kB limit and every route is rate-limited (120/min), so
+    # one request carries at most a few tens of thousands of elements; the storefront and the
+    # dashboard only run zod in the visitor's own browser. Drop when packages are on zod 4.
+    - GHSA-mrhx-c7xc-m3w5
