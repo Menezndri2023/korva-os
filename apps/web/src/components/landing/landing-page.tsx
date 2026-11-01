@@ -188,7 +188,7 @@ export function LandingPage() {
       <footer className="bg-ink-deep text-ink-muted">
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div className="flex items-center gap-2.5 text-paper">
-            <KorvaGlyph className="size-5" />
+            <KorvaGlyph className="size-5" compact />
             <p className="text-sm">
               KORVA OS, le système de gestion des petites entreprises.
             </p>

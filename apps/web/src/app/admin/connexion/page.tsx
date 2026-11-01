@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Button, Card, Input } from "@korva/ui";
 import { ApiError } from "@/lib/api-client";
 import { adminApi, setAdminToken } from "@/lib/platform-admin";
+import { KorvaTile } from "@/components/brand/korva-mark";
 
 const ERRORS: Record<string, string> = {
   INVALID_CREDENTIALS: "Adresse ou mot de passe incorrect.",
@@ -33,7 +34,7 @@ export default function AdminSignInPage() {
     <div className="flex min-h-screen items-center justify-center bg-sidebar px-4">
       <Card className="w-full max-w-sm p-8">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary font-bold text-on-primary">K</span>
+          <KorvaTile className="size-10" />
           <div>
             <h1 className="text-xl font-semibold">Administration</h1>
             <p className="text-sm text-text-muted">KORVA OS</p>

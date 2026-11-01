@@ -31,6 +31,7 @@ import {
 } from "@/lib/platform-admin";
 import { useTheme } from "@/lib/theme-provider";
 import { AdminSearch } from "@/components/admin/admin-search";
+import { KorvaTile } from "@/components/brand/korva-mark";
 
 interface NavItem {
   href: string;
@@ -128,7 +129,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       >
         <div className="flex items-center justify-between gap-3 px-5 py-5">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary font-display font-bold text-on-primary">K</span>
+            <KorvaTile className="bg-sidebar-hover" />
             <div>
               <p className="text-sm font-semibold text-white">Administration</p>
               <p className="text-xs text-sidebar-muted">KORVA</p>
