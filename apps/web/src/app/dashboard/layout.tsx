@@ -152,6 +152,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const bootstrapped = useAuthStore((state) => state.bootstrapped);
   const setActiveOrganization = useAuthStore((state) => state.setActiveOrganization);
   const clear = useAuthStore((state) => state.clear);
+  const viewOnly = useAuthStore((state) => state.viewOnly);
   const { data: organization, error: organizationError } = useActiveOrganization();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -207,6 +208,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     : { kitchen: true, training: true };
 
   async function logout() {
+    // A read-only administration view has nothing to sign out of: close the tab, and never touch
+    // this browser's own session.
+    if (viewOnly) {
+      window.close();
+      router.replace("/admin");
+      return;
+    }
     try {
       // Revokes the session server-side and clears the HttpOnly refresh cookie — clearing
       // local state alone would leave that cookie valid.
@@ -365,6 +373,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-8">
+          {viewOnly && (
+            <Notice tone="warning" className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <span>
+                Vue de l&apos;administration KORVA, en lecture seule : rien ne peut être modifié. Elle se
+                termine à{" "}
+                {new Date(viewOnly.expiresAt).toLocaleTimeString("fr-FR", { timeStyle: "short" })}.
+              </span>
+              <Button size="sm" variant="secondary" onClick={() => void logout()}>
+                Fermer la vue
+              </Button>
+            </Notice>
+          )}
           {organization && !enabledModules.has("website") && (
             // Visitors of a site whose module is off see "Ce site n'est pas en ligne"; the owner
             // must not have to discover that from a customer.

@@ -7,6 +7,8 @@ import type { AuthenticatedUser } from '../../core/tenant/request-context.types'
 interface JwtPayload {
   sub: string;
   email: string;
+  /** Present on an administration view token only — see AuthenticatedUser.viewOnly. */
+  view?: { by: string; org: string };
 }
 
 @Injectable()
@@ -20,6 +22,17 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtPayload): AuthenticatedUser {
-    return { userId: payload.sub, email: payload.email };
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      ...(payload.view
+        ? {
+            viewOnly: {
+              adminUserId: payload.view.by,
+              organizationId: payload.view.org,
+            },
+          }
+        : {}),
+    };
   }
 }

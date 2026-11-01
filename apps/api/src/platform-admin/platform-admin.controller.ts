@@ -115,6 +115,16 @@ export class PlatformAdminController {
     return this.adminService.suspend(id, admin.id, body.reason);
   }
 
+  /** "Voir son tableau de bord": a 30-minute read-only token (see PlatformAdminService.viewAs). */
+  @Post('organizations/:id/view-as')
+  @HttpCode(200)
+  viewAs(
+    @Param('id') id: string,
+    @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
+  ) {
+    return this.adminService.viewAs(id, admin.id);
+  }
+
   @Post('organizations/:id/reactivate')
   @HttpCode(200)
   reactivate(

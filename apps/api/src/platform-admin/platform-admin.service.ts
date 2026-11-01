@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { PasswordResetService } from '../identity/auth/password-reset.service';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
@@ -130,6 +136,9 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** How long an administration view of a business dashboard lasts. */
+const VIEW_AS_TTL_SECONDS = 30 * 60;
+
 @Injectable()
 export class PlatformAdminService {
   private readonly logger = new Logger(PlatformAdminService.name);
@@ -144,7 +153,78 @@ export class PlatformAdminService {
     private readonly activationReport: ActivationReportService,
     private readonly passwordResetService: PasswordResetService,
     private readonly configService: ConfigService,
+    private readonly jwtService: JwtService,
   ) {}
+
+  /**
+   * "Voir son tableau de bord": a 30-minute token, in the name of the organization's owner, that
+   * can only READ that one organization (JwtAuthGuard, TenantGuard). No refresh token exists for
+   * it, so the view ends on its own. Recorded in the organization's journal with the
+   * administrator's id.
+   */
+  async viewAs(organizationId: string, adminUserId: string) {
+    const organization = await this.findOrganizationOrFail(organizationId);
+    if (organization.suspendedAt) {
+      throw new BadRequestException({
+        code: 'ORGANIZATION_SUSPENDED',
+        message: 'Reactivate the organization before opening its dashboard',
+      });
+    }
+    const ownerRoles = await this.collection('roles')
+      .find({ systemKey: 'OWNER' }, { projection: { _id: 1 } })
+      .toArray();
+    const membership = await this.collection('memberships').findOne(
+      {
+        organizationId: organization._id,
+        status: 'active',
+        roleId: { $in: ownerRoles.map((role) => role._id) },
+      },
+      { sort: { createdAt: 1 } },
+    );
+    const owner = membership
+      ? await this.collection('users').findOne(
+          { _id: membership.userId as Types.ObjectId },
+          { projection: { email: 1, firstName: 1, lastName: 1 } },
+        )
+      : null;
+    if (!owner) {
+      throw new BadRequestException({
+        code: 'OWNER_NOT_FOUND',
+        message: 'This organization has no active owner to view as',
+      });
+    }
+    const expiresInSeconds = VIEW_AS_TTL_SECONDS;
+    const accessToken = this.jwtService.sign(
+      {
+        sub: owner._id.toString(),
+        email: owner.email as string,
+        view: { by: adminUserId, org: organizationId },
+      },
+      {
+        secret: this.configService.getOrThrow<string>('JWT_SECRET'),
+        expiresIn: expiresInSeconds,
+      },
+    );
+    await this.auditService.record({
+      organizationId,
+      userId: adminUserId,
+      action: 'LOGIN',
+      entity: 'organization',
+      entityId: organizationId,
+      metadata: { viewAs: true, readOnly: true, by: 'platform_admin' },
+    });
+    return {
+      accessToken,
+      organizationId,
+      expiresAt: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
+      user: {
+        id: owner._id.toString(),
+        email: owner.email as string,
+        firstName: owner.firstName as string | undefined,
+        lastName: owner.lastName as string | undefined,
+      },
+    };
+  }
 
   /** The plan catalog as the billing engine sees it: every tier in every currency. */
   async plans() {

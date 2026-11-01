@@ -120,6 +120,9 @@ async function refreshAccessToken(): Promise<void> {
  * token — one winning, the other 401ing and wiping the just-restored session.
  */
 export function getRefreshedAccessToken(): Promise<void> {
+  if (useAuthStore.getState().viewOnly) {
+    return Promise.reject(new Error("A read-only view is never refreshed"));
+  }
   if (!refreshPromise) {
     refreshPromise = refreshAccessToken().finally(() => {
       refreshPromise = null;
@@ -156,7 +159,10 @@ async function request<T>(
   // Bearer token) whose token the API just rejected. Excludes the refresh endpoint itself
   // (would recurse) and only ever fires once per original call (isRetry) — a still-401 retry
   // falls straight through to the normal error below instead of looping.
-  if (response.status === 401 && !isRetry && accessToken && path !== REFRESH_PATH) {
+  // A read-only administration view has no refresh token: when it expires it ends, and must never
+  // pick up whatever session this browser's cookie holds.
+  const viewOnly = useAuthStore.getState().viewOnly !== null;
+  if (response.status === 401 && !isRetry && accessToken && path !== REFRESH_PATH && !viewOnly) {
     try {
       await getRefreshedAccessToken();
     } catch {

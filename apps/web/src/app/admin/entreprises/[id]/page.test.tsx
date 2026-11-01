@@ -6,7 +6,7 @@ import { adminApi } from "@/lib/platform-admin";
 import type { PlatformOrganization } from "@/lib/platform-admin";
 import type { WalletSummary } from "@korva/types";
 
-vi.mock("next/navigation", () => ({ useParams: () => ({ id: "org-1" }) }));
+vi.mock("next/navigation", () => ({ useParams: () => ({ id: "org-1" }), useRouter: () => ({ push: vi.fn() }) }));
 
 vi.mock("@/lib/platform-admin", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/platform-admin")>();
@@ -99,6 +99,25 @@ describe("AdminShopPage", () => {
     expect(await screen.findByRole("heading", { name: "Boutique Abidjan" })).toBeInTheDocument();
     expect(screen.getAllByText("Gratuit").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /owner@korva\.test/ })).toHaveAttribute("href", "mailto:owner@korva.test");
+  });
+
+  it("opens the business's dashboard read-only in a new tab, the token only in the fragment", async () => {
+    const tab = { opener: {} as unknown, location: { href: "" }, close: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    postMock.mockResolvedValue({
+      accessToken: "view-token",
+      organizationId: "org-1",
+      expiresAt: "2026-11-01T15:00:00.000Z",
+      user: { id: "u-1", email: "owner@korva.test" },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Voir son tableau de bord" }));
+    await waitFor(() => expect(tab.location.href).toContain("/voir#"));
+    expect(postMock).toHaveBeenCalledWith("/platform/organizations/org-1/view-as", {});
+    const [path, fragment] = tab.location.href.split("#");
+    expect(path).not.toContain("view-token");
+    expect(new URLSearchParams(fragment).get("t")).toBe("view-token");
+    expect(tab.opener).toBeNull();
   });
 
   it("assigns a plan paid outside the platform, after confirmation", async () => {

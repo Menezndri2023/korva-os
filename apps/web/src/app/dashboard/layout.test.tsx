@@ -25,6 +25,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+let viewOnly: { expiresAt: string } | null = null;
 vi.mock("@/lib/auth-store", () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -34,6 +35,7 @@ vi.mock("@/lib/auth-store", () => ({
       user: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com" },
       clear: vi.fn(),
       setActiveOrganization: vi.fn(),
+      viewOnly,
     }),
 }));
 
@@ -65,6 +67,7 @@ describe("DashboardLayout", () => {
     document.body.style.overflow = "";
     businessModel = undefined;
     extraTools = undefined;
+    viewOnly = null;
   });
 
   function navHrefs() {
@@ -138,6 +141,13 @@ describe("DashboardLayout", () => {
     expect(navHrefs()).toContain("/dashboard/returns");
     expect(navHrefs()).not.toContain("/dashboard/bookings");
     expect(screen.getByRole("link", { name: "Produits" })).toBeInTheDocument();
+  });
+
+  it("says plainly when the administration is looking, read-only, and until when", () => {
+    viewOnly = { expiresAt: "2026-11-01T15:00:00.000Z" };
+    renderWithProviders(<DashboardLayout><div /></DashboardLayout>);
+    expect(screen.getByText(/Vue de l'administration KORVA, en lecture seule/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fermer la vue" })).toBeInTheDocument();
   });
 
   it("brings back a tool the owner re-enabled from Autres outils", () => {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { BUSINESS_MODEL_DEFINITIONS, PLAN_KEYS, PLAN_NAMES, type PlanKey, type WalletSummary } from "@korva/types";
@@ -123,6 +123,7 @@ export default function AdminShopPage() {
           >
             Voir le site
           </a>
+          {!org.suspendedAt && <ViewDashboardButton organizationId={org.id} />}
           <a
             href="#formule"
             className="inline-flex min-h-11 items-center rounded-lg bg-action px-4 text-sm font-semibold text-on-action hover:bg-action-hover"
@@ -685,5 +686,57 @@ function Suspension({
       </Button>
       {mutation.isError && <p className="mt-2 text-sm text-destructive">{errorText(mutation.error)}</p>}
     </Card>
+  );
+}
+
+/**
+ * "Voir son tableau de bord": a new tab on the business's own dashboard, read-only, for 30
+ * minutes. The tab is opened at the click (a tab opened after the request would be blocked as a
+ * pop-up), then pointed at /voir with the view token in the URL fragment.
+ */
+function ViewDashboardButton({ organizationId }: { organizationId: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function open() {
+    setError(null);
+    setPending(true);
+    const tab = window.open("about:blank", "_blank");
+    try {
+      const view = await adminApi.post<{
+        accessToken: string;
+        organizationId: string;
+        expiresAt: string;
+        user: { id: string; email: string; firstName?: string; lastName?: string };
+      }>(`/platform/organizations/${organizationId}/view-as`, {});
+      const fragment = new URLSearchParams({
+        t: view.accessToken,
+        o: view.organizationId,
+        e: view.expiresAt,
+        u: JSON.stringify(view.user),
+      });
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = `${window.location.origin}/voir#${fragment.toString()}`;
+      } else {
+        // Pop-up blocked: open the view in this tab instead.
+        router.push(`/voir#${fragment.toString()}`);
+      }
+    } catch (err) {
+      tab?.close();
+      setError(err instanceof ApiError ? err.message : "Impossible d'ouvrir le tableau de bord.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex flex-col">
+      <Button variant="secondary" onClick={() => void open()} disabled={pending}>
+        Voir son tableau de bord
+      </Button>
+      {error && <span className="mt-1 text-xs text-destructive">{error}</span>}
+    </span>
   );
 }

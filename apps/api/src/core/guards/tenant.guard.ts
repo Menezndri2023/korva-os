@@ -50,6 +50,15 @@ export class TenantGuard {
       });
     }
 
+    // An administration view token opens one organization, never another one of its owner's.
+    const view = request.user.viewOnly;
+    if (view && view.organizationId !== organizationId) {
+      throw new ForbiddenException({
+        code: 'ORGANIZATION_ACCESS_DENIED',
+        message: 'You do not have access to this organization',
+      });
+    }
+
     const tenant = await this.membershipsService.resolveTenantContext(
       request.user.userId,
       organizationId,
