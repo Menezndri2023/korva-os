@@ -21,12 +21,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [];
   }
 
-  const tenantPages: MetadataRoute.Sitemap = entries.map((entry) => ({
-    url: `${SITE_URL}/${entry.slug}`,
-    lastModified: new Date(entry.updatedAt),
-    changeFrequency: "weekly",
-    priority: 0.8,
-  }));
+  // Each site's home, its catalogue and each active offer: what people search for is often an
+  // offer ("tresses africaines Cocody"), not the business's name.
+  const tenantPages: MetadataRoute.Sitemap = entries.flatMap((entry) => [
+    {
+      url: `${SITE_URL}/${entry.slug}`,
+      lastModified: new Date(entry.updatedAt),
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
+    },
+    ...(entry.catalog
+      ? [{ url: `${SITE_URL}/${entry.slug}/catalogue`, changeFrequency: "weekly" as const, priority: 0.7 }]
+      : []),
+    ...(entry.offers ?? []).map((offer) => ({
+      url: `${SITE_URL}/${entry.slug}/offers/${offer.id}`,
+      lastModified: new Date(offer.updatedAt),
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
+  ]);
 
   return tenantPages;
 }

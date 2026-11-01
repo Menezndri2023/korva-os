@@ -62,6 +62,10 @@ const plexMono = IBM_Plex_Mono({
  * `template` keeps the brand on every nested route's title without repeating it per page.
  */
 export const metadata: Metadata = {
+  // Absolute base for canonical links and the share image. The production address; APP_URL
+  // (server-side, see lib/site-url.ts) is what the sitemap and robots.txt use.
+  metadataBase: new URL(process.env.APP_URL ?? "https://app.korvasuite.com"),
+  twitter: { card: "summary_large_image" },
   title: {
     default: "KORVA OS, la gestion de votre entreprise au même endroit",
     template: "%s · KORVA OS",

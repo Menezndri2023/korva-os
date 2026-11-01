@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import OfferDetailClient from "./offer-detail-client";
 import { serverApi } from "@/lib/server-api";
+import { jsonLdHtml, offerJsonLd } from "@/lib/structured-data";
 import {
   classifyLookupFailure,
   unresolvedStorefrontMetadata,
   type OrganizationLookup,
 } from "@/lib/organization-lookup";
-import type { PublicOrganization } from "@/lib/public-types";
+import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { StorefrontOffline } from "../../storefront-offline";
 
 // Server-side only — see the same note in ../page.tsx.
@@ -100,9 +101,29 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
 
 export default async function OfferDetailPage({ params }: OfferDetailPageProps) {
   const { slug, offerId } = await params;
-  if ((await fetchOrganization(slug)).kind === "offline") return <StorefrontOffline />;
+  const lookup = await fetchOrganization(slug);
+  if (lookup.kind === "offline") return <StorefrontOffline />;
   // Same nonce middleware.ts put on the CSP's `style-src` — the offer page now renders the
   // shop's theme (see templates/storefront-theme-style.tsx).
   const nonce = (await headers()).get("x-nonce") ?? undefined;
-  return <OfferDetailClient slug={slug} offerId={offerId} nonce={nonce} />;
+  // The offer as a product or service with its price, for search results. Best effort: the page
+  // itself renders the same either way.
+  let offer: PublicOffer | null = null;
+  if (lookup.kind === "found") {
+    offer = await serverApi.get<PublicOffer>(`/public/${slug}/offers/${offerId}`).catch(() => null);
+  }
+  return (
+    <>
+      {offer && lookup.kind === "found" && (
+        <script
+          type="application/ld+json"
+          nonce={nonce}
+          dangerouslySetInnerHTML={{
+            __html: jsonLdHtml(offerJsonLd(offer, lookup.organization, `${SITE_URL}/${slug}/offers/${offerId}`)),
+          }}
+        />
+      )}
+      <OfferDetailClient slug={slug} offerId={offerId} nonce={nonce} />
+    </>
+  );
 }

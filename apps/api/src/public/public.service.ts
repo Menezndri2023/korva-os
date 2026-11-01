@@ -111,6 +111,9 @@ const ORDER_CONFIRMATION_BODY_TEMPLATE = `<p>Bonjour {{firstName}},</p>
  * docs/multi-tenancy.md: organizationId here comes from the slug, not a TenantContext, so
  * every method must resolve and re-check it itself rather than trusting a caller-supplied id.
  */
+/** Offer pages listed per site in the sitemap (a sitemap file holds 50 000 URLs). */
+const SITEMAP_OFFER_LIMIT = 500;
+
 @Injectable()
 export class PublicService {
   private readonly logger = new Logger(PublicService.name);
@@ -203,10 +206,39 @@ export class PublicService {
   /** Backs PublicSitesController's `GET /public-sites/sitemap-entries` — see its own doc comment. */
   async listSitemapEntries() {
     const entries = await this.organizationsService.listWebsiteSitemapEntries();
-    return entries.map((entry) => ({
-      slug: entry.slug,
-      updatedAt: entry.updatedAt,
-    }));
+    // Each site's offer pages too: they are what people search for ("tresses africaines
+    // Cocody"). Active offers only, from sites whose catalogue is on; capped per site.
+    const withCatalog = entries.filter((entry) =>
+      entry.enabledModules.includes('catalog'),
+    );
+    const offers = withCatalog.length
+      ? await this.contactModel.db
+          .collection('offers')
+          .find(
+            {
+              organizationId: { $in: withCatalog.map((entry) => entry._id) },
+              status: 'active',
+            },
+            { projection: { organizationId: 1, updatedAt: 1 } },
+          )
+          .sort({ updatedAt: -1 })
+          .limit(SITEMAP_OFFER_LIMIT * Math.max(1, withCatalog.length))
+          .toArray()
+      : [];
+    return entries.map((entry) => {
+      const own = offers
+        .filter((offer) => String(offer.organizationId) === String(entry._id))
+        .slice(0, SITEMAP_OFFER_LIMIT);
+      return {
+        slug: entry.slug,
+        updatedAt: entry.updatedAt,
+        catalog: entry.enabledModules.includes('catalog'),
+        offers: own.map((offer) => ({
+          id: String(offer._id),
+          updatedAt: offer.updatedAt as Date,
+        })),
+      };
+    });
   }
 
   async getOrganization(slug: string) {

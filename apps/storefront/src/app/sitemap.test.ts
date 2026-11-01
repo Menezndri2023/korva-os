@@ -25,6 +25,23 @@ describe("sitemap", () => {
     expect(urls).toEqual(["http://localhost:3001/boutique-a", "http://localhost:3001/boutique-b"]);
   });
 
+  it("adds a site's catalogue and each of its active offers", async () => {
+    getMock.mockResolvedValue([
+      {
+        slug: "salon-awa",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        catalog: true,
+        offers: [{ id: "o-1", updatedAt: "2026-03-03T00:00:00.000Z" }],
+      },
+    ]);
+    const { default: sitemap } = await import("./sitemap");
+    expect((await sitemap()).map((entry) => entry.url)).toEqual([
+      "http://localhost:3001/salon-awa",
+      "http://localhost:3001/salon-awa/catalogue",
+      "http://localhost:3001/salon-awa/offers/o-1",
+    ]);
+  });
+
   it("is empty, rather than throwing, if the API call fails", async () => {
     getMock.mockRejectedValue(new Error("network error"));
     const { default: sitemap } = await import("./sitemap");

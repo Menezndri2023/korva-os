@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { BUSINESS_MODELS, BUSINESS_MODEL_DEFINITIONS, PLAN_NAMES, SIGNUP_TRIAL } from "@korva/types";
-import { KorvaGlyph, KorvaWordmark } from "@/components/brand/korva-mark";
+import { KorvaWordmark } from "@/components/brand/korva-mark";
 import { REPLACES } from "@/lib/landing-content";
 import { PlanLadder } from "./plan-ladder";
 import { PlatformReviews } from "./platform-reviews";
 import { TradePanel } from "./trade-panel";
+import { JsonLd } from "@/components/seo/json-ld";
+import { PublicFooter } from "@/components/seo/trade-page";
+import { KORVA_SUPPORT, PLAN_PRICES } from "@korva/types";
 
 /**
  * KORVA's public home page.
@@ -24,6 +27,44 @@ import { TradePanel } from "./trade-panel";
 export function LandingPage() {
   return (
     <div className="bg-paper text-ink">
+      {/* Who KORVA is and what it sells, for search engines and AI assistants. */}
+      <JsonLd
+        data={[
+          {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "KORVA OS",
+            url: "https://app.korvasuite.com",
+            logo: "https://app.korvasuite.com/apple-icon.png",
+            email: KORVA_SUPPORT.email,
+            contactPoint: {
+              "@type": "ContactPoint",
+              contactType: "customer support",
+              email: KORVA_SUPPORT.email,
+              telephone: KORVA_SUPPORT.phoneDisplay.replace(/\s/g, ""),
+              availableLanguage: ["French"],
+            },
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "KORVA OS",
+            applicationCategory: "BusinessApplication",
+            operatingSystem: "Web, Android, iOS (navigateur)",
+            url: "https://app.korvasuite.com",
+            inLanguage: "fr",
+            description:
+              "Logiciel de gestion pour petites entreprises : clients, rendez-vous, commandes, stock, caisse, factures et site internet. Paiement Wave, Orange Money, MTN, Moov et carte bancaire.",
+            offers: {
+              "@type": "AggregateOffer",
+              priceCurrency: "XOF",
+              lowPrice: PLAN_PRICES.XOF.free,
+              highPrice: PLAN_PRICES.XOF.business,
+              offerCount: 4,
+            },
+          },
+        ]}
+      />
       {/* ------------------------------------------------------------------ ink field */}
       <div className="bg-ink-deep text-paper">
         <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-8">
@@ -35,6 +76,12 @@ export function LandingPage() {
             <span className="sr-only">KORVA OS, accueil</span>
           </Link>
           <nav className="flex items-center gap-1 sm:gap-2">
+            <Link
+              href="/metiers"
+              className="hidden rounded-md px-3 py-2 text-sm text-ink-muted transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper sm:inline-block"
+            >
+              Métiers
+            </Link>
             <Link
               href="#formules"
               className="hidden rounded-md px-3 py-2 text-sm text-ink-muted transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper sm:inline-block"
@@ -185,19 +232,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <footer className="bg-ink-deep text-ink-muted">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <div className="flex items-center gap-2.5 text-paper">
-            <KorvaGlyph className="size-5" compact />
-            <p className="text-sm">
-              KORVA OS, le système de gestion des petites entreprises.
-            </p>
-          </div>
-          <p className="text-sm">
-            &copy; {new Date().getFullYear()} KORVA OS
-          </p>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

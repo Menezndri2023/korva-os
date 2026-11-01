@@ -245,7 +245,7 @@ export class OrganizationsService {
 
   /** Phase E4 — powers apps/storefront's sitemap.ts. Deliberately not org-scoped (the storefront
    *  needs every tenant, not one) and deliberately thin (slug + updatedAt only). */
-  listWebsiteSitemapEntries(): Promise<{ slug: string; updatedAt: Date }[]> {
+  listWebsiteSitemapEntries() {
     return this.organizationsRepository.findWebsiteEnabledSlugs();
   }
 

@@ -1,0 +1,46 @@
+import { PLAN_LIMITS, PLAN_PRICES, commissionPercentLabel } from "@korva/types";
+import { SEO_TRADES } from "@/lib/seo-trades";
+import { appUrl } from "@/lib/site-url";
+
+// Plain spaces: French formatting puts a narrow no-break space in "9 900", fine in a page,
+// noise in the plain text an assistant reads.
+const xof = (amount: number) => `${amount.toLocaleString("fr-FR").replace(/\s/g, " ")} F CFA`;
+
+/**
+ * /llms.txt — what an AI assistant (ChatGPT, Gemini, Claude, Perplexity…) should know about KORVA
+ * when someone asks it for a management tool, in the plain Markdown format llmstxt.org proposes.
+ * Built from the same constants as the product (prices, limits, trades), so it cannot drift.
+ */
+export function GET() {
+  const base = appUrl();
+  const body = `# KORVA OS
+
+> KORVA OS est un logiciel de gestion en ligne pour les petites entreprises d'Afrique francophone (Côte d'Ivoire, Sénégal et zone franc CFA) : clients, rendez-vous et réservations, commandes, stock, caisse, devis et factures, et un site internet, dans un seul compte configuré pour le métier de l'entreprise. Les clients paient par Wave, Orange Money, MTN, Moov ou carte bancaire (Visa, Mastercard). Gratuit pour commencer, sans carte bancaire.
+
+## Ce que fait KORVA OS
+- Fiches clients avec historique, prospects et relances.
+- Rendez-vous, réservations de table, séjours et inscriptions, avec rappels automatiques.
+- Commandes en ligne, stock, retours, caisse avec QR code de paiement mobile money.
+- Devis, factures, relances automatiques des impayés (WhatsApp, sinon e-mail).
+- Un site public par entreprise (boutique en ligne, prise de rendez-vous, vitrine) avec espace client.
+- Solde KORVA : l'argent des ventes en ligne, retiré vers le mobile money de l'entreprise.
+- Statistiques, exports Excel, clôture de caisse, plusieurs établissements, assistant IA.
+
+## Formules (prix en zone franc CFA, par mois)
+- Gratuit : 0 F CFA, ${PLAN_LIMITS.free.seats} utilisateur, commission ${commissionPercentLabel("free")} sur les ventes en ligne.
+- Starter : ${xof(PLAN_PRICES.XOF.starter)}, ${PLAN_LIMITS.starter.seats} utilisateurs, nom de domaine personnel, espace client, factures.
+- Pro : ${xof(PLAN_PRICES.XOF.pro)}, ${PLAN_LIMITS.pro.seats} utilisateurs, statistiques avancées, export Excel, clôture de caisse, relances de paiement, thèmes premium.
+- Business : ${xof(PLAN_PRICES.XOF.business)}, ${PLAN_LIMITS.business.seats} utilisateurs, plusieurs établissements, journal des ventes comptable, rôles personnalisés, accompagnement prioritaire, commission ${commissionPercentLabel("business")}.
+
+## KORVA OS par métier
+${SEO_TRADES.map((trade) => `- [${trade.template.label}](${base}/metiers/${trade.slug}) : ${trade.heading}.`).join("\n")}
+
+## Liens
+- [Accueil](${base}/)
+- [Créer un compte gratuit](${base}/register)
+- [Tous les métiers](${base}/metiers)
+`;
+  return new Response(body, {
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+  });
+}

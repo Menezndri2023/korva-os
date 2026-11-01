@@ -84,6 +84,10 @@ export interface PublicOrganization {
 export interface PublicSitemapEntry {
   slug: string;
   updatedAt: string;
+  /** Catalogue module on: the site has a /catalogue page and offer pages. */
+  catalog?: boolean;
+  /** Active offers, newest first (capped per site by the API). */
+  offers?: { id: string; updatedAt: string }[];
 }
 
 /**

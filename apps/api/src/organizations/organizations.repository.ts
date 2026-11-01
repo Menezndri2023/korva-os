@@ -61,12 +61,28 @@ export class OrganizationsRepository {
   /** Phase E4 (docs/KORVA_OS_V2_AUDIT.md §2.6) — the storefront's sitemap.ts has no way to
    *  enumerate tenant slugs today; this is the minimal, unauthenticated-safe projection it
    *  needs (slug + freshness only, never the full organization document). */
+  /** Sites that answer: website on, not suspended (a suspended site is offline). */
   async findWebsiteEnabledSlugs(): Promise<
-    { slug: string; updatedAt: Date }[]
+    {
+      _id: Types.ObjectId;
+      slug: string;
+      updatedAt: Date;
+      enabledModules: string[];
+    }[]
   > {
     const docs = await this.organizationModel
-      .find({ enabledModules: 'website' }, { slug: 1, updatedAt: 1 })
-      .lean<{ slug: string; updatedAt: Date }[]>()
+      .find(
+        { enabledModules: 'website', suspendedAt: { $exists: false } },
+        { slug: 1, updatedAt: 1, enabledModules: 1 },
+      )
+      .lean<
+        {
+          _id: Types.ObjectId;
+          slug: string;
+          updatedAt: Date;
+          enabledModules: string[];
+        }[]
+      >()
       .exec();
     return docs;
   }

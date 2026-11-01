@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import StorefrontClient from "./storefront-client";
 import { serverApi } from "@/lib/server-api";
+import { businessJsonLd, jsonLdHtml } from "@/lib/structured-data";
 import {
   classifyLookupFailure,
   unresolvedStorefrontMetadata,
@@ -178,7 +179,16 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
     : [];
 
   return (
-    <StorefrontClient
+    <>
+      {organization && (
+        // What the business is, for search engines and AI assistants (see structured-data.ts).
+        <script
+          type="application/ld+json"
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: jsonLdHtml(businessJsonLd(organization, `${SITE_URL}/${slug}`)) }}
+        />
+      )}
+      <StorefrontClient
       slug={slug}
       nonce={nonce}
       // Never passed as initial data when absent: react-query would treat it as a successful
@@ -186,5 +196,6 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
       initialOrganization={organization}
       initialOffers={offers}
     />
+    </>
   );
 }

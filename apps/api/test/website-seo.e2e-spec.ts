@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -26,6 +26,8 @@ interface PublicOrganizationPayload {
 interface SitemapEntryPayload {
   slug: string;
   updatedAt: string;
+  catalog: boolean;
+  offers: { id: string; updatedAt: string }[];
 }
 
 function asSuccess<T>(body: unknown): T {
@@ -165,5 +167,53 @@ describe('Website SEO overrides and sitemap entries (Phase E4, e2e)', () => {
     for (const entry of entries) {
       expect(Number.isNaN(new Date(entry.updatedAt).getTime())).toBe(false);
     }
+  });
+
+  it("lists each site's active offers for the sitemap, never drafts, and drops suspended sites", async () => {
+    const { accessToken, organizationId, slug } = await setupOrg(
+      'sitemap-offers-owner@korva.test',
+      'Sitemap Offers Org',
+      ['website', 'catalog'],
+    );
+    const offer = async (name: string, status: string) =>
+      asSuccess<{ id: string }>(
+        (
+          await request(server)
+            .post('/api/v1/offers')
+            .set('Authorization', `Bearer ${accessToken}`)
+            .set('X-Organization-Id', organizationId)
+            .send({
+              type: 'product',
+              name,
+              status,
+              pricing: { amount: 5000, currency: 'EUR' },
+            })
+            .expect(201)
+        ).body,
+      ).id;
+    const active = await offer('Pagne wax', 'active');
+    const draft = await offer('Brouillon', 'draft');
+
+    const entries = async () =>
+      asSuccess<SitemapEntryPayload[]>(
+        (
+          await request(server)
+            .get('/api/v1/public-sites/sitemap-entries')
+            .expect(200)
+        ).body,
+      );
+    const mine = (await entries()).find((entry) => entry.slug === slug)!;
+    expect(mine.catalog).toBe(true);
+    const ids = mine.offers.map((o) => o.id);
+    expect(ids).toContain(active);
+    expect(ids).not.toContain(draft);
+
+    await connection
+      .collection('organizations')
+      .updateOne(
+        { _id: new Types.ObjectId(organizationId) },
+        { $set: { suspendedAt: new Date() } },
+      );
+    expect((await entries()).map((entry) => entry.slug)).not.toContain(slug);
   });
 });
