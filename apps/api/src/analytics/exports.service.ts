@@ -22,30 +22,41 @@ import {
   ContactDocument,
 } from '../crm/contacts/schemas/contact.schema';
 import { zonedTimeToUtc } from '../booking/availability/availability.service';
+import { intlLocaleOf, translator, type Translate } from '../shared/i18n';
 
 /** One file carries at most this many rows; the rest of the period needs a shorter range. */
 export const EXPORT_ROW_LIMIT = 10_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DAYS = 30;
 
-const ORDER_STATUS_LABELS: Record<string, string> = {
-  open: 'Ouverte',
-  pending: 'En attente',
-  confirmed: 'Confirmée',
-  fulfilled: 'Livrée',
-  cancelled: 'Annulée',
+// Exports are read by the business: in its language (shared/i18n.ts).
+const ORDER_STATUS_LABELS: Record<string, [string, string]> = {
+  open: ['Ouverte', 'Open'],
+  pending: ['En attente', 'Pending'],
+  confirmed: ['Confirmée', 'Confirmed'],
+  fulfilled: ['Livrée', 'Fulfilled'],
+  cancelled: ['Annulée', 'Cancelled'],
 };
-const BOOKING_STATUS_LABELS: Record<string, string> = {
-  pending: 'En attente',
-  confirmed: 'Confirmée',
-  cancelled: 'Annulée',
-  completed: 'Terminée',
+const BOOKING_STATUS_LABELS: Record<string, [string, string]> = {
+  pending: ['En attente', 'Pending'],
+  confirmed: ['Confirmée', 'Confirmed'],
+  cancelled: ['Annulée', 'Cancelled'],
+  completed: ['Terminée', 'Completed'],
 };
-const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  unpaid: 'Non payée',
-  deposit_paid: 'Acompte payé',
-  paid: 'Payée',
+const PAYMENT_STATUS_LABELS: Record<string, [string, string]> = {
+  unpaid: ['Non payée', 'Unpaid'],
+  deposit_paid: ['Acompte payé', 'Deposit paid'],
+  paid: ['Payée', 'Paid'],
 };
+
+function statusIn(
+  labels: Record<string, [string, string]>,
+  key: string,
+  t: Translate,
+): string {
+  const pair = labels[key];
+  return pair ? t(...pair) : key;
+}
 
 type Cell = string | number | null | undefined;
 
@@ -111,9 +122,10 @@ export class ExportsService {
   ): Promise<DataExport> {
     const organization = await this.organizationModel
       .findById(organizationId)
-      .select({ slug: 1, timezone: 1 })
+      .select({ slug: 1, timezone: 1, language: 1 })
       .lean();
     const timeZone = organization?.timezone ?? 'UTC';
+    const t = translator(organization?.language);
     const today = this.day(new Date(), timeZone);
     const to = query.to ?? today;
     const from =
@@ -141,18 +153,18 @@ export class ExportsService {
           .lean();
         const contacts = await this.contacts(orders.map((o) => o.contactId));
         header = [
-          'Date',
-          'Numéro',
-          'Client',
-          'Téléphone',
-          'Statut',
-          'Articles',
-          'Sous-total',
-          'Remise',
-          'Livraison',
-          'TVA',
-          'Total',
-          'Devise',
+          t('Date', 'Date'),
+          t('Numéro', 'Number'),
+          t('Client', 'Customer'),
+          t('Téléphone', 'Phone'),
+          t('Statut', 'Status'),
+          t('Articles', 'Items'),
+          t('Sous-total', 'Subtotal'),
+          t('Remise', 'Discount'),
+          t('Livraison', 'Delivery'),
+          t('TVA', 'VAT'),
+          t('Total', 'Total'),
+          t('Devise', 'Currency'),
         ];
         rows = orders.map((order) => {
           const contact = contacts.get(order.contactId.toString());
@@ -161,7 +173,7 @@ export class ExportsService {
             order.number,
             contactName(contact),
             contact?.phone,
-            ORDER_STATUS_LABELS[order.status] ?? order.status,
+            statusIn(ORDER_STATUS_LABELS, order.status, t),
             order.items
               .map((item) => `${item.quantity} × ${item.description}`)
               .join(', '),
@@ -192,23 +204,23 @@ export class ExportsService {
           offers.map((o) => [o._id.toString(), o.name]),
         );
         header = [
-          'Réservée le',
-          'Date',
-          'Heure',
-          'Prestation',
-          'Client',
-          'Téléphone',
-          'Statut',
-          'Paiement',
-          'Montant',
-          'Devise',
+          t('Réservée le', 'Booked on'),
+          t('Date', 'Date'),
+          t('Heure', 'Time'),
+          t('Prestation', 'Service'),
+          t('Client', 'Customer'),
+          t('Téléphone', 'Phone'),
+          t('Statut', 'Status'),
+          t('Paiement', 'Payment'),
+          t('Montant', 'Amount'),
+          t('Devise', 'Currency'),
         ];
         rows = bookings.map((booking) => {
           const contact = contacts.get(booking.contactId.toString());
           return [
             day(createdAt(booking)),
             day(booking.startAt),
-            new Intl.DateTimeFormat('fr-FR', {
+            new Intl.DateTimeFormat(intlLocaleOf(organization?.language), {
               timeZone,
               hour: '2-digit',
               minute: '2-digit',
@@ -216,9 +228,8 @@ export class ExportsService {
             offerName.get(booking.offerId.toString()) ?? '',
             contactName(contact),
             contact?.phone,
-            BOOKING_STATUS_LABELS[booking.status] ?? booking.status,
-            PAYMENT_STATUS_LABELS[booking.paymentStatus] ??
-              booking.paymentStatus,
+            statusIn(BOOKING_STATUS_LABELS, booking.status, t),
+            statusIn(PAYMENT_STATUS_LABELS, booking.paymentStatus, t),
             booking.pricing.amount,
             booking.pricing.currency,
           ];
@@ -232,13 +243,13 @@ export class ExportsService {
           .limit(EXPORT_ROW_LIMIT + 1)
           .lean();
         header = [
-          'Ajouté le',
-          'Prénom',
-          'Nom',
-          'Entreprise',
-          'E-mail',
-          'Téléphone',
-          'Étiquettes',
+          t('Ajouté le', 'Added on'),
+          t('Prénom', 'First name'),
+          t('Nom', 'Last name'),
+          t('Entreprise', 'Company'),
+          t('E-mail', 'E-mail'),
+          t('Téléphone', 'Phone'),
+          t('Étiquettes', 'Tags'),
         ];
         rows = contacts.map((contact) => [
           day(createdAt(contact)),
@@ -252,7 +263,7 @@ export class ExportsService {
         break;
       }
       case 'sales-journal':
-        ({ header, rows } = await this.salesJournal(scope, day));
+        ({ header, rows } = await this.salesJournal(scope, day, t));
         break;
     }
 
@@ -275,6 +286,7 @@ export class ExportsService {
   private async salesJournal(
     scope: { organizationId: Types.ObjectId; createdAt: Record<string, Date> },
     day: (date: Date | undefined) => string,
+    t: Translate,
   ): Promise<{ header: string[]; rows: Cell[][] }> {
     const [invoices, orders] = await Promise.all([
       this.invoiceModel
@@ -318,7 +330,7 @@ export class ExportsService {
       ...invoices.map((invoice) => ({
         date: invoice.issuedAt ?? createdAt(invoice),
         piece: invoice.number,
-        type: 'Facture',
+        type: t('Facture', 'Invoice'),
         contactId: invoice.contactId,
         items: invoice.items,
         net: invoice.subtotal - invoice.discountTotal,
@@ -330,7 +342,7 @@ export class ExportsService {
       ...orders.map((order) => ({
         date: createdAt(order),
         piece: order.number,
-        type: 'Commande',
+        type: t('Commande', 'Order'),
         contactId: order.contactId,
         items: order.items,
         net: order.total - order.taxTotal,
@@ -343,16 +355,16 @@ export class ExportsService {
     ].sort((a, b) => a.date.getTime() - b.date.getTime());
 
     const header = [
-      'Date',
-      'Pièce',
-      'Type',
-      'Client',
-      'Montant HT',
-      'TVA',
-      'Montant TTC',
-      'Encaissé',
-      'Reste dû',
-      'Devise',
+      t('Date', 'Date'),
+      t('Pièce', 'Document'),
+      t('Type', 'Type'),
+      t('Client', 'Customer'),
+      t('Montant HT', 'Amount excl. VAT'),
+      t('TVA', 'VAT'),
+      t('Montant TTC', 'Amount incl. VAT'),
+      t('Encaissé', 'Collected'),
+      t('Reste dû', 'Balance due'),
+      t('Devise', 'Currency'),
     ];
     const rows: Cell[][] = entries.map((entry) => [
       day(entry.date),
@@ -381,7 +393,14 @@ export class ExportsService {
     }
     if (byRate.size > 0) {
       rows.push([]);
-      rows.push(['Récapitulatif TVA', '', '', 'Taux', 'Base HT', 'TVA']);
+      rows.push([
+        t('Récapitulatif TVA', 'VAT summary'),
+        '',
+        '',
+        t('Taux', 'Rate'),
+        t('Base HT', 'Net base'),
+        t('TVA', 'VAT'),
+      ]);
       for (const [rate, sum] of [...byRate.entries()].sort(
         (a, b) => a[0] - b[0],
       )) {
