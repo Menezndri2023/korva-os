@@ -2,12 +2,24 @@ import { afterEach, describe, it, expect, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { Pagination } from "./pagination.tsx";
+import { UiLocaleProvider } from "../ui-locale.tsx";
 
 afterEach(() => {
   cleanup();
 });
 
 describe("Pagination", () => {
+  it("speaks English inside an English UiLocaleProvider", () => {
+    render(
+      <UiLocaleProvider locale="en">
+        <Pagination page={2} totalPages={5} onPageChange={vi.fn()} />
+      </UiLocaleProvider>,
+    );
+    expect(screen.getByText("Page 2 of 5")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Previous" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+  });
+
   it("shows the current page and the total number of pages", () => {
     render(<Pagination page={2} totalPages={5} onPageChange={vi.fn()} />);
     expect(screen.getByText("Page 2 sur 5")).toBeInTheDocument();

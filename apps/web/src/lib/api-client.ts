@@ -1,5 +1,6 @@
-import type { ApiListResponse, ApiListSuccess, ApiResponse, ApiSuccess, Pagination } from "@korva/types";
+import type { ApiListResponse, ApiListSuccess, ApiResponse, ApiSuccess, Locale, Pagination } from "@korva/types";
 import { useAuthStore } from "./auth-store";
+import { readDashboardLocale } from "./dashboard-locale-core";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
 const REFRESH_PATH = "/auth/refresh";
@@ -36,10 +37,10 @@ function toApiError(payload: ApiResponse<unknown> | ApiListResponse<unknown>): A
   );
 }
 
-const PLAN_LIMIT_SUBJECTS: Record<string, string> = {
-  offers: "offres au catalogue",
-  bookable_staff: "membres d'équipe réservables",
-  workflows: "automatisations",
+const PLAN_LIMIT_SUBJECTS: Record<string, [string, string]> = {
+  offers: ["offres au catalogue", "catalogue offers"],
+  bookable_staff: ["membres d'équipe réservables", "bookable team members"],
+  workflows: ["automatisations", "automations"],
 };
 
 /**
@@ -47,14 +48,19 @@ const PLAN_LIMIT_SUBJECTS: Record<string, string> = {
  * as-is. The API's own messages are English and say nothing about what to do next; these name
  * the limit and the way out (a higher plan, or an extra user once that can be bought).
  */
-export function planLimitMessage(code: string, details: unknown): string | undefined {
+export function planLimitMessage(
+  code: string,
+  details: unknown,
+  locale: Locale = readDashboardLocale(),
+): string | undefined {
+  if (locale === "en") return planLimitMessageEn(code, details);
   const d = (details ?? {}) as {
     metric?: string;
     limit?: number;
     extraSeat?: { price: number | null; currency: string; purchasable: boolean };
   };
   if (code === "PLAN_LIMIT_REACHED" && d.metric && d.limit != null) {
-    const subject = PLAN_LIMIT_SUBJECTS[d.metric] ?? d.metric;
+    const subject = PLAN_LIMIT_SUBJECTS[d.metric]?.[0] ?? d.metric;
     return `Votre formule permet ${d.limit} ${subject}. Passez à la formule supérieure pour en ajouter.`;
   }
   if (code === "USAGE_LIMIT_REACHED" && d.metric === "ai_messages_per_month" && d.limit != null) {
@@ -68,6 +74,31 @@ export function planLimitMessage(code: string, details: unknown): string | undef
     return extra.purchasable
       ? `${base} Ajoutez un utilisateur pour ${price}, ou passez à la formule supérieure.`
       : `${base} L'utilisateur supplémentaire (${price}) arrive bientôt ; en attendant, passez à la formule supérieure. Vos coiffeurs, coachs ou formateurs réservables n'ont pas besoin de compte.`;
+  }
+  return undefined;
+}
+
+function planLimitMessageEn(code: string, details: unknown): string | undefined {
+  const d = (details ?? {}) as {
+    metric?: string;
+    limit?: number;
+    extraSeat?: { price: number | null; currency: string; purchasable: boolean };
+  };
+  if (code === "PLAN_LIMIT_REACHED" && d.metric && d.limit != null) {
+    const subject = PLAN_LIMIT_SUBJECTS[d.metric]?.[1] ?? d.metric;
+    return `Your plan allows ${d.limit} ${subject}. Move to a higher plan to add more.`;
+  }
+  if (code === "USAGE_LIMIT_REACHED" && d.metric === "ai_messages_per_month" && d.limit != null) {
+    return `You have used your ${d.limit} KORVA AI messages this month. They come back on the 1st of next month; for more, move to a higher plan.`;
+  }
+  if (code === "SEAT_LIMIT_REACHED" && d.limit != null) {
+    const base = `Your plan allows ${d.limit} dashboard user${d.limit === 1 ? "" : "s"}.`;
+    const extra = d.extraSeat;
+    if (!extra || extra.price == null) return `${base} Move to a higher plan.`;
+    const price = `${extra.price} ${extra.currency}/month`;
+    return extra.purchasable
+      ? `${base} Add a user for ${price}, or move to a higher plan.`
+      : `${base} Extra users (${price}) are coming soon; until then, move to a higher plan. The hairdressers, coaches or trainers your customers book need no account.`;
   }
   return undefined;
 }

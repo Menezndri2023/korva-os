@@ -9,6 +9,7 @@ import type { PlanFeature } from "./plan-tiers.ts";
 import type { ResourceKind } from "./booking.ts";
 import type { PayoutStatus, WalletEntryKind } from "./wallet.ts";
 import type { FulfillmentMode } from "./commerce.ts";
+import { PLAN_NAMES, type PlanKey } from "./plan-tiers.ts";
 import type { VerticalTemplate } from "./verticals.ts";
 
 /**
@@ -277,6 +278,11 @@ export const TRADE_TOOL_LABELS_EN: Record<TradeTool, string> = {
   returns: "Returns",
   bookings: "Bookings",
 };
+
+/** A plan's name in a language: only the free plan's changes ("Gratuit" / "Free"). */
+export function planName(plan: PlanKey, locale: Locale): string {
+  return locale === "en" && plan === "free" ? "Free" : PLAN_NAMES[plan];
+}
 
 export const FULFILLMENT_MODE_LABELS_EN: Record<FulfillmentMode, string> = {
   delivery: "Delivery",

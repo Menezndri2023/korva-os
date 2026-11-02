@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BUSINESS_MODEL_DEFINITIONS, type NetworkOverview } from "@korva/types";
+import { BUSINESS_MODEL_DEFINITIONS, businessModelText, type NetworkOverview } from "@korva/types";
 import { Button, Card, PageHeader, SkeletonList, Table, Td, Th } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
@@ -92,7 +92,7 @@ export default function EstablishmentsPage() {
                     <span className="font-medium">{place.name}</span>
                     {place.businessModel && (
                       <span className="block text-xs text-text-muted">
-                        {BUSINESS_MODEL_DEFINITIONS[place.businessModel].label}
+                        {businessModelText(BUSINESS_MODEL_DEFINITIONS[place.businessModel], locale).label}
                       </span>
                     )}
                   </Td>

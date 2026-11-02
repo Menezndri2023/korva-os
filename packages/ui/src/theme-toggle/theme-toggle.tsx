@@ -1,4 +1,7 @@
+"use client";
+
 import { Button } from "../button/button.tsx";
+import { useUiLocale } from "../ui-locale.tsx";
 
 export interface ThemeToggleProps {
   theme: "light" | "dark";
@@ -9,12 +12,17 @@ export interface ThemeToggleProps {
  *  persistence, and DOM attribute writes live in the consuming app (apps/web's ThemeProvider),
  *  since a design-system component never owns application state. */
 export function ThemeToggle({ theme, onToggle }: ThemeToggleProps) {
+  const en = useUiLocale() === "en";
   return (
     <Button
       type="button"
       variant="ghost"
       size="sm"
-      aria-label={theme === "dark" ? "Passer au thème clair" : "Passer au thème sombre"}
+      aria-label={
+        theme === "dark"
+          ? en ? "Switch to the light theme" : "Passer au thème clair"
+          : en ? "Switch to the dark theme" : "Passer au thème sombre"
+      }
       onClick={onToggle}
       className="p-2"
     >

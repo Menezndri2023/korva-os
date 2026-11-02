@@ -13,6 +13,9 @@ import {
 } from "@korva/validation";
 import {
   BILLABLE_COUNTRIES,
+  businessModelText,
+  planName,
+  verticalText,
   BUSINESS_MODELS,
   BUSINESS_MODEL_DEFINITIONS,
   MODULE_MIN_PLAN,
@@ -29,19 +32,20 @@ import {
 import { Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const MODULE_LABELS: Record<KorvaModule, string> = {
-  crm: "Clients & Prospects (CRM)",
-  catalog: "Produits & Services",
-  booking: "Réservations",
-  commerce: "Commandes & E-commerce",
-  finance: "Devis & Factures",
-  workflow: "Automatisations",
-  communication: "Communication",
-  analytics: "Statistiques",
-  ai: "Assistant IA",
-  website: "Site web",
-  marketing: "Marketing",
+const MODULE_LABELS: Record<KorvaModule, [string, string]> = {
+  crm: ["Clients & Prospects (CRM)", "Customers & leads (CRM)"],
+  catalog: ["Produits & Services", "Products & services"],
+  booking: ["Réservations", "Bookings"],
+  commerce: ["Commandes & E-commerce", "Orders & e-commerce"],
+  finance: ["Devis & Factures", "Quotes & invoices"],
+  workflow: ["Automatisations", "Automations"],
+  communication: ["Communication", "Messages"],
+  analytics: ["Statistiques", "Statistics"],
+  ai: ["Assistant IA", "AI assistant"],
+  website: ["Site web", "Website"],
+  marketing: ["Marketing", "Marketing"],
 };
 
 /** The countries KORVA bills in, with their currency — shared with the public pricing section
@@ -122,6 +126,8 @@ interface ImportPreview {
 }
 
 export default function OnboardingPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const router = useRouter();
   const setActiveOrganization = useAuthStore((state) => state.setActiveOrganization);
   const [selectedVertical, setSelectedVertical] = useState<string | null>(null);
@@ -149,7 +155,7 @@ export default function OnboardingPage() {
       country: "FR",
       currency: currencyForCountry("FR"),
       timezone: resolveDefaultTimezone(),
-      language: "fr",
+      language: locale,
     },
   });
 
@@ -249,24 +255,34 @@ export default function OnboardingPage() {
     <div className="flex min-h-screen items-center justify-center px-4 py-12">
       <div className="w-full max-w-lg space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold">Configurez votre entreprise</h1>
-          <p className="mt-1 text-sm text-text-muted">Quelques informations pour démarrer sur KORVA OS.</p>
+          <h1 className="text-2xl font-semibold">{t("Configurez votre entreprise", "Set up your business")}</h1>
+          <p className="mt-1 text-sm text-text-muted">{t(
+            "Quelques informations pour démarrer sur KORVA OS.",
+            "A few details to get started on KORVA OS.",
+          )}</p>
           <p className="mt-1 text-sm font-medium text-text">
-            Les {SIGNUP_TRIAL.days} premiers jours, toutes les fonctions de la formule{" "}
-            {PLAN_NAMES[SIGNUP_TRIAL.plan]} sont offertes, sans carte bancaire.
+            {t(
+              `Les ${SIGNUP_TRIAL.days} premiers jours, toutes les fonctions de la formule ${PLAN_NAMES[SIGNUP_TRIAL.plan]} sont offertes, sans carte bancaire.`,
+              `For the first ${SIGNUP_TRIAL.days} days, every feature of the ${planName(SIGNUP_TRIAL.plan, locale)} plan is free, no credit card needed.`,
+            )}
           </p>
         </div>
 
         <Card className="space-y-2 p-4">
-          <p className="text-sm font-medium">Importer mon entreprise (optionnel)</p>
+          <p className="text-sm font-medium">{t(
+            "Importer mon entreprise (optionnel)",
+            "Import my business (optional)",
+          )}</p>
           <p className="text-xs text-text-muted">
-            Vous avez déjà un site web ? Collez son adresse pour préremplir le nom, le slogan et
-            le logo ci-dessous — tout reste modifiable avant de valider.
+            {t(
+              "Vous avez déjà un site web ? Collez son adresse pour préremplir le nom, le slogan et le logo ci-dessous — tout reste modifiable avant de valider.",
+              "Already have a website? Paste its address to pre-fill the name, tagline and logo below — everything stays editable before you confirm.",
+            )}
           </p>
           <div className="flex gap-2">
             <Input
               type="url"
-              placeholder="https://mon-entreprise.com"
+              placeholder={t("https://mon-entreprise.com", "https://my-business.com")}
               value={importUrl}
               onChange={(event) => setImportUrl(event.target.value)}
               className="flex-1"
@@ -278,19 +294,22 @@ export default function OnboardingPage() {
               disabled={!importUrl.trim()}
               onClick={() => importMutation.mutate({ url: importUrl.trim() })}
             >
-              {importMutation.isPending ? "Analyse..." : "Analyser"}
+              {importMutation.isPending ? t("Analyse...", "Analysing...") : t("Analyser", "Analyse")}
             </Button>
           </div>
           {importMutation.isError && (
             <p className="text-xs text-red-600">
               {importMutation.error instanceof ApiError
                 ? importMutation.error.message
-                : "Impossible d'analyser ce site."}
+                : t("Impossible d'analyser ce site.", "This website could not be analysed.")}
             </p>
           )}
           {imported && (
             <p className="text-xs text-green-700">
-              Informations importées — vérifiez-les ci-dessous avant de continuer.
+              {t(
+                "Informations importées — vérifiez-les ci-dessous avant de continuer.",
+                "Details imported — check them below before you continue.",
+              )}
             </p>
           )}
         </Card>
@@ -298,27 +317,38 @@ export default function OnboardingPage() {
         <form className="space-y-4" onSubmit={handleSubmit((data) => mutation.mutate(data))}>
           <div>
             <label className="block text-sm font-medium" htmlFor="name">
-              Nom de l&apos;entreprise
+              {t("Nom de l'entreprise", "Business name")}
             </label>
             <Input id="name" className="mt-1 w-full" {...register("name")} />
             {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name.message}</p>}
           </div>
 
           <div>
-            <p className="block text-sm font-medium">Quel est votre secteur ?</p>
+            <p className="block text-sm font-medium">{t(
+              "Quel est votre secteur ?",
+              "What is your line of business?",
+            )}</p>
             <p className="mt-1 text-xs text-text-muted">
-              Optionnel — préremplit le secteur et les modules suggérés ci-dessous, modifiables
-              librement.
+              {t(
+                "Optionnel — préremplit le secteur et les modules suggérés ci-dessous, modifiables librement.",
+                "Optional — pre-fills the line of business and suggested modules below, which you can change freely.",
+              )}
             </p>
             <Input
               type="search"
-              placeholder="Rechercher un secteur (ex: restaurant, artisanat, immobilier...)"
+              placeholder={t(
+                "Rechercher un secteur (ex: restaurant, artisanat, immobilier...)",
+                "Search for a line of business (e.g. restaurant, crafts, real estate...)",
+              )}
               value={verticalFilter}
               onChange={(event) => setVerticalFilter(event.target.value)}
               className="mt-2 w-full"
             />
             {filteredVerticals.length === 0 && (
-              <p className="mt-2 text-xs text-text-muted">Aucun secteur ne correspond à cette recherche.</p>
+              <p className="mt-2 text-xs text-text-muted">{t(
+                "Aucun secteur ne correspond à cette recherche.",
+                "No line of business matches this search.",
+              )}</p>
             )}
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {filteredVerticals.map((template) => (
@@ -333,8 +363,8 @@ export default function OnboardingPage() {
                       selectedVertical === template.key ? "border-primary" : ""
                     }`}
                   >
-                    <p className="text-sm font-medium">{template.label}</p>
-                    <p className="mt-0.5 text-xs text-text-muted">{template.description}</p>
+                    <p className="text-sm font-medium">{verticalText(template, locale).label}</p>
+                    <p className="mt-0.5 text-xs text-text-muted">{verticalText(template, locale).description}</p>
                   </Card>
                 </button>
               ))}
@@ -343,11 +373,11 @@ export default function OnboardingPage() {
 
           <div>
             <label className="block text-sm font-medium" htmlFor="type">
-              Secteur d&apos;activité
+              {t("Secteur d'activité", "Line of business")}
             </label>
             <Input
               id="type"
-              placeholder="ex: commerce, service, réservation..."
+              placeholder={t("ex: commerce, service, réservation...", "e.g. retail, service, booking...")}
               className="mt-1 w-full"
               {...register("type")}
             />
@@ -356,7 +386,7 @@ export default function OnboardingPage() {
 
           <div>
             <label className="block text-sm font-medium" htmlFor="business-model">
-              Type d&apos;activité
+              {t("Type d'activité", "Type of business")}
             </label>
             <Select
               id="business-model"
@@ -367,39 +397,50 @@ export default function OnboardingPage() {
               })}
             >
               <option value="" disabled>
-                Choisir votre type d&apos;activité
+                {t("Choisir votre type d'activité", "Choose your type of business")}
               </option>
               {BUSINESS_MODELS.map((model) => (
                 <option key={model} value={model}>
-                  {BUSINESS_MODEL_DEFINITIONS[model].label} —{" "}
-                  {BUSINESS_MODEL_DEFINITIONS[model].description}
+                  {businessModelText(BUSINESS_MODEL_DEFINITIONS[model], locale).label} —{" "}
+                  {businessModelText(BUSINESS_MODEL_DEFINITIONS[model], locale).description}
                 </option>
               ))}
             </Select>
             {businessModel ? (
               <p className="mt-1 text-xs text-text-muted">
-                Votre site : {BUSINESS_MODEL_DEFINITIONS[businessModel].siteKind}.
+                {t("Votre site :", "Your website:")}{" "}
+                {businessModelText(BUSINESS_MODEL_DEFINITIONS[businessModel], locale).siteKind}.
               </p>
             ) : null}
             {errors.businessModel && (
-              <p className="mt-1 text-xs text-red-600">{errors.businessModel.message}</p>
+              <p className="mt-1 text-xs text-red-600">
+                {t("Choisissez votre type d'activité.", "Choose your type of business.")}
+              </p>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium" htmlFor="business-description">
-              Décrivez vos produits ou services (optionnel)
+              {t(
+                "Décrivez vos produits ou services (optionnel)",
+                "Describe your products or services (optional)",
+              )}
             </label>
             <p className="mt-1 text-xs text-text-muted">
-              Utilisé pour préremplir le slogan et le texte &quot;À propos&quot; de votre page
-              publique — tout reste modifiable ensuite dans Réglages.
+              {t(
+                "Utilisé pour préremplir le slogan et le texte \"À propos\" de votre page publique — tout reste modifiable ensuite dans Réglages.",
+                "Used to pre-fill the tagline and the “About” text of your public page — everything stays editable later in Settings.",
+              )}
             </p>
             <textarea
               id="business-description"
               className="mt-2 w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               rows={3}
               maxLength={2000}
-              placeholder="ex: Nous proposons des coupes, colorations et soins capillaires bio à Paris."
+              placeholder={t(
+                "ex: Nous proposons des coupes, colorations et soins capillaires bio à Paris.",
+                "e.g. We offer organic haircuts, colouring and hair care in London.",
+              )}
               {...register("businessDescription", {
                 setValueAs: (v: string) => (v === "" ? undefined : v),
               })}
@@ -412,7 +453,7 @@ export default function OnboardingPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium" htmlFor="country">
-                Pays
+                {t("Pays", "Country")}
               </label>
               <select
                 id="country"
@@ -427,13 +468,13 @@ export default function OnboardingPage() {
               >
                 {COUNTRIES.map((country) => (
                   <option key={country.code} value={country.code}>
-                    {country.label}
+                    {new Intl.DisplayNames([intlLocale(locale)], { type: "region" }).of(country.code) ?? country.label}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <p className="block text-sm font-medium">Devise de facturation</p>
+              <p className="block text-sm font-medium">{t("Devise de facturation", "Billing currency")}</p>
               {/* Derived from the country, never chosen separately. This was an independent
                   five-currency dropdown defaulting to EUR, so a merchant in Morocco was billed
                   in euros unless they spotted it — and a Subscription is bound for good to the
@@ -442,7 +483,7 @@ export default function OnboardingPage() {
                   hidden field so react-hook-form still tracks and submits it. */}
               <p className="mt-1 rounded-md border border-dashed border-border-input px-3 py-2 text-sm text-text-muted">
                 {billingCurrency}
-                <span className="ml-2 text-xs">selon votre pays</span>
+                <span className="ml-2 text-xs">{t("selon votre pays", "based on your country")}</span>
               </p>
               <input type="hidden" {...register("currency")} />
             </div>
@@ -450,7 +491,7 @@ export default function OnboardingPage() {
 
           <div>
             <label className="block text-sm font-medium" htmlFor="timezone">
-              Fuseau horaire
+              {t("Fuseau horaire", "Time zone")}
             </label>
             <Select id="timezone" className="mt-1 w-full" {...register("timezone")}>
               {TIMEZONES.map((timezone) => (
@@ -465,10 +506,15 @@ export default function OnboardingPage() {
           </div>
 
           <div>
-            <p className="block text-sm font-medium">Que souhaitez-vous gérer ?</p>
+            <p className="block text-sm font-medium">{t(
+              "Que souhaitez-vous gérer ?",
+              "What do you want to manage?",
+            )}</p>
             <p className="mt-1 text-xs text-text-muted">
-              En formule Gratuite, choisissez un seul mode de vente : réservations ou commandes.
-              Les deux ensemble sont inclus à partir de la formule Starter.
+              {t(
+                "En formule Gratuite, choisissez un seul mode de vente : réservations ou commandes. Les deux ensemble sont inclus à partir de la formule Starter.",
+                "On the Free plan, choose one way of selling: bookings or orders. Both together are included from the Starter plan.",
+              )}
             </p>
             <Controller
               control={enabledModulesControl.control}
@@ -496,7 +542,7 @@ export default function OnboardingPage() {
                           ]);
                         }}
                       />
-                      {MODULE_LABELS[module]}
+                      {t(...MODULE_LABELS[module])}
                     </label>
                   ))}
                 </div>
@@ -506,20 +552,21 @@ export default function OnboardingPage() {
                 where: this sentence was already wrong once, claiming automations were a paid
                 feature after `workflow` moved to the free plan. */}
             <p className="mt-1 text-xs text-text-muted">
-              Vous pourrez en activer d&apos;autres plus tard. Les devis, factures et campagnes
-              arrivent avec la formule {PLAN_NAMES[MODULE_MIN_PLAN.finance]} ; l&apos;assistant IA
-              avec la formule {PLAN_NAMES[MODULE_MIN_PLAN.ai]}.
+              {t(
+                `Vous pourrez en activer d'autres plus tard. Les devis, factures et campagnes arrivent avec la formule ${PLAN_NAMES[MODULE_MIN_PLAN.finance]} ; l'assistant IA avec la formule ${PLAN_NAMES[MODULE_MIN_PLAN.ai]}.`,
+                `You can turn on others later. Quotes, invoices and campaigns come with the ${planName(MODULE_MIN_PLAN.finance, locale)} plan; the AI assistant with the ${planName(MODULE_MIN_PLAN.ai, locale)} plan.`,
+              )}
             </p>
           </div>
 
           {mutation.isError && (
             <p className="text-sm text-red-600">
-              {mutation.error instanceof ApiError ? mutation.error.message : "Une erreur est survenue."}
+              {mutation.error instanceof ApiError ? mutation.error.message : t("Une erreur est survenue.", "Something went wrong.")}
             </p>
           )}
 
           <Button type="submit" loading={mutation.isPending} className="w-full">
-            {mutation.isPending ? "Création..." : "Créer mon organisation"}
+            {mutation.isPending ? t("Création...", "Creating...") : t("Créer mon organisation", "Create my organization")}
           </Button>
         </form>
       </div>

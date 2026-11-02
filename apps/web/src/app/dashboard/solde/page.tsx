@@ -223,7 +223,6 @@ function WithdrawCard({
   onDone: () => void;
 }) {
   const [amount, setAmount] = useState("");
-  const locale = useDashboardLocale();
   const t = useT();
   const withdraw = useMutation({
     mutationFn: () =>

@@ -18,7 +18,7 @@ import { Button, Card, Input, Pagination, Select, cn } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
-import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
+import { useT } from "@/lib/dashboard-locale";
 
 function usePipelines(enabled: boolean) {
   return useQuery({
@@ -29,7 +29,6 @@ function usePipelines(enabled: boolean) {
 }
 
 export default function DealsPage() {
-  const locale = useDashboardLocale();
   const t = useT();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);

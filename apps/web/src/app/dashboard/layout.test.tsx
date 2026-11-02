@@ -1,3 +1,4 @@
+import "@/lib/test-localstorage-shim"; // the language switch remembers its choice there
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, waitFor, fireEvent } from "@testing-library/react";
 import DashboardLayout from "./layout";
@@ -327,6 +328,32 @@ describe("DashboardLayout", () => {
         "false",
       );
     });
+  });
+
+  it("switches the dashboard to English from the user menu, and remembers it", () => {
+    enabledModules = ["crm", "commerce"];
+    businessModel = "retail";
+    try {
+      renderWithProviders(
+        <DashboardLayout>
+          <div />
+        </DashboardLayout>,
+      );
+      expect(screen.getByRole("link", { name: "Tableau de bord" })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "AL" }));
+      fireEvent.click(screen.getByRole("button", { name: "English" }));
+
+      expect(screen.getByRole("link", { name: "Dashboard" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Orders" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "English" })).toHaveAttribute("aria-pressed", "true");
+      expect(localStorage.getItem("korva-lang")).toBe("en");
+      expect(document.documentElement.lang).toBe("en");
+    } finally {
+      fireEvent.click(screen.getByRole("button", { name: "Français" }));
+      localStorage.removeItem("korva-lang");
+    }
   });
 
   it("explains a suspension by KORVA instead of showing the dashboard", async () => {

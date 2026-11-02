@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BUSINESS_MODELS,
   BUSINESS_MODEL_DEFINITIONS,
+  businessModelText,
   CORE_PERMISSIONS,
   CUSTOM_FIELD_ENTITIES,
   CUSTOM_FIELD_TYPES,
@@ -706,16 +707,16 @@ export default function SettingsPage() {
                 <dd className="mt-0.5">{organization?.type ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">{t("Type d'activité", "Activity type")}</dt>
+                <dt className="text-text-muted">{t("Type d'activité", "Type of business")}</dt>
                 <dd className="mt-0.5">
                   {organization?.businessModel
-                    ? `${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].label} · ${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].siteKind}`
+                    ? `${businessModelText(BUSINESS_MODEL_DEFINITIONS[organization.businessModel], locale).label} · ${businessModelText(BUSINESS_MODEL_DEFINITIONS[organization.businessModel], locale).siteKind}`
                     : t("Non défini", "Not set")}
                 </dd>
               </div>
               <div>
                 <dt className="text-text-muted">{t("Pays", "Country")}</dt>
-                <dd className="mt-0.5">{organization?.country ?? "—"}</dd>
+                <dd className="mt-0.5">{organization?.country ? countryName(organization.country, locale) : "—"}</dd>
               </div>
               <div>
                 <dt className="text-text-muted">{t("Devise", "Currency")}</dt>
@@ -726,8 +727,10 @@ export default function SettingsPage() {
                 <dd className="mt-0.5">{organization?.timezone ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">{t("Langue", "Language")}</dt>
-                <dd className="mt-0.5">{organization?.language ?? "—"}</dd>
+                <dt className="text-text-muted">{t("Langue de votre site", "Website language")}</dt>
+                <dd className="mt-0.5">
+                  {organization?.language === "en" ? "English" : organization?.language === "fr" ? "Français" : (organization?.language ?? "—")}
+                </dd>
               </div>
               <div>
                 <dt className="text-text-muted">{t("Couleur de marque", "Brand colour")}</dt>
@@ -857,7 +860,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-business-model">
-                  {t("Type d'activité", "Activity type")}
+                  {t("Type d'activité", "Type of business")}
                 </label>
                 <Select
                   id="org-business-model"
@@ -870,7 +873,8 @@ export default function SettingsPage() {
                   <option value="">{t("Non défini", "Not set")}</option>
                   {BUSINESS_MODELS.map((model) => (
                     <option key={model} value={model}>
-                      {BUSINESS_MODEL_DEFINITIONS[model].label} — {BUSINESS_MODEL_DEFINITIONS[model].siteKind}
+                      {businessModelText(BUSINESS_MODEL_DEFINITIONS[model], locale).label} —{" "}
+                      {businessModelText(BUSINESS_MODEL_DEFINITIONS[model], locale).siteKind}
                     </option>
                   ))}
                 </Select>
@@ -913,9 +917,12 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-language">
-                  {t("Langue", "Language")}
+                  {t("Langue de votre site et des messages clients", "Language of your website and customer messages")}
                 </label>
-                <Input id="org-language" className="w-full" {...registerOrg("language")} />
+                <Select id="org-language" className="w-full" {...registerOrg("language")}>
+                  <option value="fr">Français</option>
+                  <option value="en">English</option>
+                </Select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-brand-color">

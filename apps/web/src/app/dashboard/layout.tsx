@@ -13,7 +13,7 @@ import {
   type TradeTool,
   type TradeVocabulary,
 } from "@korva/types";
-import { Button, Notice, ThemeToggle } from "@korva/ui";
+import { Button, Notice, ThemeToggle, UiLocaleProvider } from "@korva/ui";
 import { ApiError, apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { useActiveOrganization } from "@/lib/use-active-organization";
@@ -44,7 +44,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
-import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
+import { intlLocale, setDashboardLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
+import type { Locale } from "@korva/types";
 
 type NavItem = {
   href: string;
@@ -179,6 +180,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [bootstrapped, accessToken, activeOrganizationId, router]);
 
   useEffect(() => {
+    // Screen readers and the browser's own translation offer read the page's language from here.
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  useEffect(() => {
     // Prevent the page behind the open mobile drawer from scrolling. Captures whatever was
     // there before (rather than assuming "") so this never clobbers an unrelated overflow
     // value some other part of the app might have set.
@@ -262,170 +268,174 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex min-h-screen">
-      {sidebarOpen && (
-        <button
-          aria-label={t("Fermer le menu", "Close the menu")}
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-zinc-900/40 md:hidden"
-        />
-      )}
+    <UiLocaleProvider locale={locale}>
+      <div className="flex min-h-screen">
+        {sidebarOpen && (
+          <button
+            aria-label={t("Fermer le menu", "Close the menu")}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-30 bg-zinc-900/40 md:hidden"
+          />
+        )}
 
-      <aside
-        id="mobile-sidebar"
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-sidebar px-3 py-5 text-sidebar-text transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="mb-6 flex items-center gap-3 px-2">
-          {/* The business's initial on a saffron tile: the one warm mark in the petrol column,
-              and the quickest way to see which organization is open. */}
-          <span
-            aria-hidden="true"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary font-display text-base font-bold text-on-primary"
-          >
-            {(organization?.name ?? "K").charAt(0).toUpperCase()}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">{organization?.name ?? "..."}</p>
-            <p className="text-xs text-sidebar-muted">KORVA OS</p>
-          </div>
-        </div>
-
-        <nav className="flex-1 space-y-5 overflow-y-auto pb-4">
-          {navGroups(
-            enabledModules,
-            screens,
-            planFeatures.has("kitchen_display"),
-            visibleTradeTools(organization?.businessModel, organization?.extraTools),
-            tradeVocabularyIn(organization?.businessModel, locale),
-            (planFeatures.planKey !== undefined && planFeatures.has("network_overview")) ||
-              (organizations?.length ?? 0) > 1,
-            t,
-          ).map((group) => {
-            const items = group.items.filter((item) => item.visible);
-            if (items.length === 0) return null;
-            return (
-              <div key={group.title ?? "main"}>
-                {group.title && (
-                  <p className="mb-1.5 px-3 text-xs font-medium text-sidebar-muted">{group.title}</p>
-                )}
-                <div className="space-y-0.5">
-                  {items.map((item) => (
-                    <NavLink
-                      key={item.href}
-                      href={item.href}
-                      label={item.label}
-                      icon={item.icon}
-                      active={
-                        item.prefix
-                          ? pathname === item.href || pathname.startsWith(`${item.href}/`)
-                          : pathname === item.href
-                      }
-                      onClick={() => setSidebarOpen(false)}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
-        <NavLink
-          href="/dashboard/avis-korva"
-          label={t("Votre avis sur KORVA", "Your feedback on KORVA")}
-          icon={HeartHandshake}
-          active={pathname === "/dashboard/avis-korva"}
-          onClick={() => setSidebarOpen(false)}
-        />
-        <NavLink
-          href="/dashboard/settings"
-          label={t("Paramètres", "Settings")}
-          icon={Settings}
-          active={pathname === "/dashboard/settings"}
-          onClick={() => setSidebarOpen(false)}
-        />
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col md:pl-0">
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 py-3 backdrop-blur md:px-8">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              aria-label={t("Ouvrir le menu", "Open the menu")}
-              aria-expanded={sidebarOpen}
-              aria-controls="mobile-sidebar"
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 md:hidden"
+        <aside
+          id="mobile-sidebar"
+          className={`fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-sidebar px-3 py-5 text-sidebar-text transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0 ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="mb-6 flex items-center gap-3 px-2">
+            {/* The business's initial on a saffron tile: the one warm mark in the petrol column,
+                and the quickest way to see which organization is open. */}
+            <span
+              aria-hidden="true"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary font-display text-base font-bold text-on-primary"
             >
-              <MenuIcon />
-            </Button>
-            {organizations && organizations.length > 1 && (
-              <OrgSwitcher
-                organizations={organizations}
-                activeOrganizationId={activeOrganizationId}
-                onSwitch={switchOrganization}
-                label={t("Changer d'organisation", "Switch organization")}
-              />
-            )}
+              {(organization?.name ?? "K").charAt(0).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{organization?.name ?? "..."}</p>
+              <p className="text-xs text-sidebar-muted">KORVA OS</p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            {organization?.slug && <StorefrontLinkMenu slug={organization.slug} t={t} />}
-            <UserMenu
-              name={[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || ""}
-              email={user?.email ?? ""}
-              onLogout={() => void logout()}
-              logoutLabel={t("Se déconnecter", "Sign out")}
-              closeLabel={t("Fermer le menu utilisateur", "Close the user menu")}
-            />
-          </div>
-        </header>
+          <nav className="flex-1 space-y-5 overflow-y-auto pb-4">
+            {navGroups(
+              enabledModules,
+              screens,
+              planFeatures.has("kitchen_display"),
+              visibleTradeTools(organization?.businessModel, organization?.extraTools),
+              tradeVocabularyIn(organization?.businessModel, locale),
+              (planFeatures.planKey !== undefined && planFeatures.has("network_overview")) ||
+                (organizations?.length ?? 0) > 1,
+              t,
+            ).map((group) => {
+              const items = group.items.filter((item) => item.visible);
+              if (items.length === 0) return null;
+              return (
+                <div key={group.title ?? "main"}>
+                  {group.title && (
+                    <p className="mb-1.5 px-3 text-xs font-medium text-sidebar-muted">{group.title}</p>
+                  )}
+                  <div className="space-y-0.5">
+                    {items.map((item) => (
+                      <NavLink
+                        key={item.href}
+                        href={item.href}
+                        label={item.label}
+                        icon={item.icon}
+                        active={
+                          item.prefix
+                            ? pathname === item.href || pathname.startsWith(`${item.href}/`)
+                            : pathname === item.href
+                        }
+                        onClick={() => setSidebarOpen(false)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </nav>
+          <NavLink
+            href="/dashboard/avis-korva"
+            label={t("Votre avis sur KORVA", "Your feedback on KORVA")}
+            icon={HeartHandshake}
+            active={pathname === "/dashboard/avis-korva"}
+            onClick={() => setSidebarOpen(false)}
+          />
+          <NavLink
+            href="/dashboard/settings"
+            label={t("Paramètres", "Settings")}
+            icon={Settings}
+            active={pathname === "/dashboard/settings"}
+            onClick={() => setSidebarOpen(false)}
+          />
+        </aside>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-8">
-          {viewOnly && (
-            <Notice tone="warning" className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <span>
-                {t(
-                  "Vue de l'administration KORVA, en lecture seule : rien ne peut être modifié. Elle se termine à",
-                  "KORVA administration view, read-only: nothing can be changed. It ends at",
-                )}{" "}
-                {new Date(viewOnly.expiresAt).toLocaleTimeString(intlLocale(locale), { timeStyle: "short" })}.
-              </span>
-              <Button size="sm" variant="secondary" onClick={() => void logout()}>
-                {t("Fermer la vue", "Close the view")}
+        <div className="flex min-w-0 flex-1 flex-col md:pl-0">
+          <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 py-3 backdrop-blur md:px-8">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                aria-label={t("Ouvrir le menu", "Open the menu")}
+                aria-expanded={sidebarOpen}
+                aria-controls="mobile-sidebar"
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 md:hidden"
+              >
+                <MenuIcon />
               </Button>
-            </Notice>
-          )}
-          {organization && !enabledModules.has("website") && (
-            // Visitors of a site whose module is off see "Ce site n'est pas en ligne"; the owner
-            // must not have to discover that from a customer.
-            <Notice tone="accent" className="mb-4">
-              {t(
-                "Votre site public n'est pas en ligne : vos clients voient « Ce site n'est pas en ligne pour le moment ».",
-                "Your public website is not online: your customers see “This site is not online at the moment”.",
-              )}{" "}
-              <Link href="/dashboard/settings#abonnement" className="font-medium underline">
-                {t("Activez le module Site web", "Turn on the Website module")}
-              </Link>{" "}
-              {t("pour le publier.", "to publish it.")}
-            </Notice>
-          )}
-          {planFeatures.trialEndsAt && (
-            // The trial ends on its own; saying when, and where to choose a plan, is the only
-            // way the owner is not surprised by Free coming back.
-            <Notice tone="warning" className="mb-4">
-              {t("Essai Pro offert :", "Free Pro trial:")} {trialDaysLeft(planFeatures.trialEndsAt)}{" "}
-              {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? t("jours restants", "days left") : t("jour restant", "day left")}.{" "}
-              {t("Vos données restent à vous après l'essai ;", "Your data stays yours after the trial;")}{" "}
-              <Link href="/dashboard/settings#abonnement" className="font-medium underline">
-                {t("choisissez une formule", "choose a plan")}
-              </Link>{" "}
-              {t("pour garder les fonctions Pro.", "to keep the Pro features.")}
-            </Notice>
-          )}{children}</main>
+              {organizations && organizations.length > 1 && (
+                <OrgSwitcher
+                  organizations={organizations}
+                  activeOrganizationId={activeOrganizationId}
+                  onSwitch={switchOrganization}
+                  label={t("Changer d'organisation", "Switch organization")}
+                />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+              {organization?.slug && <StorefrontLinkMenu slug={organization.slug} t={t} />}
+              <UserMenu
+                name={[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || ""}
+                email={user?.email ?? ""}
+                onLogout={() => void logout()}
+                logoutLabel={t("Se déconnecter", "Sign out")}
+                closeLabel={t("Fermer le menu utilisateur", "Close the user menu")}
+                locale={locale}
+                languageLabel={t("Langue", "Language")}
+              />
+            </div>
+          </header>
+
+          <main className="mx-auto w-full max-w-6xl flex-1 p-4 md:p-8">
+            {viewOnly && (
+              <Notice tone="warning" className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  {t(
+                    "Vue de l'administration KORVA, en lecture seule : rien ne peut être modifié. Elle se termine à",
+                    "KORVA administration view, read-only: nothing can be changed. It ends at",
+                  )}{" "}
+                  {new Date(viewOnly.expiresAt).toLocaleTimeString(intlLocale(locale), { timeStyle: "short" })}.
+                </span>
+                <Button size="sm" variant="secondary" onClick={() => void logout()}>
+                  {t("Fermer la vue", "Close the view")}
+                </Button>
+              </Notice>
+            )}
+            {organization && !enabledModules.has("website") && (
+              // Visitors of a site whose module is off see "Ce site n'est pas en ligne"; the owner
+              // must not have to discover that from a customer.
+              <Notice tone="accent" className="mb-4">
+                {t(
+                  "Votre site public n'est pas en ligne : vos clients voient « Ce site n'est pas en ligne pour le moment ».",
+                  "Your public website is not online: your customers see “This site is not online at the moment”.",
+                )}{" "}
+                <Link href="/dashboard/settings#abonnement" className="font-medium underline">
+                  {t("Activez le module Site web", "Turn on the Website module")}
+                </Link>{" "}
+                {t("pour le publier.", "to publish it.")}
+              </Notice>
+            )}
+            {planFeatures.trialEndsAt && (
+              // The trial ends on its own; saying when, and where to choose a plan, is the only
+              // way the owner is not surprised by Free coming back.
+              <Notice tone="warning" className="mb-4">
+                {t("Essai Pro offert :", "Free Pro trial:")} {trialDaysLeft(planFeatures.trialEndsAt)}{" "}
+                {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? t("jours restants", "days left") : t("jour restant", "day left")}.{" "}
+                {t("Vos données restent à vous après l'essai ;", "Your data stays yours after the trial;")}{" "}
+                <Link href="/dashboard/settings#abonnement" className="font-medium underline">
+                  {t("choisissez une formule", "choose a plan")}
+                </Link>{" "}
+                {t("pour garder les fonctions Pro.", "to keep the Pro features.")}
+              </Notice>
+            )}{children}</main>
+        </div>
       </div>
-    </div>
+    </UiLocaleProvider>
   );
 }
 
@@ -587,12 +597,16 @@ function UserMenu({
   onLogout,
   logoutLabel,
   closeLabel,
+  locale,
+  languageLabel,
 }: {
   name: string;
   email: string;
   onLogout: () => void;
   logoutLabel: string;
   closeLabel: string;
+  locale: Locale;
+  languageLabel: string;
 }) {
   const [open, setOpen] = useState(false);
   const initials = getInitials(name || email);
@@ -618,6 +632,25 @@ function UserMenu({
             <div className="px-3 py-2">
               <p className="truncate text-sm font-medium text-text">{name || "—"}</p>
               <p className="truncate text-xs text-text-muted">{email}</p>
+            </div>
+            <div className="my-1 h-px bg-border" />
+            {/* The dashboard's language, remembered in this browser; the website's language is
+                the business's own setting (Settings › Business). */}
+            <div role="group" aria-label={languageLabel} className="flex gap-1 px-2 py-1.5">
+              {(["fr", "en"] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  lang={option}
+                  aria-pressed={locale === option}
+                  onClick={() => setDashboardLocale(option)}
+                  className={`flex-1 rounded-md px-2 py-1 text-xs font-medium ${
+                    locale === option ? "bg-sidebar text-text-primary" : "text-text-muted hover:bg-surface-muted"
+                  }`}
+                >
+                  {option === "fr" ? "Français" : "English"}
+                </button>
+              ))}
             </div>
             <div className="my-1 h-px bg-border" />
             <Button
