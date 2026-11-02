@@ -8,6 +8,7 @@ import {
 import type { PlanFeature } from "./plan-tiers.ts";
 import type { ResourceKind } from "./booking.ts";
 import type { PayoutStatus, WalletEntryKind } from "./wallet.ts";
+import type { FulfillmentMode } from "./commerce.ts";
 import type { VerticalTemplate } from "./verticals.ts";
 
 /**
@@ -275,6 +276,12 @@ export const TRADE_TOOL_LABELS_EN: Record<TradeTool, string> = {
   orders: "Orders",
   returns: "Returns",
   bookings: "Bookings",
+};
+
+export const FULFILLMENT_MODE_LABELS_EN: Record<FulfillmentMode, string> = {
+  delivery: "Delivery",
+  pickup: "Collection",
+  dine_in: "Eat in",
 };
 
 export const WALLET_ENTRY_LABELS_EN: Record<WalletEntryKind, string> = {

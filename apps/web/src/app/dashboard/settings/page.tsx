@@ -32,6 +32,7 @@ import {
   type StorefrontTemplateKey,
 } from "@korva/types";
 import type {
+  Locale,
   AiUsageSummary,
   AuditLogEntry,
   ConnectMessagingAccountInput,
@@ -80,6 +81,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { SettingsTabPanel, SettingsTabs, useSettingsTab } from "./settings-tabs";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 interface MemberRow {
   id: string;
@@ -104,58 +106,56 @@ interface PendingInvitation {
   expiresAt: string;
 }
 
-const METRIC_LABELS: Record<string, string> = {
+const METRIC_LABELS: Record<string, [string, string]> = {
   // Seats are dashboard logins. Bookable team members (Réservations › Équipe et ressources) need
   // no account and use none — the label must not suggest otherwise.
-  seats: "Utilisateurs du tableau de bord",
-  offers: "Offres au catalogue",
-  bookable_staff: "Membres d'équipe réservables",
-  workflows: "Automatisations",
-  ai_messages_per_month: "Messages IA / mois",
+  seats: ["Utilisateurs du tableau de bord", "Dashboard users"],
+  offers: ["Offres au catalogue", "Catalogue offers"],
+  bookable_staff: ["Membres d'équipe réservables", "Bookable team members"],
+  workflows: ["Automatisations", "Automations"],
+  ai_messages_per_month: ["Messages IA / mois", "AI messages / month"],
 };
 
-const MODULE_LABELS: Record<KorvaModule, string> = {
-  crm: "Clients & Prospects (CRM)",
-  catalog: "Produits & Services",
-  booking: "Réservations",
-  commerce: "Commandes & E-commerce",
-  finance: "Devis & Factures",
-  workflow: "Automatisations",
-  communication: "Communication",
-  analytics: "Statistiques",
-  ai: "Assistant IA",
-  website: "Site web",
-  marketing: "Marketing",
+const MODULE_LABELS: Record<KorvaModule, [string, string]> = {
+  crm: ["Clients & Prospects (CRM)", "Customers & leads (CRM)"],
+  catalog: ["Produits & Services", "Products & services"],
+  booking: ["Réservations", "Bookings"],
+  commerce: ["Commandes & E-commerce", "Orders & e-commerce"],
+  finance: ["Devis & Factures", "Quotes & invoices"],
+  workflow: ["Automatisations", "Automations"],
+  communication: ["Communication", "Messages"],
+  analytics: ["Statistiques", "Statistics"],
+  ai: ["Assistant IA", "AI assistant"],
+  website: ["Site web", "Website"],
+  marketing: ["Marketing", "Marketing"],
 };
 
-const PRODUCT_LABELS: Record<KorvaProduct, string> = {
-  crm: "CRM",
-  inventory: "Inventaire",
-  website: "Site web",
-  ai: "Assistant IA",
+const PRODUCT_LABELS: Record<KorvaProduct, [string, string]> = {
+  crm: ["CRM", "CRM"],
+  inventory: ["Inventaire", "Inventory"],
+  website: ["Site web", "Website"],
+  ai: ["Assistant IA", "AI assistant"],
 };
 
 // Deliberately worded to never contain a MODULE_LABELS value as a substring (e.g. "Assistant
 // IA", "Site web") — role+name queries (tests, screen readers) match by substring, so two
 // same-page checkboxes sharing that substring would be indistinguishable even though they
 // control different things (a product toggle here vs. a module toggle in the section below).
-const PRODUCT_ARIA_LABELS: Record<KorvaProduct, string> = {
-  crm: "Produit CRM",
-  inventory: "Produit Inventaire",
-  website: "Produit web (vitrine)",
-  ai: "Produit IA",
+const PRODUCT_ARIA_LABELS: Record<KorvaProduct, [string, string]> = {
+  crm: ["Produit CRM", "CRM product"],
+  inventory: ["Produit Inventaire", "Inventory product"],
+  website: ["Produit web (vitrine)", "Web product (showcase)"],
+  ai: ["Produit IA", "AI product"],
 };
 
 // Same list as apps/web/src/app/onboarding/page.tsx — kept local rather than shared, matching
 // that page's own precedent, since neither list is large enough yet to be worth extracting.
-const COUNTRIES = [
-  { code: "FR", label: "France" },
-  { code: "CI", label: "Côte d'Ivoire" },
-  { code: "SN", label: "Sénégal" },
-  { code: "MA", label: "Maroc" },
-  { code: "BE", label: "Belgique" },
-  { code: "CA", label: "Canada" },
-];
+const COUNTRIES = ["FR", "CI", "SN", "MA", "BE", "CA"] as const;
+
+/** A country's name in the dashboard language, from the browser's own list. */
+function countryName(code: string, locale: Locale): string {
+  return new Intl.DisplayNames([intlLocale(locale)], { type: "region" }).of(code) ?? code;
+}
 // Imported, no longer re-declared here and in onboarding: the list now also decides which
 // Plan documents exist (see PlansService.list), so a local copy could drift from what is
 // actually billable.
@@ -169,13 +169,13 @@ const TIMEZONES = Intl.supportedValuesOf("timeZone");
 // render as a real card (with its own Connecter action) instead of disappearing entirely.
 const INTEGRATION_SLOTS: Array<{
   domain: IntegrationDomain;
-  title: string;
-  description: string;
+  title: [string, string];
+  description: [string, string];
   // Both domains reuse IntegrationSummary.market as the one connected-state descriptor the
   // contract exposes — it has no separate WABA-display-name field (deliberately secret-free,
   // see integrations.ts's doc comment) — so this only changes the *label* shown above it, not
   // which field is read.
-  connectedLabel: string;
+  connectedLabel: [string, string];
 }> = [
   {
     // Not yet connected: no provider name here — which PSP ends up handling this organization's
@@ -184,15 +184,15 @@ const INTEGRATION_SLOTS: Array<{
     // just be a guess. Once connected, the card below names the ACTUAL resolved provider via
     // PAYMENT_PROVIDER_DISPLAY_NAMES — this static copy is only ever shown pre-connection.
     domain: "payment",
-    title: "Paiements",
-    description: "Recevez vos règlements en ligne.",
-    connectedLabel: "Marché",
+    title: ["Paiements", "Payments"],
+    description: ["Recevez vos règlements en ligne.", "Get paid online."],
+    connectedLabel: ["Marché", "Market"],
   },
   {
     domain: "messaging",
-    title: "WhatsApp Business — 360dialog",
-    description: "Envoyez et recevez des messages WhatsApp avec vos clients.",
-    connectedLabel: "Compte connecté",
+    title: ["WhatsApp Business — 360dialog", "WhatsApp Business — 360dialog"],
+    description: ["Envoyez et recevez des messages WhatsApp avec vos clients.", "Send and receive WhatsApp messages with your customers."],
+    connectedLabel: ["Compte connecté", "Connected account"],
   },
 ];
 
@@ -204,7 +204,8 @@ const PAYMENT_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   manual: "Manuel",
 };
 
-function paymentProviderDisplayName(provider: string): string {
+function paymentProviderDisplayName(provider: string, locale: Locale): string {
+  if (provider === "manual" && locale === "en") return "Manual";
   return (
     PAYMENT_PROVIDER_DISPLAY_NAMES[provider] ??
     provider.charAt(0).toUpperCase() + provider.slice(1)
@@ -213,13 +214,13 @@ function paymentProviderDisplayName(provider: string): string {
 
 const INTEGRATION_STATUS_BADGE: Record<
   IntegrationAccountStatus,
-  { variant: BadgeVariant; label: string }
+  { variant: BadgeVariant; label: [string, string] }
 > = {
-  pending: { variant: "warning", label: "En attente" },
-  active: { variant: "success", label: "Actif" },
-  disabled: { variant: "default", label: "Désactivé" },
-  revoked: { variant: "destructive", label: "Révoqué" },
-  error: { variant: "destructive", label: "Erreur" },
+  pending: { variant: "warning", label: ["En attente", "Pending"] },
+  active: { variant: "success", label: ["Actif", "Active"] },
+  disabled: { variant: "default", label: ["Désactivé", "Off"] },
+  revoked: { variant: "destructive", label: ["Révoqué", "Revoked"] },
+  error: { variant: "destructive", label: ["Erreur", "Error"] },
 };
 
 // Reconciled at Wave 4 Stage 2 convergence against the real FlutterwaveProvider adapter's
@@ -240,6 +241,8 @@ interface PaymentPayoutFormValues {
 }
 
 export default function SettingsPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const activeTab = useSettingsTab();
   const queryClient = useQueryClient();
   const { data: organization } = useActiveOrganization();
@@ -404,7 +407,10 @@ export default function SettingsPage() {
       const result = await uploadFile(file);
       setOrgValue(field, result.url, { shouldDirty: true });
     } catch (error) {
-      setUploadError(error instanceof ApiError ? error.message : "Échec de l'envoi du fichier.");
+      setUploadError(error instanceof ApiError ? error.message : t(
+        "Échec de l'envoi du fichier.",
+        "The file could not be uploaded.",
+      ));
     } finally {
       setUploading(false);
     }
@@ -629,7 +635,7 @@ export default function SettingsPage() {
   });
 
   // Same click-to-confirm shape as CRM contacts (dashboard/crm/page.tsx) and communication
-  // templates: "Déconnecter" turns into an inline "Confirmer ?" / "Annuler" pair rather than a
+  // templates: t("Déconnecter", "Disconnect") turns into an inline "Confirmer ?" / "Annuler" pair rather than a
   // native confirm() dialog. Reset on both success and error so a failed disconnect doesn't
   // leave the row stuck on "Confirmer ?".
   const disconnectMutation = useMutation({
@@ -658,8 +664,11 @@ export default function SettingsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold">Paramètres</h1>
-        <p className="mt-1 text-sm text-text-muted">Votre entreprise, votre site, votre équipe et votre abonnement.</p>
+        <h1 className="text-2xl font-semibold">{t("Paramètres", "Settings")}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t(
+          "Votre entreprise, votre site, votre équipe et votre abonnement.",
+          "Your business, your website, your team and your subscription.",
+        )}</p>
       </div>
 
       <SettingsTabs active={activeTab} />
@@ -670,14 +679,14 @@ export default function SettingsPage() {
             dashboard/bookings). */}
         <section className="rounded-lg border border-border bg-surface p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text">Organisation</h2>
+            <h2 className="text-sm font-semibold text-text">{t("Organisation", "Organization")}</h2>
             {organization && (
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => (orgEditOpen ? cancelOrgEdit() : startOrgEdit())}
               >
-                {orgEditOpen ? "Annuler" : "Modifier"}
+                {orgEditOpen ? t("Annuler", "Cancel") : t("Modifier", "Edit")}
               </Button>
             )}
           </div>
@@ -685,43 +694,43 @@ export default function SettingsPage() {
           {!orgEditOpen ? (
             <dl className="mt-4 grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div>
-                <dt className="text-text-muted">Nom</dt>
+                <dt className="text-text-muted">{t("Nom", "Name")}</dt>
                 <dd className="mt-0.5">{organization?.name ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Raison sociale</dt>
+                <dt className="text-text-muted">{t("Raison sociale", "Legal name")}</dt>
                 <dd className="mt-0.5">{organization?.legalName ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Secteur</dt>
+                <dt className="text-text-muted">{t("Secteur", "Line of business")}</dt>
                 <dd className="mt-0.5">{organization?.type ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Type d&apos;activité</dt>
+                <dt className="text-text-muted">{t("Type d'activité", "Activity type")}</dt>
                 <dd className="mt-0.5">
                   {organization?.businessModel
                     ? `${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].label} · ${BUSINESS_MODEL_DEFINITIONS[organization.businessModel].siteKind}`
-                    : "Non défini"}
+                    : t("Non défini", "Not set")}
                 </dd>
               </div>
               <div>
-                <dt className="text-text-muted">Pays</dt>
+                <dt className="text-text-muted">{t("Pays", "Country")}</dt>
                 <dd className="mt-0.5">{organization?.country ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Devise</dt>
+                <dt className="text-text-muted">{t("Devise", "Currency")}</dt>
                 <dd className="mt-0.5">{organization?.currency ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Fuseau horaire</dt>
+                <dt className="text-text-muted">{t("Fuseau horaire", "Time zone")}</dt>
                 <dd className="mt-0.5">{organization?.timezone ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Langue</dt>
+                <dt className="text-text-muted">{t("Langue", "Language")}</dt>
                 <dd className="mt-0.5">{organization?.language ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Couleur de marque</dt>
+                <dt className="text-text-muted">{t("Couleur de marque", "Brand colour")}</dt>
                 <dd className="mt-0.5 flex items-center gap-2">
                   {organization?.brandColor ? (
                     <>
@@ -737,61 +746,73 @@ export default function SettingsPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-text-muted">Slogan (page publique)</dt>
+                <dt className="text-text-muted">{t("Slogan (page publique)", "Tagline (public page)")}</dt>
                 <dd className="mt-0.5">{organization?.tagline ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Téléphone (page publique)</dt>
+                <dt className="text-text-muted">{t("Téléphone (page publique)", "Phone (public page)")}</dt>
                 <dd className="mt-0.5">{organization?.contactPhone || "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">WhatsApp (page publique)</dt>
+                <dt className="text-text-muted">{t("WhatsApp (page publique)", "WhatsApp (public page)")}</dt>
                 <dd className="mt-0.5">{organization?.whatsappNumber || "—"}</dd>
               </div>
               <div className="sm:col-span-2">
-                <dt className="text-text-muted">Adresse (page publique)</dt>
+                <dt className="text-text-muted">{t("Adresse (page publique)", "Address (public page)")}</dt>
                 <dd className="mt-0.5">{organization?.contactAddress || "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Image de bannière (page publique)</dt>
+                <dt className="text-text-muted">{t(
+                  "Image de bannière (page publique)",
+                  "Banner image (public page)",
+                )}</dt>
                 <dd className="mt-0.5 truncate">{organization?.heroImage ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Titre SEO (page publique)</dt>
+                <dt className="text-text-muted">{t("Titre SEO (page publique)", "SEO title (public page)")}</dt>
                 <dd className="mt-0.5">{organization?.seoTitle ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Description SEO (page publique)</dt>
+                <dt className="text-text-muted">{t(
+                  "Description SEO (page publique)",
+                  "SEO description (public page)",
+                )}</dt>
                 <dd className="mt-0.5">{organization?.seoDescription ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Domaine personnalisé</dt>
+                <dt className="text-text-muted">{t("Domaine personnalisé", "Custom domain")}</dt>
                 <dd className="mt-0.5">{organization?.customDomain ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Frais de livraison (boutique en ligne)</dt>
+                <dt className="text-text-muted">{t(
+                  "Frais de livraison (boutique en ligne)",
+                  "Delivery fee (online shop)",
+                )}</dt>
                 <dd className="mt-0.5">
                   {organization?.shippingFlatRate != null
                     ? `${organization.shippingFlatRate} ${organization.currency}`
-                    : "Gratuit"}
+                    : t("Gratuit", "Free")}
                 </dd>
               </div>
               <div>
-                <dt className="text-text-muted">Sections visibles (page publique)</dt>
+                <dt className="text-text-muted">{t(
+                  "Sections visibles (page publique)",
+                  "Sections shown (public page)",
+                )}</dt>
                 <dd className="mt-0.5">
                   {organization?.storefrontSections
                     ? organization.storefrontSections
-                        .map((s) => (s === "catalog" ? "Catalogue" : "Réservations"))
-                        .join(", ") || "Aucune"
-                    : "Toutes"}
+                        .map((s) => (s === "catalog" ? t("Catalogue", "Catalogue") : t("Réservations", "Bookings")))
+                        .join(", ") || t("Aucune", "None")
+                    : t("Toutes", "All")}
                 </dd>
               </div>
               {organization?.enabledModules.includes("commerce") && (
                 <div>
-                  <dt className="text-text-muted">Moyens de paiement acceptés</dt>
+                  <dt className="text-text-muted">{t("Moyens de paiement acceptés", "Accepted payment methods")}</dt>
                   <dd className="mt-0.5">
                     {(organization.acceptedPaymentMethods ?? ["cash"])
-                      .map((m) => (m === "cash" ? "Espèces / à la livraison" : "En ligne"))
+                      .map((m) => (m === "cash" ? t("Espèces / à la livraison", "Cash / on delivery") : t("En ligne", "Online")))
                       .join(", ")}
                   </dd>
                 </div>
@@ -804,7 +825,7 @@ export default function SettingsPage() {
             >
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-name">
-                  Nom
+                  {t("Nom", "Name")}
                 </label>
                 <Input
                   id="org-name"
@@ -818,25 +839,25 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-legal-name">
-                  Raison sociale
+                  {t("Raison sociale", "Legal name")}
                 </label>
                 <Input id="org-legal-name" className="w-full" {...registerOrg("legalName")} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-type">
-                  Secteur d&apos;activité
+                  {t("Secteur d'activité", "Line of business")}
                 </label>
                 <Input
                   id="org-type"
                   className="w-full"
-                  placeholder="ex: commerce, service, réservation..."
+                  placeholder={t("ex: commerce, service, réservation...", "e.g. retail, service, booking...")}
                   error={!!orgErrors.type}
                   {...registerOrg("type")}
                 />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-business-model">
-                  Type d&apos;activité
+                  {t("Type d'activité", "Activity type")}
                 </label>
                 <Select
                   id="org-business-model"
@@ -846,7 +867,7 @@ export default function SettingsPage() {
                     setValueAs: (v: string | undefined) => (v ? v : undefined),
                   })}
                 >
-                  <option value="">Non défini</option>
+                  <option value="">{t("Non défini", "Not set")}</option>
                   {BUSINESS_MODELS.map((model) => (
                     <option key={model} value={model}>
                       {BUSINESS_MODEL_DEFINITIONS[model].label} — {BUSINESS_MODEL_DEFINITIONS[model].siteKind}
@@ -856,19 +877,19 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-country">
-                  Pays
+                  {t("Pays", "Country")}
                 </label>
                 <Select id="org-country" className="w-full" {...registerOrg("country")}>
-                  {COUNTRIES.map((country) => (
-                    <option key={country.code} value={country.code}>
-                      {country.label}
+                  {COUNTRIES.map((code) => (
+                    <option key={code} value={code}>
+                      {countryName(code, locale)}
                     </option>
                   ))}
                 </Select>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-currency">
-                  Devise
+                  {t("Devise", "Currency")}
                 </label>
                 <Select id="org-currency" className="w-full" {...registerOrg("currency")}>
                   {CURRENCIES.map((currency) => (
@@ -880,7 +901,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-timezone">
-                  Fuseau horaire
+                  {t("Fuseau horaire", "Time zone")}
                 </label>
                 <Select id="org-timezone" className="w-full" {...registerOrg("timezone")}>
                   {TIMEZONES.map((timezone) => (
@@ -892,13 +913,13 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-language">
-                  Langue
+                  {t("Langue", "Language")}
                 </label>
                 <Input id="org-language" className="w-full" {...registerOrg("language")} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-brand-color">
-                  Couleur de marque
+                  {t("Couleur de marque", "Brand colour")}
                 </label>
                 {/* setValueAs: brandColor/logo are optional but format-constrained (hex/url) —
                     an uncontrolled input left untouched by the user always submits "" (never
@@ -908,7 +929,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
-                    aria-label="Choisir la couleur de marque"
+                    aria-label={t("Choisir la couleur de marque", "Choose the brand colour")}
                     className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-border-input bg-transparent p-0.5"
                     value={/^#([0-9a-fA-F]{6})$/.test(watchedBrandColor ?? "") ? watchedBrandColor! : "#1a73e8"}
                     onChange={(event) => setOrgValue("brandColor", event.target.value, { shouldDirty: true })}
@@ -927,7 +948,7 @@ export default function SettingsPage() {
               </div>
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-logo">
-                  Logo
+                  {t("Logo", "Logo")}
                 </label>
                 <div className="flex items-center gap-3">
                   {watchedLogo && (
@@ -937,7 +958,7 @@ export default function SettingsPage() {
                   <Input
                     id="org-logo"
                     className="w-full"
-                    placeholder="https://... ou envoyez un fichier"
+                    placeholder={t("https://... ou envoyez un fichier", "https://... or upload a file")}
                     error={!!orgErrors.logo}
                     {...registerOrg("logo", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
                   />
@@ -946,7 +967,7 @@ export default function SettingsPage() {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    aria-label="Envoyer un fichier pour le logo"
+                    aria-label={t("Envoyer un fichier pour le logo", "Upload a file for the logo")}
                     onChange={(event) => {
                       void handleImageUpload("logo", event.target.files?.[0], setLogoUploading);
                       event.target.value = "";
@@ -960,7 +981,7 @@ export default function SettingsPage() {
                     loading={logoUploading}
                     onClick={() => logoFileInputRef.current?.click()}
                   >
-                    Envoyer
+                    {t("Envoyer", "Send")}
                   </Button>
                 </div>
                 {orgErrors.logo && (
@@ -969,12 +990,12 @@ export default function SettingsPage() {
               </div>
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-tagline">
-                  Slogan (affiché sur votre page publique)
+                  {t("Slogan (affiché sur votre page publique)", "Tagline (shown on your public page)")}
                 </label>
                 <Input
                   id="org-tagline"
                   className="w-full"
-                  placeholder="ex: Le meilleur salon de la ville"
+                  placeholder={t("ex: Le meilleur salon de la ville", "e.g. The best salon in town")}
                   error={!!orgErrors.tagline}
                   {...registerOrg("tagline", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
                 />
@@ -984,13 +1005,13 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-contact-phone">
-                  Téléphone (affiché sur votre site)
+                  {t("Téléphone (affiché sur votre site)", "Phone (shown on your website)")}
                 </label>
                 <Input
                   id="org-contact-phone"
                   className="w-full"
                   type="tel"
-                  placeholder="ex: 27 22 00 00 00"
+                  placeholder={t("ex: 27 22 00 00 00", "e.g. 27 22 00 00 00")}
                   error={!!orgErrors.contactPhone}
                   {...registerOrg("contactPhone")}
                 />
@@ -1000,13 +1021,13 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-whatsapp">
-                  Numéro WhatsApp
+                  {t("Numéro WhatsApp", "WhatsApp number")}
                 </label>
                 <Input
                   id="org-whatsapp"
                   className="w-full"
                   type="tel"
-                  placeholder="ex: +225 07 07 07 07 07"
+                  placeholder={t("ex: +225 07 07 07 07 07", "e.g. +225 07 07 07 07 07")}
                   error={!!orgErrors.whatsappNumber}
                   {...registerOrg("whatsappNumber")}
                 />
@@ -1014,18 +1035,24 @@ export default function SettingsPage() {
                   <p className="mt-1 text-xs text-destructive">{orgErrors.whatsappNumber.message}</p>
                 ) : (
                   <p className="mt-1 text-xs text-text-muted">
-                    Vos clients pourront vous écrire et commander sur WhatsApp depuis votre site.
+                    {t(
+                      "Vos clients pourront vous écrire et commander sur WhatsApp depuis votre site.",
+                      "Your customers will be able to message you and order on WhatsApp from your website.",
+                    )}
                   </p>
                 )}
               </div>
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-contact-address">
-                  Adresse (affichée sur votre site)
+                  {t("Adresse (affichée sur votre site)", "Address (shown on your website)")}
                 </label>
                 <Input
                   id="org-contact-address"
                   className="w-full"
-                  placeholder="ex: Rue des Jardins, Cocody, Abidjan"
+                  placeholder={t(
+                    "ex: Rue des Jardins, Cocody, Abidjan",
+                    "e.g. Rue des Jardins, Cocody, Abidjan",
+                  )}
                   error={!!orgErrors.contactAddress}
                   {...registerOrg("contactAddress")}
                 />
@@ -1035,12 +1062,18 @@ export default function SettingsPage() {
               </div>
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-seo-title">
-                  Titre SEO (balise &lt;title&gt; de la page publique)
+                  {t(
+                    "Titre SEO (balise <title> de la page publique)",
+                    "SEO title (the public page's <title> tag)",
+                  )}
                 </label>
                 <Input
                   id="org-seo-title"
                   className="w-full"
-                  placeholder={organization?.name || "Laissez vide pour utiliser le nom de l'organisation"}
+                  placeholder={organization?.name || t(
+                    "Laissez vide pour utiliser le nom de l'organisation",
+                    "Leave empty to use the organization's name",
+                  )}
                   error={!!orgErrors.seoTitle}
                   {...registerOrg("seoTitle", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
                 />
@@ -1050,14 +1083,20 @@ export default function SettingsPage() {
               </div>
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-seo-description">
-                  Description SEO (meta description de la page publique)
+                  {t(
+                    "Description SEO (meta description de la page publique)",
+                    "SEO description (the public page's meta description)",
+                  )}
                 </label>
                 <textarea
                   id="org-seo-description"
                   className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
                   rows={2}
                   maxLength={200}
-                  placeholder="Laissez vide pour générer une description automatiquement"
+                  placeholder={t(
+                    "Laissez vide pour générer une description automatiquement",
+                    "Leave empty to generate a description automatically",
+                  )}
                   {...registerOrg("seoDescription", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
                 />
                 {orgErrors.seoDescription && (
@@ -1066,7 +1105,7 @@ export default function SettingsPage() {
               </div>
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-custom-domain">
-                  Domaine personnalisé (optionnel)
+                  {t("Domaine personnalisé (optionnel)", "Custom domain (optional)")}
                 </label>
                 <Input
                   id="org-custom-domain"
@@ -1081,14 +1120,20 @@ export default function SettingsPage() {
                   <p className="mt-1 text-xs text-destructive">{orgErrors.customDomain.message}</p>
                 )}
                 <p className="mt-1 text-xs text-text-muted">
-                  Chez votre fournisseur de domaine, ajoutez un enregistrement CNAME pointant ce
-                  domaine vers <span className="font-mono">{storefrontDomainCnameTarget}</span>.
-                  Sans &quot;https://&quot; ni chemin — juste le nom de domaine.
+                  {t(
+                    "Chez votre fournisseur de domaine, ajoutez un enregistrement CNAME pointant ce domaine vers",
+                    "At your domain provider, add a CNAME record pointing this domain to",
+                  )}{" "}
+                  <span className="font-mono">{storefrontDomainCnameTarget}</span>.{" "}
+                  {t(
+                    "Sans « https:// » ni chemin — juste le nom de domaine.",
+                    "No “https://” and no path — just the domain name.",
+                  )}
                 </p>
               </div>
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-hero-image">
-                  Image de bannière (page publique)
+                  {t("Image de bannière (page publique)", "Banner image (public page)")}
                 </label>
                 <div className="flex items-center gap-3">
                   {watchedHeroImage && (
@@ -1098,7 +1143,7 @@ export default function SettingsPage() {
                   <Input
                     id="org-hero-image"
                     className="w-full"
-                    placeholder="https://... ou envoyez un fichier"
+                    placeholder={t("https://... ou envoyez un fichier", "https://... or upload a file")}
                     error={!!orgErrors.heroImage}
                     {...registerOrg("heroImage", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
                   />
@@ -1107,7 +1152,7 @@ export default function SettingsPage() {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    aria-label="Envoyer un fichier pour la bannière"
+                    aria-label={t("Envoyer un fichier pour la bannière", "Upload a file for the banner")}
                     onChange={(event) => {
                       void handleImageUpload("heroImage", event.target.files?.[0], setHeroImageUploading);
                       event.target.value = "";
@@ -1121,7 +1166,7 @@ export default function SettingsPage() {
                     loading={heroImageUploading}
                     onClick={() => heroImageFileInputRef.current?.click()}
                   >
-                    Envoyer
+                    {t("Envoyer", "Send")}
                   </Button>
                 </div>
                 {orgErrors.heroImage && (
@@ -1130,14 +1175,14 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-shipping-flat-rate">
-                  Frais de livraison (boutique en ligne)
+                  {t("Frais de livraison (boutique en ligne)", "Delivery fee (online shop)")}
                 </label>
                 <Input
                   id="org-shipping-flat-rate"
                   type="number"
                   step="0.01"
                   className="w-full"
-                  placeholder="Gratuit"
+                  placeholder={t("Gratuit", "Free")}
                   error={!!orgErrors.shippingFlatRate}
                   {...registerOrg("shippingFlatRate", {
                     setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -1163,7 +1208,7 @@ export default function SettingsPage() {
                 organization?.enabledModules.includes("booking")) && (
                 <div className="sm:col-span-2">
                   <p className="mb-1 text-xs font-medium text-text">
-                    Sections visibles sur la page publique
+                    {t("Sections visibles sur la page publique", "Sections shown on the public page")}
                   </p>
                   <div className="flex flex-wrap gap-4">
                     {organization.enabledModules.includes("catalog") && (
@@ -1173,7 +1218,7 @@ export default function SettingsPage() {
                           value="catalog"
                           {...registerOrg("storefrontSections")}
                         />
-                        Afficher le catalogue
+                        {t("Afficher le catalogue", "Show the catalogue")}
                       </label>
                     )}
                     {organization.enabledModules.includes("booking") && (
@@ -1183,7 +1228,7 @@ export default function SettingsPage() {
                           value="booking"
                           {...registerOrg("storefrontSections")}
                         />
-                        Afficher les réservations
+                        {t("Afficher les réservations", "Show bookings")}
                       </label>
                     )}
                   </div>
@@ -1193,12 +1238,13 @@ export default function SettingsPage() {
               {organization?.enabledModules.includes("commerce") && (
                 <div className="sm:col-span-2">
                   <p className="mb-1 text-xs font-medium text-text">
-                    Moyens de paiement acceptés à la commande
+                    {t("Moyens de paiement acceptés à la commande", "Payment methods accepted at checkout")}
                   </p>
                   <p className="mb-2 text-xs text-text-muted">
-                    &quot;En ligne&quot; ne s&apos;affiche à vos clients que si un moyen de paiement
-                    réel est connecté (voir Intégrations) — cochez-le dès maintenant si vous
-                    comptez en connecter un.
+                    {t(
+                      "\"En ligne\" ne s'affiche à vos clients que si un moyen de paiement réel est connecté (voir Intégrations) — cochez-le dès maintenant si vous comptez en connecter un.",
+                      "“Online” only shows to your customers once a real payment method is connected (see Integrations) — tick it now if you plan to connect one.",
+                    )}
                   </p>
                   <div className="flex flex-wrap gap-4">
                     <label className="flex items-center gap-2 text-sm text-text">
@@ -1207,7 +1253,7 @@ export default function SettingsPage() {
                         value="cash"
                         {...registerOrg("acceptedPaymentMethods")}
                       />
-                      Espèces / à la livraison ou au retrait
+                      {t("Espèces / à la livraison ou au retrait", "Cash / on delivery or collection")}
                     </label>
                     <label className="flex items-center gap-2 text-sm text-text">
                       <input
@@ -1220,7 +1266,10 @@ export default function SettingsPage() {
                         }
                         {...registerOrg("acceptedPaymentMethods")}
                       />
-                      Paiement en ligne : mobile money (Wave, Orange Money, MTN, Moov) et carte
+                      {t(
+                        "Paiement en ligne : mobile money (Wave, Orange Money, MTN, Moov) et carte",
+                        "Online payment: mobile money (Wave, Orange Money, MTN, Moov) and card",
+                      )}
                       {!planFeatures.has("online_payment") && <PlanLock feature="online_payment" />}
                     </label>
                   </div>
@@ -1235,16 +1284,19 @@ export default function SettingsPage() {
                 <p className="text-sm text-destructive sm:col-span-2">
                   {updateOrgMutation.error instanceof ApiError
                     ? updateOrgMutation.error.message
-                    : "Impossible d'enregistrer les informations de l'organisation."}
+                    : t(
+                      "Impossible d'enregistrer les informations de l'organisation.",
+                      "The organization's details could not be saved.",
+                    )}
                 </p>
               )}
 
               <div className="flex gap-2 sm:col-span-2">
                 <Button type="submit" loading={updateOrgMutation.isPending}>
-                  {updateOrgMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                  {updateOrgMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
                 </Button>
                 <Button type="button" variant="ghost" onClick={cancelOrgEdit}>
-                  Annuler
+                  {t("Annuler", "Cancel")}
                 </Button>
               </div>
             </form>
@@ -1277,7 +1329,7 @@ export default function SettingsPage() {
 
       <SettingsTabPanel tab="abonnement" active={activeTab}>
         <section className="rounded-lg border border-border bg-surface p-6">
-          <h2 className="text-sm font-semibold text-text">Abonnement</h2>
+          <h2 className="text-sm font-semibold text-text">{t("Abonnement", "Subscription")}</h2>
           {subscription && (
             <div className="mt-4 space-y-4">
               <div className="flex items-center justify-between">
@@ -1287,7 +1339,7 @@ export default function SettingsPage() {
                     {planFeatures.trialEndsAt && (
                       <span className="ml-2 text-xs font-normal text-text-muted">
                         essai offert jusqu&apos;au{" "}
-                        {new Date(planFeatures.trialEndsAt).toLocaleDateString("fr-FR")}, puis
+                        {new Date(planFeatures.trialEndsAt).toLocaleDateString(intlLocale(locale))}, puis
                         formule Gratuite si vous ne choisissez rien
                       </span>
                     )}
@@ -1297,7 +1349,7 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <Badge variant="success">
-                  {subscription.subscription.status === "active" ? "Actif" : subscription.subscription.status}
+                  {subscription.subscription.status === "active" ? t("Actif", "Active") : subscription.subscription.status}
                 </Badge>
               </div>
 
@@ -1305,9 +1357,9 @@ export default function SettingsPage() {
                 {subscription.usage.map((item) => (
                   <div key={item.metric} className="text-xs">
                     <div className="mb-1 flex justify-between text-text-muted">
-                      <span>{METRIC_LABELS[item.metric] ?? item.metric}</span>
+                      <span>{(METRIC_LABELS[item.metric] ? t(...METRIC_LABELS[item.metric]!) : item.metric)}</span>
                       <span>
-                        {item.used} / {item.limit === -1 ? "illimité" : item.limit}
+                        {item.used} / {item.limit === -1 ? t("illimité", "unlimited") : item.limit}
                       </span>
                     </div>
                     {item.limit !== -1 && (
@@ -1324,15 +1376,17 @@ export default function SettingsPage() {
 
               {changePlanMutation.data?.paymentRequired && (
                 <Notice tone="accent">
-                  Réglez la facture ci-dessous : la nouvelle formule s&apos;active dès le paiement
-                  confirmé.
+                  {t(
+                    "Réglez la facture ci-dessous : la nouvelle formule s'active dès le paiement confirmé.",
+                    "Pay the invoice below: the new plan starts as soon as the payment is confirmed.",
+                  )}
                 </Notice>
               )}
               {changePlanMutation.isError && (
                 <p className="text-xs text-destructive">
                   {changePlanMutation.error instanceof ApiError
                     ? changePlanMutation.error.message
-                    : "Erreur"}
+                    : t("Erreur", "Error")}
                 </p>
               )}
 
@@ -1340,10 +1394,10 @@ export default function SettingsPage() {
                 <div className="border-t border-border pt-4">
                   <div className="mb-1 flex justify-between text-xs text-text-muted">
                     <span>Coût IA ce mois-ci ({aiUsage.period})</span>
-                    <span>{formatCurrency(aiUsage.costUsd, "USD")}</span>
+                    <span>{formatCurrency(aiUsage.costUsd, "USD", locale)}</span>
                   </div>
                   <p className="text-xs text-text-muted">
-                    {(aiUsage.inputTokens + aiUsage.outputTokens).toLocaleString("fr-FR")} tokens
+                    {(aiUsage.inputTokens + aiUsage.outputTokens).toLocaleString(intlLocale(locale))} tokens
                     {aiUsage.unpricedCalls > 0 && (
                       <> · {aiUsage.unpricedCalls} appel{aiUsage.unpricedCalls > 1 ? "s" : ""} non tarifé{aiUsage.unpricedCalls > 1 ? "s" : ""}</>
                     )}
@@ -1365,7 +1419,7 @@ export default function SettingsPage() {
                       onClick={() => changePlanMutation.mutate(plan.key)}
                       disabled={plan.key === subscription.plan.key || changePlanMutation.isPending}
                     >
-                      {plan.key === subscription.plan.key ? "Plan actuel" : "Choisir"}
+                      {plan.key === subscription.plan.key ? t("Plan actuel", "Current plan") : t("Choisir", "Choose")}
                     </Button>
                   </div>
                 ))}
@@ -1378,28 +1432,31 @@ export default function SettingsPage() {
 
         <section className="rounded-lg border border-border bg-surface p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text">Produits</h2>
+            <h2 className="text-sm font-semibold text-text">{t("Produits", "Products")}</h2>
             {productOverridesMutation.isPending && (
-              <span className="text-xs text-text-muted">Enregistrement...</span>
+              <span className="text-xs text-text-muted">{t("Enregistrement...", "Saving...")}</span>
             )}
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            KORVA CRM, Inventaire, Site web et Assistant IA peuvent être activés ou désactivés
-            indépendamment. Une case cochée par défaut signifie que votre plan actuel inclut déjà
-            ce produit ; désactiver ou forcer l&apos;activation d&apos;un produit met à jour les
-            modules concernés ci-dessous.
+            {t(
+              "KORVA CRM, Inventaire, Site web et Assistant IA peuvent être activés ou désactivés indépendamment. Une case cochée par défaut signifie que votre plan actuel inclut déjà ce produit ; désactiver ou forcer l'activation d'un produit met à jour les modules concernés ci-dessous.",
+              "KORVA CRM, Inventory, Website and AI assistant can each be turned on or off. A box ticked by default means your current plan already includes that product; turning a product off or forcing it on updates the related modules below.",
+            )}
           </p>
 
           {productOverridesMutation.isError && (
             <p className="mt-3 text-xs text-destructive">
               {productOverridesMutation.error instanceof ApiError
                 ? productOverridesMutation.error.message
-                : "Impossible de mettre à jour les produits. Réessayez."}
+                : t(
+                  "Impossible de mettre à jour les produits. Réessayez.",
+                  "Products could not be updated. Try again.",
+                )}
             </p>
           )}
 
           {!subscription ? (
-            <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+            <p className="mt-4 text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {KORVA_PRODUCTS.map((product) => {
@@ -1422,11 +1479,11 @@ export default function SettingsPage() {
                         checked={isActive}
                         disabled={productOverridesMutation.isPending}
                         onChange={() => toggleProduct(product, isActive)}
-                        aria-label={PRODUCT_ARIA_LABELS[product]}
+                        aria-label={t(...PRODUCT_ARIA_LABELS[product])}
                       />
-                      {PRODUCT_LABELS[product]}
+                      {t(...PRODUCT_LABELS[product])}
                     </span>
-                    {override === undefined && <Badge>Défaut du plan</Badge>}
+                    {override === undefined && <Badge>{t("Défaut du plan", "Plan default")}</Badge>}
                   </label>
                 );
               })}
@@ -1436,26 +1493,31 @@ export default function SettingsPage() {
 
         <section className="rounded-lg border border-border bg-surface p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text">Modules</h2>
+            <h2 className="text-sm font-semibold text-text">{t("Modules", "Modules")}</h2>
             {modulesMutation.isPending && (
-              <span className="text-xs text-text-muted">Enregistrement...</span>
+              <span className="text-xs text-text-muted">{t("Enregistrement...", "Saving...")}</span>
             )}
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            Activez ou désactivez les modules disponibles dans votre plan actuel. Le menu à
-            gauche se met à jour immédiatement.
+            {t(
+              "Activez ou désactivez les modules disponibles dans votre plan actuel. Le menu à gauche se met à jour immédiatement.",
+              "Turn on or off the modules available in your current plan. The menu on the left updates straight away.",
+            )}
           </p>
 
           {modulesMutation.isError && (
             <p className="mt-3 text-xs text-destructive">
               {modulesMutation.error instanceof ApiError
                 ? modulesMutation.error.message
-                : "Impossible de mettre à jour les modules. Réessayez."}
+                : t(
+                  "Impossible de mettre à jour les modules. Réessayez.",
+                  "Modules could not be updated. Try again.",
+                )}
             </p>
           )}
 
           {!organization || !subscription ? (
-            <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+            <p className="mt-4 text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>
           ) : (
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {KORVA_MODULES.map((module) => {
@@ -1490,9 +1552,9 @@ export default function SettingsPage() {
                         disabled={disabled}
                         onChange={() => toggleModule(module)}
                       />
-                      {MODULE_LABELS[module]}
+                      {t(...MODULE_LABELS[module])}
                     </span>
-                    {!isAllowedByPlan && <Badge>Non inclus dans le plan</Badge>}
+                    {!isAllowedByPlan && <Badge>{t("Non inclus dans le plan", "Not included in the plan")}</Badge>}
                     {isAllowedByPlan && channelLocked && <PlanLock feature="both_channels" />}
                   </label>
                 );
@@ -1507,15 +1569,16 @@ export default function SettingsPage() {
       <SettingsTabPanel tab="equipe" active={activeTab}>
         <section className="rounded-lg border border-border bg-surface p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text">Utilisateurs</h2>
+            <h2 className="text-sm font-semibold text-text">{t("Utilisateurs", "Users")}</h2>
             <Button variant="secondary" size="sm" onClick={() => setInviteOpen((v) => !v)}>
-              {inviteOpen ? "Annuler" : "Inviter un membre"}
+              {inviteOpen ? t("Annuler", "Cancel") : t("Inviter un membre", "Invite a member")}
             </Button>
           </div>
           <p className="mt-1 text-sm text-text-muted">
-            Les personnes qui se connectent au tableau de bord. Vos coiffeurs, coachs ou formateurs
-            réservables par vos clients n&apos;ont pas besoin de compte : ajoutez-les dans
-            Réservations › Équipe et ressources, sans utiliser d&apos;utilisateur de votre abonnement.
+            {t(
+              "Les personnes qui se connectent au tableau de bord. Vos coiffeurs, coachs ou formateurs réservables par vos clients n'ont pas besoin de compte : ajoutez-les dans Réservations › Équipe et ressources, sans utiliser d'utilisateur de votre abonnement.",
+              "The people who sign in to the dashboard. Your hairdressers, coaches or trainers that customers book need no account: add them in Bookings › Team and resources, without using a user from your subscription.",
+            )}
           </p>
 
           {inviteOpen && (
@@ -1525,7 +1588,7 @@ export default function SettingsPage() {
             >
               <div>
                 <label className="block text-sm font-medium text-text" htmlFor="invite-email">
-                  Adresse email
+                  {t("Adresse email", "Email address")}
                 </label>
                 <Input
                   id="invite-email"
@@ -1541,7 +1604,7 @@ export default function SettingsPage() {
 
               <div>
                 <label className="block text-sm font-medium text-text" htmlFor="invite-role">
-                  Rôle
+                  {t("Rôle", "Role")}
                 </label>
                 <select
                   id="invite-role"
@@ -1552,12 +1615,12 @@ export default function SettingsPage() {
                 >
                   <option value="" disabled>
                     {rolesLoading
-                      ? "Chargement des rôles..."
+                      ? t("Chargement des rôles...", "Loading roles...")
                       : rolesError
-                        ? "Rôles indisponibles"
+                        ? t("Rôles indisponibles", "Roles unavailable")
                         : roles && roles.length === 0
-                          ? "Aucun rôle disponible"
-                          : "Sélectionner un rôle"}
+                          ? t("Aucun rôle disponible", "No roles available")
+                          : t("Sélectionner un rôle", "Select a role")}
                   </option>
                   {roles?.map((role) => (
                     <option key={role.id} value={role.id}>
@@ -1567,13 +1630,16 @@ export default function SettingsPage() {
                 </select>
                 {rolesError && (
                   <div className="mt-1">
-                    <p className="text-xs text-destructive">Impossible de charger les rôles.</p>
+                    <p className="text-xs text-destructive">{t(
+                      "Impossible de charger les rôles.",
+                      "Roles could not be loaded.",
+                    )}</p>
                     <button
                       type="button"
                       onClick={() => void refetchRoles()}
                       className="text-xs font-medium text-text underline"
                     >
-                      Réessayer
+                      {t("Réessayer", "Try again")}
                     </button>
                   </div>
                 )}
@@ -1586,13 +1652,19 @@ export default function SettingsPage() {
                 <p className="text-sm text-destructive sm:col-span-2">
                   {inviteMemberMutation.error instanceof ApiError
                     ? inviteMemberMutation.error.message
-                    : "Impossible d'envoyer l'invitation. Réessayez."}
+                    : t(
+                      "Impossible d'envoyer l'invitation. Réessayez.",
+                      "The invitation could not be sent. Try again.",
+                    )}
                 </p>
               )}
 
               {inviteMemberMutation.isSuccess && (
                 <p className="text-sm text-text sm:col-span-2">
-                  Invitation envoyée par email. Elle apparaîtra ci-dessous jusqu&apos;à ce qu&apos;elle soit acceptée.
+                  {t(
+                    "Invitation envoyée par email. Elle apparaîtra ci-dessous jusqu'à ce qu'elle soit acceptée.",
+                    "Invitation sent by email. It shows below until it is accepted.",
+                  )}
                 </p>
               )}
 
@@ -1602,13 +1674,13 @@ export default function SettingsPage() {
                 loading={inviteMemberMutation.isPending}
                 disabled={rolesLoading || rolesError || (roles?.length ?? 0) === 0}
               >
-                {inviteMemberMutation.isPending ? "Invitation en cours..." : "Envoyer l'invitation"}
+                {inviteMemberMutation.isPending ? t("Invitation en cours...", "Inviting...") : t("Envoyer l'invitation", "Send the invitation")}
               </Button>
             </form>
           )}
 
           <div className="mt-4 divide-y divide-border">
-            {isLoading && <p className="py-2 text-sm text-text-muted">Chargement...</p>}
+            {isLoading && <p className="py-2 text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
             {members
               ?.filter((member) => member.status === "active")
               .map((member) => {
@@ -1636,7 +1708,7 @@ export default function SettingsPage() {
                           {member.userId.firstName
                             ? `${member.userId.firstName} ${member.userId.lastName ?? ""}`.trim()
                             : member.userId.email}
-                          {isSelf && <span className="text-xs text-text-muted"> (vous)</span>}
+                          {isSelf && <span className="text-xs text-text-muted"> {t("(vous)", "(you)")}</span>}
                         </p>
                         <p className="text-xs text-text-muted">{member.userId.email}</p>
                       </div>
@@ -1666,7 +1738,7 @@ export default function SettingsPage() {
                                 loading={isRemovePending}
                                 onClick={() => removeMemberMutation.mutate(member.id)}
                               >
-                                {isRemovePending ? "Retrait..." : "Confirmer ?"}
+                                {isRemovePending ? t("Retrait...", "Removing...") : t("Confirmer ?", "Confirm?")}
                               </Button>
                               <Button
                                 variant="ghost"
@@ -1674,7 +1746,7 @@ export default function SettingsPage() {
                                 disabled={isRemovePending}
                                 onClick={() => setRemoveConfirmId(null)}
                               >
-                                Annuler
+                                {t("Annuler", "Cancel")}
                               </Button>
                             </>
                           ) : (
@@ -1683,14 +1755,14 @@ export default function SettingsPage() {
                               size="sm"
                               onClick={() => setRemoveConfirmId(member.id)}
                             >
-                              Retirer
+                              {t("Retirer", "Remove")}
                             </Button>
                           )}
                         </div>
                       )}
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
-                      <label htmlFor={`rate-${member.id}`}>Taux horaire par défaut</label>
+                      <label htmlFor={`rate-${member.id}`}>{t("Taux horaire par défaut", "Default hourly rate")}</label>
                       <Input
                         id={`rate-${member.id}`}
                         type="number"
@@ -1713,12 +1785,12 @@ export default function SettingsPage() {
                           <span className="text-destructive">
                             {updateMemberRateMutation.error instanceof ApiError
                               ? updateMemberRateMutation.error.message
-                              : "Erreur"}
+                              : t("Erreur", "Error")}
                           </span>
                         )}
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
-                      <label htmlFor={`commission-${member.id}`}>Commission (%)</label>
+                      <label htmlFor={`commission-${member.id}`}>{t("Commission (%)", "Commission (%)")}</label>
                       <Input
                         id={`commission-${member.id}`}
                         type="number"
@@ -1753,7 +1825,7 @@ export default function SettingsPage() {
                           <span className="text-destructive">
                             {updateMemberCommissionRateMutation.error instanceof ApiError
                               ? updateMemberCommissionRateMutation.error.message
-                              : "Erreur"}
+                              : t("Erreur", "Error")}
                           </span>
                         )}
                     </div>
@@ -1761,14 +1833,14 @@ export default function SettingsPage() {
                       <p className="mt-1 text-xs text-destructive">
                         {roleChangeError instanceof ApiError
                           ? roleChangeError.message
-                          : "Impossible de modifier le rôle."}
+                          : t("Impossible de modifier le rôle.", "The role could not be changed.")}
                       </p>
                     )}
                     {removeError && (
                       <p className="mt-1 text-xs text-destructive">
                         {removeError instanceof ApiError
                           ? removeError.message
-                          : "Impossible de retirer ce membre."}
+                          : t("Impossible de retirer ce membre.", "This member could not be removed.")}
                       </p>
                     )}
                   </div>
@@ -1779,7 +1851,7 @@ export default function SettingsPage() {
           {pendingInvitations && pendingInvitations.length > 0 && (
             <div className="mt-4">
               <h3 className="text-xs font-semibold text-text-muted">
-                Invitations en attente
+                {t("Invitations en attente", "Pending invitations")}
               </h3>
               <div className="mt-2 divide-y divide-border">
                 {pendingInvitations.map((invitation) => (
@@ -1794,8 +1866,7 @@ export default function SettingsPage() {
                       </p>
                     </div>
                     <Badge variant="warning">
-                      {roles?.find((role) => role.id === invitation.roleId)?.name ??
-                        "En attente"}
+                      {roles?.find((role) => role.id === invitation.roleId)?.name ?? t("En attente", "Pending")}
                     </Badge>
                   </div>
                 ))}
@@ -1809,30 +1880,36 @@ export default function SettingsPage() {
 
       <SettingsTabPanel tab="integrations" active={activeTab}>
         <section className="rounded-lg border border-border bg-surface p-6">
-          <h2 className="text-sm font-semibold text-text">Intégrations</h2>
+          <h2 className="text-sm font-semibold text-text">{t("Intégrations", "Integrations")}</h2>
           <p className="mt-1 text-sm text-text-muted">
-            Connectez les services externes utilisés par votre organisation.
+            {t(
+              "Connectez les services externes utilisés par votre organisation.",
+              "Connect the outside services your organization uses.",
+            )}
           </p>
 
           {integrationsPermissionDenied ? (
             <p className="mt-4 text-sm text-text-muted">
-              Les intégrations sont réservées aux administrateurs.
+              {t(
+                "Les intégrations sont réservées aux administrateurs.",
+                "Integrations are for administrators only.",
+              )}
             </p>
           ) : integrationsLoading ? (
-            <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+            <p className="mt-4 text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>
           ) : integrationsIsError ? (
             <div className="mt-4">
               <p className="text-sm text-destructive">
                 {integrationsError instanceof ApiError
                   ? integrationsError.message
-                  : "Impossible de charger les intégrations."}
+                  : t("Impossible de charger les intégrations.", "Integrations could not be loaded.")}
               </p>
               <button
                 type="button"
                 onClick={() => void refetchIntegrations()}
                 className="mt-1 text-sm font-medium text-text underline"
               >
-                Réessayer
+                {t("Réessayer", "Try again")}
               </button>
             </div>
           ) : (
@@ -1868,12 +1945,12 @@ export default function SettingsPage() {
                 // slot's deliberately provider-agnostic default copy.
                 const providerName =
                   integration && slot.domain === "payment"
-                    ? paymentProviderDisplayName(integration.provider)
+                    ? paymentProviderDisplayName(integration.provider, locale)
                     : undefined;
-                const title = providerName ? `${slot.title} — ${providerName}` : slot.title;
+                const title = providerName ? `${t(...slot.title)} — ${providerName}` : t(...slot.title);
                 const description = providerName
-                  ? `Recevez vos règlements via ${providerName}.`
-                  : slot.description;
+                  ? t(`Recevez vos règlements via ${providerName}.`, `Get paid through ${providerName}.`)
+                  : t(...slot.description);
 
                 return (
                   <div key={slot.domain} className="rounded-md border border-border p-4">
@@ -1890,8 +1967,8 @@ export default function SettingsPage() {
                         }
                       >
                         {integration
-                          ? INTEGRATION_STATUS_BADGE[integration.status].label
-                          : "Non connecté"}
+                          ? t(...INTEGRATION_STATUS_BADGE[integration.status].label)
+                          : t("Non connecté", "Not connected")}
                       </Badge>
                     </div>
 
@@ -1899,15 +1976,15 @@ export default function SettingsPage() {
                       <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-text-muted">
                         {integration.market && (
                           <div>
-                            <dt>{slot.connectedLabel}</dt>
+                            <dt>{t(...slot.connectedLabel)}</dt>
                             <dd className="text-text">{integration.market}</dd>
                           </div>
                         )}
                         {integration.lastVerifiedAt && (
                           <div>
-                            <dt>Dernière vérification</dt>
+                            <dt>{t("Dernière vérification", "Last check")}</dt>
                             <dd className="text-text">
-                              {new Date(integration.lastVerifiedAt).toLocaleString("fr-FR")}
+                              {new Date(integration.lastVerifiedAt).toLocaleString(intlLocale(locale))}
                             </dd>
                           </div>
                         )}
@@ -1925,21 +2002,24 @@ export default function SettingsPage() {
                         className={`mt-2 text-xs ${testResult.ok ? "text-success" : "text-destructive"}`}
                       >
                         {testResult.message ??
-                          (testResult.ok ? "Connexion réussie." : "Échec de la connexion.")}
+                          (testResult.ok ? t("Connexion réussie.", "Connected.") : t("Échec de la connexion.", "Connection failed."))}
                       </p>
                     )}
                     {testError && (
                       <p className="mt-2 text-xs text-destructive">
                         {testError instanceof ApiError
                           ? testError.message
-                          : "Impossible de tester la connexion."}
+                          : t("Impossible de tester la connexion.", "The connection could not be tested.")}
                       </p>
                     )}
                     {disconnectError && (
                       <p className="mt-2 text-xs text-destructive">
                         {disconnectError instanceof ApiError
                           ? disconnectError.message
-                          : "Impossible de déconnecter cette intégration."}
+                          : t(
+                            "Impossible de déconnecter cette intégration.",
+                            "This integration could not be disconnected.",
+                          )}
                       </p>
                     )}
 
@@ -1954,7 +2034,7 @@ export default function SettingsPage() {
                               : setMessagingFormOpen((v) => !v)
                           }
                         >
-                          {isFormOpen ? "Annuler" : "Connecter"}
+                          {isFormOpen ? t("Annuler", "Cancel") : t("Connecter", "Connect")}
                         </Button>
                       )}
                       {integration && (
@@ -1966,7 +2046,7 @@ export default function SettingsPage() {
                             disabled={isConfirmingDisconnect}
                             onClick={() => testConnectionMutation.mutate(integration.id)}
                           >
-                            {isTestingThis ? "Test en cours..." : "Tester la connexion"}
+                            {isTestingThis ? t("Test en cours...", "Testing...") : t("Tester la connexion", "Test the connection")}
                           </Button>
                           {isConfirmingDisconnect ? (
                             <>
@@ -1976,7 +2056,7 @@ export default function SettingsPage() {
                                 loading={isDisconnectPending}
                                 onClick={() => disconnectMutation.mutate(integration.id)}
                               >
-                                {isDisconnectPending ? "Déconnexion..." : "Confirmer ?"}
+                                {isDisconnectPending ? t("Déconnexion...", "Disconnecting...") : t("Confirmer ?", "Confirm?")}
                               </Button>
                               <Button
                                 variant="ghost"
@@ -1984,7 +2064,7 @@ export default function SettingsPage() {
                                 disabled={isDisconnectPending}
                                 onClick={() => setDisconnectConfirmId(null)}
                               >
-                                Annuler
+                                {t("Annuler", "Cancel")}
                               </Button>
                             </>
                           ) : (
@@ -1993,7 +2073,7 @@ export default function SettingsPage() {
                               size="sm"
                               onClick={() => setDisconnectConfirmId(integration.id)}
                             >
-                              Déconnecter
+                              {t("Déconnecter", "Disconnect")}
                             </Button>
                           )}
                         </>
@@ -2010,17 +2090,20 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="payout-account-bank"
                           >
-                            Code banque (Flutterwave)
+                            {t("Code banque (Flutterwave)", "Bank code (Flutterwave)")}
                           </label>
                           <Input
                             id="payout-account-bank"
                             className="mt-1 w-full"
-                            placeholder="ex : 044"
+                            placeholder={t("ex : 044", "e.g. 044")}
                             error={!!paymentErrors.account_bank}
                             {...registerPayment("account_bank", { required: true })}
                           />
                           <p className="mt-1 text-xs text-text-muted">
-                            Code numérique de la banque chez Flutterwave, pas son nom.
+                            {t(
+                              "Code numérique de la banque chez Flutterwave, pas son nom.",
+                              "The bank's number code at Flutterwave, not its name.",
+                            )}
                           </p>
                         </div>
                         <div>
@@ -2028,7 +2111,7 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="payout-account-number"
                           >
-                            Numéro de compte
+                            {t("Numéro de compte", "Account number")}
                           </label>
                           <Input
                             id="payout-account-number"
@@ -2042,7 +2125,7 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="payout-business-name"
                           >
-                            Nom de l&apos;entreprise
+                            {t("Nom de l'entreprise", "Company name")}
                           </label>
                           <Input
                             id="payout-business-name"
@@ -2056,12 +2139,12 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="payout-country"
                           >
-                            Pays (code ISO)
+                            {t("Pays (code ISO)", "Country (ISO code)")}
                           </label>
                           <Input
                             id="payout-country"
                             className="mt-1 w-full"
-                            placeholder="ex : CI"
+                            placeholder={t("ex : CI", "e.g. CI")}
                             defaultValue={organization?.country}
                             error={!!paymentErrors.country}
                             {...registerPayment("country", { required: true })}
@@ -2072,15 +2155,15 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="payout-split-type"
                           >
-                            Type de répartition
+                            {t("Type de répartition", "Split type")}
                           </label>
                           <select
                             id="payout-split-type"
                             className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
                             {...registerPayment("split_type", { required: true })}
                           >
-                            <option value="percentage">Pourcentage</option>
-                            <option value="flat">Montant fixe</option>
+                            <option value="percentage">{t("Pourcentage", "Percentage")}</option>
+                            <option value="flat">{t("Montant fixe", "Fixed amount")}</option>
                           </select>
                         </div>
                         <div>
@@ -2088,7 +2171,7 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="payout-split-value"
                           >
-                            Valeur de répartition
+                            {t("Valeur de répartition", "Split value")}
                           </label>
                           <Input
                             id="payout-split-value"
@@ -2104,7 +2187,10 @@ export default function SettingsPage() {
                           <p className="text-sm text-destructive sm:col-span-2">
                             {connectPaymentMutation.error instanceof ApiError
                               ? connectPaymentMutation.error.message
-                              : "Impossible de connecter le compte de paiement."}
+                              : t(
+                                "Impossible de connecter le compte de paiement.",
+                                "The payment account could not be connected.",
+                              )}
                           </p>
                         )}
 
@@ -2113,7 +2199,7 @@ export default function SettingsPage() {
                           className="sm:col-span-2"
                           loading={connectPaymentMutation.isPending}
                         >
-                          {connectPaymentMutation.isPending ? "Connexion..." : "Connecter"}
+                          {connectPaymentMutation.isPending ? t("Connexion...", "Connecting...") : t("Connecter", "Connect")}
                         </Button>
                       </form>
                     )}
@@ -2126,17 +2212,17 @@ export default function SettingsPage() {
                         className="mt-3 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
                       >
                         <p className="text-xs text-text-muted sm:col-span-2">
-                          Le WABA ID, l&apos;ID du numéro de téléphone et la clé API proviennent de
-                          l&apos;inscription WhatsApp Business que vous avez complétée directement
-                          chez 360dialog (embedded signup) — ces informations ne sont pas saisies
-                          ici pour la première fois.
+                          {t(
+                            "Le WABA ID, l'ID du numéro de téléphone et la clé API proviennent de l'inscription WhatsApp Business que vous avez complétée directement chez 360dialog (embedded signup) — ces informations ne sont pas saisies ici pour la première fois.",
+                            "The WABA ID, phone number ID and API key come from the WhatsApp Business sign-up you completed directly with 360dialog (embedded signup) — this is not where they are entered for the first time.",
+                          )}
                         </p>
                         <div>
                           <label
                             className="block text-sm font-medium text-text"
                             htmlFor="waba-id"
                           >
-                            WABA ID
+                            {t("WABA ID", "WABA ID")}
                           </label>
                           <Input
                             id="waba-id"
@@ -2150,7 +2236,7 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="phone-number-id"
                           >
-                            ID du numéro de téléphone
+                            {t("ID du numéro de téléphone", "Phone number ID")}
                           </label>
                           <Input
                             id="phone-number-id"
@@ -2164,7 +2250,7 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="waba-display-name"
                           >
-                            Nom affiché
+                            {t("Nom affiché", "Display name")}
                           </label>
                           <Input
                             id="waba-display-name"
@@ -2178,7 +2264,7 @@ export default function SettingsPage() {
                             className="block text-sm font-medium text-text"
                             htmlFor="waba-api-key"
                           >
-                            Clé API (D360-API-KEY)
+                            {t("Clé API (D360-API-KEY)", "API key (D360-API-KEY)")}
                           </label>
                           <Input
                             id="waba-api-key"
@@ -2189,8 +2275,10 @@ export default function SettingsPage() {
                             {...registerMessaging("apiKey", { required: true })}
                           />
                           <p className="mt-1 text-xs text-text-muted">
-                            Stockée chiffrée et jamais réaffichée ensuite — nécessaire pour tester
-                            la connexion et activer l&apos;intégration.
+                            {t(
+                              "Stockée chiffrée et jamais réaffichée ensuite — nécessaire pour tester la connexion et activer l'intégration.",
+                              "Stored encrypted and never shown again — needed to test the connection and turn on the integration.",
+                            )}
                           </p>
                         </div>
 
@@ -2198,7 +2286,10 @@ export default function SettingsPage() {
                           <p className="text-sm text-destructive sm:col-span-2">
                             {connectMessagingMutation.error instanceof ApiError
                               ? connectMessagingMutation.error.message
-                              : "Impossible de connecter le compte WhatsApp Business."}
+                              : t(
+                                "Impossible de connecter le compte WhatsApp Business.",
+                                "The WhatsApp Business account could not be connected.",
+                              )}
                           </p>
                         )}
 
@@ -2207,7 +2298,7 @@ export default function SettingsPage() {
                           className="sm:col-span-2"
                           loading={connectMessagingMutation.isPending}
                         >
-                          {connectMessagingMutation.isPending ? "Connexion..." : "Connecter"}
+                          {connectMessagingMutation.isPending ? t("Connexion...", "Connecting...") : t("Connecter", "Connect")}
                         </Button>
                       </form>
                     )}
@@ -2223,22 +2314,23 @@ export default function SettingsPage() {
         {!sensitiveToolsPermissionDenied && sensitiveTools && sensitiveTools.length > 0 && (
           <section className="rounded-lg border border-border bg-surface p-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-text">Autonomie de l&apos;IA</h2>
+              <h2 className="text-sm font-semibold text-text">{t("Autonomie de l'IA", "AI autonomy")}</h2>
               {autoApprovedToolsMutation.isPending && (
-                <span className="text-xs text-text-muted">Enregistrement...</span>
+                <span className="text-xs text-text-muted">{t("Enregistrement...", "Saving...")}</span>
               )}
             </div>
             <p className="mt-1 text-sm text-text-muted">
-              Ces actions nécessitent normalement une confirmation humaine avant d&apos;être
-              exécutées par l&apos;assistant IA. Cochez celles que vous autorisez à s&apos;exécuter
-              automatiquement, sans confirmation.
+              {t(
+                "Ces actions nécessitent normalement une confirmation humaine avant d'être exécutées par l'assistant IA. Cochez celles que vous autorisez à s'exécuter automatiquement, sans confirmation.",
+                "These actions normally need a person to confirm them before the AI assistant runs them. Tick the ones you allow to run automatically, without confirmation.",
+              )}
             </p>
 
             {autoApprovedToolsMutation.isError && (
               <p className="mt-2 text-xs text-destructive">
                 {autoApprovedToolsMutation.error instanceof ApiError
                   ? autoApprovedToolsMutation.error.message
-                  : "Erreur"}
+                  : t("Erreur", "Error")}
               </p>
             )}
 
@@ -2293,6 +2385,7 @@ interface RoleDetail {
  *  System roles are listed for visibility but never editable/deletable here (the API itself
  *  refuses, this UI just doesn't offer the buttons for them). */
 function RolesManagementSection() {
+  const t = useT();
   const authReady = useAuthReady();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -2337,15 +2430,17 @@ function RolesManagementSection() {
     <section className="rounded-lg border border-border bg-surface p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-text">Rôles personnalisés</h2>
+          <h2 className="text-sm font-semibold text-text">{t("Rôles personnalisés", "Custom roles")}</h2>
           <p className="mt-1 text-sm text-text-muted">
-            En plus des 6 rôles standards, créez des rôles avec exactement les permissions dont
-            vos équipes ont besoin.
+            {t(
+              "En plus des 6 rôles standards, créez des rôles avec exactement les permissions dont vos équipes ont besoin.",
+              "On top of the 6 standard roles, create roles with exactly the permissions your teams need.",
+            )}
           </p>
         </div>
         {canCreate ? (
           <Button type="button" variant="secondary" size="sm" onClick={() => setCreateOpen((v) => !v)}>
-            {createOpen ? "Annuler" : "Créer un rôle"}
+            {createOpen ? t("Annuler", "Cancel") : t("Créer un rôle", "Create a role")}
           </Button>
         ) : (
           <PlanLock feature="custom_roles" />
@@ -2358,11 +2453,11 @@ function RolesManagementSection() {
           className="mt-4 space-y-3 rounded-md border border-border p-4"
         >
           <div>
-            <Input placeholder="Nom du rôle" className="w-full" error={!!errors.name} {...register("name")} />
+            <Input placeholder={t("Nom du rôle", "Role name")} className="w-full" error={!!errors.name} {...register("name")} />
             {errors.name && <p className="mt-1 text-xs text-destructive">{errors.name.message}</p>}
           </div>
           <div>
-            <p className="mb-1 text-xs font-medium text-text">Permissions</p>
+            <p className="mb-1 text-xs font-medium text-text">{t("Permissions", "Permissions")}</p>
             <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
               {CORE_PERMISSIONS.map((permission) => (
                 <label key={permission} className="flex items-center gap-2 text-xs text-text">
@@ -2376,17 +2471,17 @@ function RolesManagementSection() {
             <p className="text-sm text-destructive">
               {createMutation.error instanceof ApiError
                 ? createMutation.error.message
-                : "Impossible de créer ce rôle."}
+                : t("Impossible de créer ce rôle.", "This role could not be created.")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer le rôle"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le rôle", "Create the role")}
           </Button>
         </form>
       )}
 
       {isLoading ? (
-        <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+        <p className="mt-4 text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>
       ) : (
         <ul className="mt-4 divide-y divide-border">
           {roles?.map((role) => (
@@ -2394,7 +2489,7 @@ function RolesManagementSection() {
               <div className="flex items-center gap-2">
                 <span className="text-text">{role.name}</span>
                 {role.isSystem ? (
-                  <Badge>Standard</Badge>
+                  <Badge>{t("Standard", "Standard")}</Badge>
                 ) : (
                   <span className="text-xs text-text-muted">
                     {role.permissions.length} permission(s)
@@ -2409,7 +2504,7 @@ function RolesManagementSection() {
                   loading={deleteMutation.isPending && deleteMutation.variables === role.id}
                   onClick={() => deleteMutation.mutate(role.id)}
                 >
-                  Supprimer
+                  {t("Supprimer", "Delete")}
                 </Button>
               )}
             </li>
@@ -2420,34 +2515,34 @@ function RolesManagementSection() {
         <p className="mt-2 text-sm text-destructive">
           {deleteMutation.error instanceof ApiError
             ? deleteMutation.error.message
-            : "Impossible de supprimer ce rôle."}
+            : t("Impossible de supprimer ce rôle.", "This role could not be deleted.")}
         </p>
       )}
     </section>
   );
 }
 
-const CUSTOM_FIELD_ENTITY_LABELS: Record<CustomFieldEntity, string> = {
-  contacts: "Contacts",
-  leads: "Prospects",
-  deals: "Affaires",
-  offers: "Produits & services",
-  bookings: "Réservations",
-  orders: "Commandes",
-  tickets: "Tickets",
+const CUSTOM_FIELD_ENTITY_LABELS: Record<CustomFieldEntity, [string, string]> = {
+  contacts: ["Contacts", "Contacts"],
+  leads: ["Prospects", "Leads"],
+  deals: ["Affaires", "Deals"],
+  offers: ["Produits & services", "Products & services"],
+  bookings: ["Réservations", "Bookings"],
+  orders: ["Commandes", "Orders"],
+  tickets: ["Tickets", "Tickets"],
 };
 
-const CUSTOM_FIELD_TYPE_LABELS: Record<CreateCustomFieldInput["type"], string> = {
-  text: "Texte",
-  number: "Nombre",
-  boolean: "Case à cocher",
-  date: "Date",
-  datetime: "Date et heure",
-  select: "Liste déroulante",
-  multiselect: "Choix multiples",
-  email: "Email",
-  phone: "Téléphone",
-  url: "URL",
+const CUSTOM_FIELD_TYPE_LABELS: Record<CreateCustomFieldInput["type"], [string, string]> = {
+  text: ["Texte", "Text"],
+  number: ["Nombre", "Number"],
+  boolean: ["Case à cocher", "Checkbox"],
+  date: ["Date", "Date"],
+  datetime: ["Date et heure", "Date and time"],
+  select: ["Liste déroulante", "Drop-down list"],
+  multiselect: ["Choix multiples", "Multiple choice"],
+  email: ["Email", "Email"],
+  phone: ["Téléphone", "Phone"],
+  url: ["URL", "URL"],
 };
 
 const CUSTOM_FIELD_TYPES_WITH_OPTIONS = new Set<CreateCustomFieldInput["type"]>([
@@ -2465,6 +2560,7 @@ const CUSTOM_FIELD_TYPES_WITH_OPTIONS = new Set<CreateCustomFieldInput["type"]>(
  * fix a mistake by deleting and recreating rather than editing in place.
  */
 function CustomFieldsSection() {
+  const t = useT();
   const authReady = useAuthReady();
   const queryClient = useQueryClient();
   const [entity, setEntity] = useState<CustomFieldEntity>("contacts");
@@ -2509,10 +2605,12 @@ function CustomFieldsSection() {
     <section className="rounded-lg border border-border bg-surface p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-text">Champs personnalisés</h2>
+          <h2 className="text-sm font-semibold text-text">{t("Champs personnalisés", "Custom fields")}</h2>
           <p className="mt-1 text-sm text-text-muted">
-            Ajoutez des champs propres à votre activité sur les contacts, prospects, produits,
-            réservations et commandes.
+            {t(
+              "Ajoutez des champs propres à votre activité sur les contacts, prospects, produits, réservations et commandes.",
+              "Add fields specific to your business to contacts, leads, products, bookings and orders.",
+            )}
           </p>
         </div>
         <Button
@@ -2521,7 +2619,7 @@ function CustomFieldsSection() {
           size="sm"
           onClick={() => setCreateOpen((v) => !v)}
         >
-          {createOpen ? "Annuler" : "Ajouter un champ"}
+          {createOpen ? t("Annuler", "Cancel") : t("Ajouter un champ", "Add a field")}
         </Button>
       </div>
 
@@ -2534,7 +2632,7 @@ function CustomFieldsSection() {
             size="sm"
             onClick={() => setEntity(option)}
           >
-            {CUSTOM_FIELD_ENTITY_LABELS[option]}
+            {t(...CUSTOM_FIELD_ENTITY_LABELS[option])}
           </Button>
         ))}
       </div>
@@ -2557,11 +2655,11 @@ function CustomFieldsSection() {
         >
           <div>
             <label className="mb-1 block text-xs font-medium text-text" htmlFor="custom-field-key">
-              Clé (identifiant technique)
+              {t("Clé (identifiant technique)", "Key (technical identifier)")}
             </label>
             <Input
               id="custom-field-key"
-              placeholder="ex. surface_m2"
+              placeholder={t("ex. surface_m2", "e.g. surface_m2")}
               error={!!errors.key}
               {...register("key")}
             />
@@ -2569,30 +2667,30 @@ function CustomFieldsSection() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-text" htmlFor="custom-field-label">
-              Libellé affiché
+              {t("Libellé affiché", "Display label")}
             </label>
             <Input
               id="custom-field-label"
-              placeholder="ex. Surface (m²)"
+              placeholder={t("ex. Surface (m²)", "e.g. Surface (m²)")}
               error={!!errors.label}
               {...register("label")}
             />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-text" htmlFor="custom-field-type">
-              Type
+              {t("Type", "Type")}
             </label>
             <Select id="custom-field-type" className="w-full" {...register("type")}>
               {CUSTOM_FIELD_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {CUSTOM_FIELD_TYPE_LABELS[type]}
+                  {t(...CUSTOM_FIELD_TYPE_LABELS[type])}
                 </option>
               ))}
             </Select>
           </div>
           <label className="flex items-center gap-2 self-end text-sm text-text">
             <input type="checkbox" {...register("required")} />
-            Obligatoire
+            {t("Obligatoire", "Required")}
           </label>
           {CUSTOM_FIELD_TYPES_WITH_OPTIONS.has(selectedType) && (
             <div className="col-span-2">
@@ -2600,12 +2698,12 @@ function CustomFieldsSection() {
                 className="mb-1 block text-xs font-medium text-text"
                 htmlFor="custom-field-options"
               >
-                Options (séparées par des virgules)
+                {t("Options (séparées par des virgules)", "Options (comma-separated)")}
               </label>
               <Input
                 id="custom-field-options"
                 className="w-full"
-                placeholder="ex. Petit, Moyen, Grand"
+                placeholder={t("ex. Petit, Moyen, Grand", "e.g. Small, Medium, Large")}
                 value={optionsInput}
                 onChange={(e) => setOptionsInput(e.target.value)}
               />
@@ -2615,20 +2713,23 @@ function CustomFieldsSection() {
             <p className="col-span-2 text-sm text-destructive">
               {createMutation.error instanceof ApiError
                 ? createMutation.error.message
-                : "Impossible de créer ce champ."}
+                : t("Impossible de créer ce champ.", "This field could not be created.")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending} className="col-span-2">
-            {createMutation.isPending ? "Création..." : "Créer le champ"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le champ", "Create the field")}
           </Button>
         </form>
       )}
 
       {isLoading ? (
-        <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+        <p className="mt-4 text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>
       ) : fields?.length === 0 ? (
         <p className="mt-4 text-sm text-text-muted">
-          Aucun champ personnalisé pour {CUSTOM_FIELD_ENTITY_LABELS[entity].toLowerCase()}.
+          {t(
+            `Aucun champ personnalisé pour ${CUSTOM_FIELD_ENTITY_LABELS[entity][0].toLowerCase()}.`,
+            `No custom fields for ${CUSTOM_FIELD_ENTITY_LABELS[entity][1].toLowerCase()}.`,
+          )}
         </p>
       ) : (
         <ul className="mt-4 divide-y divide-border">
@@ -2636,8 +2737,8 @@ function CustomFieldsSection() {
             <li key={field.id} className="flex items-center justify-between gap-3 py-2 text-sm">
               <div className="flex items-center gap-2">
                 <span className="text-text">{field.label}</span>
-                <Badge>{CUSTOM_FIELD_TYPE_LABELS[field.type]}</Badge>
-                {field.required && <Badge>Obligatoire</Badge>}
+                <Badge>{t(...CUSTOM_FIELD_TYPE_LABELS[field.type])}</Badge>
+                {field.required && <Badge>{t("Obligatoire", "Required")}</Badge>}
                 <span className="text-xs text-text-muted">{field.key}</span>
               </div>
               <Button
@@ -2647,7 +2748,7 @@ function CustomFieldsSection() {
                 loading={deleteMutation.isPending && deleteMutation.variables === field.id}
                 onClick={() => deleteMutation.mutate(field.id)}
               >
-                Supprimer
+                {t("Supprimer", "Delete")}
               </Button>
             </li>
           ))}
@@ -2657,7 +2758,7 @@ function CustomFieldsSection() {
         <p className="mt-2 text-sm text-destructive">
           {deleteMutation.error instanceof ApiError
             ? deleteMutation.error.message
-            : "Impossible de supprimer ce champ."}
+            : t("Impossible de supprimer ce champ.", "This field could not be deleted.")}
         </p>
       )}
     </section>
@@ -2671,26 +2772,26 @@ function CustomFieldsSection() {
  * being fully functional. `NEXT_PUBLIC_STOREFRONT_URL` makes the storefront domain real (unlike
  * the prior placeholder "VOTRE-DOMAINE-STOREFRONT"), same pattern as NEXT_PUBLIC_API_URL.
  */
-const WIDGET_MODE_OPTIONS: { value: string; label: string; description: string }[] = [
+const WIDGET_MODE_OPTIONS: { value: string; label: [string, string]; description: [string, string] }[] = [
   {
     value: "leads",
-    label: "Capture de contacts",
-    description: "Un formulaire simple pour recevoir des demandes de contact.",
+    label: ["Capture de contacts", "Contact capture"],
+    description: ["Un formulaire simple pour recevoir des demandes de contact.", "A simple form to receive contact requests."],
   },
   {
     value: "catalog",
-    label: "Boutique",
-    description: "Vos visiteurs parcourent votre catalogue et commandent directement.",
+    label: ["Boutique", "Shop"],
+    description: ["Vos visiteurs parcourent votre catalogue et commandent directement.", "Your visitors browse your catalogue and order directly."],
   },
   {
     value: "booking",
-    label: "Réservation",
-    description: "Vos visiteurs réservent un créneau directement.",
+    label: ["Réservation", "Booking"],
+    description: ["Vos visiteurs réservent un créneau directement.", "Your visitors book a slot directly."],
   },
   {
     value: "full",
-    label: "Boutique + réservation",
-    description: "Les deux, avec des onglets dans le widget.",
+    label: ["Boutique + réservation", "Shop + booking"],
+    description: ["Les deux, avec des onglets dans le widget.", "Both, with tabs in the widget."],
   },
 ];
 
@@ -2715,6 +2816,7 @@ function StorefrontPreviewSection({
   previewPalette?: string;
   previewFontPairing?: string;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const storefrontUrl = STOREFRONT_URL;
@@ -2728,7 +2830,7 @@ function StorefrontPreviewSection({
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text">Aperçu de ma page publique</h2>
+        <h2 className="text-sm font-semibold text-text">{t("Aperçu de ma page publique", "Preview of my public page")}</h2>
         <div className="flex items-center gap-2">
           {open && (
             <Button
@@ -2737,11 +2839,11 @@ function StorefrontPreviewSection({
               size="sm"
               onClick={() => setReloadKey((key) => key + 1)}
             >
-              Rafraîchir
+              {t("Rafraîchir", "Refresh")}
             </Button>
           )}
           <Button type="button" variant="secondary" size="sm" onClick={() => setOpen((v) => !v)}>
-            {open ? "Masquer" : "Afficher"}
+            {open ? t("Masquer", "Hide") : t("Afficher", "Show")}
           </Button>
         </div>
       </div>
@@ -2749,7 +2851,7 @@ function StorefrontPreviewSection({
         <iframe
           key={`${reloadKey}-${query}`}
           src={storefrontPageUrl}
-          title="Aperçu de la page publique"
+          title={t("Aperçu de la page publique", "Public page preview")}
           className="mt-4 h-[600px] w-full rounded-md border border-border"
         />
       )}
@@ -2767,6 +2869,7 @@ function StorefrontPreviewSection({
  * then correctly capture real data on their first (and only) mount, with no sync effect needed.
  */
 function StorefrontContentSection() {
+  const t = useT();
   const authReady = useAuthReady();
   const { data: organization, isLoading } = useActiveOrganization();
   const { data: subscription } = useQuery({
@@ -2781,13 +2884,15 @@ function StorefrontContentSection() {
     <section className="rounded-lg border border-border bg-surface p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-text">Contenu de la page publique</h2>
+          <h2 className="text-sm font-semibold text-text">{t("Contenu de la page publique", "Public page content")}</h2>
           <p className="mt-1 text-sm text-text-muted">
-            Présentez votre entreprise comme un vrai site professionnel : à propos, équipe,
-            galerie et avis clients.
+            {t(
+              "Présentez votre entreprise comme un vrai site professionnel : à propos, équipe, galerie et avis clients.",
+              "Present your business like a real professional website: about, team, gallery and customer reviews.",
+            )}
           </p>
         </div>
-        {!allowed && <Badge>🔒 Passer au plan Pro</Badge>}
+        {!allowed && <Badge>{t("🔒 Passer au plan Pro", "🔒 Move to the Pro plan")}</Badge>}
       </div>
       {!isLoading && organization && (
         <fieldset disabled={!allowed} className="mt-4 space-y-6 disabled:opacity-60">
@@ -2803,6 +2908,7 @@ function StorefrontContentSection() {
 }
 
 function AboutTextEditor({ organization }: { organization: Organization }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [value, setValue] = useState(organization.aboutText ?? "");
   const mutation = useMutation({
@@ -2813,12 +2919,12 @@ function AboutTextEditor({ organization }: { organization: Organization }) {
 
   return (
     <div>
-      <p className="mb-1 text-xs font-medium text-text">À propos</p>
+      <p className="mb-1 text-xs font-medium text-text">{t("À propos", "About")}</p>
       <textarea
         className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
         rows={4}
         maxLength={4000}
-        placeholder="Racontez l'histoire de votre entreprise..."
+        placeholder={t("Racontez l'histoire de votre entreprise...", "Tell your business's story...")}
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
@@ -2829,11 +2935,11 @@ function AboutTextEditor({ organization }: { organization: Organization }) {
           loading={mutation.isPending}
           onClick={() => mutation.mutate(value)}
         >
-          {mutation.isPending ? "Enregistrement..." : "Enregistrer le texte"}
+          {mutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer le texte", "Save the text")}
         </Button>
         {mutation.isError && (
           <p className="text-xs text-destructive">
-            {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+            {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
           </p>
         )}
       </div>
@@ -2849,6 +2955,7 @@ interface TestimonialFormValues {
 }
 
 function TestimonialsEditor({ organization }: { organization: Organization }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const testimonials = organization.testimonials ?? [];
@@ -2877,13 +2984,13 @@ function TestimonialsEditor({ organization }: { organization: Organization }) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-text">Témoignages clients</p>
+        <p className="text-xs font-medium text-text">{t("Témoignages clients", "Customer testimonials")}</p>
         <Button type="button" variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
-          Ajouter un témoignage
+          {t("Ajouter un témoignage", "Add a testimonial")}
         </Button>
       </div>
       {testimonials.length === 0 ? (
-        <p className="mt-2 text-sm text-text-muted">Aucun témoignage.</p>
+        <p className="mt-2 text-sm text-text-muted">{t("Aucun témoignage.", "No testimonials.")}</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {testimonials.map((testimonial) => (
@@ -2903,19 +3010,22 @@ function TestimonialsEditor({ organization }: { organization: Organization }) {
                 onClick={() => removeTestimonial(testimonial.id)}
                 className="shrink-0 text-xs text-destructive hover:underline"
               >
-                Supprimer
+                {t("Supprimer", "Delete")}
               </button>
             </li>
           ))}
         </ul>
       )}
 
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter un témoignage">
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} title={t("Ajouter un témoignage", "Add a testimonial")}>
         <form onSubmit={handleSubmit(addTestimonial)} className="space-y-3">
-          <Input placeholder="Nom du client" {...register("authorName", { required: true })} />
-          <Input placeholder="Rôle / entreprise (optionnel)" {...register("role")} />
+          <Input placeholder={t("Nom du client", "Customer name")} {...register("authorName", { required: true })} />
+          <Input placeholder={t(
+            "Rôle / entreprise (optionnel)",
+            "Role / company (optional)",
+          )} {...register("role")} />
           <textarea
-            placeholder="Témoignage"
+            placeholder={t("Témoignage", "Testimonial")}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={3}
             {...register("quote", { required: true })}
@@ -2924,22 +3034,22 @@ function TestimonialsEditor({ organization }: { organization: Organization }) {
             type="number"
             min={1}
             max={5}
-            placeholder="Note sur 5 (optionnel)"
+            placeholder={t("Note sur 5 (optionnel)", "Rating out of 5 (optional)")}
             {...register("rating", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
             })}
           />
           {mutation.isError && (
             <p className="text-xs text-destructive">
-              {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+              {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
             <Button type="submit" loading={mutation.isPending}>
-              {mutation.isPending ? "Ajout..." : "Ajouter"}
+              {mutation.isPending ? t("Ajout...", "Adding...") : t("Ajouter", "Add")}
             </Button>
           </div>
         </form>
@@ -2955,6 +3065,7 @@ interface TeamMemberFormValues {
 }
 
 function TeamMembersEditor({ organization }: { organization: Organization }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
@@ -2986,7 +3097,10 @@ function TeamMembersEditor({ organization }: { organization: Organization }) {
       const result = await uploadFile(file);
       setPhotoUrl(result.url);
     } catch (error) {
-      setUploadError(error instanceof ApiError ? error.message : "Échec de l'envoi du fichier.");
+      setUploadError(error instanceof ApiError ? error.message : t(
+        "Échec de l'envoi du fichier.",
+        "The file could not be uploaded.",
+      ));
     } finally {
       setPhotoUploading(false);
     }
@@ -3005,13 +3119,13 @@ function TeamMembersEditor({ organization }: { organization: Organization }) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-text">Équipe</p>
+        <p className="text-xs font-medium text-text">{t("Équipe", "Team")}</p>
         <Button type="button" variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
-          Ajouter un membre
+          {t("Ajouter un membre", "Add a member")}
         </Button>
       </div>
       {teamMembers.length === 0 ? (
-        <p className="mt-2 text-sm text-text-muted">Aucun membre.</p>
+        <p className="mt-2 text-sm text-text-muted">{t("Aucun membre.", "No members.")}</p>
       ) : (
         <ul className="mt-2 grid gap-2 sm:grid-cols-2">
           {teamMembers.map((member) => (
@@ -3028,7 +3142,7 @@ function TeamMembersEditor({ organization }: { organization: Organization }) {
                 onClick={() => removeTeamMember(member.id)}
                 className="shrink-0 text-xs text-destructive hover:underline"
               >
-                Supprimer
+                {t("Supprimer", "Delete")}
               </button>
             </li>
           ))}
@@ -3038,13 +3152,13 @@ function TeamMembersEditor({ organization }: { organization: Organization }) {
       <Dialog
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        title="Ajouter un membre de l'équipe"
+        title={t("Ajouter un membre de l'équipe", "Add a team member")}
       >
         <form onSubmit={handleSubmit(addTeamMember)} className="space-y-3">
-          <Input placeholder="Nom" {...register("name", { required: true })} />
-          <Input placeholder="Rôle" {...register("role", { required: true })} />
+          <Input placeholder={t("Nom", "Name")} {...register("name", { required: true })} />
+          <Input placeholder={t("Rôle", "Role")} {...register("role", { required: true })} />
           <textarea
-            placeholder="Bio (optionnel)"
+            placeholder={t("Bio (optionnel)", "Bio (optional)")}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             {...register("bio")}
@@ -3064,22 +3178,22 @@ function TeamMembersEditor({ organization }: { organization: Organization }) {
               loading={photoUploading}
               onClick={() => photoInputRef.current?.click()}
             >
-              {photoUrl ? "Changer la photo" : "Ajouter une photo"}
+              {photoUrl ? t("Changer la photo", "Change the photo") : t("Ajouter une photo", "Add a photo")}
             </Button>
-            {photoUrl && <span className="text-xs text-text-muted">Photo ajoutée</span>}
+            {photoUrl && <span className="text-xs text-text-muted">{t("Photo ajoutée", "Photo added")}</span>}
           </div>
           {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
           {mutation.isError && (
             <p className="text-xs text-destructive">
-              {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+              {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
             <Button type="submit" loading={mutation.isPending}>
-              {mutation.isPending ? "Ajout..." : "Ajouter"}
+              {mutation.isPending ? t("Ajout...", "Adding...") : t("Ajouter", "Add")}
             </Button>
           </div>
         </form>
@@ -3089,6 +3203,7 @@ function TeamMembersEditor({ organization }: { organization: Organization }) {
 }
 
 function GalleryEditor({ organization }: { organization: Organization }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -3109,7 +3224,10 @@ function GalleryEditor({ organization }: { organization: Organization }) {
       const result = await uploadFile(file);
       mutation.mutate([...galleryImages, { id: crypto.randomUUID(), url: result.url }]);
     } catch (error) {
-      setUploadError(error instanceof ApiError ? error.message : "Échec de l'envoi du fichier.");
+      setUploadError(error instanceof ApiError ? error.message : t(
+        "Échec de l'envoi du fichier.",
+        "The file could not be uploaded.",
+      ));
     } finally {
       setUploading(false);
     }
@@ -3121,7 +3239,7 @@ function GalleryEditor({ organization }: { organization: Organization }) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-text">Galerie photo</p>
+        <p className="text-xs font-medium text-text">{t("Galerie photo", "Photo gallery")}</p>
         <input
           ref={fileInputRef}
           type="file"
@@ -3136,17 +3254,17 @@ function GalleryEditor({ organization }: { organization: Organization }) {
           loading={uploading}
           onClick={() => fileInputRef.current?.click()}
         >
-          Ajouter une image
+          {t("Ajouter une image", "Add an image")}
         </Button>
       </div>
       {uploadError && <p className="mt-2 text-xs text-destructive">{uploadError}</p>}
       {mutation.isError && (
         <p className="mt-2 text-xs text-destructive">
-          {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+          {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
         </p>
       )}
       {galleryImages.length === 0 ? (
-        <p className="mt-2 text-sm text-text-muted">Aucune image.</p>
+        <p className="mt-2 text-sm text-text-muted">{t("Aucune image.", "No images.")}</p>
       ) : (
         <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
           {galleryImages.map((image) => (
@@ -3178,6 +3296,7 @@ interface FaqItemFormValues {
 }
 
 function FaqEditor({ organization }: { organization: Organization }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const faqItems = organization.faqItems ?? [];
@@ -3206,13 +3325,13 @@ function FaqEditor({ organization }: { organization: Organization }) {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-text">Questions fréquentes</p>
+        <p className="text-xs font-medium text-text">{t("Questions fréquentes", "Frequently asked questions")}</p>
         <Button type="button" variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
-          Ajouter une question
+          {t("Ajouter une question", "Add a question")}
         </Button>
       </div>
       {faqItems.length === 0 ? (
-        <p className="mt-2 text-sm text-text-muted">Aucune question.</p>
+        <p className="mt-2 text-sm text-text-muted">{t("Aucune question.", "No questions.")}</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {faqItems.map((item) => (
@@ -3229,33 +3348,33 @@ function FaqEditor({ organization }: { organization: Organization }) {
                 onClick={() => removeFaqItem(item.id)}
                 className="shrink-0 text-xs text-destructive hover:underline"
               >
-                Supprimer
+                {t("Supprimer", "Delete")}
               </button>
             </li>
           ))}
         </ul>
       )}
 
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} title="Ajouter une question">
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} title={t("Ajouter une question", "Add a question")}>
         <form onSubmit={handleSubmit(addFaqItem)} className="space-y-3">
-          <Input placeholder="Question" {...register("question", { required: true })} />
+          <Input placeholder={t("Question", "Question")} {...register("question", { required: true })} />
           <textarea
-            placeholder="Réponse"
+            placeholder={t("Réponse", "Answer")}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={3}
             {...register("answer", { required: true })}
           />
           {mutation.isError && (
             <p className="text-xs text-destructive">
-              {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+              {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setAddOpen(false)}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
             <Button type="submit" loading={mutation.isPending}>
-              {mutation.isPending ? "Ajout..." : "Ajouter"}
+              {mutation.isPending ? t("Ajout...", "Adding...") : t("Ajouter", "Add")}
             </Button>
           </div>
         </form>
@@ -3281,6 +3400,7 @@ function StorefrontThemePicker({
   onChangePalette: (key: StorefrontPaletteKey) => void;
   onChangeFontPairing: (key: StorefrontFontPairingKey) => void;
 }) {
+  const t = useT();
   const effectiveTemplateKey = selectedTemplate ?? "essentiel";
   const currentTemplate =
     STOREFRONT_TEMPLATES.find((t) => t.key === effectiveTemplateKey) ?? STOREFRONT_TEMPLATES[0];
@@ -3298,9 +3418,12 @@ function StorefrontThemePicker({
 
   return (
     <div>
-      <p className="mb-1 text-xs font-medium text-text">Gabarit de la page publique</p>
+      <p className="mb-1 text-xs font-medium text-text">{t("Gabarit de la page publique", "Public page template")}</p>
       <p className="mb-2 text-xs text-text-muted">
-        Chaque gabarit propose une mise en page différente, pensée pour un secteur d&apos;activité.
+        {t(
+          "Chaque gabarit propose une mise en page différente, pensée pour un secteur d'activité.",
+          "Each template offers a different layout, designed for a line of business.",
+        )}
       </p>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {STOREFRONT_TEMPLATES.map((template) => {
@@ -3318,7 +3441,7 @@ function StorefrontThemePicker({
             >
               <span className="flex items-center justify-between gap-2">
                 <span className="font-medium text-text">{template.label}</span>
-                {!isAllowed && <Badge>Non inclus dans le plan</Badge>}
+                {!isAllowed && <Badge>{t("Non inclus dans le plan", "Not included in the plan")}</Badge>}
               </span>
               <span className="mt-0.5 block text-xs text-text-muted">{template.description}</span>
             </button>
@@ -3329,7 +3452,7 @@ function StorefrontThemePicker({
       {currentTemplate.palettes.length > 0 && (
         <div className="mt-3 space-y-3">
           <div>
-            <p className="mb-1 text-xs font-medium text-text">Palette de couleurs</p>
+            <p className="mb-1 text-xs font-medium text-text">{t("Palette de couleurs", "Colour palette")}</p>
             <div className="flex flex-wrap gap-2">
               {paletteChoices.map(({ key: paletteKey, premium, allowed: isAllowed }) => {
                 const palette = STOREFRONT_PALETTES[paletteKey];
@@ -3340,7 +3463,7 @@ function StorefrontThemePicker({
                     type="button"
                     disabled={!isAllowed}
                     onClick={() => onChangePalette(paletteKey)}
-                    title={isAllowed ? palette.label : `${palette.label} — nécessite un plan supérieur`}
+                    title={isAllowed ? palette.label : t(`${palette.label} — nécessite un plan supérieur`, `${palette.label} — needs a higher plan`)}
                     className={`flex items-center gap-2 rounded-full border px-2 py-1 text-xs ${
                       isSelected ? "border-text" : "border-border"
                     } ${!isAllowed ? "opacity-50" : ""}`}
@@ -3350,14 +3473,14 @@ function StorefrontThemePicker({
                       style={{ backgroundColor: palette.accent }}
                     />
                     {palette.label}
-                    {premium && <span className="font-semibold text-action">Premium</span>}
+                    {premium && <span className="font-semibold text-action">{t("Premium", "Premium")}</span>}
                   </button>
                 );
               })}
             </div>
           </div>
           <div>
-            <p className="mb-1 text-xs font-medium text-text">Police</p>
+            <p className="mb-1 text-xs font-medium text-text">{t("Police", "Font")}</p>
             <div className="flex flex-wrap gap-2">
               {fontChoices.map(({ key: fontKey, premium, allowed: isAllowed }) => {
                 const font = STOREFRONT_FONT_PAIRINGS[fontKey];
@@ -3373,7 +3496,7 @@ function StorefrontThemePicker({
                     } ${!isAllowed ? "opacity-50" : ""}`}
                   >
                     {font.label}
-                    {premium && <span className="ml-1 font-semibold text-action">Premium</span>}
+                    {premium && <span className="ml-1 font-semibold text-action">{t("Premium", "Premium")}</span>}
                   </button>
                 );
               })}
@@ -3386,6 +3509,7 @@ function StorefrontThemePicker({
 }
 
 function ExternalWebsiteSection({ slug }: { slug: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState("leads");
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
@@ -3405,32 +3529,37 @@ function ExternalWebsiteSection({ slug }: { slug: string }) {
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text">Mon site existant</h2>
+        <h2 className="text-sm font-semibold text-text">{t("Mon site existant", "My existing website")}</h2>
         <a
           href={storefrontPageUrl}
           target="_blank"
           rel="noreferrer"
           className="text-sm font-medium text-text underline-offset-2 hover:underline"
         >
-          Voir ma page publique →
+          {t("Voir ma page publique", "See my public page")} →
         </a>
       </div>
       <p className="mt-1 text-sm text-text-muted">
-        Ajoutez ce widget sur votre site web actuel pour interagir avec vos visiteurs directement
-        depuis KORVA.
+        {t(
+          "Ajoutez ce widget sur votre site web actuel pour interagir avec vos visiteurs directement depuis KORVA.",
+          "Add this widget to your current website to interact with your visitors straight from KORVA.",
+        )}
       </p>
 
       <label className="mt-4 block text-sm">
-        <span className="mb-1 block text-text-muted">Ce que le widget doit faire</span>
+        <span className="mb-1 block text-text-muted">{t(
+          "Ce que le widget doit faire",
+          "What the widget should do",
+        )}</span>
         <Select value={mode} onChange={(event) => setMode(event.target.value)} className="w-full sm:w-72">
           {WIDGET_MODE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {t(...option.label)}
             </option>
           ))}
         </Select>
         {selectedOption && (
-          <span className="mt-1 block text-xs text-text-muted">{selectedOption.description}</span>
+          <span className="mt-1 block text-xs text-text-muted">{t(...selectedOption.description)}</span>
         )}
       </label>
 
@@ -3448,36 +3577,36 @@ function ExternalWebsiteSection({ slug }: { slug: string }) {
           setTimeout(() => setCopied(false), 2000);
         }}
       >
-        {copied ? "Copié !" : "Copier le code"}
+        {copied ? t("Copié !", "Copied!") : t("Copier le code", "Copy the code")}
       </Button>
     </section>
   );
 }
 
-const WEBHOOK_EVENT_LABELS: Record<string, string> = {
-  "lead.created": "Prospect créé",
-  "quote.created": "Devis créé",
-  "quote.accepted": "Devis accepté",
-  "quote.expired": "Devis expiré",
-  "order.created": "Commande créée",
-  "payment.completed": "Paiement complété",
-  "booking.created": "Réservation créée",
-  "booking.cancelled": "Réservation annulée",
-  "customer.created": "Client créé",
-  "invoice.overdue": "Facture en retard",
-  "customer.inactive": "Client inactif",
-  "payment.webhook_received": "Webhook paiement reçu",
-  "whatsapp.status_updated": "Statut WhatsApp mis à jour",
-  "offer.created": "Offre créée",
-  "message.sent": "Message envoyé",
-  "subscription.plan_changed": "Plan d'abonnement changé",
-  "expense.created": "Dépense créée",
-  "recurring_billing.created": "Abonnement client créé",
-  "recurring_billing.charged": "Abonnement client facturé",
-  "recurring_billing.cancelled": "Abonnement client résilié",
-  "return_request.created": "Demande de retour créée",
-  "return_request.approved": "Retour approuvé (remboursé)",
-  "return_request.rejected": "Retour refusé",
+const WEBHOOK_EVENT_LABELS: Record<string, [string, string]> = {
+  "lead.created": ["Prospect créé", "Lead created"],
+  "quote.created": ["Devis créé", "Quote created"],
+  "quote.accepted": ["Devis accepté", "Quote accepted"],
+  "quote.expired": ["Devis expiré", "Quote expired"],
+  "order.created": ["Commande créée", "Order created"],
+  "payment.completed": ["Paiement complété", "Payment completed"],
+  "booking.created": ["Réservation créée", "Booking created"],
+  "booking.cancelled": ["Réservation annulée", "Booking cancelled"],
+  "customer.created": ["Client créé", "Customer created"],
+  "invoice.overdue": ["Facture en retard", "Invoice overdue"],
+  "customer.inactive": ["Client inactif", "Customer inactive"],
+  "payment.webhook_received": ["Webhook paiement reçu", "Payment webhook received"],
+  "whatsapp.status_updated": ["Statut WhatsApp mis à jour", "WhatsApp status updated"],
+  "offer.created": ["Offre créée", "Offer created"],
+  "message.sent": ["Message envoyé", "Message sent"],
+  "subscription.plan_changed": ["Plan d'abonnement changé", "Subscription plan changed"],
+  "expense.created": ["Dépense créée", "Expense created"],
+  "recurring_billing.created": ["Abonnement client créé", "Customer subscription created"],
+  "recurring_billing.charged": ["Abonnement client facturé", "Customer subscription charged"],
+  "recurring_billing.cancelled": ["Abonnement client résilié", "Customer subscription cancelled"],
+  "return_request.created": ["Demande de retour créée", "Return request created"],
+  "return_request.approved": ["Retour approuvé (remboursé)", "Return approved (refunded)"],
+  "return_request.rejected": ["Retour refusé", "Return rejected"],
 };
 
 /**
@@ -3487,6 +3616,7 @@ const WEBHOOK_EVENT_LABELS: Record<string, string> = {
  * once (at creation and at each rotation), same posture as any bearer credential in this product.
  */
 function WebhookSubscriptionsSection() {
+  const t = useT();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [revealedSecret, setRevealedSecret] = useState<{ id: string; secret: string } | null>(
@@ -3548,16 +3678,21 @@ function WebhookSubscriptionsSection() {
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold text-text">Webhooks sortants</h2>
+      <h2 className="text-sm font-semibold text-text">{t("Webhooks sortants", "Outgoing webhooks")}</h2>
       <p className="mt-1 text-sm text-text-muted">
-        Envoyez automatiquement les événements KORVA (signés, avec nouvelles tentatives) vers un
-        logiciel partenaire.
+        {t(
+          "Envoyez automatiquement les événements KORVA (signés, avec nouvelles tentatives) vers un logiciel partenaire.",
+          "Automatically send KORVA events (signed, with retries) to partner software.",
+        )}
       </p>
 
       {revealedSecret && (
         <div className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-4">
           <p className="text-sm font-medium text-amber-900">
-            Clé secrète générée — notez-la maintenant, elle ne sera plus jamais affichée.
+            {t(
+              "Clé secrète générée — notez-la maintenant, elle ne sera plus jamais affichée.",
+              "Secret key generated — write it down now, it will never be shown again.",
+            )}
           </p>
           <div className="mt-2 flex items-center gap-2">
             <code className="flex-1 overflow-x-auto rounded bg-white px-2 py-1 text-xs text-amber-950">
@@ -3573,10 +3708,10 @@ function WebhookSubscriptionsSection() {
                 setTimeout(() => setCopied(false), 2000);
               }}
             >
-              {copied ? "Copié !" : "Copier"}
+              {copied ? t("Copié !", "Copied!") : t("Copier", "Copy")}
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setRevealedSecret(null)}>
-              Fermer
+              {t("Fermer", "Close")}
             </Button>
           </div>
         </div>
@@ -3595,37 +3730,43 @@ function WebhookSubscriptionsSection() {
           />
           {errors.url && <p className="mt-1 text-xs text-destructive">{errors.url.message}</p>}
         </div>
-        <Input placeholder="Description (optionnel)" className="w-full" {...register("description")} />
+        <Input placeholder={t("Description (optionnel)", "Description (optional)")} className="w-full" {...register("description")} />
         <div>
-          <p className="mb-1 text-xs font-medium text-text">Événements</p>
+          <p className="mb-1 text-xs font-medium text-text">{t("Événements", "Events")}</p>
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
             {SYSTEM_EVENTS.map((event) => (
               <label key={event} className="flex items-center gap-2 text-sm text-text">
                 <input type="checkbox" value={event} {...register("events")} />
-                {WEBHOOK_EVENT_LABELS[event] ?? event}
+                {(WEBHOOK_EVENT_LABELS[event] ? t(...WEBHOOK_EVENT_LABELS[event]!) : event)}
               </label>
             ))}
           </div>
           {errors.events && (
-            <p className="mt-1 text-xs text-destructive">Sélectionnez au moins un événement.</p>
+            <p className="mt-1 text-xs text-destructive">{t(
+              "Sélectionnez au moins un événement.",
+              "Select at least one event.",
+            )}</p>
           )}
         </div>
         {createMutation.isError && (
           <p className="text-sm text-destructive">
             {createMutation.error instanceof ApiError
               ? createMutation.error.message
-              : "Impossible de créer ce webhook."}
+              : t("Impossible de créer ce webhook.", "This webhook could not be created.")}
           </p>
         )}
         <Button type="submit" loading={createMutation.isPending}>
-          {createMutation.isPending ? "Création..." : "Ajouter un webhook"}
+          {createMutation.isPending ? t("Création...", "Creating...") : t("Ajouter un webhook", "Add a webhook")}
         </Button>
       </form>
 
       <div className="mt-4 space-y-2">
-        {isLoading && <p className="text-sm text-text-muted">Chargement...</p>}
+        {isLoading && <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
         {!isLoading && subscriptions?.length === 0 && (
-          <p className="text-sm text-text-muted">Aucun webhook sortant configuré.</p>
+          <p className="text-sm text-text-muted">{t(
+            "Aucun webhook sortant configuré.",
+            "No outgoing webhooks set up.",
+          )}</p>
         )}
         {subscriptions?.map((subscription) => (
           <div key={subscription.id} className="rounded-md border border-border p-3">
@@ -3637,17 +3778,18 @@ function WebhookSubscriptionsSection() {
                 )}
                 <div className="mt-1 flex flex-wrap gap-1">
                   {subscription.events.map((event) => (
-                    <Badge key={event}>{WEBHOOK_EVENT_LABELS[event] ?? event}</Badge>
+                    <Badge key={event}>{(WEBHOOK_EVENT_LABELS[event] ? t(...WEBHOOK_EVENT_LABELS[event]!) : event)}</Badge>
                   ))}
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant={subscription.active ? "success" : "default"}>
-                  {subscription.active ? "Actif" : "Inactif"}
+                  {subscription.active ? t("Actif", "Active") : t("Inactif", "Inactive")}
                 </Badge>
                 {subscription.lastDeliveryStatus && (
                   <Badge variant={subscription.lastDeliveryStatus === "success" ? "success" : "destructive"}>
-                    Dernière livraison : {subscription.lastDeliveryStatus === "success" ? "OK" : "échec"}
+                    {t("Dernière livraison :", "Last delivery:")}{" "}
+                    {subscription.lastDeliveryStatus === "success" ? "OK" : t("échec", "failed")}
                   </Badge>
                 )}
               </div>
@@ -3662,7 +3804,7 @@ function WebhookSubscriptionsSection() {
                 }
                 loading={toggleActiveMutation.isPending && toggleActiveMutation.variables?.id === subscription.id}
               >
-                {subscription.active ? "Désactiver" : "Activer"}
+                {subscription.active ? t("Désactiver", "Turn off") : t("Activer", "Turn on")}
               </Button>
               <Button
                 type="button"
@@ -3671,7 +3813,7 @@ function WebhookSubscriptionsSection() {
                 onClick={() => rotateMutation.mutate(subscription.id)}
                 loading={rotateMutation.isPending && rotateMutation.variables === subscription.id}
               >
-                Régénérer la clé
+                {t("Régénérer la clé", "Regenerate the key")}
               </Button>
               <Button
                 type="button"
@@ -3679,7 +3821,7 @@ function WebhookSubscriptionsSection() {
                 size="sm"
                 onClick={() => setExpandedId(expandedId === subscription.id ? null : subscription.id)}
               >
-                {expandedId === subscription.id ? "Masquer les livraisons" : "Voir les livraisons"}
+                {expandedId === subscription.id ? t("Masquer les livraisons", "Hide deliveries") : t("Voir les livraisons", "See deliveries")}
               </Button>
               <Button
                 type="button"
@@ -3688,24 +3830,24 @@ function WebhookSubscriptionsSection() {
                 onClick={() => deleteMutation.mutate(subscription.id)}
                 loading={deleteMutation.isPending && deleteMutation.variables === subscription.id}
               >
-                Supprimer
+                {t("Supprimer", "Delete")}
               </Button>
             </div>
 
             {expandedId === subscription.id && (
               <div className="mt-3 border-t border-border pt-3">
                 {deliveriesQuery.isLoading && (
-                  <p className="text-xs text-text-muted">Chargement des livraisons...</p>
+                  <p className="text-xs text-text-muted">{t("Chargement des livraisons...", "Loading deliveries...")}</p>
                 )}
                 {deliveriesQuery.data?.length === 0 && (
-                  <p className="text-xs text-text-muted">Aucune livraison pour le moment.</p>
+                  <p className="text-xs text-text-muted">{t("Aucune livraison pour le moment.", "No deliveries yet.")}</p>
                 )}
                 {deliveriesQuery.data && deliveriesQuery.data.length > 0 && (
                   <ul className="space-y-1">
                     {deliveriesQuery.data.map((delivery) => (
                       <li key={delivery.id} className="flex items-center justify-between text-xs">
                         <span className="text-text-muted">
-                          {WEBHOOK_EVENT_LABELS[delivery.eventName] ?? delivery.eventName}
+                          {(WEBHOOK_EVENT_LABELS[delivery.eventName] ? t(...WEBHOOK_EVENT_LABELS[delivery.eventName]!) : delivery.eventName)}
                         </span>
                         <span className="flex items-center gap-2">
                           {delivery.responseStatus && <span className="text-text-muted">HTTP {delivery.responseStatus}</span>}
@@ -3727,22 +3869,24 @@ function WebhookSubscriptionsSection() {
   );
 }
 
-const AUDIT_ACTION_LABELS: Record<string, string> = {
-  CREATE: "Création",
-  UPDATE: "Modification",
-  DELETE: "Suppression",
-  LOGIN: "Connexion",
-  LOGOUT: "Déconnexion",
-  PAYMENT: "Paiement",
-  REFUND: "Remboursement",
-  BOOKING: "Réservation",
-  AI_ACTION: "Action IA",
-  ROLE_CHANGE: "Changement de rôle",
-  SETTINGS_CHANGE: "Changement de paramètres",
+const AUDIT_ACTION_LABELS: Record<string, [string, string]> = {
+  CREATE: ["Création", "Created"],
+  UPDATE: ["Modification", "Updated"],
+  DELETE: ["Suppression", "Deleted"],
+  LOGIN: ["Connexion", "Sign-in"],
+  LOGOUT: ["Déconnexion", "Sign-out"],
+  PAYMENT: ["Paiement", "Payment"],
+  REFUND: ["Remboursement", "Refund"],
+  BOOKING: ["Réservation", "Booking"],
+  AI_ACTION: ["Action IA", "AI action"],
+  ROLE_CHANGE: ["Changement de rôle", "Role change"],
+  SETTINGS_CHANGE: ["Changement de paramètres", "Settings change"],
 };
 
 /** First read UI for AuditService.record — see apps/api/src/audit/audit.controller.ts. */
 function AuditLogSection() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const authReady = useAuthReady();
   const [page, setPage] = useState(1);
   const limit = 20;
@@ -3754,30 +3898,32 @@ function AuditLogSection() {
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold text-text">Journal d&apos;audit</h2>
+      <h2 className="text-sm font-semibold text-text">{t("Journal d'audit", "Audit log")}</h2>
       <p className="mt-1 text-sm text-text-muted">
-        Historique des actions effectuées sur votre organisation (créations, modifications,
-        paiements...).
+        {t(
+          "Historique des actions effectuées sur votre organisation (créations, modifications, paiements...).",
+          "History of the actions taken on your organization (creations, changes, payments...).",
+        )}
       </p>
 
       {isLoading ? (
-        <p className="mt-4 text-sm text-text-muted">Chargement...</p>
+        <p className="mt-4 text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>
       ) : !data || data.data.length === 0 ? (
-        <p className="mt-4 text-sm text-text-muted">Aucune entrée pour le moment.</p>
+        <p className="mt-4 text-sm text-text-muted">{t("Aucune entrée pour le moment.", "No entries yet.")}</p>
       ) : (
         <>
           <ul className="mt-4 divide-y divide-border">
             {data.data.map((entry) => (
               <li key={entry.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <Badge>{AUDIT_ACTION_LABELS[entry.action] ?? entry.action}</Badge>
+                  <Badge>{(AUDIT_ACTION_LABELS[entry.action] ? t(...AUDIT_ACTION_LABELS[entry.action]!) : entry.action)}</Badge>
                   <span className="text-text">{entry.entity}</span>
                   {entry.entityId && (
                     <span className="text-xs text-text-muted">#{entry.entityId.slice(-6)}</span>
                   )}
                 </div>
                 <span className="text-xs text-text-muted">
-                  {new Date(entry.createdAt).toLocaleString("fr-FR")}
+                  {new Date(entry.createdAt).toLocaleString(intlLocale(locale))}
                 </span>
               </li>
             ))}
@@ -3790,7 +3936,7 @@ function AuditLogSection() {
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
             >
-              Précédent
+              {t("Précédent", "Previous")}
             </Button>
             <span className="text-xs text-text-muted">
               Page {data.pagination.page} / {data.pagination.totalPages}
@@ -3802,7 +3948,7 @@ function AuditLogSection() {
               disabled={page >= data.pagination.totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Suivant
+              {t("Suivant", "Next")}
             </Button>
           </div>
         </>

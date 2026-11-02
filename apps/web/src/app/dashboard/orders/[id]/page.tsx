@@ -7,7 +7,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { addOrderItemSchema, type AddOrderItemInput } from "@korva/validation";
-import { FULFILLMENT_MODE_LABELS, type Contact, type Offer, type Order, type Resource } from "@korva/types";
+import { FULFILLMENT_MODE_LABELS, FULFILLMENT_MODE_LABELS_EN, type Contact, type Offer, type Order, type Resource } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useActiveOrganization } from "@/lib/use-active-organization";
@@ -275,7 +275,7 @@ export default function OrderDetailPage() {
             <div>
               <dt className="text-text-muted">{t("Réception", "Receiving")}</dt>
               <dd className="mt-0.5">
-                {FULFILLMENT_MODE_LABELS[order.fulfillmentMode]}
+                {(locale === "en" ? FULFILLMENT_MODE_LABELS_EN : FULFILLMENT_MODE_LABELS)[order.fulfillmentMode]}
                 {order.deliveryZoneName && ` · ${order.deliveryZoneName}`}
                 {order.tableLabel && ` · ${order.tableLabel}`}
               </dd>

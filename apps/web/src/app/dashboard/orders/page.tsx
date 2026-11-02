@@ -11,12 +11,12 @@ import {
   type CreateOpenOrderInput,
   type CreateOrderInput,
 } from "@korva/validation";
-import { FULFILLMENT_MODE_LABELS, type Contact, type Order, type Resource } from "@korva/types";
+import { FULFILLMENT_MODE_LABELS, FULFILLMENT_MODE_LABELS_EN, type Contact, type Order, type Resource } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useActiveOrganization } from "@/lib/use-active-organization";
-import { useT } from "@/lib/dashboard-locale";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 const STATUS_LABELS: Record<Order["status"], [string, string]> = {
   open: ["Addition ouverte", "Open tab"],
@@ -27,6 +27,7 @@ const STATUS_LABELS: Record<Order["status"], [string, string]> = {
 };
 
 export default function OrdersPage() {
+  const locale = useDashboardLocale();
   const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [showOpenForm, setShowOpenForm] = useState(false);
@@ -310,7 +311,7 @@ export default function OrdersPage() {
                     {order.source}
                     {order.fulfillmentMode && (
                       <span className="block text-xs">
-                        {FULFILLMENT_MODE_LABELS[order.fulfillmentMode]}
+                        {(locale === "en" ? FULFILLMENT_MODE_LABELS_EN : FULFILLMENT_MODE_LABELS)[order.fulfillmentMode]}
                       </span>
                     )}
                   </td>

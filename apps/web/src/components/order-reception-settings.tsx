@@ -5,12 +5,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   FULFILLMENT_MODES,
   FULFILLMENT_MODE_LABELS,
+  FULFILLMENT_MODE_LABELS_EN,
   type DeliveryZone,
   type FulfillmentMode,
   type Organization,
 } from "@korva/types";
 import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 const FIELD =
   "rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none";
@@ -31,6 +33,8 @@ function optionalNumber(value: string): number | undefined {
  * has loaded, same pattern as the storefront content editors.
  */
 export function OrderReceptionSettings({ organization }: { organization: Organization }) {
+  const locale = useDashboardLocale();
+  const t = useT();
   const queryClient = useQueryClient();
   const [modes, setModes] = useState<FulfillmentMode[]>(organization.fulfillmentModes ?? []);
   const [zones, setZones] = useState<DeliveryZone[]>(organization.deliveryZones ?? []);
@@ -68,13 +72,16 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold text-text">Réception des commandes</h2>
+      <h2 className="text-sm font-semibold text-text">{t("Réception des commandes", "Order fulfilment")}</h2>
       <p className="mt-1 text-sm text-text-muted">
-        Comment vos clients reçoivent ce qu&apos;ils commandent sur votre site.
+        {t(
+          "Comment vos clients reçoivent ce qu'ils commandent sur votre site.",
+          "How your customers receive what they order on your website.",
+        )}
       </p>
 
       <fieldset className="mt-4 space-y-2">
-        <legend className="text-xs font-medium text-text">Modes proposés</legend>
+        <legend className="text-xs font-medium text-text">{t("Modes proposés", "Modes offered")}</legend>
         <div className="flex flex-wrap gap-4">
           {FULFILLMENT_MODES.map((mode) => (
             <label key={mode} className="flex items-center gap-2 text-sm">
@@ -83,14 +90,16 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
                 checked={modes.includes(mode)}
                 onChange={(e) => toggleMode(mode, e.target.checked)}
               />
-              {FULFILLMENT_MODE_LABELS[mode]}
+              {(locale === "en" ? FULFILLMENT_MODE_LABELS_EN : FULFILLMENT_MODE_LABELS)[mode]}
             </label>
           ))}
         </div>
         {!configuredBefore && (
           <p className="text-xs text-text-muted">
-            Tant que vous n&apos;avez rien enregistré ici, votre site applique le tarif de livraison
-            fixe à toutes les commandes, comme aujourd&apos;hui.
+            {t(
+              "Tant que vous n'avez rien enregistré ici, votre site applique le tarif de livraison fixe à toutes les commandes, comme aujourd'hui.",
+              "Until you save something here, your website applies the flat delivery fee to every order, as it does today.",
+            )}
           </p>
         )}
       </fieldset>
@@ -98,7 +107,7 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
       {modes.includes("delivery") && (
         <fieldset className="mt-4 space-y-2">
           <div className="flex items-center justify-between">
-            <legend className="text-xs font-medium text-text">Zones de livraison</legend>
+            <legend className="text-xs font-medium text-text">{t("Zones de livraison", "Delivery zones")}</legend>
             <Button
               type="button"
               variant="secondary"
@@ -107,12 +116,15 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
                 setZones((current) => [...current, { id: crypto.randomUUID(), name: "", fee: 0 }])
               }
             >
-              Ajouter une zone
+              {t("Ajouter une zone", "Add a zone")}
             </Button>
           </div>
           {zones.length === 0 ? (
             <p className="text-xs text-text-muted">
-              Sans zone, la livraison coûte le tarif fixe défini dans le profil de l&apos;entreprise.
+              {t(
+                "Sans zone, la livraison coûte le tarif fixe défini dans le profil de l'entreprise.",
+                "With no zone, delivery costs the flat fee set in the business profile.",
+              )}
             </p>
           ) : (
             <ul className="space-y-2">
@@ -120,14 +132,14 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
                 <li key={zone.id} className="flex flex-wrap items-center gap-2">
                   <input
                     aria-label={`Nom de la zone ${index + 1}`}
-                    placeholder="Quartier, ville..."
+                    placeholder={t("Quartier, ville...", "Neighbourhood, town...")}
                     className={`${FIELD} w-44`}
                     value={zone.name}
                     onChange={(e) => updateZone(index, { name: e.target.value })}
                   />
                   <input
                     aria-label={`Frais de la zone ${index + 1}`}
-                    placeholder="Frais"
+                    placeholder={t("Frais", "Fee")}
                     type="number"
                     min="0"
                     step="0.01"
@@ -137,7 +149,7 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
                   />
                   <input
                     aria-label={`Minimum de commande de la zone ${index + 1}`}
-                    placeholder="Minimum de commande"
+                    placeholder={t("Minimum de commande", "Minimum order")}
                     type="number"
                     min="0"
                     step="0.01"
@@ -153,7 +165,7 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
                     onClick={() => setZones((current) => current.filter((_, i) => i !== index))}
                     className="text-xs text-destructive hover:underline"
                   >
-                    Retirer
+                    {t("Retirer", "Remove")}
                   </button>
                 </li>
               ))}
@@ -165,14 +177,14 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
       {modes.includes("pickup") && (
         <div className="mt-4">
           <label className="mb-1 block text-xs font-medium text-text" htmlFor="pickup-instructions">
-            Instructions de retrait
+            {t("Instructions de retrait", "Collection instructions")}
           </label>
           <textarea
             id="pickup-instructions"
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             maxLength={500}
-            placeholder="Adresse, horaires, à qui s'adresser..."
+            placeholder={t("Adresse, horaires, à qui s'adresser...", "Address, hours, who to ask for...")}
             value={pickupInstructions}
             onChange={(e) => setPickupInstructions(e.target.value)}
           />
@@ -182,7 +194,7 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
       {modes.length > 0 && (
         <div className="mt-4 max-w-xs">
           <label className="mb-1 block text-xs font-medium text-text" htmlFor="order-lead-time">
-            Délai de préparation minimum (minutes)
+            {t("Délai de préparation minimum (minutes)", "Minimum preparation time (minutes)")}
           </label>
           <Input
             id="order-lead-time"
@@ -204,15 +216,18 @@ export function OrderReceptionSettings({ organization }: { organization: Organiz
           disabled={modes.length === 0}
           onClick={() => mutation.mutate()}
         >
-          {mutation.isPending ? "Enregistrement..." : "Enregistrer"}
+          {mutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
         </Button>
         {modes.length === 0 && (
-          <p className="text-xs text-text-muted">Choisissez au moins un mode.</p>
+          <p className="text-xs text-text-muted">{t(
+            "Choisissez au moins un mode.",
+            "Choose at least one mode.",
+          )}</p>
         )}
-        {mutation.isSuccess && <p className="text-xs text-success">Enregistré.</p>}
+        {mutation.isSuccess && <p className="text-xs text-success">{t("Enregistré.", "Saved.")}</p>}
         {mutation.isError && (
           <p className="text-xs text-destructive">
-            {mutation.error instanceof ApiError ? mutation.error.message : "Erreur"}
+            {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
           </p>
         )}
       </div>

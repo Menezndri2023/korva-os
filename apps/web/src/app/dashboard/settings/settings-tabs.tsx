@@ -1,14 +1,15 @@
 "use client";
 
 import { useSyncExternalStore, type ReactNode } from "react";
+import { useT } from "@/lib/dashboard-locale";
 
 export const SETTINGS_TABS = [
-  { key: "entreprise", label: "Entreprise" },
-  { key: "site", label: "Site et ventes" },
-  { key: "abonnement", label: "Formule et modules" },
-  { key: "equipe", label: "Équipe" },
-  { key: "integrations", label: "Intégrations" },
-  { key: "avance", label: "Avancé" },
+  { key: "entreprise", label: ["Entreprise", "Business"] },
+  { key: "site", label: ["Site et ventes", "Website and sales"] },
+  { key: "abonnement", label: ["Formule et modules", "Plan and modules"] },
+  { key: "equipe", label: ["Équipe", "Team"] },
+  { key: "integrations", label: ["Intégrations", "Integrations"] },
+  { key: "avance", label: ["Avancé", "Advanced"] },
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number]["key"];
 
@@ -40,9 +41,10 @@ export function useSettingsTab(): SettingsTab {
  * opening a tab in a new browser tab or sharing the address works without extra code.
  */
 export function SettingsTabs({ active }: { active: SettingsTab }) {
+  const t = useT();
   return (
     <nav
-      aria-label="Sections des paramètres"
+      aria-label={t("Sections des paramètres", "Settings sections")}
       className="-mx-4 flex gap-1 overflow-x-auto border-b border-border px-4 sm:mx-0 sm:px-0"
     >
       {SETTINGS_TABS.map((tab) => (
@@ -56,7 +58,7 @@ export function SettingsTabs({ active }: { active: SettingsTab }) {
               : "text-text-muted hover:text-text"
           }`}
         >
-          {tab.label}
+          {t(tab.label[0], tab.label[1])}
         </a>
       ))}
     </nav>
