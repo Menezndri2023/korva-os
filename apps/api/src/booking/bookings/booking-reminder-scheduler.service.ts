@@ -16,6 +16,8 @@ import { EventBusService } from '../../core/events/event-bus.service';
 import { interpolate } from '../../shared/template';
 import { sendWithChannelFallback } from '../../communication/notify-contact-with-fallback';
 import { backgroundWorkersDisabled } from '../../core/background/background-workers';
+import { intlLocaleOf, orgLocale } from '../../shared/i18n';
+import { OrganizationsService } from '../../organizations/organizations.service';
 
 export const BOOKING_REMINDER_QUEUE_NAME = 'booking-reminder';
 export const BOOKING_REMINDER_JOB_NAME = 'sweep';
@@ -32,8 +34,11 @@ const JOB_OPTIONS = {
   removeOnFail: false,
 } as const;
 
-const DEFAULT_MESSAGE =
-  'Bonjour {{contact.firstName}}, un rappel pour votre rendez-vous « {{offer.name}} » le {{booking.date}} à {{booking.heure}}. À bientôt !';
+// In the business's language (shared/i18n.ts).
+const DEFAULT_MESSAGE = {
+  fr: 'Bonjour {{contact.firstName}}, un rappel pour votre rendez-vous « {{offer.name}} » le {{booking.date}} à {{booking.heure}}. À bientôt !',
+  en: 'Hello {{contact.firstName}}, a reminder of your appointment “{{offer.name}}” on {{booking.date}} at {{booking.heure}}. See you soon!',
+};
 
 /**
  * Periodically finds active (pending/confirmed) Bookings starting within the next
@@ -67,6 +72,7 @@ export class BookingReminderSchedulerService
     private readonly conversationsService: ConversationsService,
     private readonly auditService: AuditService,
     private readonly eventBus: EventBusService,
+    private readonly organizationsService: OrganizationsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -132,7 +138,7 @@ export class BookingReminderSchedulerService
       const organizationId = candidate.organizationId.toString();
       const bookingId = candidate.id as string;
       try {
-        const [offer, contact] = await Promise.all([
+        const [offer, contact, organization] = await Promise.all([
           this.offersService.getById(
             organizationId,
             candidate.offerId.toString(),
@@ -141,20 +147,25 @@ export class BookingReminderSchedulerService
             organizationId,
             candidate.contactId.toString(),
           ),
+          this.organizationsService.getById(organizationId),
         ]);
 
+        const intl = intlLocaleOf(organization.language);
         const payload = {
           contact: { firstName: contact.firstName ?? '' },
           offer: { name: offer.name },
           booking: {
-            date: candidate.startAt.toLocaleDateString('fr-FR'),
-            heure: candidate.startAt.toLocaleTimeString('fr-FR', {
+            date: candidate.startAt.toLocaleDateString(intl),
+            heure: candidate.startAt.toLocaleTimeString(intl, {
               hour: '2-digit',
               minute: '2-digit',
             }),
           },
         };
-        const body = interpolate(DEFAULT_MESSAGE, payload);
+        const body = interpolate(
+          DEFAULT_MESSAGE[orgLocale(organization.language)],
+          payload,
+        );
 
         const channel = await sendWithChannelFallback(
           this.conversationsService,

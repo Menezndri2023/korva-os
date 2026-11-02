@@ -26,15 +26,24 @@ import { sendWithChannelFallback } from '../../communication/notify-contact-with
 import { interpolate } from '../../shared/template';
 import { CreditBalancesService } from '../credit-balances/credit-balances.service';
 import { ReviewRequestsService } from '../../reviews/review-requests.service';
+import { orgLocale } from '../../shared/i18n';
 
 /** Training centres complete a course; every other business a visit, a stay, an appointment.
  *  The second wording used to go to everyone, so a hair salon's client was congratulated on
  *  "finishing the training". */
-const TRAINING_COMPLETION_MESSAGE =
-  'Bonjour {{contact.firstName}}, félicitations pour avoir terminé la formation « {{offer.name}} » ! Merci pour votre participation.';
-const COMPLETION_MESSAGE =
-  'Bonjour {{contact.firstName}}, merci d’avoir choisi {{organization.name}} pour « {{offer.name}} » ! À très bientôt.';
-const REVIEW_INVITATION = ' Votre avis compte, il ne prend que 30 secondes : ';
+// In the business's language (shared/i18n.ts).
+const TRAINING_COMPLETION_MESSAGE = {
+  fr: 'Bonjour {{contact.firstName}}, félicitations pour avoir terminé la formation « {{offer.name}} » ! Merci pour votre participation.',
+  en: 'Hello {{contact.firstName}}, congratulations on completing the course “{{offer.name}}”! Thank you for taking part.',
+};
+const COMPLETION_MESSAGE = {
+  fr: 'Bonjour {{contact.firstName}}, merci d’avoir choisi {{organization.name}} pour « {{offer.name}} » ! À très bientôt.',
+  en: 'Hello {{contact.firstName}}, thank you for choosing {{organization.name}} for “{{offer.name}}”! See you soon.',
+};
+const REVIEW_INVITATION = {
+  fr: ' Votre avis compte, il ne prend que 30 secondes : ',
+  en: ' Your review matters and takes only 30 seconds: ',
+};
 
 @Injectable()
 export class BookingsService {
@@ -478,16 +487,18 @@ export class BookingsService {
     ]);
     // Suspended or deleted business: nothing goes out in its name.
     if (!invitation) return;
+    const locale = orgLocale(invitation.language);
     const template =
       invitation.businessModel === 'training'
-        ? TRAINING_COMPLETION_MESSAGE
-        : COMPLETION_MESSAGE;
+        ? TRAINING_COMPLETION_MESSAGE[locale]
+        : COMPLETION_MESSAGE[locale];
     const body =
       interpolate(template, {
         contact: { firstName: contact.firstName ?? '' },
         offer: { name: offer.name },
         organization: { name: invitation.organizationName },
-      }) + (invitation.link ? `${REVIEW_INVITATION}${invitation.link}` : '');
+      }) +
+      (invitation.link ? `${REVIEW_INVITATION[locale]}${invitation.link}` : '');
     await sendWithChannelFallback(
       this.conversationsService,
       this.logger,

@@ -16,6 +16,7 @@ import { AuditService } from '../../audit/audit.service';
 import { interpolate } from '../../shared/template';
 import { sendWithChannelFallback } from '../../communication/notify-contact-with-fallback';
 import { backgroundWorkersDisabled } from '../../core/background/background-workers';
+import { orgLocale } from '../../shared/i18n';
 
 export const ABANDONED_CART_QUEUE_NAME = 'abandoned-cart-reminder';
 export const ABANDONED_CART_JOB_NAME = 'sweep';
@@ -32,8 +33,11 @@ const JOB_OPTIONS = {
   removeOnFail: false,
 } as const;
 
-const DEFAULT_MESSAGE =
-  "Bonjour {{contact.firstName}}, vous avez laissé {{items}} dans votre panier chez {{organization.name}}. Revenez les récupérer avant qu'ils ne soient plus disponibles !";
+// In the business's language (shared/i18n.ts).
+const DEFAULT_MESSAGE = {
+  fr: "Bonjour {{contact.firstName}}, vous avez laissé {{items}} dans votre panier chez {{organization.name}}. Revenez les récupérer avant qu'ils ne soient plus disponibles !",
+  en: 'Hello {{contact.firstName}}, you left {{items}} in your basket at {{organization.name}}. Come back for them before they are gone!',
+};
 
 /**
  * Periodically finds Carts left untouched (no item added/changed) for more than
@@ -163,11 +167,14 @@ export class AbandonedCartReminderSchedulerService
           continue;
         }
 
-        const body = interpolate(DEFAULT_MESSAGE, {
-          contact: { firstName: contact.firstName ?? '' },
-          organization: { name: organization.name },
-          items: itemNames.join(', '),
-        });
+        const body = interpolate(
+          DEFAULT_MESSAGE[orgLocale(organization.language)],
+          {
+            contact: { firstName: contact.firstName ?? '' },
+            organization: { name: organization.name },
+            items: itemNames.join(', '),
+          },
+        );
 
         const channel = await sendWithChannelFallback(
           this.conversationsService,

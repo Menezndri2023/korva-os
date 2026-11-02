@@ -45,6 +45,7 @@ import {
   WalletSettings,
   WalletSettingsDocument,
 } from './schemas/wallet-settings.schema';
+import { translator } from '../../shared/i18n';
 
 const DAY_MS = 86_400_000;
 /** A new withdrawal number must be this old before AUTOMATIC withdrawals use it. */
@@ -408,14 +409,24 @@ export class WalletService {
       .exec();
     const organization =
       await this.organizationsService.getById(organizationId);
+    // In the business's language (shared/i18n.ts).
+    const t = translator(organization.language);
     await this.emailProvider.send({
       to: userEmail,
-      subject: `Code de confirmation de votre numéro de retrait — ${organization.name}`,
-      body:
+      subject: t(
+        `Code de confirmation de votre numéro de retrait — ${organization.name}`,
+        `Confirmation code for your withdrawal number — ${organization.name}`,
+      ),
+      body: t(
         `<p>Code de confirmation : <strong style="font-size:20px;letter-spacing:3px">${code}</strong></p>` +
-        `<p>Il confirme que les retraits de ${escapeHtml(organization.name)} iront vers ` +
-        `${escapeHtml(input.account)} (${escapeHtml(input.holderName)}). Il expire dans 15 minutes.</p>` +
-        `<p>Si vous n'êtes pas à l'origine de ce changement, ne communiquez ce code à personne et changez votre mot de passe.</p>`,
+          `<p>Il confirme que les retraits de ${escapeHtml(organization.name)} iront vers ` +
+          `${escapeHtml(input.account)} (${escapeHtml(input.holderName)}). Il expire dans 15 minutes.</p>` +
+          `<p>Si vous n'êtes pas à l'origine de ce changement, ne communiquez ce code à personne et changez votre mot de passe.</p>`,
+        `<p>Confirmation code: <strong style="font-size:20px;letter-spacing:3px">${code}</strong></p>` +
+          `<p>It confirms that withdrawals for ${escapeHtml(organization.name)} will go to ` +
+          `${escapeHtml(input.account)} (${escapeHtml(input.holderName)}). It expires in 15 minutes.</p>` +
+          `<p>If you did not make this change, do not share this code with anyone and change your password.</p>`,
+      ),
     });
     return { pending: true };
   }

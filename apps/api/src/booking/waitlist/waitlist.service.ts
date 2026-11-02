@@ -20,9 +20,14 @@ import { ConversationsService } from '../../communication/conversations/conversa
 import { sendWithChannelFallback } from '../../communication/notify-contact-with-fallback';
 import { interpolate } from '../../shared/template';
 import { AuditService } from '../../audit/audit.service';
+import { intlLocaleOf, orgLocale } from '../../shared/i18n';
+import { OrganizationsService } from '../../organizations/organizations.service';
 
-const NOTIFICATION_MESSAGE =
-  "Bonjour {{contact.firstName}}, une place s'est libérée pour « {{offer.name}} » le {{booking.date}} à {{booking.heure}}. Contactez-nous vite pour la réserver !";
+// In the business's language (shared/i18n.ts).
+const NOTIFICATION_MESSAGE = {
+  fr: "Bonjour {{contact.firstName}}, une place s'est libérée pour « {{offer.name}} » le {{booking.date}} à {{booking.heure}}. Contactez-nous vite pour la réserver !",
+  en: 'Hello {{contact.firstName}}, a place has opened up for “{{offer.name}}” on {{booking.date}} at {{booking.heure}}. Contact us quickly to book it!',
+};
 
 /** Extracts a NestJS HttpException's `.response.code` — same shape/reasoning as the identical
  *  helper in notify-contact-with-fallback.ts, kept local here since this one branches control
@@ -47,6 +52,7 @@ export class WaitlistService {
     private readonly offersService: OffersService,
     private readonly conversationsService: ConversationsService,
     private readonly auditService: AuditService,
+    private readonly organizationsService: OrganizationsService,
   ) {}
 
   /**
@@ -208,24 +214,29 @@ export class WaitlistService {
       );
       if (!claimed) return; // lost a concurrent race — nothing to notify
 
-      const [offer, contact] = await Promise.all([
+      const [offer, contact, organization] = await Promise.all([
         this.offersService.getById(organizationId, claimed.offerId.toString()),
         this.contactsService.getById(
           organizationId,
           claimed.contactId.toString(),
         ),
+        this.organizationsService.getById(organizationId),
       ]);
-      const body = interpolate(NOTIFICATION_MESSAGE, {
-        contact: { firstName: contact.firstName ?? '' },
-        offer: { name: offer.name },
-        booking: {
-          date: claimed.startAt.toLocaleDateString('fr-FR'),
-          heure: claimed.startAt.toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
+      const intl = intlLocaleOf(organization.language);
+      const body = interpolate(
+        NOTIFICATION_MESSAGE[orgLocale(organization.language)],
+        {
+          contact: { firstName: contact.firstName ?? '' },
+          offer: { name: offer.name },
+          booking: {
+            date: claimed.startAt.toLocaleDateString(intl),
+            heure: claimed.startAt.toLocaleTimeString(intl, {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          },
         },
-      });
+      );
       await sendWithChannelFallback(
         this.conversationsService,
         this.logger,

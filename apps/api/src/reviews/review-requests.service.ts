@@ -12,10 +12,13 @@ import {
   verifyReviewInvitation,
   type ReviewInvitationClaims,
 } from './review-invitation-token';
+import { translator } from '../shared/i18n';
 
 export interface ReviewInvitationContext {
   organizationName: string;
   businessModel?: BusinessModel;
+  /** The business's language: what the customer is written to in (shared/i18n.ts). */
+  language?: string;
   /** Absent when the business switched review requests off. */
   link?: string;
 }
@@ -80,6 +83,7 @@ export class ReviewRequestsService {
         name: 1,
         slug: 1,
         businessModel: 1,
+        language: 1,
         reviewRequestsEnabled: 1,
         suspendedAt: 1,
       })
@@ -89,6 +93,7 @@ export class ReviewRequestsService {
     return {
       organizationName: organization.name,
       businessModel: organization.businessModel,
+      language: organization.language,
       link:
         organization.reviewRequestsEnabled === false
           ? undefined
@@ -118,12 +123,16 @@ export class ReviewRequestsService {
         organizationId,
         contactId,
       );
+      const t = translator(context.language);
       const hello = contact.firstName
-        ? `Bonjour ${contact.firstName}`
-        : 'Bonjour';
-      const body =
+        ? t(`Bonjour ${contact.firstName}`, `Hello ${contact.firstName}`)
+        : t('Bonjour', 'Hello');
+      const body = t(
         `${hello}, votre commande ${order.number} chez ${context.organizationName} est terminée. ` +
-        `Merci pour votre confiance ! Votre avis compte, il ne prend que 30 secondes : ${context.link}`;
+          `Merci pour votre confiance ! Votre avis compte, il ne prend que 30 secondes : ${context.link}`,
+        `${hello}, your order ${order.number} from ${context.organizationName} is complete. ` +
+          `Thank you for your trust! Your review matters and takes only 30 seconds: ${context.link}`,
+      );
       await sendWithChannelFallback(
         this.conversationsService,
         this.logger,

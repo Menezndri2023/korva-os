@@ -11,6 +11,7 @@ import { Offer } from '../catalog/offers/schemas/offer.schema';
 import { Membership } from '../identity/schemas/membership.schema';
 import { User } from '../identity/schemas/user.schema';
 import { interpolate } from '../shared/template';
+import { orgLocale } from '../shared/i18n';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -18,13 +19,25 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const NUDGE_MIN_AGE_DAYS = 2;
 export const NUDGE_MAX_AGE_DAYS = 7;
 
-const SUBJECT = 'Votre site est prêt, il ne lui manque qu’une offre';
-const BODY_TEMPLATE =
-  '<p>Bonjour,</p>' +
-  '<p>Le site de <strong>{{organizationName}}</strong> est créé, mais aucune offre n’y est encore en ligne : vos clients voient pour l’instant une page vide.</p>' +
-  '<p>Une seule offre suffit pour commencer — un nom, un prix et une photo prise avec votre téléphone, en deux minutes.</p>' +
-  '<p><a href="{{catalogUrl}}">Mettre ma première offre en ligne</a></p>' +
-  '<p>À bientôt sur KORVA.</p>';
+// In the business's language (shared/i18n.ts), the one its owner chose at sign-up.
+const SUBJECT = {
+  fr: 'Votre site est prêt, il ne lui manque qu’une offre',
+  en: 'Your website is ready — it only needs one offer',
+};
+const BODY_TEMPLATE = {
+  fr:
+    '<p>Bonjour,</p>' +
+    '<p>Le site de <strong>{{organizationName}}</strong> est créé, mais aucune offre n’y est encore en ligne : vos clients voient pour l’instant une page vide.</p>' +
+    '<p>Une seule offre suffit pour commencer — un nom, un prix et une photo prise avec votre téléphone, en deux minutes.</p>' +
+    '<p><a href="{{catalogUrl}}">Mettre ma première offre en ligne</a></p>' +
+    '<p>À bientôt sur KORVA.</p>',
+  en:
+    '<p>Hello,</p>' +
+    '<p>The website of <strong>{{organizationName}}</strong> is created, but no offer is online yet: for now your customers see an empty page.</p>' +
+    '<p>One offer is enough to start — a name, a price and a photo taken with your phone, in two minutes.</p>' +
+    '<p><a href="{{catalogUrl}}">Put my first offer online</a></p>' +
+    '<p>See you soon on KORVA.</p>',
+};
 
 export interface NudgeSweepResult {
   candidates: number;
@@ -72,9 +85,9 @@ export class ActivationNudgeService {
             $lte: new Date(now.getTime() - NUDGE_MIN_AGE_DAYS * DAY_MS),
           },
         },
-        { name: 1 },
+        { name: 1, language: 1 },
       )
-      .lean<{ _id: Types.ObjectId; name: string }[]>()
+      .lean<{ _id: Types.ObjectId; name: string; language?: string }[]>()
       .exec();
 
     let sent = 0;
@@ -92,7 +105,7 @@ export class ActivationNudgeService {
   }
 
   private async sendIfStillEmpty(
-    organization: { _id: Types.ObjectId; name: string },
+    organization: { _id: Types.ObjectId; name: string; language?: string },
     now: Date,
   ): Promise<boolean> {
     const online = await this.offerModel
@@ -113,11 +126,12 @@ export class ActivationNudgeService {
 
     const appUrl =
       this.configService.get<string>('APP_URL') ?? 'http://localhost:3000';
+    const locale = orgLocale(organization.language);
     const result = await this.emailProvider.send({
       to: owner,
-      subject: SUBJECT,
+      subject: SUBJECT[locale],
       body: interpolate(
-        BODY_TEMPLATE,
+        BODY_TEMPLATE[locale],
         {
           organizationName: organization.name,
           catalogUrl: `${appUrl}/dashboard/catalog`,

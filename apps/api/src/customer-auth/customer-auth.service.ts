@@ -56,6 +56,7 @@ import { hashToken } from '../identity/auth/token-hash.util';
 import { CustomerAccountDocument } from './schemas/customer-account.schema';
 import type { AuthenticatedCustomer } from './strategies/customer-jwt.strategy';
 import { EntitlementsService } from '../subscriptions/entitlements.service';
+import { orgLocale, translator } from '../shared/i18n';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
@@ -65,11 +66,21 @@ const FORGOT_PASSWORD_RESPONSE = {
   message: 'If an account exists for this email, a reset link has been sent.',
 };
 
-const RESET_EMAIL_SUBJECT = 'Reset your password';
-const RESET_EMAIL_BODY_TEMPLATE =
-  '<p>We received a request to reset your password for {{orgName}}.</p>' +
-  '<p><a href="{{resetUrl}}">Click here to reset your password</a>. This link expires in 30 minutes.</p>' +
-  '<p>If you did not request this, you can safely ignore this email.</p>';
+// In the business's language (see shared/i18n.ts): its customers read this, not KORVA's team.
+const RESET_EMAIL_SUBJECT = {
+  fr: 'Réinitialisez votre mot de passe',
+  en: 'Reset your password',
+};
+const RESET_EMAIL_BODY_TEMPLATE = {
+  fr:
+    '<p>Nous avons reçu une demande de réinitialisation de votre mot de passe chez {{orgName}}.</p>' +
+    '<p><a href="{{resetUrl}}">Cliquez ici pour choisir un nouveau mot de passe</a>. Ce lien expire dans 30 minutes.</p>' +
+    "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet e-mail.</p>",
+  en:
+    '<p>We received a request to reset your password for {{orgName}}.</p>' +
+    '<p><a href="{{resetUrl}}">Click here to reset your password</a>. This link expires in 30 minutes.</p>' +
+    '<p>If you did not request this, you can safely ignore this email.</p>',
+};
 
 export interface CustomerAuthTokens {
   accessToken: string;
@@ -200,13 +211,22 @@ export class CustomerAuthService {
     // own email-verification send (a delivery failure must never turn a successful account
     // creation into a failed request).
     try {
+      const t = translator(organization.language);
       await this.emailProvider.send({
         to: account.email,
-        subject: `Bienvenue chez ${organization.name}`,
+        subject: t(
+          `Bienvenue chez ${organization.name}`,
+          `Welcome to ${organization.name}`,
+        ),
         body: interpolate(
-          '<p>Bonjour {{firstName}},</p>' +
-            '<p>Votre compte client chez {{orgName}} a bien été créé. Vous pouvez suivre vos commandes ' +
-            'et réservations à tout moment depuis votre espace client.</p>',
+          t(
+            '<p>Bonjour {{firstName}},</p>' +
+              '<p>Votre compte client chez {{orgName}} a bien été créé. Vous pouvez suivre vos commandes ' +
+              'et réservations à tout moment depuis votre espace client.</p>',
+            '<p>Hello {{firstName}},</p>' +
+              '<p>Your customer account with {{orgName}} has been created. You can follow your orders ' +
+              'and bookings at any time from your customer area.</p>',
+          ),
           { firstName: contact.firstName ?? '', orgName: organization.name },
           { escapeHtml: true },
         ),
@@ -1107,8 +1127,9 @@ export class CustomerAuthService {
     );
 
     const resetUrl = this.buildResetUrl(organization.slug, token);
+    const locale = orgLocale(organization.language);
     const body = interpolate(
-      RESET_EMAIL_BODY_TEMPLATE,
+      RESET_EMAIL_BODY_TEMPLATE[locale],
       { resetUrl, orgName: organization.name },
       { escapeHtml: true },
     );
@@ -1116,7 +1137,7 @@ export class CustomerAuthService {
     try {
       await this.emailProvider.send({
         to: account.email,
-        subject: `${RESET_EMAIL_SUBJECT} — ${organization.name}`,
+        subject: `${RESET_EMAIL_SUBJECT[locale]} — ${organization.name}`,
         body,
       });
     } catch (error) {

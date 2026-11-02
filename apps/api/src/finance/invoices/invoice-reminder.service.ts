@@ -9,12 +9,13 @@ import { EntitlementsService } from '../../subscriptions/entitlements.service';
 import { PaymentsService } from '../payments/payments.service';
 import { PaymentProviderResolverService } from '../payments/providers/payment-provider-resolver.service';
 import { Invoice, type InvoiceDocument } from './schemas/invoice.schema';
+import { intlLocaleOf, translator } from '../../shared/i18n';
 
 /** Every reminder's payment link carries this key: one link per invoice, however often asked. */
 const KEY_PREFIX = 'reminder:';
 
-function money(amount: number, currency: string): string {
-  return new Intl.NumberFormat('fr-FR', {
+function money(amount: number, currency: string, intl = 'fr-FR'): string {
+  return new Intl.NumberFormat(intl, {
     style: 'currency',
     currency,
     maximumFractionDigits: currency.toUpperCase() === 'XOF' ? 0 : 2,
@@ -84,16 +85,35 @@ export class InvoiceReminderService {
         remaining,
         organization.currency,
       );
+      // In the business's language (shared/i18n.ts).
+      const t = translator(organization.language);
       const greeting = contact.firstName
-        ? `Bonjour ${contact.firstName},`
-        : 'Bonjour,';
+        ? t(`Bonjour ${contact.firstName},`, `Hello ${contact.firstName},`)
+        : t('Bonjour,', 'Hello,');
+      const amount = money(
+        remaining,
+        invoice.currency,
+        intlLocaleOf(organization.language),
+      );
       const body = [
-        `${greeting} la facture ${invoice.number} de ${organization.name} (${money(remaining, invoice.currency)} restant à payer) est arrivée à échéance.`,
+        t(
+          `${greeting} la facture ${invoice.number} de ${organization.name} (${amount} restant à payer) est arrivée à échéance.`,
+          `${greeting} invoice ${invoice.number} from ${organization.name} (${amount} still to pay) is now due.`,
+        ),
         link
-          ? `Vous pouvez la régler par mobile money ici : ${link}`
+          ? t(
+              `Vous pouvez la régler par mobile money ici : ${link}`,
+              `You can pay it by mobile money or card here: ${link}`,
+            )
           : organization.contactPhone
-            ? `Pour la régler, contactez-nous au ${organization.contactPhone}.`
-            : 'Merci de nous contacter pour la régler.',
+            ? t(
+                `Pour la régler, contactez-nous au ${organization.contactPhone}.`,
+                `To pay it, contact us on ${organization.contactPhone}.`,
+              )
+            : t(
+                'Merci de nous contacter pour la régler.',
+                'Please contact us to pay it.',
+              ),
       ].join(' ');
 
       const channel = await sendWithChannelFallback(

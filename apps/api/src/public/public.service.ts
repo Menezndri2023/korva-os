@@ -76,6 +76,7 @@ import {
   Contact,
   ContactDocument,
 } from '../crm/contacts/schemas/contact.schema';
+import { orgLocale, translator } from '../shared/i18n';
 
 /** Slot length offered for an offer with no duration of its own when the visitor has not picked
  *  one — the booking form's own default before durations moved onto the offer. */
@@ -100,9 +101,15 @@ function emailsMatch(storedEmail: string, candidateEmail: string): boolean {
   return storedEmail === candidateEmail.trim().toLowerCase();
 }
 
-const ORDER_CONFIRMATION_BODY_TEMPLATE = `<p>Bonjour {{firstName}},</p>
+// In the business's language (shared/i18n.ts): its customers read it.
+const ORDER_CONFIRMATION_BODY_TEMPLATE = {
+  fr: `<p>Bonjour {{firstName}},</p>
 <p>Votre commande <strong>{{orderNumber}}</strong> d'un montant de {{total}} {{currency}} a bien été enregistrée.</p>
-<p>Vous pouvez suivre son statut à tout moment depuis la page de suivi de commande de la boutique.</p>`;
+<p>Vous pouvez suivre son statut à tout moment depuis la page de suivi de commande de la boutique.</p>`,
+  en: `<p>Hello {{firstName}},</p>
+<p>Your order <strong>{{orderNumber}}</strong> for {{total}} {{currency}} has been recorded.</p>
+<p>You can follow its status at any time from the shop's order tracking page.</p>`,
+};
 
 /**
  * Backs the public, unauthenticated storefront API (`/public/:organizationSlug/...`). Never
@@ -1126,9 +1133,12 @@ export class PublicService {
       try {
         await this.emailProvider.send({
           to: contact.email,
-          subject: `Confirmation de commande ${order.number}`,
+          subject: translator(organization.language)(
+            `Confirmation de commande ${order.number}`,
+            `Order confirmation ${order.number}`,
+          ),
           body: interpolate(
-            ORDER_CONFIRMATION_BODY_TEMPLATE,
+            ORDER_CONFIRMATION_BODY_TEMPLATE[orgLocale(organization.language)],
             {
               firstName: contact.firstName ?? '',
               orderNumber: order.number,
