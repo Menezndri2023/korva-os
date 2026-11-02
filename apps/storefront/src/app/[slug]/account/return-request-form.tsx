@@ -6,6 +6,7 @@ import { Button, Card } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { LineItem } from "@korva/types";
+import { useT } from "@/lib/storefront-locale";
 
 /**
  * "Demander un retour" widget for a fulfilled order — mirrors ReviewForm's shape (submit, show
@@ -25,6 +26,7 @@ export function ReturnRequestForm({
   orderId: string;
   items: LineItem[];
 }) {
+  const t = useT();
   const { authFetch } = useCustomerAuth(slug);
   const [selected, setSelected] = useState<Record<number, number>>({});
   const [reason, setReason] = useState("");
@@ -67,7 +69,10 @@ export function ReturnRequestForm({
   if (returnMutation.isSuccess) {
     return (
       <Card className="p-4 text-sm text-text">
-        Votre demande de retour a été envoyée — elle est en attente de validation.
+        {t(
+          "Votre demande de retour a été envoyée — elle est en attente de validation.",
+          "Your return request has been sent — it is waiting for approval.",
+        )}
       </Card>
     );
   }
@@ -75,7 +80,7 @@ export function ReturnRequestForm({
   if (!open) {
     return (
       <Button type="button" variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        Demander un retour
+        {t("Demander un retour", "Ask for a return")}
       </Button>
     );
   }
@@ -84,7 +89,7 @@ export function ReturnRequestForm({
 
   return (
     <Card className="space-y-3 p-4">
-      <p className="text-sm font-medium text-text">Demander un retour</p>
+      <p className="text-sm font-medium text-text">{t("Demander un retour", "Ask for a return")}</p>
       <ul className="space-y-2">
         {items.map((item, index) => (
           <li key={index} className="flex items-center justify-between gap-3 text-sm">
@@ -114,7 +119,7 @@ export function ReturnRequestForm({
       <textarea
         value={reason}
         onChange={(event) => setReason(event.target.value)}
-        placeholder="Motif du retour"
+        placeholder={t("Motif du retour", "Reason for the return")}
         rows={2}
         className="w-full rounded-md border border-border-input px-3 py-2 text-sm text-text focus:border-focus focus:outline-none"
       />
@@ -122,7 +127,7 @@ export function ReturnRequestForm({
         <p className="text-xs text-destructive">
           {returnMutation.error instanceof PublicApiError
             ? returnMutation.error.message
-            : "Impossible d'envoyer votre demande de retour."}
+            : t("Impossible d'envoyer votre demande de retour.", "Your return request could not be sent.")}
         </p>
       )}
       <div className="flex gap-2">
@@ -133,10 +138,10 @@ export function ReturnRequestForm({
           loading={returnMutation.isPending}
           onClick={() => returnMutation.mutate()}
         >
-          Envoyer la demande
+          {t("Envoyer la demande", "Send the request")}
         </Button>
         <Button type="button" size="sm" variant="secondary" onClick={() => setOpen(false)}>
-          Annuler
+          {t("Annuler", "Cancel")}
         </Button>
       </div>
     </Card>

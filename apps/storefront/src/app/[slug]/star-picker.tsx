@@ -1,8 +1,12 @@
 "use client";
 
 import { useRef } from "react";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const LABELS = ["Décevant", "Moyen", "Bien", "Très bien", "Excellent"] as const;
+const LABELS = {
+  fr: ["Décevant", "Moyen", "Bien", "Très bien", "Excellent"],
+  en: ["Disappointing", "Average", "Good", "Very good", "Excellent"],
+} as const;
 
 /**
  * Five stars as a radio group: arrows move the choice, as with any radio group, and the chosen
@@ -16,6 +20,9 @@ export function StarPicker({
   onChange: (value: number) => void;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const locale = useStorefrontLocale();
+  const t = useT();
+  const labels = LABELS[locale];
 
   function move(next: number) {
     const clamped = Math.min(5, Math.max(1, next));
@@ -27,7 +34,7 @@ export function StarPicker({
     <div>
       <div
         role="radiogroup"
-        aria-label="Votre note"
+        aria-label={t("Votre note", "Your rating")}
         className="flex gap-1"
         onKeyDown={(event) => {
           if (event.key === "ArrowRight" || event.key === "ArrowUp") {
@@ -39,7 +46,7 @@ export function StarPicker({
           }
         }}
       >
-        {LABELS.map((label, index) => {
+        {labels.map((label, index) => {
           const star = index + 1;
           return (
             <button
@@ -50,7 +57,7 @@ export function StarPicker({
               type="button"
               role="radio"
               aria-checked={value === star}
-              aria-label={`${star} sur 5 — ${label}`}
+              aria-label={t(`${star} sur 5 — ${label}`, `${star} out of 5 — ${label}`)}
               tabIndex={value === star || (value === 0 && star === 1) ? 0 : -1}
               onClick={() => onChange(star)}
               className={`rounded-md px-0.5 text-4xl leading-none transition-transform focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus active:scale-90 ${
@@ -63,7 +70,7 @@ export function StarPicker({
         })}
       </div>
       <p className="mt-1 h-5 text-sm font-medium text-text" aria-live="polite">
-        {value > 0 ? LABELS[value - 1] : ""}
+        {value > 0 ? labels[value - 1] : ""}
       </p>
     </div>
   );

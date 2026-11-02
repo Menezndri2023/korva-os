@@ -21,18 +21,37 @@ import { MobileCartBar } from "@/templates/sections/MobileCartBar";
 import { WhatsAppButton } from "@/templates/sections/WhatsAppButton";
 import { Confirmation } from "@/templates/sections/Confirmation";
 import { useRouter } from "next/navigation";
+import { useT } from "@/lib/storefront-locale";
 
 const PAGE_SIZE = 24;
 const ALL_CATEGORIES = "__all__";
 
-const CATALOGUE_LABELS: Record<string, { title: string; empty: string }> = {
-  table: { title: "Notre menu", empty: "Aucun plat ne correspond à votre recherche." },
-  academie: { title: "Nos formations", empty: "Aucune formation ne correspond à votre recherche." },
-  salon: { title: "Nos services", empty: "Aucun service ne correspond à votre recherche." },
-  vitrine: { title: "Nos services", empty: "Aucun service ne correspond à votre recherche." },
-  boutique: { title: "Notre boutique", empty: "Aucun produit ne correspond à votre recherche." },
+const CATALOGUE_LABELS: Record<string, { title: [string, string]; empty: [string, string] }> = {
+  table: {
+    title: ["Notre menu", "Our menu"],
+    empty: ["Aucun plat ne correspond à votre recherche.", "No dish matches your search."],
+  },
+  academie: {
+    title: ["Nos formations", "Our courses"],
+    empty: ["Aucune formation ne correspond à votre recherche.", "No course matches your search."],
+  },
+  salon: {
+    title: ["Nos services", "Our services"],
+    empty: ["Aucun service ne correspond à votre recherche.", "No service matches your search."],
+  },
+  vitrine: {
+    title: ["Nos services", "Our services"],
+    empty: ["Aucun service ne correspond à votre recherche.", "No service matches your search."],
+  },
+  boutique: {
+    title: ["Notre boutique", "Our shop"],
+    empty: ["Aucun produit ne correspond à votre recherche.", "No product matches your search."],
+  },
 };
-const DEFAULT_LABELS = { title: "Notre catalogue", empty: "Aucun article ne correspond à votre recherche." };
+const DEFAULT_LABELS = {
+  title: ["Notre catalogue", "Our catalogue"],
+  empty: ["Aucun article ne correspond à votre recherche.", "No item matches your search."],
+} satisfies { title: [string, string]; empty: [string, string] };
 
 /** Debounces the free-text query so every keystroke doesn't fire a new request — 350ms is
  *  short enough to feel live, long enough that a normal typing burst collapses to one call. */
@@ -46,6 +65,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?: string }) {
+  const t = useT();
   const queryClient = useQueryClient();
 
   const [searchInput, setSearchInput] = useState("");
@@ -111,7 +131,7 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
         {/* Not "n'existe pas": this branch is reached for any failed load, most often an
             unreachable API, and a real shop's customers must not be told the business is gone.
             See classifyLookupFailure in @/lib/organization-lookup. */}
-        <p>Cette boutique est momentanément indisponible.</p>
+        <p>{t("Cette boutique est momentanément indisponible.", "This shop is temporarily unavailable.")}</p>
       </div>
     );
   }
@@ -132,7 +152,7 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
       <SiteHeader
         slug={slug}
         organization={organization}
-        links={[{ href: `/${slug}`, label: "Accueil" }, { href: `/${slug}/track`, label: "Suivre ma commande" }]}
+        links={[{ href: `/${slug}`, label: t("Accueil", "Home") }, { href: `/${slug}/track`, label: t("Suivre ma commande", "Track my order") }]}
         authHydrated={authHydrated}
         isAuthenticated={isAuthenticated}
         customerFirstName={customer?.firstName}
@@ -142,11 +162,14 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
       />
 
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-        <h1 className={`mb-6 text-3xl font-semibold ${KT.headingFont}`}>{labels.title}</h1>
+        <h1 className={`mb-6 text-3xl font-semibold ${KT.headingFont}`}>{t(...labels.title)}</h1>
 
         <Confirmation message={confirmation} />
 
-        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>Le catalogue n&apos;est pas disponible pour le moment.</p>}
+        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>{t(
+          "Le catalogue n'est pas disponible pour le moment.",
+          "The catalogue is not available at the moment.",
+        )}</p>}
 
         {catalogVisible && (
           <>
@@ -154,17 +177,17 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
               <Input
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Rechercher..."
-                aria-label="Rechercher dans le catalogue"
+                placeholder={t("Rechercher...", "Search...")}
+                aria-label={t("Rechercher dans le catalogue", "Search the catalogue")}
                 className="w-full sm:w-64"
               />
               {(categoriesQuery.data?.length ?? 0) > 0 && (
                 <Select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  aria-label="Filtrer par catégorie"
+                  aria-label={t("Filtrer par catégorie", "Filter by category")}
                 >
-                  <option value={ALL_CATEGORIES}>Toutes les catégories</option>
+                  <option value={ALL_CATEGORIES}>{t("Toutes les catégories", "All categories")}</option>
                   {categoriesQuery.data?.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
@@ -173,11 +196,11 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
               <Select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as typeof sort)}
-                aria-label="Trier"
+                aria-label={t("Trier", "Sort")}
               >
-                <option value="newest">Plus récents</option>
-                <option value="price_asc">Prix croissant</option>
-                <option value="price_desc">Prix décroissant</option>
+                <option value="newest">{t("Plus récents", "Newest")}</option>
+                <option value="price_asc">{t("Prix croissant", "Price, low to high")}</option>
+                <option value="price_desc">{t("Prix décroissant", "Price, high to low")}</option>
               </Select>
             </div>
 
@@ -191,13 +214,15 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
 
             {offersQuery.isError && (
               <div className={`rounded-md border ${KT.border} p-4 text-sm text-destructive`}>
-                Impossible de charger le catalogue.{" "}
-                <button onClick={() => offersQuery.refetch()} className="underline">Réessayer</button>
+                {t("Impossible de charger le catalogue.", "The catalogue could not be loaded.")}{" "}
+                <button onClick={() => offersQuery.refetch()} className="underline">
+                  {t("Réessayer", "Try again")}
+                </button>
               </div>
             )}
 
             {result && result.data.length === 0 && (
-              <p className={`text-sm ${KT.textMuted}`}>{labels.empty}</p>
+              <p className={`text-sm ${KT.textMuted}`}>{t(...labels.empty)}</p>
             )}
 
             {result && result.data.length > 0 && (
@@ -232,7 +257,7 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
         )}
       </main>
 
-      <SiteFooter organization={organization} links={[{ href: `/${slug}`, label: "Accueil" }, { href: `/${slug}/track`, label: "Suivre ma commande" }]} />
+      <SiteFooter organization={organization} links={[{ href: `/${slug}`, label: t("Accueil", "Home") }, { href: `/${slug}/track`, label: t("Suivre ma commande", "Track my order") }]} />
       {commerceEnabled && <MobileCartBar cartCount={cartCount} onOpenCheckout={() => setShowCheckout(true)} />}
       {organization.whatsappNumber && (
         <WhatsAppButton
@@ -249,7 +274,10 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
           onClose={() => setBookingOffer(null)}
           onSuccess={() => {
             setBookingOffer(null);
-            setConfirmation("Votre réservation a bien été enregistrée.");
+            setConfirmation(t(
+              "Votre réservation a bien été enregistrée.",
+              "Your booking has been recorded.",
+            ));
           }}
         />
       )}
@@ -267,7 +295,7 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
           onSuccess={(orderNumber) => {
             clearCart();
             setShowCheckout(false);
-            setConfirmation(`Commande ${orderNumber} confirmée, merci !`);
+            setConfirmation(t(`Commande ${orderNumber} confirmée, merci !`, `Order ${orderNumber} confirmed, thank you!`));
             void queryClient.invalidateQueries({ queryKey: ["public-offers-search", slug] });
           }}
         />
@@ -291,6 +319,7 @@ function CatalogueCard({
   onBook: () => void;
   onAddToCart: () => void;
 }) {
+  const t = useT();
   return (
     <div className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
       <div className="relative">
@@ -313,11 +342,11 @@ function CatalogueCard({
         </p>
         <div className="mt-auto pt-3">
           {offer.type === "booking" && bookingEnabled && (
-            <Button variant="secondary" size="sm" className="w-full" onClick={onBook}>Réserver</Button>
+            <Button variant="secondary" size="sm" className="w-full" onClick={onBook}>{t("Réserver", "Book")}</Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
             <Button size="sm" className={`w-full ${KT.accentBg} ${KT.accentContrastText}`} onClick={onAddToCart}>
-              Ajouter
+              {t("Ajouter", "Add")}
             </Button>
           )}
         </div>

@@ -8,8 +8,10 @@ import { Button, Card } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { AccountShell } from "../account/account-shell";
 import { StarPicker } from "../star-picker";
+import { useT } from "@/lib/storefront-locale";
 
 export default function ReviewInvitationClient({ slug, token }: { slug: string; token: string }) {
+  const t = useT();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [showName, setShowName] = useState(true);
@@ -46,18 +48,23 @@ export default function ReviewInvitationClient({ slug, token }: { slug: string; 
 
   const backToSite = (
     <Link href={`/${slug}`} className="font-medium text-text underline underline-offset-2">
-      Voir le site
+      {t("Voir le site", "See the website")}
     </Link>
   );
 
   if (!token || invitation.isError) {
     return (
-      <AccountShell slug={slug} title="Donner mon avis">
+      <AccountShell slug={slug} title={t("Donner mon avis", "Leave my review")}>
         <Card className="space-y-2 p-6 text-sm text-text-muted">
-          <p className="font-medium text-text">Ce lien n’est plus valide.</p>
+          <p className="font-medium text-text">{t(
+            "Ce lien n’est plus valide.",
+            "This link is no longer valid.",
+          )}</p>
           <p>
-            Il a peut-être expiré, ou il a été copié incomplètement. Vous pouvez aussi laisser un avis
-            depuis votre espace client, sur la commande ou la réservation concernée.
+            {t(
+              "Il a peut-être expiré, ou il a été copié incomplètement. Vous pouvez aussi laisser un avis depuis votre espace client, sur la commande ou la réservation concernée.",
+              "It may have expired, or it was not copied in full. You can also leave a review from your customer area, on the order or booking concerned.",
+            )}
           </p>
           <p>{backToSite}</p>
         </Card>
@@ -67,8 +74,8 @@ export default function ReviewInvitationClient({ slug, token }: { slug: string; 
 
   if (invitation.isLoading || !invitation.data) {
     return (
-      <AccountShell slug={slug} title="Donner mon avis">
-        <Card className="p-6 text-sm text-text-muted">Chargement…</Card>
+      <AccountShell slug={slug} title={t("Donner mon avis", "Leave my review")}>
+        <Card className="p-6 text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       </AccountShell>
     );
   }
@@ -80,15 +87,21 @@ export default function ReviewInvitationClient({ slug, token }: { slug: string; 
 
   if (submit.isSuccess || alreadyDone) {
     return (
-      <AccountShell slug={slug} title={`Votre avis sur ${data.organizationName}`}>
+      <AccountShell slug={slug} title={t(`Votre avis sur ${data.organizationName}`, `Your review of ${data.organizationName}`)}>
         <Card className="space-y-2 p-6 text-sm text-text-muted">
           <p className="text-base font-semibold text-text">
-            {submit.isSuccess ? "Merci, votre avis est publié." : "Vous avez déjà donné votre avis sur cet achat."}
+            {submit.isSuccess ? t("Merci, votre avis est publié.", "Thank you, your review is published.") : t("Vous avez déjà donné votre avis sur cet achat.", "You have already reviewed this purchase.")}
           </p>
           <p>
             {submit.isSuccess
-              ? `Il aide ${data.organizationName} à s'améliorer et les prochains clients à choisir.`
-              : "Un seul avis par achat : c'est ce qui les rend fiables."}
+              ? t(
+                  `Il aide ${data.organizationName} à s'améliorer et les prochains clients à choisir.`,
+                  `It helps ${data.organizationName} improve and helps the next customers choose.`,
+                )
+              : t(
+                "Un seul avis par achat : c'est ce qui les rend fiables.",
+                "One review per purchase: that is what makes them trustworthy.",
+              )}
           </p>
           <p>{backToSite}</p>
         </Card>
@@ -96,16 +109,18 @@ export default function ReviewInvitationClient({ slug, token }: { slug: string; 
     );
   }
 
-  const what = data.entity === "order" ? "votre commande" : "votre rendez-vous";
+  const what =
+    data.entity === "order" ? t("votre commande", "your order") : t("votre rendez-vous", "your appointment");
 
   return (
-    <AccountShell slug={slug} title={`Votre avis sur ${data.organizationName}`}>
+    <AccountShell slug={slug} title={t(`Votre avis sur ${data.organizationName}`, `Your review of ${data.organizationName}`)}>
       <Card className="p-6">
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <p className="text-sm text-text-muted">
-              {data.customerFirstName ? `${data.customerFirstName}, comment` : "Comment"} s’est passé{" "}
-              {what} ?
+              {data.customerFirstName
+                ? t(`${data.customerFirstName}, comment s’est passé ${what} ?`, `${data.customerFirstName}, how was ${what}?`)
+                : t(`Comment s’est passé ${what} ?`, `How was ${what}?`)}
             </p>
             {data.items.length > 0 && (
               <p className="mt-1 text-sm font-medium text-text">{data.items.join(", ")}</p>
@@ -122,19 +137,25 @@ export default function ReviewInvitationClient({ slug, token }: { slug: string; 
             />
             {missingRating && (
               <p className="text-sm text-destructive" role="alert">
-                Choisissez une note de 1 à 5 étoiles.
+                {t("Choisissez une note de 1 à 5 étoiles.", "Choose a rating from 1 to 5 stars.")}
               </p>
             )}
           </div>
 
           <label className="block text-sm">
-            <span className="mb-1 block text-text-muted">Votre commentaire (facultatif)</span>
+            <span className="mb-1 block text-text-muted">{t(
+              "Votre commentaire (facultatif)",
+              "Your comment (optional)",
+            )}</span>
             <textarea
               value={comment}
               onChange={(event) => setComment(event.target.value)}
               maxLength={2000}
               rows={4}
-              placeholder="Ce que vous avez aimé, ce qui pourrait être mieux…"
+              placeholder={t(
+                "Ce que vous avez aimé, ce qui pourrait être mieux…",
+                "What you liked, what could be better…",
+              )}
               className="w-full rounded-md border border-border-input bg-surface px-3 py-2 text-base text-text focus:border-focus focus:outline-none"
             />
           </label>
@@ -148,9 +169,12 @@ export default function ReviewInvitationClient({ slug, token }: { slug: string; 
                 className="mt-0.5 h-4 w-4"
               />
               <span>
-                Signer avec mon prénom ({data.customerFirstName})
+                {t(`Signer avec mon prénom (${data.customerFirstName})`, `Sign with my first name (${data.customerFirstName})`)}
                 <span className="block text-xs text-text-muted">
-                  Sinon, votre avis apparaît comme « Client vérifié ».
+                  {t(
+                    "Sinon, votre avis apparaît comme « Client vérifié ».",
+                    "Otherwise your review shows as “Verified customer”.",
+                  )}
                 </span>
               </span>
             </label>
@@ -158,15 +182,21 @@ export default function ReviewInvitationClient({ slug, token }: { slug: string; 
 
           {submit.isError && !alreadyDone && (
             <p className="text-sm text-destructive" role="alert">
-              {submit.error instanceof PublicApiError ? submit.error.message : "Envoi impossible. Réessayez."}
+              {submit.error instanceof PublicApiError ? submit.error.message : t(
+                "Envoi impossible. Réessayez.",
+                "Could not send. Try again.",
+              )}
             </p>
           )}
 
           <Button type="submit" loading={submit.isPending} className="w-full">
-            Publier mon avis
+            {t("Publier mon avis", "Publish my review")}
           </Button>
           <p className="text-center text-xs text-text-muted">
-            Votre avis est publié sur le site de {data.organizationName}, qui peut y répondre.
+            {t(
+              `Votre avis est publié sur le site de ${data.organizationName}, qui peut y répondre.`,
+              `Your review is published on ${data.organizationName}'s website, which can reply to it.`,
+            )}
           </p>
         </form>
       </Card>

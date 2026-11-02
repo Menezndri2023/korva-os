@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import ReviewInvitationClient from "./review-invitation-client";
 
 interface ReviewPageProps {
@@ -8,8 +9,9 @@ interface ReviewPageProps {
 
 export async function generateMetadata({ params }: ReviewPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Donner mon avis",
+    title: t("Donner mon avis", "Leave my review"),
     // The link is personal: never indexed, and its token never leaves in a Referer header.
     robots: { index: false, follow: false },
     referrer: "no-referrer",

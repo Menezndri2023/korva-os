@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import CohortClient from "./cohort-client";
 
 interface CohortPageProps {
@@ -7,8 +8,9 @@ interface CohortPageProps {
 
 export async function generateMetadata({ params }: CohortPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Ma formation",
+    title: t("Ma formation", "My course"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/learning` },
   };

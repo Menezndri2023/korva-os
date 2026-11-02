@@ -11,17 +11,20 @@ import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { CustomerQuoteDetail } from "@/lib/public-types";
 import type { QuoteStatus } from "@korva/types";
 import { AccountShell } from "../../account-shell";
+import { intlLocale, useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
-  draft: "Brouillon",
-  sent: "En attente de signature",
-  viewed: "En attente de signature",
-  accepted: "Signé",
-  rejected: "Refusé",
-  expired: "Expiré",
+const QUOTE_STATUS_LABELS: Record<QuoteStatus, [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  sent: ["En attente de signature", "Awaiting signature"],
+  viewed: ["En attente de signature", "Awaiting signature"],
+  accepted: ["Signé", "Signed"],
+  rejected: ["Refusé", "Rejected"],
+  expired: ["Expiré", "Expired"],
 };
 
 export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quoteId: string }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { hydrated, isAuthenticated, authFetch, customer } = useCustomerAuth(slug);
@@ -68,13 +71,13 @@ export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quo
   const canSign = quoteQuery.data?.status === "sent" || quoteQuery.data?.status === "viewed";
 
   return (
-    <AccountShell slug={slug} title="Mon devis">
+    <AccountShell slug={slug} title={t("Mon devis", "My quote")}>
       <Link href={`/${slug}/account/quotes`} className="text-sm text-text-muted hover:underline">
-        ← Mes devis
+        {t("← Mes devis", "← My quotes")}
       </Link>
 
       {quoteQuery.isLoading && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {quoteQuery.isSuccess && (
@@ -90,7 +93,7 @@ export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quo
                     : "default"
               }
             >
-              {QUOTE_STATUS_LABELS[quoteQuery.data.status]}
+              {t(...QUOTE_STATUS_LABELS[quoteQuery.data.status])}
             </Badge>
           </div>
 
@@ -101,7 +104,7 @@ export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quo
                   {item.description} × {item.quantity}
                 </span>
                 <span className="text-text-muted">
-                  {formatOfferPrice(item.unitPrice * item.quantity, quoteQuery.data.currency)}
+                  {formatOfferPrice(item.unitPrice * item.quantity, quoteQuery.data.currency, locale)}
                 </span>
               </li>
             ))}
@@ -110,11 +113,11 @@ export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quo
           <div className="space-y-1 text-right text-sm">
             {quoteQuery.data.discountTotal > 0 && (
               <p className="text-text-muted">
-                Remise : -{formatOfferPrice(quoteQuery.data.discountTotal, quoteQuery.data.currency)}
+                Remise : -{formatOfferPrice(quoteQuery.data.discountTotal, quoteQuery.data.currency, locale)}
               </p>
             )}
             <p className="font-medium text-text">
-              Total : {formatOfferPrice(quoteQuery.data.total, quoteQuery.data.currency)}
+              Total : {formatOfferPrice(quoteQuery.data.total, quoteQuery.data.currency, locale)}
             </p>
           </div>
 
@@ -125,7 +128,7 @@ export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quo
           {quoteQuery.data.validUntil && !canSign && quoteQuery.data.status !== "accepted" && (
             <p className="text-xs text-text-muted">
               Valide jusqu&apos;au{" "}
-              {new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
+              {new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "medium" }).format(
                 new Date(quoteQuery.data.validUntil),
               )}
             </p>
@@ -133,9 +136,9 @@ export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quo
 
           {quoteQuery.data.status === "accepted" && quoteQuery.data.signedByName && (
             <p className="border-t border-border pt-3 text-sm text-text-muted">
-              Signé par {quoteQuery.data.signedByName}
+              {t("Signé par", "Signed by")} {quoteQuery.data.signedByName}
               {quoteQuery.data.signedAt &&
-                ` le ${new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(
+                ` ${t("le", "on")} ${new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "medium", timeStyle: "short" }).format(
                   new Date(quoteQuery.data.signedAt),
                 )}`}
             </p>
@@ -143,22 +146,24 @@ export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quo
 
           {canSign && (
             <div className="space-y-3 border-t border-border pt-3">
-              <p className="text-sm font-medium text-text">Signer ce devis</p>
+              <p className="text-sm font-medium text-text">{t("Signer ce devis", "Sign this quote")}</p>
               <p className="text-xs text-text-muted">
-                En saisissant votre nom complet et en validant, vous acceptez ce devis dans les
-                conditions indiquées ci-dessus.
+                {t(
+                  "En saisissant votre nom complet et en validant, vous acceptez ce devis dans les conditions indiquées ci-dessus.",
+                  "By typing your full name and confirming, you accept this quote on the terms shown above.",
+                )}
               </p>
               <Input
                 value={signerName}
                 onChange={(event) => setSignerName(event.target.value)}
-                placeholder="Nom complet"
+                placeholder={t("Nom complet", "Full name")}
                 className="w-full"
               />
               {signMutation.isError && (
                 <p className="text-xs text-destructive">
                   {signMutation.error instanceof PublicApiError
                     ? signMutation.error.message
-                    : "Impossible de signer ce devis."}
+                    : t("Impossible de signer ce devis.", "This quote could not be signed.")}
                 </p>
               )}
               <Button
@@ -167,7 +172,7 @@ export default function QuoteDetailClient({ slug, quoteId }: { slug: string; quo
                 disabled={!signerName.trim()}
                 onClick={() => signMutation.mutate()}
               >
-                Signer et accepter
+                {t("Signer et accepter", "Sign and accept")}
               </Button>
             </div>
           )}

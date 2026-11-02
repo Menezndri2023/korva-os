@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import { headers } from "next/headers";
 import OfferDetailClient from "./offer-detail-client";
 import { serverApi } from "@/lib/server-api";
@@ -33,12 +34,13 @@ async function fetchOrganization(
 
 export async function generateMetadata({ params }: OfferDetailPageProps): Promise<Metadata> {
   const { slug, offerId } = await params;
+  const t = await siteTranslator(slug);
   const canonicalUrl = `${SITE_URL}/${slug}/offers/${offerId}`;
   const lookup = await fetchOrganization(slug);
 
   const notFoundMetadata: Metadata = {
-    title: "Offre introuvable — KORVA OS",
-    description: "Cette offre n'existe pas ou n'est plus disponible.",
+    title: t("Offre introuvable — KORVA OS", "Offer not found — KORVA OS"),
+    description: t("Cette offre n'existe pas ou n'est plus disponible.", "This offer does not exist or is no longer available."),
     alternates: { canonical: canonicalUrl },
     robots: { index: false, follow: false },
   };

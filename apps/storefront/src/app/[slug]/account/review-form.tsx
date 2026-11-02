@@ -6,6 +6,7 @@ import { Button, Card } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import { StarPicker } from "../star-picker";
+import { useT } from "@/lib/storefront-locale";
 
 /**
  * Shared "Laisser un avis" widget for a fulfilled order or a completed booking — the server
@@ -23,6 +24,7 @@ export function ReviewForm({
   entity: "order" | "booking";
   entityId: string;
 }) {
+  const t = useT();
   const { authFetch, customer } = useCustomerAuth(slug);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -47,23 +49,29 @@ export function ReviewForm({
   if (reviewMutation.isSuccess) {
     return (
       <Card className="p-4 text-sm text-text">
-        Merci, votre avis est publié sur le site.
+        {t(
+          "Merci, votre avis est publié sur le site.",
+          "Thank you, your review is published on the website.",
+        )}
       </Card>
     );
   }
 
   return (
     <Card className="space-y-3 p-4">
-      <p className="text-sm font-medium text-text">Laisser un avis</p>
+      <p className="text-sm font-medium text-text">{t("Laisser un avis", "Leave a review")}</p>
       {alreadyReviewed ? (
-        <p className="text-sm text-text-muted">Vous avez déjà laissé un avis pour cet élément.</p>
+        <p className="text-sm text-text-muted">{t(
+          "Vous avez déjà laissé un avis pour cet élément.",
+          "You have already left a review for this.",
+        )}</p>
       ) : (
         <>
           <StarPicker value={rating} onChange={setRating} />
           <textarea
             value={comment}
             onChange={(event) => setComment(event.target.value)}
-            placeholder="Votre commentaire (optionnel)"
+            placeholder={t("Votre commentaire (optionnel)", "Your comment (optional)")}
             rows={3}
             className="w-full rounded-md border border-border-input px-3 py-2 text-base text-text focus:border-focus focus:outline-none"
           />
@@ -75,14 +83,17 @@ export function ReviewForm({
                 onChange={(event) => setShowName(event.target.checked)}
                 className="h-4 w-4"
               />
-              Signer avec mon prénom ({customer.firstName}), sinon « Client vérifié »
+              {t(
+                `Signer avec mon prénom (${customer.firstName}), sinon « Client vérifié »`,
+                `Sign with my first name (${customer.firstName}), otherwise “Verified customer”`,
+              )}
             </label>
           )}
           {reviewMutation.isError && !alreadyReviewed && (
             <p className="text-xs text-destructive">
               {reviewMutation.error instanceof PublicApiError
                 ? reviewMutation.error.message
-                : "Impossible d'envoyer votre avis."}
+                : t("Impossible d'envoyer votre avis.", "Your review could not be sent.")}
             </p>
           )}
           <Button
@@ -92,7 +103,7 @@ export function ReviewForm({
             disabled={rating === 0}
             onClick={() => reviewMutation.mutate()}
           >
-            Envoyer
+            {t("Envoyer", "Send")}
           </Button>
         </>
       )}

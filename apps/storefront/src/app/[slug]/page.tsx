@@ -5,11 +5,8 @@ import { notFound } from "next/navigation";
 import StorefrontClient from "./storefront-client";
 import { serverApi } from "@/lib/server-api";
 import { businessJsonLd, jsonLdHtml } from "@/lib/structured-data";
-import {
-  classifyLookupFailure,
-  unresolvedStorefrontMetadata,
-  type OrganizationLookup,
-} from "@/lib/organization-lookup";
+import { unresolvedStorefrontMetadata } from "@/lib/organization-lookup";
+import { fetchOrganization } from "@/lib/fetch-organization";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { StorefrontOffline } from "./storefront-offline";
 
@@ -21,27 +18,6 @@ const SITE_URL = (process.env.STOREFRONT_URL ?? "http://localhost:3001").replace
 interface StorefrontPageProps {
   params: Promise<{ slug: string }>;
 }
-
-/**
- * Wrapped in React's `cache()` so generateMetadata and the page body share ONE call per request.
- * serverApi sends `cache: "no-store"`, which opts out of Next's fetch memoization, so
- * without this the organization was fetched twice for every page view — and three times once the
- * page started fetching it for the initial render below.
- */
-const fetchOrganization = cache(
-  async (slug: string): Promise<OrganizationLookup<PublicOrganization>> => {
-    try {
-      const organization = await serverApi.get<PublicOrganization>(
-        `/public/${slug}`,
-      );
-      return { kind: "found", organization };
-    } catch (error) {
-      // See classifyLookupFailure: "the API said no" and "we could not ask" must not collapse
-      // into one answer, because the second one used to render as the first.
-      return { kind: classifyLookupFailure(error) };
-    }
-  },
-);
 
 /**
  * Gated on `visibleSections`, not `enabledModules`. visibleSections is the narrower of the two —

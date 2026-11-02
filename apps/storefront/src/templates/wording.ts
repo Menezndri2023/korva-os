@@ -1,4 +1,4 @@
-import type { BusinessModel } from "@korva/types";
+import type { BusinessModel, Locale } from "@korva/types";
 
 /**
  * The words of a public site that depend on the trade rather than on the template. Two templates
@@ -42,6 +42,35 @@ const BY_TRADE: Partial<Record<BusinessModel, Partial<SiteWording>>> = {
   },
 };
 
-export function siteWording(businessModel: BusinessModel | undefined, template: SiteWording): SiteWording {
-  return { ...template, ...(businessModel ? BY_TRADE[businessModel] : undefined) };
+const BY_TRADE_EN: Partial<Record<BusinessModel, Partial<SiteWording>>> = {
+  lodging: {
+    catalogLink: "All our rooms",
+    eyebrow: "Stays",
+    title: "Our rooms",
+    heroCta: "Book a stay",
+    book: "Book",
+  },
+  real_estate: {
+    catalogLink: "All our properties",
+    eyebrow: "For sale and to let",
+    title: "Our properties",
+    heroCta: "See our properties",
+    book: "Ask for a viewing",
+  },
+  association: {
+    catalogLink: "Membership and donations",
+    eyebrow: "Support us",
+    title: "Join and give",
+    heroCta: "Join us",
+    book: "Sign up",
+  },
+};
+
+export function siteWording(
+  businessModel: BusinessModel | undefined,
+  template: SiteWording,
+  locale: Locale = "fr",
+): SiteWording {
+  const byTrade = locale === "en" ? BY_TRADE_EN : BY_TRADE;
+  return { ...template, ...(businessModel ? byTrade[businessModel] : undefined) };
 }

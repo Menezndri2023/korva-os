@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import ResetPasswordClient from "./reset-password-client";
 
 interface ResetPasswordPageProps {
@@ -7,8 +8,9 @@ interface ResetPasswordPageProps {
 
 export async function generateMetadata({ params }: ResetPasswordPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Réinitialiser le mot de passe",
+    title: t("Réinitialiser le mot de passe", "Reset the password"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/reset-password` },
   };

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import LoginClient from "./login-client";
 
 interface LoginPageProps {
@@ -7,8 +8,9 @@ interface LoginPageProps {
 
 export async function generateMetadata({ params }: LoginPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Se connecter",
+    title: t("Se connecter", "Sign in"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/login` },
   };

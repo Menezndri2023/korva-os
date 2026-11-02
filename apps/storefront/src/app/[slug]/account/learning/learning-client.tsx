@@ -9,15 +9,18 @@ import { publicApiClient } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { Cohort, CohortStatus } from "@korva/types";
 import { AccountShell } from "../account-shell";
+import { intlLocale, useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const STATUS_LABELS: Record<CohortStatus, string> = {
-  upcoming: "À venir",
-  active: "En cours",
-  completed: "Terminée",
-  cancelled: "Annulée",
+const STATUS_LABELS: Record<CohortStatus, [string, string]> = {
+  upcoming: ["À venir", "Upcoming"],
+  active: ["En cours", "In progress"],
+  completed: ["Terminée", "Completed"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 export default function LearningClient({ slug }: { slug: string }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
 
@@ -37,18 +40,21 @@ export default function LearningClient({ slug }: { slug: string }) {
   });
 
   return (
-    <AccountShell slug={slug} title="Mes formations">
+    <AccountShell slug={slug} title={t("Mes formations", "My courses")}>
       <Link href={`/${slug}/account`} className="text-sm text-text-muted hover:underline">
-        ← Mon compte
+        {t("← Mon compte", "← My account")}
       </Link>
 
       {cohortsQuery.isLoading && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {cohortsQuery.isSuccess && cohortsQuery.data.length === 0 && (
         <Card className="p-6 text-center text-sm text-text-muted">
-          Vous n&apos;êtes inscrit à aucune formation pour le moment.
+          {t(
+            "Vous n'êtes inscrit à aucune formation pour le moment.",
+            "You are not enrolled in any course yet.",
+          )}
         </Card>
       )}
 
@@ -60,14 +66,14 @@ export default function LearningClient({ slug }: { slug: string }) {
                 <div>
                   <p className="font-medium text-text">{cohort.name}</p>
                   <p className="text-text-muted">
-                    Début le{" "}
-                    {new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
+                    {t("Début le", "Starts")}{" "}
+                    {new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "medium" }).format(
                       new Date(cohort.startDate),
                     )}
                   </p>
                 </div>
                 <Badge variant={cohort.status === "cancelled" ? "destructive" : "default"}>
-                  {STATUS_LABELS[cohort.status]}
+                  {t(...STATUS_LABELS[cohort.status])}
                 </Badge>
               </Card>
             </Link>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import BookingsHistoryClient from "./bookings-history-client";
 
 interface BookingsHistoryPageProps {
@@ -7,8 +8,9 @@ interface BookingsHistoryPageProps {
 
 export async function generateMetadata({ params }: BookingsHistoryPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Mes réservations",
+    title: t("Mes réservations", "My bookings"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/bookings` },
   };

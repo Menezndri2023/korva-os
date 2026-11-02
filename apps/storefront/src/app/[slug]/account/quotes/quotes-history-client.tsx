@@ -11,17 +11,20 @@ import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { CustomerQuoteSummary } from "@/lib/public-types";
 import type { QuoteStatus } from "@korva/types";
 import { AccountShell } from "../account-shell";
+import { intlLocale, useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
-  draft: "Brouillon",
-  sent: "En attente de signature",
-  viewed: "En attente de signature",
-  accepted: "Signé",
-  rejected: "Refusé",
-  expired: "Expiré",
+const QUOTE_STATUS_LABELS: Record<QuoteStatus, [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  sent: ["En attente de signature", "Awaiting signature"],
+  viewed: ["En attente de signature", "Awaiting signature"],
+  accepted: ["Signé", "Signed"],
+  rejected: ["Refusé", "Rejected"],
+  expired: ["Expiré", "Expired"],
 };
 
 export default function QuotesHistoryClient({ slug }: { slug: string }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
 
@@ -41,18 +44,18 @@ export default function QuotesHistoryClient({ slug }: { slug: string }) {
   });
 
   return (
-    <AccountShell slug={slug} title="Mes devis">
+    <AccountShell slug={slug} title={t("Mes devis", "My quotes")}>
       <Link href={`/${slug}/account`} className="text-sm text-text-muted hover:underline">
-        ← Mon compte
+        {t("← Mon compte", "← My account")}
       </Link>
 
       {quotesQuery.isLoading && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {quotesQuery.isSuccess && quotesQuery.data.length === 0 && (
         <Card className="p-6 text-center text-sm text-text-muted">
-          Vous n&apos;avez pas encore de devis.
+          {t("Vous n'avez pas encore de devis.", "You have no quotes yet.")}
         </Card>
       )}
 
@@ -64,17 +67,17 @@ export default function QuotesHistoryClient({ slug }: { slug: string }) {
                 <div>
                   <p className="font-medium text-text">Devis {quote.number}</p>
                   <p className="text-text-muted">
-                    {new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
+                    {new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "medium" }).format(
                       new Date(quote.createdAt),
                     )}
                   </p>
                 </div>
                 <div className="text-right">
                   <Badge variant={quote.status === "rejected" ? "destructive" : quote.status === "accepted" ? "success" : "default"}>
-                    {QUOTE_STATUS_LABELS[quote.status]}
+                    {t(...QUOTE_STATUS_LABELS[quote.status])}
                   </Badge>
                   <p className="mt-1 font-medium text-text">
-                    {formatOfferPrice(quote.total, quote.currency)}
+                    {formatOfferPrice(quote.total, quote.currency, locale)}
                   </p>
                 </div>
               </Card>

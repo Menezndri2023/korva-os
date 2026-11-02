@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import LearningClient from "./learning-client";
 
 interface LearningPageProps {
@@ -7,8 +8,9 @@ interface LearningPageProps {
 
 export async function generateMetadata({ params }: LearningPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Mes formations",
+    title: t("Mes formations", "My courses"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/learning` },
   };

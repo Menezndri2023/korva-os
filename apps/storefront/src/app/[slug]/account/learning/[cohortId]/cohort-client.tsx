@@ -9,8 +9,10 @@ import { publicApiClient } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { Cohort, PublicQuiz } from "@korva/types";
 import { AccountShell } from "../../account-shell";
+import { useT } from "@/lib/storefront-locale";
 
 export default function CohortClient({ slug, cohortId }: { slug: string; cohortId: string }) {
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
 
@@ -42,18 +44,18 @@ export default function CohortClient({ slug, cohortId }: { slug: string; cohortI
   });
 
   return (
-    <AccountShell slug={slug} title={cohortQuery.data?.name ?? "Formation"}>
+    <AccountShell slug={slug} title={cohortQuery.data?.name ?? t("Formation", "Course")}>
       <Link href={`/${slug}/account/learning`} className="text-sm text-text-muted hover:underline">
-        ← Mes formations
+        {t("← Mes formations", "← My courses")}
       </Link>
 
       {(cohortQuery.isLoading || quizzesQuery.isLoading) && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {quizzesQuery.isSuccess && quizzesQuery.data.length === 0 && (
         <Card className="p-6 text-center text-sm text-text-muted">
-          Aucun quiz disponible pour le moment.
+          {t("Aucun quiz disponible pour le moment.", "No quizzes available yet.")}
         </Card>
       )}
 
@@ -67,8 +69,10 @@ export default function CohortClient({ slug, cohortId }: { slug: string; cohortI
               <Card className="p-4 text-sm hover:bg-surface-muted">
                 <p className="font-medium text-text">{quiz.title}</p>
                 <p className="text-text-muted">
-                  {quiz.questions.length} question(s) — seuil de réussite{" "}
-                  {quiz.passingScorePercent}%
+                  {t(
+                    `${quiz.questions.length} question(s) — seuil de réussite ${quiz.passingScorePercent}%`,
+                    `${quiz.questions.length} question(s) — pass mark ${quiz.passingScorePercent}%`,
+                  )}
                 </p>
               </Card>
             </Link>

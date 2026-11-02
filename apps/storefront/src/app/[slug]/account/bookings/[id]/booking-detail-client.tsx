@@ -12,12 +12,13 @@ import type { CustomerBookingDetail } from "@/lib/public-types";
 import type { BookingStatus } from "@korva/types";
 import { AccountShell } from "../../account-shell";
 import { ReviewForm } from "../../review-form";
+import { intlLocale, useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
-  pending: "En attente de confirmation",
-  confirmed: "Confirmée",
-  completed: "Terminée",
-  cancelled: "Annulée",
+const BOOKING_STATUS_LABELS: Record<BookingStatus, [string, string]> = {
+  pending: ["En attente de confirmation", "Awaiting confirmation"],
+  confirmed: ["Confirmée", "Confirmed"],
+  completed: ["Terminée", "Completed"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 export default function BookingDetailClient({
@@ -27,6 +28,8 @@ export default function BookingDetailClient({
   slug: string;
   bookingId: string;
 }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -50,7 +53,7 @@ export default function BookingDetailClient({
     enabled: hydrated && isAuthenticated,
   });
 
-  const formatter = new Intl.DateTimeFormat("fr-FR", { dateStyle: "full", timeStyle: "short" });
+  const formatter = new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "full", timeStyle: "short" });
 
   async function handleDownloadCertificate() {
     setDownloadError(null);
@@ -65,7 +68,10 @@ export default function BookingDetailClient({
       );
     } catch (error) {
       setDownloadError(
-        error instanceof PublicApiError ? error.message : "Impossible de télécharger le certificat.",
+        error instanceof PublicApiError ? error.message : t(
+          "Impossible de télécharger le certificat.",
+          "The certificate could not be downloaded.",
+        ),
       );
     } finally {
       setDownloading(false);
@@ -73,13 +79,13 @@ export default function BookingDetailClient({
   }
 
   return (
-    <AccountShell slug={slug} title="Ma réservation">
+    <AccountShell slug={slug} title={t("Ma réservation", "My booking")}>
       <Link href={`/${slug}/account/bookings`} className="text-sm text-text-muted hover:underline">
-        ← Mes réservations
+        {t("← Mes réservations", "← My bookings")}
       </Link>
 
       {bookingQuery.isLoading && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {bookingQuery.isSuccess && (
@@ -96,7 +102,7 @@ export default function BookingDetailClient({
                       : "default"
                 }
               >
-                {BOOKING_STATUS_LABELS[bookingQuery.data.status]}
+                {t(...BOOKING_STATUS_LABELS[bookingQuery.data.status])}
               </Badge>
             </div>
             <p className="text-sm text-text-muted">
@@ -107,8 +113,8 @@ export default function BookingDetailClient({
               <p className="text-sm text-text-muted">{bookingQuery.data.notes}</p>
             )}
             <div className="flex items-center justify-between border-t border-border pt-3 font-medium text-text">
-              <span>Montant</span>
-              <span>{formatOfferPrice(bookingQuery.data.pricing.amount, bookingQuery.data.pricing.currency)}</span>
+              <span>{t("Montant", "Amount")}</span>
+              <span>{formatOfferPrice(bookingQuery.data.pricing.amount, bookingQuery.data.pricing.currency, locale)}</span>
             </div>
 
             {bookingQuery.data.status === "completed" && bookingQuery.data.attended && (
@@ -120,7 +126,7 @@ export default function BookingDetailClient({
                   loading={downloading}
                   onClick={() => void handleDownloadCertificate()}
                 >
-                  Télécharger le certificat
+                  {t("Télécharger le certificat", "Download the certificate")}
                 </Button>
                 {downloadError && <p className="mt-2 text-xs text-destructive">{downloadError}</p>}
               </div>

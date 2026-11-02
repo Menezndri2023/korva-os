@@ -9,6 +9,7 @@ import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { PublicQuiz, QuizAttempt } from "@korva/types";
 import { AccountShell } from "../../../../account-shell";
+import { useT } from "@/lib/storefront-locale";
 
 interface QuizForCohort {
   quiz: PublicQuiz;
@@ -24,6 +25,7 @@ export default function QuizClient({
   cohortId: string;
   quizId: string;
 }) {
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -60,7 +62,7 @@ export default function QuizClient({
   if (quizQuery.isLoading) {
     return (
       <AccountShell slug={slug} title="Quiz">
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       </AccountShell>
     );
   }
@@ -89,11 +91,11 @@ export default function QuizClient({
 
       {attempts.length > 0 && !submitMutation.isSuccess && (
         <Card className="p-4 text-sm">
-          <p className="font-medium text-text">Vos tentatives précédentes</p>
+          <p className="font-medium text-text">{t("Vos tentatives précédentes", "Your previous attempts")}</p>
           <ul className="mt-1 space-y-0.5 text-text-muted">
             {attempts.map((attempt, i) => (
               <li key={i}>
-                {attempt.scorePercent}% — {attempt.passed ? "Réussi" : "Non réussi"}
+                {attempt.scorePercent}% — {attempt.passed ? t("Réussi", "Passed") : t("Non réussi", "Not passed")}
               </li>
             ))}
           </ul>
@@ -106,7 +108,7 @@ export default function QuizClient({
             {submitMutation.data.scorePercent}%
           </p>
           <p className="mt-1 text-text-muted">
-            {submitMutation.data.passed ? "Quiz réussi !" : "Quiz non réussi."}
+            {submitMutation.data.passed ? t("Quiz réussi !", "Quiz passed!") : t("Quiz non réussi.", "Quiz not passed.")}
           </p>
         </Card>
       ) : (
@@ -134,7 +136,7 @@ export default function QuizClient({
             <p className="text-sm text-destructive">
               {submitMutation.error instanceof PublicApiError
                 ? submitMutation.error.message
-                : "Impossible d'envoyer vos réponses."}
+                : t("Impossible d'envoyer vos réponses.", "Your answers could not be sent.")}
             </p>
           )}
 
@@ -144,7 +146,7 @@ export default function QuizClient({
             loading={submitMutation.isPending}
             onClick={() => submitMutation.mutate()}
           >
-            Envoyer mes réponses
+            {t("Envoyer mes réponses", "Send my answers")}
           </Button>
         </Card>
       )}

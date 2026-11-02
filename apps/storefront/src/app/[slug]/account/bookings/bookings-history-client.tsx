@@ -9,20 +9,24 @@ import { publicApiClient } from "@/lib/public-api-client";
 import { formatOfferPrice } from "@/lib/offer-labels";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { CustomerBookingSummary } from "@/lib/public-types";
-import { tradeVocabulary, type BookingStatus } from "@korva/types";
+import { tradeVocabularyIn, type BookingStatus } from "@korva/types";
 import { usePublicOrganization } from "@/lib/use-public-organization";
 import { AccountShell } from "../account-shell";
+import { intlLocale, useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
-  pending: "En attente de confirmation",
-  confirmed: "Confirmée",
-  completed: "Terminée",
-  cancelled: "Annulée",
+const BOOKING_STATUS_LABELS: Record<BookingStatus, [string, string]> = {
+  pending: ["En attente de confirmation", "Awaiting confirmation"],
+  confirmed: ["Confirmée", "Confirmed"],
+  completed: ["Terminée", "Completed"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 export default function BookingsHistoryClient({ slug }: { slug: string }) {
+  const t = useT();
   // "Mes rendez-vous", "Mes visites", "Mes séjours"… — the trade's word, as in the account menu.
-  const title = `Mes ${tradeVocabulary(usePublicOrganization(slug).data?.businessModel).bookings.toLowerCase()}`;
+  const locale = useStorefrontLocale();
+  const bookingsWord = tradeVocabularyIn(usePublicOrganization(slug).data?.businessModel, locale).bookings.toLowerCase();
+  const title = locale === "en" ? `My ${bookingsWord}` : `Mes ${bookingsWord}`;
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
 
@@ -41,21 +45,21 @@ export default function BookingsHistoryClient({ slug }: { slug: string }) {
     enabled: hydrated && isAuthenticated,
   });
 
-  const formatter = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" });
+  const formatter = new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "medium", timeStyle: "short" });
 
   return (
     <AccountShell slug={slug} title={title}>
       <Link href={`/${slug}/account`} className="text-sm text-text-muted hover:underline">
-        ← Mon compte
+        {t("← Mon compte", "← My account")}
       </Link>
 
       {bookingsQuery.isLoading && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {bookingsQuery.isSuccess && bookingsQuery.data.length === 0 && (
         <Card className="p-6 text-center text-sm text-text-muted">
-          Vous n&apos;avez pas encore de réservation.
+          {t("Vous n'avez pas encore de réservation.", "You have no bookings yet.")}
         </Card>
       )}
 
@@ -67,7 +71,7 @@ export default function BookingsHistoryClient({ slug }: { slug: string }) {
               <div>
                 <p className="font-medium text-text">{formatter.format(new Date(booking.startAt))}</p>
                 <p className="text-text-muted">
-                  jusqu&apos;à {formatter.format(new Date(booking.endAt))}
+                  {t("jusqu'à", "until")} {formatter.format(new Date(booking.endAt))}
                 </p>
               </div>
               <div className="text-right">
@@ -80,10 +84,10 @@ export default function BookingsHistoryClient({ slug }: { slug: string }) {
                         : "default"
                   }
                 >
-                  {BOOKING_STATUS_LABELS[booking.status]}
+                  {t(...BOOKING_STATUS_LABELS[booking.status])}
                 </Badge>
                 <p className="mt-1 font-medium text-text">
-                  {formatOfferPrice(booking.pricing.amount, booking.pricing.currency)}
+                  {formatOfferPrice(booking.pricing.amount, booking.pricing.currency, locale)}
                 </p>
               </div>
             </Card>

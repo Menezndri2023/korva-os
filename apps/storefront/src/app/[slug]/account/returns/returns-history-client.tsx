@@ -11,14 +11,17 @@ import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { CustomerReturnRequestSummary } from "@/lib/public-types";
 import type { ReturnRequestStatus } from "@korva/types";
 import { AccountShell } from "../account-shell";
+import { intlLocale, useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const STATUS_LABELS: Record<ReturnRequestStatus, string> = {
-  pending: "En attente",
-  approved: "Approuvé (remboursé)",
-  rejected: "Refusé",
+const STATUS_LABELS: Record<ReturnRequestStatus, [string, string]> = {
+  pending: ["En attente", "Pending"],
+  approved: ["Approuvé (remboursé)", "Approved (refunded)"],
+  rejected: ["Refusé", "Rejected"],
 };
 
 export default function ReturnsHistoryClient({ slug }: { slug: string }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
 
@@ -41,19 +44,21 @@ export default function ReturnsHistoryClient({ slug }: { slug: string }) {
   });
 
   return (
-    <AccountShell slug={slug} title="Mes retours">
+    <AccountShell slug={slug} title={t("Mes retours", "My returns")}>
       <Link href={`/${slug}/account`} className="text-sm text-text-muted hover:underline">
-        ← Mon compte
+        {t("← Mon compte", "← My account")}
       </Link>
 
       {returnsQuery.isLoading && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {returnsQuery.isSuccess && returnsQuery.data.length === 0 && (
         <Card className="p-6 text-center text-sm text-text-muted">
-          Vous n&apos;avez pas encore demandé de retour. Ouvrez une commande terminée pour en
-          demander un.
+          {t(
+            "Vous n'avez pas encore demandé de retour. Ouvrez une commande terminée pour en demander un.",
+            "You have not asked for a return yet. Open a completed order to ask for one.",
+          )}
         </Card>
       )}
 
@@ -65,17 +70,17 @@ export default function ReturnsHistoryClient({ slug }: { slug: string }) {
                 <div>
                   <p className="font-medium text-text">{returnRequest.reason}</p>
                   <p className="text-text-muted">
-                    {new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
+                    {new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "medium" }).format(
                       new Date(returnRequest.createdAt),
                     )}
                   </p>
                 </div>
                 <div className="text-right">
                   <Badge variant={returnRequest.status === "rejected" ? "destructive" : "default"}>
-                    {STATUS_LABELS[returnRequest.status]}
+                    {t(...STATUS_LABELS[returnRequest.status])}
                   </Badge>
                   <p className="mt-1 font-medium text-text">
-                    {formatOfferPrice(returnRequest.refundAmount, returnRequest.currency)}
+                    {formatOfferPrice(returnRequest.refundAmount, returnRequest.currency, locale)}
                   </p>
                 </div>
               </Card>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import RegisterClient from "./register-client";
 
 interface RegisterPageProps {
@@ -7,8 +8,9 @@ interface RegisterPageProps {
 
 export async function generateMetadata({ params }: RegisterPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Créer un compte",
+    title: t("Créer un compte", "Create an account"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/register` },
   };

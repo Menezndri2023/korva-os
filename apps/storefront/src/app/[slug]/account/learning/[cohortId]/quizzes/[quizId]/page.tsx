@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import QuizClient from "./quiz-client";
 
 interface QuizPageProps {
@@ -7,8 +8,9 @@ interface QuizPageProps {
 
 export async function generateMetadata({ params }: QuizPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Quiz",
+    title: t("Quiz", "Quiz"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/learning` },
   };

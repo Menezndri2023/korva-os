@@ -10,7 +10,9 @@ import { useCustomerAuth } from "@/lib/use-customer-auth";
 import { usePublicOrganization } from "@/lib/use-public-organization";
 import type { PublicOrganization } from "@/lib/public-types";
 import { AccountShell } from "./account-shell";
-import { tradeVocabulary, type BusinessModel } from "@korva/types";
+import { tradeVocabularyIn, type BusinessModel, type Locale } from "@korva/types";
+import { translator } from "@/lib/storefront-locale-core";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
 /**
  * The account sections this business actually has: a clothing shop's customer has no "Mes
@@ -18,21 +20,25 @@ import { tradeVocabulary, type BusinessModel } from "@korva/types";
  * rendez-vous", "Mes visites"). Until the business is known, every section is listed (each page
  * handles being empty on its own).
  */
-export function accountLinks(organization: PublicOrganization | undefined): { path: string; label: string }[] {
+export function accountLinks(
+  organization: PublicOrganization | undefined,
+  locale: Locale = "fr",
+): { path: string; label: string }[] {
+  const t = translator(locale);
   const on = (module: string) => !organization || organization.enabledModules.includes(module);
   const model = organization?.businessModel;
   // Returns are for goods sent back; a wishlist is for products or properties one comes back to.
   const tradeIs = (...models: BusinessModel[]) => !model || models.includes(model);
-  const bookings = tradeVocabulary(model).bookings.toLowerCase();
+  const bookings = tradeVocabularyIn(model, locale).bookings.toLowerCase();
   const links: { path: string; label: string; shown: boolean }[] = [
-    { path: "orders", label: "Mes commandes", shown: on("commerce") },
-    { path: "bookings", label: `Mes ${bookings}`, shown: on("booking") },
-    { path: "quotes", label: "Mes devis", shown: on("finance") || model === "quotes" },
-    { path: "returns", label: "Mes retours", shown: on("commerce") && tradeIs("retail") },
-    { path: "wishlist", label: "Mes favoris", shown: on("catalog") && tradeIs("retail", "real_estate") },
+    { path: "orders", label: t("Mes commandes", "My orders"), shown: on("commerce") },
+    { path: "bookings", label: t(`Mes ${bookings}`, `My ${bookings}`), shown: on("booking") },
+    { path: "quotes", label: t("Mes devis", "My quotes"), shown: on("finance") || model === "quotes" },
+    { path: "returns", label: t("Mes retours", "My returns"), shown: on("commerce") && tradeIs("retail") },
+    { path: "wishlist", label: t("Mes favoris", "My favourites"), shown: on("catalog") && tradeIs("retail", "real_estate") },
     {
       path: "learning",
-      label: "Mes formations",
+      label: t("Mes formations", "My courses"),
       shown: !organization || model === "training",
     },
   ];
@@ -40,6 +46,8 @@ export function accountLinks(organization: PublicOrganization | undefined): { pa
 }
 
 export default function ProfileClient({ slug }: { slug: string }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, customer, updateProfile, logout } = useCustomerAuth(slug);
   const organizationQuery = usePublicOrganization(slug);
@@ -86,20 +94,20 @@ export default function ProfileClient({ slug }: { slug: string }) {
 
   if (!hydrated || !isAuthenticated || !customer) {
     return (
-      <AccountShell slug={slug} title="Mon compte">
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+      <AccountShell slug={slug} title={t("Mon compte", "My account")}>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       </AccountShell>
     );
   }
 
   return (
-    <AccountShell slug={slug} title="Mon compte">
+    <AccountShell slug={slug} title={t("Mon compte", "My account")}>
       <p className="text-sm text-text-muted">
         Bonjour{customer.firstName ? ` ${customer.firstName}` : ""}, retrouvez ici tout ce qui vous concerne.
       </p>
       {/* The sections first, as tiles: what the customer came for. The profile comes after. */}
-      <nav aria-label="Mon espace client" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {accountLinks(organizationQuery.data).map(({ path, label }) => (
+      <nav aria-label={t("Mon espace client", "My customer area")} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {accountLinks(organizationQuery.data, locale).map(({ path, label }) => (
           <Link
             key={path}
             href={`/${slug}/account/${path}`}
@@ -111,23 +119,23 @@ export default function ProfileClient({ slug }: { slug: string }) {
         ))}
       </nav>
 
-      <h2 className="pt-2 text-sm font-semibold text-text">Mes informations</h2>
+      <h2 className="pt-2 text-sm font-semibold text-text">{t("Mes informations", "My details")}</h2>
       <Card className="p-4">
         <form onSubmit={handleSubmit} className="space-y-3 text-sm">
           <label className="block">
-            <span className="mb-1 block text-text-muted">Adresse e-mail</span>
+            <span className="mb-1 block text-text-muted">{t("Adresse e-mail", "Email address")}</span>
             <Input value={customer.email} disabled className="w-full" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-text-muted">Prénom</span>
+            <span className="mb-1 block text-text-muted">{t("Prénom", "First name")}</span>
             <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-text-muted">Nom</span>
+            <span className="mb-1 block text-text-muted">{t("Nom", "Last name")}</span>
             <Input value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full" />
           </label>
           <label className="block">
-            <span className="mb-1 block text-text-muted">Téléphone</span>
+            <span className="mb-1 block text-text-muted">{t("Téléphone", "Phone")}</span>
             <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full" />
           </label>
 
@@ -135,19 +143,19 @@ export default function ProfileClient({ slug }: { slug: string }) {
             <p className="text-xs text-destructive">
               {updateMutation.error instanceof PublicApiError
                 ? updateMutation.error.message
-                : "Impossible de mettre à jour le profil."}
+                : t("Impossible de mettre à jour le profil.", "The profile could not be updated.")}
             </p>
           )}
-          {updateMutation.isSuccess && <p className="text-xs text-green-700">Profil mis à jour.</p>}
+          {updateMutation.isSuccess && <p className="text-xs text-green-700">{t("Profil mis à jour.", "Profile updated.")}</p>}
 
           <Button type="submit" loading={updateMutation.isPending} className="w-full">
-            Enregistrer
+            {t("Enregistrer", "Save")}
           </Button>
         </form>
       </Card>
 
       <button onClick={handleLogout} className="text-sm text-text-muted hover:underline">
-        Se déconnecter
+        {t("Se déconnecter", "Sign out")}
       </button>
     </AccountShell>
   );

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import WishlistClient from "./wishlist-client";
 
 interface WishlistPageProps {
@@ -7,8 +8,9 @@ interface WishlistPageProps {
 
 export async function generateMetadata({ params }: WishlistPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Ma liste de souhaits",
+    title: t("Ma liste de souhaits", "My wishlist"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/wishlist` },
   };

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import QuotesHistoryClient from "./quotes-history-client";
 
 interface QuotesHistoryPageProps {
@@ -7,8 +8,9 @@ interface QuotesHistoryPageProps {
 
 export async function generateMetadata({ params }: QuotesHistoryPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Mes devis",
+    title: t("Mes devis", "My quotes"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/quotes` },
   };

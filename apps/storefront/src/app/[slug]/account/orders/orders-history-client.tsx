@@ -11,16 +11,19 @@ import { useCustomerAuth } from "@/lib/use-customer-auth";
 import type { CustomerOrderSummary } from "@/lib/public-types";
 import type { OrderStatus } from "@korva/types";
 import { AccountShell } from "../account-shell";
+import { intlLocale, useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  open: "En cours (addition ouverte)",
-  pending: "Reçue",
-  confirmed: "Confirmée",
-  fulfilled: "Terminée",
-  cancelled: "Annulée",
+const ORDER_STATUS_LABELS: Record<OrderStatus, [string, string]> = {
+  open: ["En cours (addition ouverte)", "In progress (open tab)"],
+  pending: ["Reçue", "Received"],
+  confirmed: ["Confirmée", "Confirmed"],
+  fulfilled: ["Terminée", "Completed"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 export default function OrdersHistoryClient({ slug }: { slug: string }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
 
@@ -40,18 +43,18 @@ export default function OrdersHistoryClient({ slug }: { slug: string }) {
   });
 
   return (
-    <AccountShell slug={slug} title="Mes commandes">
+    <AccountShell slug={slug} title={t("Mes commandes", "My orders")}>
       <Link href={`/${slug}/account`} className="text-sm text-text-muted hover:underline">
-        ← Mon compte
+        {t("← Mon compte", "← My account")}
       </Link>
 
       {ordersQuery.isLoading && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {ordersQuery.isSuccess && ordersQuery.data.length === 0 && (
         <Card className="p-6 text-center text-sm text-text-muted">
-          Vous n&apos;avez pas encore de commande.
+          {t("Vous n'avez pas encore de commande.", "You have no orders yet.")}
         </Card>
       )}
 
@@ -63,17 +66,17 @@ export default function OrdersHistoryClient({ slug }: { slug: string }) {
               <div>
                 <p className="font-medium text-text">Commande {order.number}</p>
                 <p className="text-text-muted">
-                  {new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" }).format(
+                  {new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "medium" }).format(
                     new Date(order.createdAt),
                   )}
                 </p>
               </div>
               <div className="text-right">
                 <Badge variant={order.status === "cancelled" ? "destructive" : "default"}>
-                  {ORDER_STATUS_LABELS[order.status]}
+                  {t(...ORDER_STATUS_LABELS[order.status])}
                 </Badge>
                 <p className="mt-1 font-medium text-text">
-                  {formatOfferPrice(order.total, order.currency)}
+                  {formatOfferPrice(order.total, order.currency, locale)}
                 </p>
               </div>
             </Card>

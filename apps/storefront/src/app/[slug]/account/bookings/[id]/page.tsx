@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import BookingDetailClient from "./booking-detail-client";
 
 interface BookingDetailPageProps {
@@ -7,8 +8,9 @@ interface BookingDetailPageProps {
 
 export async function generateMetadata({ params }: BookingDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Ma réservation",
+    title: t("Ma réservation", "My booking"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/bookings` },
   };

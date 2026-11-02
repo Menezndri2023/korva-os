@@ -9,20 +9,21 @@ import { publicApiClient } from "@/lib/public-api-client";
 import { formatOfferPrice } from "@/lib/offer-labels";
 import type { TrackedBooking, TrackedOrder } from "@/lib/public-types";
 import type { BookingStatus, OrderStatus } from "@korva/types";
+import { intlLocale, useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
 type TrackKind = "order" | "booking";
 
-const ORDER_STEPS: { status: OrderStatus; label: string }[] = [
-  { status: "pending", label: "Reçue" },
-  { status: "confirmed", label: "Confirmée" },
-  { status: "fulfilled", label: "Terminée" },
+const ORDER_STEPS: { status: OrderStatus; label: [string, string] }[] = [
+  { status: "pending", label: ["Reçue", "Received"] },
+  { status: "confirmed", label: ["Confirmée", "Confirmed"] },
+  { status: "fulfilled", label: ["Terminée", "Completed"] },
 ];
 
-const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
-  pending: "En attente de confirmation",
-  confirmed: "Confirmée",
-  completed: "Terminée",
-  cancelled: "Annulée",
+const BOOKING_STATUS_LABELS: Record<BookingStatus, [string, string]> = {
+  pending: ["En attente de confirmation", "Awaiting confirmation"],
+  confirmed: ["Confirmée", "Confirmed"],
+  completed: ["Terminée", "Completed"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 /**
@@ -32,6 +33,7 @@ const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
  * real lookup instead of showing stale or fabricated state.
  */
 export default function TrackClient({ slug }: { slug: string }) {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -85,9 +87,9 @@ export default function TrackClient({ slug }: { slug: string }) {
       <header className="border-b border-border bg-surface px-6 py-4">
         <div className="mx-auto max-w-2xl">
           <Link href={`/${slug}`} className="text-sm text-text-muted hover:underline">
-            ← Retour à la boutique
+            {t("← Retour à la boutique", "← Back to the shop")}
           </Link>
-          <h1 className="mt-1 text-lg font-semibold text-text">Suivre ma commande</h1>
+          <h1 className="mt-1 text-lg font-semibold text-text">{t("Suivre ma commande", "Track my order")}</h1>
         </div>
       </header>
 
@@ -100,59 +102,64 @@ export default function TrackClient({ slug }: { slug: string }) {
                 onClick={() => setKind("order")}
                 className={kind === "order" ? "font-semibold text-text underline" : "text-text-muted"}
               >
-                Commande
+                {t("Commande", "Order")}
               </button>
               <button
                 type="button"
                 onClick={() => setKind("booking")}
                 className={kind === "booking" ? "font-semibold text-text underline" : "text-text-muted"}
               >
-                Réservation
+                {t("Réservation", "Booking")}
               </button>
             </div>
 
             <label className="block text-sm">
               <span className="mb-1 block text-text-muted">
-                {kind === "order" ? "Numéro de commande" : "Numéro de réservation"}
+                {kind === "order" ? t("Numéro de commande", "Order number") : t("Numéro de réservation", "Booking number")}
               </span>
               <input
                 required
                 value={number}
                 onChange={(event) => setNumber(event.target.value)}
-                placeholder={kind === "order" ? "CMD-000123" : "Identifiant de réservation"}
+                placeholder={kind === "order" ? "CMD-000123" : t("Identifiant de réservation", "Booking reference")}
                 className="w-full rounded-md border border-border-input px-3 py-2 text-sm text-text focus:border-focus focus:outline-none"
               />
             </label>
 
             <label className="block text-sm">
               <span className="mb-1 block text-text-muted">
-                Email utilisé lors de la {kind === "order" ? "commande" : "réservation"}
+                {kind === "order"
+                  ? t("Email utilisé lors de la commande", "E-mail used for the order")
+                  : t("Email utilisé lors de la réservation", "E-mail used for the booking")}
               </span>
               <input
                 required
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="vous@example.com"
+                placeholder={t("vous@example.com", "you@example.com")}
                 className="w-full rounded-md border border-border-input px-3 py-2 text-sm text-text focus:border-focus focus:outline-none"
               />
             </label>
 
             <Button type="submit" className="w-full">
-              Rechercher
+              {t("Rechercher", "Search")}
             </Button>
           </form>
         </Card>
 
         {hasQuery && activeQuery.isLoading && (
-          <Card className="p-6 text-center text-sm text-text-muted">Recherche en cours…</Card>
+          <Card className="p-6 text-center text-sm text-text-muted">{t("Recherche en cours…", "Searching…")}</Card>
         )}
 
         {/* Deliberately one generic message regardless of the underlying reason (wrong number,
             wrong email, wrong organization) — never hint at which part was wrong. */}
         {hasQuery && activeQuery.isError && (
           <Card className="p-4 text-sm text-destructive">
-            Aucun résultat pour ce numéro et cet email. Vérifiez ces informations et réessayez.
+            {t(
+              "Aucun résultat pour ce numéro et cet email. Vérifiez ces informations et réessayez.",
+              "No result for this number and e-mail. Check them and try again.",
+            )}
           </Card>
         )}
 
@@ -169,6 +176,8 @@ export default function TrackClient({ slug }: { slug: string }) {
 }
 
 function OrderResult({ order }: { order: TrackedOrder }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const currentStepIndex = ORDER_STEPS.findIndex((step) => step.status === order.status);
 
   return (
@@ -176,10 +185,13 @@ function OrderResult({ order }: { order: TrackedOrder }) {
       <div className="flex items-center justify-between">
         <h2 className="font-medium text-text">Commande {order.number}</h2>
         {order.status === "cancelled" ? (
-          <Badge variant="destructive">Annulée</Badge>
+          <Badge variant="destructive">{t("Annulée", "Cancelled")}</Badge>
         ) : (
           <Badge variant={order.status === "fulfilled" ? "success" : "default"}>
-            {ORDER_STEPS[Math.max(currentStepIndex, 0)]?.label ?? order.status}
+            {(() => {
+              const step = ORDER_STEPS[Math.max(currentStepIndex, 0)];
+              return step ? t(...step.label) : order.status;
+            })()}
           </Badge>
         )}
       </div>
@@ -194,7 +206,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
                   className={`h-2 flex-1 rounded-full ${reached ? "bg-zinc-900" : "bg-surface-muted"}`}
                   aria-hidden
                 />
-                <span className="sr-only">{step.label}</span>
+                <span className="sr-only">{t(...step.label)}</span>
               </li>
             );
           })}
@@ -208,22 +220,24 @@ function OrderResult({ order }: { order: TrackedOrder }) {
               {item.description} × {item.quantity}
             </span>
             <span className="text-text-muted">
-              {formatOfferPrice(item.unitPrice * item.quantity, order.currency)}
+              {formatOfferPrice(item.unitPrice * item.quantity, order.currency, locale)}
             </span>
           </li>
         ))}
       </ul>
 
       <div className="flex items-center justify-between border-t border-border pt-3 font-medium text-text">
-        <span>Total</span>
-        <span>{formatOfferPrice(order.total, order.currency)}</span>
+        <span>{t("Total", "Total")}</span>
+        <span>{formatOfferPrice(order.total, order.currency, locale)}</span>
       </div>
     </Card>
   );
 }
 
 function BookingResult({ booking }: { booking: TrackedBooking }) {
-  const formatter = new Intl.DateTimeFormat("fr-FR", {
+  const locale = useStorefrontLocale();
+  const t = useT();
+  const formatter = new Intl.DateTimeFormat(intlLocale(locale), {
     dateStyle: "full",
     timeStyle: "short",
   });
@@ -231,7 +245,7 @@ function BookingResult({ booking }: { booking: TrackedBooking }) {
   return (
     <Card className="space-y-3 p-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-medium text-text">Réservation</h2>
+        <h2 className="font-medium text-text">{t("Réservation", "Booking")}</h2>
         <Badge
           variant={
             booking.status === "cancelled"
@@ -241,15 +255,15 @@ function BookingResult({ booking }: { booking: TrackedBooking }) {
                 : "default"
           }
         >
-          {BOOKING_STATUS_LABELS[booking.status]}
+          {t(...BOOKING_STATUS_LABELS[booking.status])}
         </Badge>
       </div>
       <p className="text-sm text-text-muted">
         {formatter.format(new Date(booking.startAt))} — {formatter.format(new Date(booking.endAt))}
       </p>
       <div className="flex items-center justify-between border-t border-border pt-3 font-medium text-text">
-        <span>Montant</span>
-        <span>{formatOfferPrice(booking.pricing.amount, booking.pricing.currency)}</span>
+        <span>{t("Montant", "Amount")}</span>
+        <span>{formatOfferPrice(booking.pricing.amount, booking.pricing.currency, locale)}</span>
       </div>
     </Card>
   );

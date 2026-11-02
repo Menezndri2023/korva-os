@@ -13,16 +13,19 @@ import type { OrderStatus } from "@korva/types";
 import { AccountShell } from "../../account-shell";
 import { ReviewForm } from "../../review-form";
 import { ReturnRequestForm } from "../../return-request-form";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  open: "En cours (addition ouverte)",
-  pending: "Reçue",
-  confirmed: "Confirmée",
-  fulfilled: "Terminée",
-  cancelled: "Annulée",
+const ORDER_STATUS_LABELS: Record<OrderStatus, [string, string]> = {
+  open: ["En cours (addition ouverte)", "In progress (open tab)"],
+  pending: ["Reçue", "Received"],
+  confirmed: ["Confirmée", "Confirmed"],
+  fulfilled: ["Terminée", "Completed"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 export default function OrderDetailClient({ slug, orderId }: { slug: string; orderId: string }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -56,7 +59,10 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
       );
     } catch (error) {
       setDownloadError(
-        error instanceof PublicApiError ? error.message : "Impossible de télécharger la facture.",
+        error instanceof PublicApiError ? error.message : t(
+          "Impossible de télécharger la facture.",
+          "The invoice could not be downloaded.",
+        ),
       );
     } finally {
       setDownloading(false);
@@ -64,13 +70,13 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
   }
 
   return (
-    <AccountShell slug={slug} title="Ma commande">
+    <AccountShell slug={slug} title={t("Ma commande", "My order")}>
       <Link href={`/${slug}/account/orders`} className="text-sm text-text-muted hover:underline">
-        ← Mes commandes
+        {t("← Mes commandes", "← My orders")}
       </Link>
 
       {orderQuery.isLoading && (
-        <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>
+        <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>
       )}
 
       {orderQuery.isSuccess && (
@@ -79,7 +85,7 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
             <div className="flex items-center justify-between">
               <h2 className="font-medium text-text">Commande {orderQuery.data.number}</h2>
               <Badge variant={orderQuery.data.status === "cancelled" ? "destructive" : "default"}>
-                {ORDER_STATUS_LABELS[orderQuery.data.status]}
+                {t(...ORDER_STATUS_LABELS[orderQuery.data.status])}
               </Badge>
             </div>
 
@@ -91,7 +97,7 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
                       {item.description} × {item.quantity}
                     </span>
                     <span className="text-text-muted">
-                      {formatOfferPrice(item.unitPrice * item.quantity, orderQuery.data.currency)}
+                      {formatOfferPrice(item.unitPrice * item.quantity, orderQuery.data.currency, locale)}
                     </span>
                   </div>
                   {item.modifiers && item.modifiers.length > 0 && (
@@ -108,22 +114,22 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
             <div className="space-y-1 text-right text-sm">
               {orderQuery.data.discountTotal > 0 && (
                 <p className="text-text-muted">
-                  Remise : -{formatOfferPrice(orderQuery.data.discountTotal, orderQuery.data.currency)}
+                  Remise : -{formatOfferPrice(orderQuery.data.discountTotal, orderQuery.data.currency, locale)}
                 </p>
               )}
               {orderQuery.data.shippingCost > 0 && (
                 <p className="text-text-muted">
-                  Livraison : {formatOfferPrice(orderQuery.data.shippingCost, orderQuery.data.currency)}
+                  Livraison : {formatOfferPrice(orderQuery.data.shippingCost, orderQuery.data.currency, locale)}
                 </p>
               )}
               <p className="font-medium text-text">
-                Total : {formatOfferPrice(orderQuery.data.total, orderQuery.data.currency)}
+                Total : {formatOfferPrice(orderQuery.data.total, orderQuery.data.currency, locale)}
               </p>
             </div>
 
             {orderQuery.data.shippingAddress && (
               <div className="border-t border-border pt-3 text-sm text-text-muted">
-                <p className="font-medium text-text">Adresse de livraison</p>
+                <p className="font-medium text-text">{t("Adresse de livraison", "Delivery address")}</p>
                 <p>{orderQuery.data.shippingAddress.line1}</p>
                 {orderQuery.data.shippingAddress.line2 && <p>{orderQuery.data.shippingAddress.line2}</p>}
                 <p>
@@ -136,7 +142,7 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
             {orderQuery.data.hasInvoice && (
               <div className="border-t border-border pt-3">
                 <Button type="button" variant="secondary" size="sm" loading={downloading} onClick={() => void handleDownloadInvoice()}>
-                  Télécharger la facture
+                  {t("Télécharger la facture", "Download the invoice")}
                 </Button>
                 {downloadError && <p className="mt-2 text-xs text-destructive">{downloadError}</p>}
               </div>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteTranslator } from "@/lib/fetch-organization";
 import ReturnsHistoryClient from "./returns-history-client";
 
 interface ReturnsHistoryPageProps {
@@ -7,8 +8,9 @@ interface ReturnsHistoryPageProps {
 
 export async function generateMetadata({ params }: ReturnsHistoryPageProps): Promise<Metadata> {
   const { slug } = await params;
+  const t = await siteTranslator(slug);
   return {
-    title: "Mes retours",
+    title: t("Mes retours", "My returns"),
     robots: { index: false, follow: false },
     alternates: { canonical: `/${slug}/account/returns` },
   };
