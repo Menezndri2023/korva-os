@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { BUSINESS_MODEL_DEFINITIONS, PLAN_KEYS, PLAN_NAMES } from "@korva/types";
+import {
+  ACQUISITION_SOURCES,
+  acquisitionSourceLabel,
+  BUSINESS_MODEL_DEFINITIONS,
+  PLAN_KEYS,
+  PLAN_NAMES,
+} from "@korva/types";
 import { Card, PageHeader, Skeleton, StatTile, Table, Td, Th } from "@korva/ui";
 import {
   adminApi,
@@ -129,6 +135,8 @@ export default function AdminOverviewPage() {
         </Card>
       </div>
 
+      {data && <AcquisitionCard overview={data} />}
+
       {data && (
         <Card className="overflow-hidden">
           <div className="p-6 pb-3">
@@ -236,6 +244,52 @@ function ActivationFunnel({ rows }: { rows: PlatformBusinessRow[] | undefined })
           ))}
         </ol>
       )}
+    </Card>
+  );
+}
+
+/**
+ * Where businesses come from — the one figure that says which channel of the marketing plan
+ * deserves the time — and what parrainage has produced.
+ */
+function AcquisitionCard({ overview }: { overview: PlatformOverview }) {
+  const rows = [...ACQUISITION_SOURCES, "unknown" as const]
+    .map((source) => ({
+      source,
+      label: source === "unknown" ? "Non renseigné" : acquisitionSourceLabel(source, "fr"),
+      count: overview.organizationsBySource?.[source] ?? 0,
+    }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  return (
+    <Card className="p-6">
+      <h2 className="text-lg font-semibold">Comment ils ont connu KORVA</h2>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-text-muted">Aucune réponse pour l&apos;instant.</p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {rows.map((row) => (
+            <li key={row.source}>
+              <div className="flex justify-between text-sm">
+                <span>{row.label}</span>
+                <span className="tabular-nums text-text-muted">{row.count}</span>
+              </div>
+              <div className="mt-1 h-2 overflow-hidden rounded-full bg-surface-muted">
+                <div
+                  className="h-full rounded-full bg-action"
+                  style={{ width: `${total ? (row.count / total) * 100 : 0}%` }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-5 border-t border-border pt-3 text-sm text-text-muted">
+        Parrainage : <span className="font-semibold text-text">{overview.referrals?.signedUp ?? 0}</span> inscrites
+        avec un lien, dont <span className="font-semibold text-text">{overview.referrals?.rewarded ?? 0}</span> ont
+        payé (parrain récompensé).
+      </p>
     </Card>
   );
 }

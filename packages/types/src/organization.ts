@@ -107,6 +107,8 @@ export interface Organization {
   currency: string;
   timezone: string;
   language: string;
+  /** How the business heard of KORVA (growth.ts), when it said. */
+  acquisitionSource?: string;
   logo?: string;
   brandColor?: string;
   tagline?: string;

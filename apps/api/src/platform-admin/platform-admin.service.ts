@@ -752,6 +752,26 @@ export class PlatformAdminService {
       }
     }
 
+    // Which channel of the marketing plan brings businesses ("Comment avez-vous connu KORVA ?"),
+    // and what parrainage has produced.
+    const [sources, referred, referralsRewarded] = await Promise.all([
+      this.organizationModel
+        .aggregate<{ _id: string | null; count: number }>([
+          { $group: { _id: '$acquisitionSource', count: { $sum: 1 } } },
+        ])
+        .exec(),
+      this.organizationModel
+        .countDocuments({ referredByOrganizationId: { $exists: true } })
+        .exec(),
+      this.organizationModel
+        .countDocuments({ referralRewardedAt: { $exists: true } })
+        .exec(),
+    ]);
+    const organizationsBySource: Record<string, number> = {};
+    for (const { _id, count } of sources) {
+      organizationsBySource[_id ?? 'unknown'] = count;
+    }
+
     const byBusinessModel = await this.byBusinessModel(now);
     const sitesOnline = byBusinessModel.reduce(
       (sum, group) => sum + group.sitesOnline,
@@ -771,6 +791,8 @@ export class PlatformAdminService {
       pastDue,
       organizationsByPlan: byPlan,
       monthlyRevenueByCurrency: revenueByCurrency,
+      organizationsBySource,
+      referrals: { signedUp: referred, rewarded: referralsRewarded },
     };
   }
 

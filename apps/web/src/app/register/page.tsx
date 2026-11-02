@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -12,6 +13,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import { AuthShell, RegisterAside } from "@/components/landing/auth-shell";
 import { AUTH_TEXT } from "@/lib/auth-text";
 import { useLocale, withLang } from "@/lib/locale";
+import { rememberReferral } from "@/lib/referral";
 
 interface RegisterResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
@@ -20,6 +22,9 @@ interface RegisterResponse {
 
 export default function RegisterPage() {
   const locale = useLocale();
+  // A parrainage link (/register?ref=CODE): remembered until the business is created.
+  const referralCode = useSearchParams()?.get("ref");
+  useEffect(() => rememberReferral(referralCode), [referralCode]);
   const t = AUTH_TEXT[locale];
   const router = useRouter();
   const setSession = useAuthStore((state) => state.setSession);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { z } from "zod";
@@ -12,6 +12,8 @@ import {
   type ImportOrganizationPreviewInput,
 } from "@korva/validation";
 import {
+  ACQUISITION_SOURCES,
+  acquisitionSourceLabel,
   BILLABLE_COUNTRIES,
   businessModelText,
   planName,
@@ -32,6 +34,7 @@ import {
 import { Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
+import { forgetReferral, readReferral } from "@/lib/referral";
 import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 const MODULE_LABELS: Record<KorvaModule, [string, string]> = {
@@ -161,6 +164,11 @@ export default function OnboardingPage() {
 
   const businessModel = useWatch({ control, name: "businessModel" }) as BusinessModel | undefined;
 
+  // Arrived through a parrainage link: that is how they heard of KORVA (they can change it).
+  useEffect(() => {
+    if (readReferral()) setValue("acquisitionSource", "referral");
+  }, [setValue]);
+
   // Registered once and spread manually below so the select can run register()'s own onChange
   // AND derive the billing currency from the same event.
   const countryField = register("country");
@@ -196,7 +204,12 @@ export default function OnboardingPage() {
 
   const mutation = useMutation({
     mutationFn: async (data: CreateOrganizationInput) => {
-      const organization = await apiClient.post<Organization>("/organizations", data, { withOrganization: false });
+      const referralCode = readReferral();
+      const organization = await apiClient.post<Organization>(
+        "/organizations",
+        { ...data, ...(referralCode ? { referralCode } : {}) },
+        { withOrganization: false },
+      );
       setActiveOrganization(organization.id);
 
       const modules = enabledModulesControl.getValues("modules");
@@ -244,6 +257,7 @@ export default function OnboardingPage() {
       return organization;
     },
     onSuccess: (organization) => {
+      forgetReferral();
       setActiveOrganization(organization.id);
       // Not straight to the dashboard: one more step puts an offer online, so the new site is
       // not empty on day one (see first-offer/page.tsx). It can be skipped.
@@ -503,6 +517,27 @@ export default function OnboardingPage() {
             {errors.timezone && (
               <p className="mt-1 text-xs text-red-600">{errors.timezone.message}</p>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium" htmlFor="acquisitionSource">
+              {t("Comment avez-vous connu KORVA ?", "How did you hear about KORVA?")}{" "}
+              <span className="font-normal text-text-muted">{t("(facultatif)", "(optional)")}</span>
+            </label>
+            <Select
+              id="acquisitionSource"
+              className="mt-1 w-full"
+              {...register("acquisitionSource", {
+                setValueAs: (value: string) => (value === "" ? undefined : value),
+              })}
+            >
+              <option value="">{t("Choisir une réponse", "Choose an answer")}</option>
+              {ACQUISITION_SOURCES.map((source) => (
+                <option key={source} value={source}>
+                  {acquisitionSourceLabel(source, locale)}
+                </option>
+              ))}
+            </Select>
           </div>
 
           <div>

@@ -26,6 +26,57 @@ export class OrganizationsRepository {
     return this.organizationModel.findOne({ slug }).exec();
   }
 
+  findByReferralCode(code: string): Promise<OrganizationDocument | null> {
+    return this.organizationModel.findOne({ referralCode: code }).exec();
+  }
+
+  /**
+   * Sets the code only if the business has none, and returns the code it ends up with — the
+   * existing one if a concurrent call won, null when another business already holds `code`
+   * (the unique index refused it) so the caller draws another.
+   */
+  async setReferralCodeIfMissing(
+    id: string,
+    code: string,
+  ): Promise<string | null> {
+    try {
+      const updated = await this.organizationModel
+        .findOneAndUpdate(
+          { _id: id, referralCode: { $exists: false } },
+          { $set: { referralCode: code } },
+          { new: true },
+        )
+        .exec();
+      if (updated) return updated.referralCode ?? null;
+      const current = await this.organizationModel
+        .findById(id, { referralCode: 1 })
+        .lean<{ referralCode?: string }>()
+        .exec();
+      return current?.referralCode ?? null;
+    } catch (error) {
+      if ((error as { code?: number }).code === 11000) return null;
+      throw error;
+    }
+  }
+
+  async countReferrals(
+    id: string,
+  ): Promise<{ signedUp: number; rewarded: number }> {
+    const referredBy = new Types.ObjectId(id);
+    const [signedUp, rewarded] = await Promise.all([
+      this.organizationModel
+        .countDocuments({ referredByOrganizationId: referredBy })
+        .exec(),
+      this.organizationModel
+        .countDocuments({
+          referredByOrganizationId: referredBy,
+          referralRewardedAt: { $exists: true },
+        })
+        .exec(),
+    ]);
+    return { signedUp, rewarded };
+  }
+
   /** Phase E3 — used both by OrganizationsService.update's uniqueness check and by
    *  PublicSitesController#resolveDomain (apps/storefront's custom-domain middleware). */
   findByCustomDomain(

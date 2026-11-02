@@ -32,6 +32,10 @@ import { UsersService } from '../identity/users/users.service';
 import { AuditService } from '../audit/audit.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { EntitlementsService } from '../subscriptions/entitlements.service';
+import { randomBytes } from 'crypto';
+import type { ReferralSummary } from '@korva/types';
+
+const REFERRAL_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /**
  * Rank of a role for role-assignment hierarchy purposes only (see addMember). Custom roles
@@ -154,6 +158,12 @@ export class OrganizationsService {
     const businessModel =
       input.businessModel ??
       verticalForOrganizationType(input.type)?.businessModel;
+    // A parrainage link: an unknown code is simply ignored, it never blocks the signup.
+    const referrer = input.referralCode
+      ? await this.organizationsRepository.findByReferralCode(
+          input.referralCode.toUpperCase(),
+        )
+      : null;
     const organization = await this.organizationsRepository.create({
       name: input.name,
       slug,
@@ -163,6 +173,9 @@ export class OrganizationsService {
       currency: input.currency,
       timezone: input.timezone,
       language: input.language,
+      acquisitionSource:
+        input.acquisitionSource ?? (referrer ? 'referral' : undefined),
+      ...(referrer ? { referredByOrganizationId: referrer._id } : {}),
       settings: { onboardingCompleted: false },
       enabledModules: [],
       ...generatedContent,
@@ -219,6 +232,33 @@ export class OrganizationsService {
     });
 
     return withDefaultModules;
+  }
+
+  /**
+   * The business's parrainage code (created on first use) and what it has brought so far. The
+   * code is short and unambiguous to read aloud or type from a WhatsApp message: no 0/O, 1/I.
+   */
+  async referralSummary(organizationId: string): Promise<ReferralSummary> {
+    const organization = await this.getById(organizationId);
+    let code = organization.referralCode;
+    for (let attempt = 0; !code && attempt < 5; attempt++) {
+      const candidate = Array.from(
+        randomBytes(6),
+        (byte) => REFERRAL_ALPHABET[byte % REFERRAL_ALPHABET.length],
+      ).join('');
+      // The unique index decides between two businesses drawing the same code.
+      code =
+        (await this.organizationsRepository.setReferralCodeIfMissing(
+          organizationId,
+          candidate,
+        )) ?? undefined;
+    }
+    if (!code) {
+      throw new Error('Could not create a referral code');
+    }
+    const { signedUp, rewarded } =
+      await this.organizationsRepository.countReferrals(organizationId);
+    return { code, signedUp, rewarded };
   }
 
   async getBySlug(slug: string): Promise<OrganizationDocument> {

@@ -148,6 +148,9 @@ export interface PlatformOverview {
   trialsRunning: number;
   pastDue: number;
   organizationsByPlan: Record<string, number>;
+  /** "Comment avez-vous connu KORVA ?" answers; "unknown" when the business did not say. */
+  organizationsBySource: Record<string, number>;
+  referrals: { signedUp: number; rewarded: number };
   monthlyRevenueByCurrency: Record<string, number>;
 }
 

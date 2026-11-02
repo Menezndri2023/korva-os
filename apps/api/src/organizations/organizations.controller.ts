@@ -60,6 +60,12 @@ export class OrganizationsController {
     return this.organizationsService.getById(tenant.organizationId);
   }
 
+  /** The parrainage code and its results — any member may share the business's link. */
+  @Get('me/referral')
+  referral(@CurrentTenant() tenant: TenantContext) {
+    return this.organizationsService.referralSummary(tenant.organizationId);
+  }
+
   /** Onboarding's "importer mon entreprise" step — triggers a server-side outbound fetch, so
    *  it's throttled the same way PUBLIC_BOOKING_THROTTLE gates other server-triggered-fetch
    *  endpoints in this codebase, to stop it being usable as a free URL-probing proxy. */

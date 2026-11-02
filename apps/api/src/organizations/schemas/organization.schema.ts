@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 import { BUSINESS_MODELS, FULFILLMENT_MODES, TRADE_TOOLS } from '@korva/types';
 import type {
   BusinessModel,
@@ -227,6 +227,25 @@ export class Organization {
    */
   @Prop({ type: [String], default: undefined })
   aiAutoApprovedTools?: string[];
+
+  /** "Comment avez-vous connu KORVA ?" at creation (@korva/types growth.ts). */
+  @Prop()
+  acquisitionSource?: string;
+
+  /** This business's parrainage code, created the first time it opens its referral page. */
+  @Prop()
+  referralCode?: string;
+
+  /** The business whose parrainage link this one signed up with. */
+  @Prop({ type: Types.ObjectId, ref: 'Organization' })
+  referredByOrganizationId?: Types.ObjectId;
+
+  /** When the referring business got its reward for this one — once, on its first payment. */
+  @Prop({ type: Date })
+  referralRewardedAt?: Date;
 }
 
 export const OrganizationSchema = SchemaFactory.createForClass(Organization);
+// Created by migration 0016 in production (autoIndex is off there).
+OrganizationSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
+OrganizationSchema.index({ referredByOrganizationId: 1 }, { sparse: true });

@@ -396,6 +396,11 @@ export class SubscriptionBillingService {
       },
     });
 
+    // Parrainage: a referred business's first payment rewards the business that referred it.
+    await this.subscriptionsService.rewardReferrerOnFirstPayment(
+      organizationId,
+    );
+
     // A plan the business picked opens once it is paid for (pay first, then the plan).
     if (paid.kind === 'plan_change') {
       await this.subscriptionsService.applyPaidPlanChange(paid);

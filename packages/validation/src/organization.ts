@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  ACQUISITION_SOURCES,
   BUSINESS_MODELS,
   TRADE_TOOLS,
   FULFILLMENT_MODES,
@@ -28,6 +29,10 @@ export const createOrganizationSchema = z.object({
    *  content-slot fields Settings already lets an owner edit by hand, just pre-filled with
    *  genuinely entered data instead of left blank. */
   businessDescription: z.string().min(1).max(2000).optional(),
+  /** "Comment avez-vous connu KORVA ?" (growth.ts). */
+  acquisitionSource: z.enum(ACQUISITION_SOURCES).optional(),
+  /** The referring business's code, from a parrainage link (growth.ts). Unknown codes are ignored. */
+  referralCode: z.string().trim().max(20).optional(),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 

@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -13,6 +14,7 @@ import {
   BUSINESS_MODEL_DEFINITIONS,
   KORVA_PRODUCTS,
   PRODUCT_MODULES,
+  REFERRAL_REWARD,
   SIGNUP_TRIAL,
   isCurrencyChargeable,
   planHasFeature,
@@ -71,6 +73,7 @@ function computeProration(
 
 @Injectable()
 export class SubscriptionsService {
+  private readonly logger = new Logger(SubscriptionsService.name);
   constructor(
     private readonly subscriptionsRepository: SubscriptionsRepository,
     private readonly plansService: PlansService,
@@ -240,10 +243,20 @@ export class SubscriptionsService {
       });
     }
     const now = new Date();
+    // A business that came through a parrainage link gets the longer trial (growth.ts).
+    const referred = await this.organizationModel
+      .exists({
+        _id: new Types.ObjectId(organizationId),
+        referredByOrganizationId: { $exists: true },
+      })
+      .exec();
+    const days = referred
+      ? REFERRAL_REWARD.refereeTrialDays
+      : SIGNUP_TRIAL.days;
     subscription.trialPlanKey = SIGNUP_TRIAL.plan;
     subscription.trialStartedAt = now;
     subscription.trialEndsAt = new Date(
-      now.getTime() + SIGNUP_TRIAL.days * 24 * 60 * 60 * 1000,
+      now.getTime() + days * 24 * 60 * 60 * 1000,
     );
     await subscription.save();
 
@@ -265,10 +278,46 @@ export class SubscriptionsService {
    * audited exception, unlike startTrial). Clearing trialSettledAt lets the period sweep settle
    * it again when it ends.
    */
+  /**
+   * Parrainage: the first time a referred business pays a KORVA invoice, the business that
+   * referred it gets REFERRAL_REWARD.referrerProDays of Pro. Claimed atomically on the referred
+   * business, so a replayed payment never rewards twice. Never throws: a reward that fails must
+   * not turn a settled payment into an error.
+   */
+  async rewardReferrerOnFirstPayment(organizationId: string): Promise<void> {
+    try {
+      const claimed = await this.organizationModel
+        .findOneAndUpdate(
+          {
+            _id: new Types.ObjectId(organizationId),
+            referredByOrganizationId: { $exists: true },
+            referralRewardedAt: { $exists: false },
+          },
+          { $set: { referralRewardedAt: new Date() } },
+          { projection: { referredByOrganizationId: 1 } },
+        )
+        .lean<{ referredByOrganizationId?: Types.ObjectId }>()
+        .exec();
+      if (!claimed?.referredByOrganizationId) return;
+      await this.extendTrial(
+        claimed.referredByOrganizationId.toString(),
+        null,
+        REFERRAL_REWARD.referrerProDays,
+        { reason: 'referral_reward', referredOrganizationId: organizationId },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Referral reward failed for organization ${organizationId}`,
+        error,
+      );
+    }
+  }
+
   async extendTrial(
     organizationId: string,
-    adminUserId: string,
+    adminUserId: string | null,
     days: number,
+    why: Record<string, unknown> = { by: 'platform_admin' },
   ): Promise<SubscriptionDocument> {
     const subscription = await this.getForOrganization(organizationId);
     const now = new Date();
@@ -286,14 +335,14 @@ export class SubscriptionsService {
 
     await this.auditService.record({
       organizationId,
-      userId: adminUserId,
+      ...(adminUserId ? { userId: adminUserId } : {}),
       action: 'UPDATE',
       entity: 'subscription',
       entityId: subscription.id as string,
       metadata: {
         trialExtendedByDays: days,
         endsAt: subscription.trialEndsAt,
-        by: 'platform_admin',
+        ...why,
       },
     });
     return subscription;

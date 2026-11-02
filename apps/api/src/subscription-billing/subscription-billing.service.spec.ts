@@ -123,6 +123,7 @@ function buildHarness(
   };
   const subscriptionsService = {
     applyPaidPlanChange: jest.fn().mockResolvedValue({}),
+    rewardReferrerOnFirstPayment: jest.fn().mockResolvedValue(undefined),
   };
   const service = new SubscriptionBillingService(
     invoices as unknown as SubscriptionInvoicesRepository,
