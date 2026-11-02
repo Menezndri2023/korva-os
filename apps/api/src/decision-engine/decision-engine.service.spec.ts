@@ -1,4 +1,5 @@
-import { Types } from 'mongoose';
+import { Types, type Model } from 'mongoose';
+import type { OrganizationDocument } from '../organizations/schemas/organization.schema';
 import { DecisionEngineService } from './decision-engine.service';
 import { InvoiceOverdueFollowupRule } from './rules/invoice-overdue-followup.rule';
 import { CustomerReactivationRule } from './rules/customer-reactivation.rule';
@@ -9,7 +10,9 @@ import type { AuditService } from '../audit/audit.service';
 
 const ORG_ID = '507f1f77bcf86cd799439011';
 
-function buildService(overrides: { createIfNotExists?: jest.Mock } = {}) {
+function buildService(
+  overrides: { createIfNotExists?: jest.Mock; language?: string } = {},
+) {
   const createIfNotExists =
     overrides.createIfNotExists ??
     jest.fn().mockResolvedValue({
@@ -20,6 +23,13 @@ function buildService(overrides: { createIfNotExists?: jest.Mock } = {}) {
   } as unknown as RecommendationsRepository;
   const record = jest.fn().mockResolvedValue(undefined);
   const auditService = { record } as unknown as AuditService;
+  const organizationModel = {
+    findById: () => ({
+      lean: () => ({
+        exec: () => Promise.resolve({ language: overrides.language }),
+      }),
+    }),
+  } as unknown as Model<OrganizationDocument>;
 
   const service = new DecisionEngineService(
     new InvoiceOverdueFollowupRule(),
@@ -28,6 +38,7 @@ function buildService(overrides: { createIfNotExists?: jest.Mock } = {}) {
     new LowStockThresholdAlertRule(),
     recommendationsRepository,
     auditService,
+    organizationModel,
   );
 
   return { service, createIfNotExists, record };
@@ -109,6 +120,24 @@ describe('DecisionEngineService', () => {
     };
     expect(draft.title).toBe('Client inactif à relancer');
     expect(draft.description).toContain('61 jours');
+  });
+
+  it('writes the recommendation in English for an English business', async () => {
+    const { service, createIfNotExists } = buildService({ language: 'en' });
+
+    await service.handleEvent(ORG_ID, 'customer.inactive', {
+      contactId: '507f1f77bcf86cd799439033',
+      inactiveDays: 61,
+    });
+
+    const draft = (createIfNotExists.mock.calls[0] as unknown[])[0] as {
+      title: string;
+      description: string;
+      impact: string;
+    };
+    expect(draft.title).toBe('Inactive customer to win back');
+    expect(draft.description).toContain('61 days');
+    expect(draft.impact).toBe('61 days inactive');
   });
 
   it('creates a Recommendation for the low-stock alert rule on offer.stock_depleted', async () => {

@@ -45,7 +45,7 @@ import {
   WalletSettings,
   WalletSettingsDocument,
 } from './schemas/wallet-settings.schema';
-import { translator } from '../../shared/i18n';
+import { translator, type Translate } from '../../shared/i18n';
 
 const DAY_MS = 86_400_000;
 /** A new withdrawal number must be this old before AUTOMATIC withdrawals use it. */
@@ -112,6 +112,14 @@ export class WalletService {
     return this.configService.get<string>('PAYOUT_APPROVAL') === 'auto'
       ? 'auto'
       : 'manual';
+  }
+
+  /** Notes stored on the business's ledger are written in its language (shared/i18n.ts). */
+  private async translatorFor(organizationId: string): Promise<Translate> {
+    const organization = await this.organizationsService
+      .getById(organizationId)
+      .catch(() => null);
+    return translator(organization?.language);
   }
 
   private async planOf(organizationId: string): Promise<PlanKey> {
@@ -328,8 +336,10 @@ export class WalletService {
         this.configService.get<string>('WALLET_FALLBACK_FEE_BPS') ?? 300,
       );
       fee = round2((payment.amount * fallbackBps) / 10_000);
-      feeNote =
-        'Frais estimés : GeniusPay ne les a pas indiqués pour ce paiement.';
+      feeNote = (await this.translatorFor(organizationId))(
+        'Frais estimés : GeniusPay ne les a pas indiqués pour ce paiement.',
+        'Estimated fee: GeniusPay did not report it for this payment.',
+      );
     }
     const plan = await this.planOf(organizationId);
     const commission = round2(
@@ -584,7 +594,7 @@ export class WalletService {
   async refundSubscriptionDebit(
     organizationId: string,
     entryId: string,
-    note = 'Montant rendu',
+    note?: string,
   ): Promise<void> {
     const entry = await this.entryModel
       .findOne({
@@ -595,6 +605,7 @@ export class WalletService {
       .lean()
       .exec();
     if (!entry) return;
+    const t = await this.translatorFor(organizationId);
     await this.addEntry({
       organizationId,
       kind: 'subscription_reversal',
@@ -602,7 +613,7 @@ export class WalletService {
       currency: entry.currency,
       availableAt: new Date(),
       sourceKey: `subscription-reversal:${entryId}`,
-      note,
+      note: note ?? t('Montant rendu', 'Amount returned'),
     });
   }
 
@@ -632,7 +643,10 @@ export class WalletService {
         await this.refundSubscriptionDebit(
           organizationId,
           id,
-          'Facture aussi payée par GeniusPay — montant rendu',
+          (await this.translatorFor(organizationId))(
+            'Facture aussi payée par GeniusPay — montant rendu',
+            'Invoice also paid through GeniusPay — amount returned',
+          ),
         );
         return true;
       }
@@ -817,7 +831,11 @@ export class WalletService {
     if (result.status === 'failed') {
       await this.fail(
         payout,
-        result.failureReason ?? 'Refusé par GeniusPay',
+        result.failureReason ??
+          (await this.translatorFor(payout.organizationId.toString()))(
+            'Refusé par GeniusPay',
+            'Refused by GeniusPay',
+          ),
         'failed',
       );
     }

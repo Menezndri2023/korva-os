@@ -7,6 +7,13 @@ import { CustomerReactivationRule } from './rules/customer-reactivation.rule';
 import { LowStockAlertRule } from './rules/low-stock-alert.rule';
 import { LowStockThresholdAlertRule } from './rules/low-stock-threshold-alert.rule';
 import { AuditService } from '../audit/audit.service';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import {
+  Organization,
+  OrganizationDocument,
+} from '../organizations/schemas/organization.schema';
+import { translator } from '../shared/i18n';
 
 /**
  * The Decision Engine (docs/BUSINESS_OS_AUDIT.md §9, item #3): a small, deterministic rules
@@ -30,6 +37,8 @@ export class DecisionEngineService {
     lowStockThresholdAlertRule: LowStockThresholdAlertRule,
     private readonly recommendationsRepository: RecommendationsRepository,
     private readonly auditService: AuditService,
+    @InjectModel(Organization.name)
+    private readonly organizationModel: Model<OrganizationDocument>,
   ) {
     this.rules = [
       invoiceOverdueFollowupRule,
@@ -57,9 +66,17 @@ export class DecisionEngineService {
     );
     if (matchingRules.length === 0) return;
 
+    // Recommendations are stored as text, so they are written once, in the business's language.
+    const organization = await this.organizationModel
+      .findById(organizationId, { language: 1 })
+      .lean<{ language?: string }>()
+      .exec()
+      .catch(() => null);
+    const t = translator(organization?.language);
+
     for (const rule of matchingRules) {
       try {
-        const draft = await rule.evaluate(organizationId, payload);
+        const draft = await rule.evaluate(organizationId, payload, t);
         if (!draft) continue;
 
         const created = await this.recommendationsRepository.createIfNotExists({

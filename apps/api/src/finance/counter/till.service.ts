@@ -14,6 +14,7 @@ import {
   TillClosing,
   type TillClosingDocument,
 } from './schemas/till-closing.schema';
+import { translator, type Translate } from '../../shared/i18n';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COUNTER_KEY_PREFIX = 'counter:';
@@ -27,10 +28,11 @@ function methodKey(method: string | undefined): string {
   return CASH_METHOD.test(value) ? 'cash' : value;
 }
 
-function methodLabel(key: string): string {
-  if (key === 'cash') return 'Espèces';
-  if (key === 'online') return 'Mobile money (QR et en ligne)';
-  if (key === '') return 'Non précisé';
+function methodLabel(key: string, t: Translate): string {
+  if (key === 'cash') return t('Espèces', 'Cash');
+  if (key === 'online')
+    return t('Mobile money (QR et en ligne)', 'Mobile money (QR and online)');
+  if (key === '') return t('Non précisé', 'Not specified');
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
@@ -62,6 +64,7 @@ export class TillService {
     const organization =
       await this.organizationsService.getById(organizationId);
     const timeZone = organization.timezone || 'UTC';
+    const t = translator(organization.language);
     const reportDay =
       day ?? new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
     const start = zonedTimeToUtc(reportDay, '00:00', timeZone);
@@ -109,7 +112,7 @@ export class TillService {
             user
               ? [user.firstName, user.lastName].filter(Boolean).join(' ') ||
                   user.email
-              : 'Ancien membre',
+              : t('Ancien membre', 'Former member'),
           );
         }),
     );
@@ -122,7 +125,7 @@ export class TillService {
       byMethod: [...byMethod.entries()]
         .map(([method, sum]) => ({
           method,
-          label: methodLabel(method),
+          label: methodLabel(method, t),
           ...sum,
         }))
         .sort((a, b) => b.total - a.total),
@@ -130,8 +133,8 @@ export class TillService {
         .map(([userId, sum]) => ({
           userId: userId || null,
           name: userId
-            ? (names.get(userId) ?? 'Ancien membre')
-            : 'Client en ligne',
+            ? (names.get(userId) ?? t('Ancien membre', 'Former member'))
+            : t('Client en ligne', 'Online customer'),
           ...sum,
         }))
         .sort((a, b) => b.total - a.total),

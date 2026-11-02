@@ -18,6 +18,11 @@ import {
   WebhookDelivery,
   WebhookDeliveryDocument,
 } from '../webhook-subscriptions/schemas/webhook-delivery.schema';
+import {
+  Organization,
+  OrganizationDocument,
+} from '../organizations/schemas/organization.schema';
+import { translator } from '../shared/i18n';
 
 const FEED_LIMIT_PER_CATEGORY = 20;
 const PENDING_APPROVAL_STATUSES = ['pending', 'confirming'];
@@ -42,6 +47,8 @@ export class ActionCenterService {
     private readonly workflowExecutionModel: Model<WorkflowExecutionDocument>,
     @InjectModel(WebhookDelivery.name)
     private readonly webhookDeliveryModel: Model<WebhookDeliveryDocument>,
+    @InjectModel(Organization.name)
+    private readonly organizationModel: Model<OrganizationDocument>,
   ) {}
 
   async getSummary(organizationId: string): Promise<ActionCenterSummary> {
@@ -75,6 +82,13 @@ export class ActionCenterService {
 
   async getFeed(organizationId: string): Promise<ActionCenterItem[]> {
     const organizationObjectId = new Types.ObjectId(organizationId);
+    // Written in the business's language, like its stored recommendations (shared/i18n.ts).
+    const organization = await this.organizationModel
+      .findById(organizationObjectId, { language: 1 })
+      .lean<{ language?: string }>()
+      .exec()
+      .catch(() => null);
+    const t = translator(organization?.language);
     const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
 
     const [pendingActions, recommendations, failures, webhookFailures] =
@@ -143,7 +157,10 @@ export class ActionCenterService {
       ...failures.map((execution) => ({
         type: 'workflow_failure' as const,
         id: execution.id as string,
-        title: `Échec d'automatisation pour l'événement "${execution.eventName}"`,
+        title: t(
+          `Échec d'automatisation pour l'événement "${execution.eventName}"`,
+          `Automation failed for the event "${execution.eventName}"`,
+        ),
         description: execution.error,
         occurredAt: (
           execution as unknown as { createdAt: Date }
@@ -157,7 +174,10 @@ export class ActionCenterService {
       ...webhookFailures.map((delivery) => ({
         type: 'webhook_delivery_failure' as const,
         id: delivery.id as string,
-        title: `Échec de livraison webhook pour l'événement "${delivery.eventName}"`,
+        title: t(
+          `Échec de livraison webhook pour l'événement "${delivery.eventName}"`,
+          `Webhook delivery failed for the event "${delivery.eventName}"`,
+        ),
         description: delivery.error,
         occurredAt: (
           delivery as unknown as { createdAt: Date }

@@ -1,3 +1,4 @@
+import type { Translate } from '../../shared/i18n';
 import type {
   ActionCenterSeverity,
   RecommendationEntityType,
@@ -30,8 +31,10 @@ export interface DecisionRule {
   /** Stored as Recommendation.ruleKey — stable, never reused by another rule. */
   readonly key: string;
   readonly eventName: SystemEvent;
+  /** `t` writes the recommendation in the business's language (shared/i18n.ts). */
   evaluate(
     organizationId: string,
     payload: Record<string, unknown>,
+    t: Translate,
   ): Promise<RecommendationDraft | null>;
 }

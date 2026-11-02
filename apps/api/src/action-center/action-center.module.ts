@@ -18,6 +18,10 @@ import {
 } from '../webhook-subscriptions/schemas/webhook-delivery.schema';
 import { ActionCenterService } from './action-center.service';
 import { ActionCenterController } from './action-center.controller';
+import {
+  Organization,
+  OrganizationSchema,
+} from '../organizations/schemas/organization.schema';
 
 @Module({
   imports: [
@@ -26,6 +30,7 @@ import { ActionCenterController } from './action-center.controller';
       { name: Recommendation.name, schema: RecommendationSchema },
       { name: WorkflowExecution.name, schema: WorkflowExecutionSchema },
       { name: WebhookDelivery.name, schema: WebhookDeliverySchema },
+      { name: Organization.name, schema: OrganizationSchema },
     ]),
   ],
   controllers: [ActionCenterController],

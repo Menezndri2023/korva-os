@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { SystemEvent } from '@korva/types';
 import { DecisionRule, RecommendationDraft } from './rule.interface';
+import type { Translate } from '../../shared/i18n';
 
 /**
  * The brief's own canonical "fidélisation" example, reused verbatim across §1/§8/§18/§19: a
@@ -15,6 +16,7 @@ export class CustomerReactivationRule implements DecisionRule {
   evaluate(
     _organizationId: string,
     payload: Record<string, unknown>,
+    t: Translate,
   ): Promise<RecommendationDraft | null> {
     const contactId = payload.contactId;
     if (typeof contactId !== 'string') return Promise.resolve(null);
@@ -25,17 +27,26 @@ export class CustomerReactivationRule implements DecisionRule {
     return Promise.resolve({
       entityType: 'contact',
       entityId: contactId,
-      title: 'Client inactif à relancer',
+      title: t('Client inactif à relancer', 'Inactive customer to win back'),
       description:
         inactiveDays !== null
-          ? `Ce client n'a montré aucune activité depuis ${inactiveDays} jours. Nous recommandons une campagne de réactivation.`
-          : "Ce client n'a montré aucune activité récente. Nous recommandons une campagne de réactivation.",
+          ? t(
+              `Ce client n'a montré aucune activité depuis ${inactiveDays} jours. Nous recommandons une campagne de réactivation.`,
+              `This customer has shown no activity for ${inactiveDays} days. We recommend a win-back campaign.`,
+            )
+          : t(
+              "Ce client n'a montré aucune activité récente. Nous recommandons une campagne de réactivation.",
+              'This customer has shown no recent activity. We recommend a win-back campaign.',
+            ),
       // No revenue is actively at risk (unlike an overdue invoice or a depleted product) — this
       // is a growth opportunity, not something bleeding money right now.
       severity: 'opportunity',
       impact:
         inactiveDays !== null
-          ? `${inactiveDays} jours d'inactivité`
+          ? t(
+              `${inactiveDays} jours d'inactivité`,
+              `${inactiveDays} days inactive`,
+            )
           : undefined,
     });
   }

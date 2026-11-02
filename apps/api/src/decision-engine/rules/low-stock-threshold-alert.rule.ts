@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { SystemEvent } from '@korva/types';
 import { DecisionRule, RecommendationDraft } from './rule.interface';
+import type { Translate } from '../../shared/i18n';
 
 /**
  * Reacts to `offer.low_stock` (InventoryService.reserveStock, whenever a decrement leaves stock
@@ -17,6 +18,7 @@ export class LowStockThresholdAlertRule implements DecisionRule {
   evaluate(
     _organizationId: string,
     payload: Record<string, unknown>,
+    t: Translate,
   ): Promise<RecommendationDraft | null> {
     const offerId = payload.offerId;
     if (typeof offerId !== 'string') return Promise.resolve(null);
@@ -31,14 +33,20 @@ export class LowStockThresholdAlertRule implements DecisionRule {
     return Promise.resolve({
       entityType: 'offer',
       entityId: offerId,
-      title: 'Stock bas',
-      description: `Il reste ${stockOnHand} unité(s) en stock, en dessous du seuil configuré (${threshold}). Pensez à réapprovisionner.`,
+      title: t('Stock bas', 'Low stock'),
+      description: t(
+        `Il reste ${stockOnHand} unité(s) en stock, en dessous du seuil configuré (${threshold}). Pensez à réapprovisionner.`,
+        `${stockOnHand} unit(s) left in stock, below the threshold you set (${threshold}). Think about restocking.`,
+      ),
       // A heads-up before the shelf is actually empty — one tier below LowStockAlertRule's
       // 'urgent' (genuine stockout), since sales aren't lost yet.
       severity: 'attention',
       impact:
         typeof stockOnHand === 'number'
-          ? `${stockOnHand} unité(s) restante(s)`
+          ? t(
+              `${stockOnHand} unité(s) restante(s)`,
+              `${stockOnHand} unit(s) left`,
+            )
           : undefined,
     });
   }

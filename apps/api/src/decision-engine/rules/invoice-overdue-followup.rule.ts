@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { SystemEvent } from '@korva/types';
 import { DecisionRule, RecommendationDraft } from './rule.interface';
+import type { Translate } from '../../shared/i18n';
 
 /**
  * The Business OS brief's own canonical deterministic-rule example (§7): "SI facture impayée
@@ -16,6 +17,7 @@ export class InvoiceOverdueFollowupRule implements DecisionRule {
   evaluate(
     _organizationId: string,
     payload: Record<string, unknown>,
+    t: Translate,
   ): Promise<RecommendationDraft | null> {
     const invoiceId = payload.invoiceId;
     if (typeof invoiceId !== 'string') return Promise.resolve(null);
@@ -28,12 +30,18 @@ export class InvoiceOverdueFollowupRule implements DecisionRule {
     return Promise.resolve({
       entityType: 'invoice',
       entityId: invoiceId,
-      title: 'Facture en retard de paiement',
-      description: `Cette facture est en retard de paiement, avec ${outstanding} restant à encaisser. Nous recommandons une relance auprès du client.`,
+      title: t('Facture en retard de paiement', 'Invoice overdue'),
+      description: t(
+        `Cette facture est en retard de paiement, avec ${outstanding} restant à encaisser. Nous recommandons une relance auprès du client.`,
+        `This invoice is overdue, with ${outstanding} still to collect. We recommend reminding the customer.`,
+      ),
       severity: 'urgent',
       impact:
         outstanding > 0
-          ? `${outstanding} en attente d'encaissement`
+          ? t(
+              `${outstanding} en attente d'encaissement`,
+              `${outstanding} waiting to be collected`,
+            )
           : undefined,
     });
   }

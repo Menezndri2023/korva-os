@@ -41,6 +41,11 @@ describe('ActionCenterService', () => {
       recommendationModel as never,
       workflowExecutionModel as never,
       webhookDeliveryModel as never,
+      {
+        findById: () => ({
+          lean: () => ({ exec: () => Promise.resolve({ language: 'fr' }) }),
+        }),
+      } as never,
     );
 
     return {

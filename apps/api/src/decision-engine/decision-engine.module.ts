@@ -13,11 +13,16 @@ import { CustomerReactivationRule } from './rules/customer-reactivation.rule';
 import { LowStockAlertRule } from './rules/low-stock-alert.rule';
 import { LowStockThresholdAlertRule } from './rules/low-stock-threshold-alert.rule';
 import { AuditModule } from '../audit/audit.module';
+import {
+  Organization,
+  OrganizationSchema,
+} from '../organizations/schemas/organization.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Recommendation.name, schema: RecommendationSchema },
+      { name: Organization.name, schema: OrganizationSchema },
     ]),
     AuditModule,
   ],
