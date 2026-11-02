@@ -2,6 +2,7 @@ import type { DocumentTemplate } from '../rendering/document-rendering.service';
 import type { QuoteDocument } from '../../finance/quotes/schemas/quote.schema';
 import type { OrganizationDocument } from '../../organizations/schemas/organization.schema';
 import type { ContactDocument } from '../../crm/contacts/schemas/contact.schema';
+import { documentWords } from './document-words';
 
 export function buildQuoteDocumentManifest(
   quote: QuoteDocument,
@@ -13,46 +14,52 @@ export function buildQuoteDocumentManifest(
     contact.company ||
     contact.email ||
     '—';
+  const { t, date, money, status } = documentWords(organization.language);
 
   return {
     documentType: 'quote',
-    title: `Devis ${quote.number}`,
+    title: t(`Devis ${quote.number}`, `Quote ${quote.number}`),
     organizationHeader: { name: organization.name },
     metadata: [
-      { label: 'Client', value: contactName },
-      { label: 'Statut', value: quote.status },
+      { label: t('Client', 'Customer'), value: contactName },
+      { label: t('Statut', 'Status'), value: status(quote.status) },
       ...(quote.validUntil
         ? [
             {
-              label: "Valable jusqu'au",
-              value: quote.validUntil.toLocaleDateString('fr-FR'),
+              label: t("Valable jusqu'au", 'Valid until'),
+              value: date(quote.validUntil),
             },
           ]
         : []),
     ],
     table: {
-      columns: ['Description', 'Qté', 'Prix unitaire', 'Total'],
+      columns: [
+        t('Description', 'Description'),
+        t('Qté', 'Qty'),
+        t('Prix unitaire', 'Unit price'),
+        t('Total', 'Total'),
+      ],
       rows: quote.items.map((item) => [
         item.description,
         String(item.quantity),
-        formatMoney(item.unitPrice, quote.currency),
-        formatMoney(item.quantity * item.unitPrice, quote.currency),
+        money(item.unitPrice, quote.currency),
+        money(item.quantity * item.unitPrice, quote.currency),
       ]),
       totals: [
         {
-          label: 'Sous-total',
-          value: formatMoney(quote.subtotal, quote.currency),
+          label: t('Sous-total', 'Subtotal'),
+          value: money(quote.subtotal, quote.currency),
         },
-        { label: 'TVA', value: formatMoney(quote.taxTotal, quote.currency) },
-        { label: 'Total', value: formatMoney(quote.total, quote.currency) },
+        {
+          label: t('TVA', 'VAT'),
+          value: money(quote.taxTotal, quote.currency),
+        },
+        {
+          label: t('Total', 'Total'),
+          value: money(quote.total, quote.currency),
+        },
       ],
     },
     footer: quote.notes,
   };
-}
-
-function formatMoney(amount: number, currency: string): string {
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency }).format(
-    amount,
-  );
 }

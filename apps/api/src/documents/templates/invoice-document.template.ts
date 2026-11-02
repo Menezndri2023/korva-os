@@ -2,6 +2,7 @@ import type { DocumentTemplate } from '../rendering/document-rendering.service';
 import type { InvoiceDocument } from '../../finance/invoices/schemas/invoice.schema';
 import type { OrganizationDocument } from '../../organizations/schemas/organization.schema';
 import type { ContactDocument } from '../../crm/contacts/schemas/contact.schema';
+import { documentWords } from './document-words';
 
 export function buildInvoiceDocumentManifest(
   invoice: InvoiceDocument,
@@ -13,57 +14,60 @@ export function buildInvoiceDocumentManifest(
     contact.company ||
     contact.email ||
     '—';
+  const { t, date, money, status } = documentWords(organization.language);
 
   return {
     documentType: 'invoice',
-    title: `Facture ${invoice.number}`,
+    title: t(`Facture ${invoice.number}`, `Invoice ${invoice.number}`),
     organizationHeader: { name: organization.name },
     metadata: [
-      { label: 'Client', value: contactName },
-      { label: 'Statut', value: invoice.status },
+      { label: t('Client', 'Customer'), value: contactName },
+      { label: t('Statut', 'Status'), value: status(invoice.status) },
       ...(invoice.issuedAt
         ? [
             {
-              label: 'Émise le',
-              value: invoice.issuedAt.toLocaleDateString('fr-FR'),
+              label: t('Émise le', 'Issued on'),
+              value: date(invoice.issuedAt),
             },
           ]
         : []),
       ...(invoice.dueDate
         ? [
             {
-              label: 'Échéance',
-              value: invoice.dueDate.toLocaleDateString('fr-FR'),
+              label: t('Échéance', 'Due date'),
+              value: date(invoice.dueDate),
             },
           ]
         : []),
     ],
     table: {
-      columns: ['Description', 'Qté', 'Prix unitaire', 'Total'],
+      columns: [
+        t('Description', 'Description'),
+        t('Qté', 'Qty'),
+        t('Prix unitaire', 'Unit price'),
+        t('Total', 'Total'),
+      ],
       rows: invoice.items.map((item) => [
         item.description,
         String(item.quantity),
-        formatMoney(item.unitPrice, invoice.currency),
-        formatMoney(item.quantity * item.unitPrice, invoice.currency),
+        money(item.unitPrice, invoice.currency),
+        money(item.quantity * item.unitPrice, invoice.currency),
       ]),
       totals: [
         {
-          label: 'Sous-total',
-          value: formatMoney(invoice.subtotal, invoice.currency),
+          label: t('Sous-total', 'Subtotal'),
+          value: money(invoice.subtotal, invoice.currency),
         },
         {
-          label: 'TVA',
-          value: formatMoney(invoice.taxTotal, invoice.currency),
+          label: t('TVA', 'VAT'),
+          value: money(invoice.taxTotal, invoice.currency),
         },
-        { label: 'Total', value: formatMoney(invoice.total, invoice.currency) },
+        {
+          label: t('Total', 'Total'),
+          value: money(invoice.total, invoice.currency),
+        },
       ],
     },
     footer: invoice.notes,
   };
-}
-
-function formatMoney(amount: number, currency: string): string {
-  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency }).format(
-    amount,
-  );
 }
