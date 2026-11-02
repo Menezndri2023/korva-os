@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AI_AGENTS,
+  korvaAiAssistantFor,
+  localeFrom,
   type AiAgent,
   type AiChatResponse,
   type AiConversation,
@@ -14,6 +16,7 @@ import {
 import { Button, Card, Notice } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 import { AI_TOOL_LABELS, AI_TOOL_LABELS_EN, AiMessageText } from "@/components/ai-message-text";
 import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
@@ -39,7 +42,14 @@ export default function AiPage() {
     enabled: authReady,
   });
   const canChat = status ? status.available && !status.paused : true;
-  const assistant = status?.assistant;
+  const locale = useDashboardLocale();
+  const { data: organization } = useActiveOrganization();
+  // The API names the assistant in the business's language; someone reading the dashboard in the
+  // other language gets the same assistant in their own words.
+  const assistant =
+    status && organization && localeFrom(organization.language) !== locale
+      ? korvaAiAssistantFor(organization.businessModel, locale)
+      : status?.assistant;
   const agentLabel = (a: AiAgent) =>
     a === "general_assistant" && assistant ? assistant.name : t(...AGENT_LABELS[a]);
 

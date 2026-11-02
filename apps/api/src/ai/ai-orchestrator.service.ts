@@ -36,13 +36,23 @@ import { KORVA_AI_CONFIG } from './korva-ai.tokens';
 import type { KorvaAiConfig } from './korva-ai.config';
 import { KORVA_AI_UNAVAILABLE_MESSAGE } from './providers/null-ai.provider';
 import { AiProviderBusyError } from './providers/openai-compatible-ai.provider';
+import { orgLocale, translator } from '../shared/i18n';
 
-const PAUSED_MESSAGE =
-  "KORVA IA fait une pause jusqu'au début du mois prochain : la plateforme a atteint son budget IA du mois. Ce message ne compte pas dans votre quota.";
-const BUSY_MESSAGE =
-  'KORVA IA est très sollicitée en ce moment. Réessayez dans une minute.';
-const FAILED_MESSAGE =
-  "KORVA IA n'a pas pu répondre pour le moment. Réessayez dans quelques instants.";
+// What KORVA IA says when it cannot answer, in the business's language (shared/i18n.ts).
+const UNAVAILABLE_MESSAGE_EN =
+  'KORVA AI is not switched on yet. It is coming very soon: this message does not count against your quota.';
+const PAUSED_MESSAGE = {
+  fr: "KORVA IA fait une pause jusqu'au début du mois prochain : la plateforme a atteint son budget IA du mois. Ce message ne compte pas dans votre quota.",
+  en: 'KORVA AI is paused until the start of next month: the platform has used its AI budget for the month. This message does not count against your quota.',
+};
+const BUSY_MESSAGE = {
+  fr: 'KORVA IA est très sollicitée en ce moment. Réessayez dans une minute.',
+  en: 'KORVA AI is very busy right now. Try again in a minute.',
+};
+const FAILED_MESSAGE = {
+  fr: "KORVA IA n'a pas pu répondre pour le moment. Réessayez dans quelques instants.",
+  en: 'KORVA AI could not answer right now. Try again in a moment.',
+};
 /** The platform spend is re-read at most this often: one aggregate per minute, not per message. */
 const SPEND_CACHE_MS = 60_000;
 
@@ -138,7 +148,10 @@ export class AiOrchestratorService {
     return {
       available,
       paused: available && (await this.budgetExhausted()),
-      assistant: korvaAiAssistantFor(organization.businessModel),
+      assistant: korvaAiAssistantFor(
+        organization.businessModel,
+        orgLocale(organization.language),
+      ),
       quota: { used: messages?.used ?? 0, limit: messages?.limit ?? 0 },
     };
   }
@@ -267,10 +280,17 @@ export class AiOrchestratorService {
     });
 
     if (unavailable || paused) {
+      const locale = orgLocale(
+        (await this.organizationsService.getById(organizationId)).language,
+      );
       return this.platformReply(
         organizationId,
         conversation,
-        unavailable ? KORVA_AI_UNAVAILABLE_MESSAGE : PAUSED_MESSAGE,
+        unavailable
+          ? locale === 'en'
+            ? UNAVAILABLE_MESSAGE_EN
+            : KORVA_AI_UNAVAILABLE_MESSAGE
+          : PAUSED_MESSAGE[locale],
       );
     }
 
@@ -310,7 +330,9 @@ export class AiOrchestratorService {
         return this.platformReply(
           organizationId,
           conversation,
-          error instanceof AiProviderBusyError ? BUSY_MESSAGE : FAILED_MESSAGE,
+          (error instanceof AiProviderBusyError
+            ? BUSY_MESSAGE
+            : FAILED_MESSAGE)[orgLocale(organization.language)],
           pendingActions,
         );
       }
@@ -368,8 +390,10 @@ export class AiOrchestratorService {
       }
     }
 
-    const fallback =
-      "Je n'ai pas pu terminer cette demande (trop d'étapes nécessaires). Peux-tu la reformuler plus simplement ?";
+    const fallback = translator(organization.language)(
+      "Je n'ai pas pu terminer cette demande (trop d'étapes nécessaires). Peux-tu la reformuler plus simplement ?",
+      'I could not finish this request (too many steps needed). Could you put it more simply?',
+    );
     await this.messagesRepository.create({
       organizationId: new Types.ObjectId(organizationId),
       conversationId: conversation._id,

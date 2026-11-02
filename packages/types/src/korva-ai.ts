@@ -106,7 +106,105 @@ export const KORVA_AI_TRADE_ASSISTANTS: Record<BusinessModel, KorvaAiTradeAssist
   },
 };
 
-export function korvaAiAssistantFor(model: BusinessModel | undefined | null): KorvaAiTradeAssistant {
+const KORVA_AI_GENERIC_ASSISTANT_EN: KorvaAiTradeAssistant = {
+  name: "KORVA assistant",
+  intro: "I know your customers, your sales and your catalogue. Ask me a question or ask me to do something.",
+  suggestions: [
+    "Give me an update on my business this month.",
+    "Which customers have not bought anything for 2 months?",
+    "Which of my offers sell the least?",
+    "What do you recommend I do this week?",
+  ],
+};
+
+const KORVA_AI_TRADE_ASSISTANTS_EN: Record<BusinessModel, KorvaAiTradeAssistant> = {
+  retail: {
+    name: "KORVA Shop assistant",
+    intro: "I am your right hand for the shop: sales, stock, loyal customers and restocking.",
+    suggestions: [
+      "Which products should I reorder before I run out?",
+      "Which items have not sold for a month?",
+      "Give me this week's sales summary.",
+      "Write a WhatsApp message for my best customers.",
+    ],
+  },
+  restaurant: {
+    name: "KORVA Restaurant assistant",
+    intro: "I help you follow orders, the dishes that work and your regulars.",
+    suggestions: [
+      "Which dishes sold most this week?",
+      "Which dishes does almost nobody order?",
+      "How many orders did we have yesterday?",
+      "Write a message announcing the dish of the day to my customers.",
+    ],
+  },
+  appointments: {
+    name: "KORVA Appointments assistant",
+    intro: "I manage your diary with you: free slots, appointments and customers to bring back.",
+    suggestions: [
+      "Which slots are still free tomorrow?",
+      "Which customers have not come back for 2 months?",
+      "Which service is most in demand this month?",
+      "Prepare a reminder for Saturday's customers.",
+    ],
+  },
+  lodging: {
+    name: "KORVA Lodging assistant",
+    intro: "I help you follow your stays, your free rooms and your guests.",
+    suggestions: [
+      "Which rooms are free this weekend?",
+      "How many nights have we sold this month?",
+      "Which guests arrive this week?",
+      "Write a welcome message for the next guests.",
+    ],
+  },
+  training: {
+    name: "KORVA Training assistant",
+    intro: "I help you fill your sessions and follow your learners and enrolments.",
+    suggestions: [
+      "Which sessions still have places?",
+      "Which courses attract the most enrolments?",
+      "Which learners should I follow up for the next session?",
+      "Give me this month's enrolment summary.",
+    ],
+  },
+  quotes: {
+    name: "KORVA Quotes & Jobs assistant",
+    intro: "I help you follow your requests, your pending quotes and the customers to follow up.",
+    suggestions: [
+      "Which quotes are still waiting for an answer?",
+      "Which requests were not handled this week?",
+      "Prepare a quote for a new customer.",
+      "Which customers should I follow up today?",
+    ],
+  },
+  real_estate: {
+    name: "KORVA Real estate assistant",
+    intro: "I help you follow your properties, your leads and the viewings to arrange.",
+    suggestions: [
+      "Which leads have not been contacted for a week?",
+      "Which properties get the most requests?",
+      "Which deals are close to closing?",
+      "Write a follow-up for yesterday's leads.",
+    ],
+  },
+  association: {
+    name: "KORVA Association assistant",
+    intro: "I help you follow your members, memberships and the life of the association.",
+    suggestions: [
+      "How many new memberships this month?",
+      "Which members have not renewed their membership?",
+      "Write a message announcing our next event.",
+      "Give me an update on the association's activity.",
+    ],
+  },
+};
+
+export function korvaAiAssistantFor(
+  model: BusinessModel | undefined | null,
+  locale: "fr" | "en" = "fr",
+): KorvaAiTradeAssistant {
+  if (locale === "en") return model ? KORVA_AI_TRADE_ASSISTANTS_EN[model] : KORVA_AI_GENERIC_ASSISTANT_EN;
   return model ? KORVA_AI_TRADE_ASSISTANTS[model] : KORVA_AI_GENERIC_ASSISTANT;
 }
 

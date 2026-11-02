@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { korvaAiAssistantFor, type AiAgent } from '@korva/types';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { KORVA_AI_RULES, KORVA_AI_TRADE_PROFILES } from './korva-ai-trades';
+import { orgLocale } from '../shared/i18n';
 
 function todayInWords(timeZone: string): string {
   const now = new Date();
@@ -38,13 +39,18 @@ export class AiContextBuilderService {
   async build(organizationId: string, agent: AiAgent): Promise<string> {
     const organization =
       await this.organizationsService.getById(organizationId);
-    const assistant = korvaAiAssistantFor(organization.businessModel);
+    const locale = orgLocale(organization.language);
+    const assistant = korvaAiAssistantFor(organization.businessModel, locale);
     const trade = organization.businessModel
       ? KORVA_AI_TRADE_PROFILES[organization.businessModel].instructions
       : 'Tu épaules une petite entreprise : ventes, clients, catalogue, rendez-vous, devis et factures.';
 
     return [
       ...KORVA_AI_RULES,
+      // The business's language (shared/i18n.ts); the instructions stay French, the model follows.
+      locale === 'en'
+        ? "Tu réponds toujours en anglais : l'entreprise travaille en anglais. Si l'utilisateur t'écrit en français, réponds en français."
+        : "Tu réponds toujours en français. Si l'utilisateur t'écrit en anglais, réponds en anglais.",
       '',
       `Tu es « ${assistant.name} » pour ${organization.name}.`,
       trade,
