@@ -1,17 +1,22 @@
 import { KORVA_SUPPORT } from "@korva/types";
 import { Card } from "@korva/ui";
 import { usePlanFeatures } from "@/lib/use-plan-features";
+import { useT } from "@/lib/dashboard-locale";
 
 /** Business: the direct line to KORVA, on the dashboard home. Nothing below Business. */
 export function PrioritySupportCard() {
   const planFeatures = usePlanFeatures();
+  const t = useT();
   if (planFeatures.planKey !== "business") return null;
   return (
     <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-text">Accompagnement prioritaire</p>
+        <p className="text-sm font-semibold text-text">{t("Accompagnement prioritaire", "Priority support")}</p>
         <p className="mt-1 text-sm text-text-muted">
-          Formule Business : écrivez-nous directement, votre demande passe en premier.
+          {t(
+            "Formule Business : écrivez-nous directement, votre demande passe en premier.",
+            "Business plan: write to us directly, your request goes first.",
+          )}
         </p>
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">

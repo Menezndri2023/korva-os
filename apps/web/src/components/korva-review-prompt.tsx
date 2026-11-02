@@ -7,6 +7,7 @@ import type { PlatformReview } from "@korva/types";
 import { HeartHandshake, X } from "lucide-react";
 import { Card } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
+import { useT } from "@/lib/dashboard-locale";
 
 /** Long enough to have an opinion, short enough that it is still fresh. */
 const PROMPT_AFTER_DAYS = 7;
@@ -39,6 +40,7 @@ export function KorvaReviewPrompt({
     typeof window === "undefined" ? true : readDismissed(organizationId),
   );
   const [now] = useState(() => Date.now());
+  const t = useT();
   const oldEnough =
     Boolean(organizationCreatedAt) &&
     now - new Date(organizationCreatedAt!).getTime() >= PROMPT_AFTER_DAYS * 86_400_000;
@@ -64,16 +66,16 @@ export function KorvaReviewPrompt({
     <Card className="flex items-center gap-3 p-4">
       <HeartHandshake aria-hidden className="h-6 w-6 shrink-0 text-primary" />
       <p className="flex-1 text-sm text-text">
-        Vous utilisez KORVA depuis quelques jours.{" "}
+        {t("Vous utilisez KORVA depuis quelques jours.", "You have been using KORVA for a few days.")}{" "}
         <Link href="/dashboard/avis-korva" className="font-medium underline underline-offset-2">
-          Dites-nous ce que vous en pensez
+          {t("Dites-nous ce que vous en pensez", "Tell us what you think")}
         </Link>
-        , en une minute.
+        {t(", en une minute.", ", in a minute.")}
       </p>
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Masquer cette invitation"
+        aria-label={t("Masquer cette invitation", "Hide this invitation")}
         className="rounded-md p-1 text-text-muted hover:bg-surface-muted hover:text-text"
       >
         <X aria-hidden className="h-4 w-4" />

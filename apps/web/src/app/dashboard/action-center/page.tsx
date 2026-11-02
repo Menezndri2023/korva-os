@@ -7,13 +7,20 @@ import type { ActionCenterItem, ActionCenterSeverity, ActionCenterSummary, Recom
 import { Badge, Button, Card } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 
-const ITEM_TYPE_LABELS: Record<ActionCenterItem["type"], string> = {
-  recommendation: "Recommandation",
-  pending_approval: "Approbation requise",
-  workflow_failure: "Échec d'automatisation",
-  webhook_delivery_failure: "Échec de livraison webhook",
-};
+function itemTypeLabel(type: ActionCenterItem["type"], t: Translate): string {
+  switch (type) {
+    case "recommendation":
+      return t("Recommandation", "Recommendation");
+    case "pending_approval":
+      return t("Approbation requise", "Approval needed");
+    case "workflow_failure":
+      return t("Échec d'automatisation", "Automation failed");
+    case "webhook_delivery_failure":
+      return t("Échec de livraison webhook", "Webhook delivery failed");
+  }
+}
 
 const ITEM_TYPE_LINKS: Record<ActionCenterItem["type"], string> = {
   recommendation: "/dashboard/recommendations",
@@ -22,12 +29,18 @@ const ITEM_TYPE_LINKS: Record<ActionCenterItem["type"], string> = {
   webhook_delivery_failure: "/dashboard/settings#integrations",
 };
 
-const SEVERITY_LABELS: Record<ActionCenterSeverity, string> = {
-  urgent: "Urgent",
-  attention: "À surveiller",
-  opportunity: "Opportunité",
-  recommendation: "Recommandation",
-};
+function severityLabel(severity: ActionCenterSeverity, t: Translate): string {
+  switch (severity) {
+    case "urgent":
+      return t("Urgent", "Urgent");
+    case "attention":
+      return t("À surveiller", "To watch");
+    case "opportunity":
+      return t("Opportunité", "Opportunity");
+    case "recommendation":
+      return t("Recommandation", "Recommendation");
+  }
+}
 
 const SEVERITY_BADGE_VARIANTS: Record<
   ActionCenterSeverity,
@@ -49,6 +62,8 @@ function groupBySeverity(items: ActionCenterItem[]): [ActionCenterSeverity, Acti
 export default function ActionCenterPage() {
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
+  const locale = useDashboardLocale();
+  const t = useT();
 
   const summaryQuery = useQuery({
     queryKey: ["action-center", "summary"],
@@ -80,9 +95,12 @@ export default function ActionCenterPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Centre d&apos;action</h1>
+        <h1 className="text-2xl font-semibold">{t("Centre d'action", "Action centre")}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Ce qui a besoin de votre attention dans votre entreprise, en un seul endroit.
+          {t(
+            "Ce qui a besoin de votre attention dans votre entreprise, en un seul endroit.",
+            "What needs your attention in your business, in one place.",
+          )}
         </p>
       </div>
 
@@ -90,22 +108,22 @@ export default function ActionCenterPage() {
       {summaryQuery.data && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryTile
-            label="Approbations"
+            label={t("Approbations", "Approvals")}
             value={summaryQuery.data.pendingApprovals}
             href="/dashboard/ai"
           />
           <SummaryTile
-            label="Recommandations"
+            label={t("Recommandations", "Recommendations")}
             value={summaryQuery.data.recommendations}
             href="/dashboard/recommendations"
           />
           <SummaryTile
-            label="Automatisé cette semaine"
+            label={t("Automatisé cette semaine", "Automated this week")}
             value={summaryQuery.data.automatedThisWeek}
             href="/dashboard/workflows"
           />
           <SummaryTile
-            label="Échecs"
+            label={t("Échecs", "Failures")}
             value={summaryQuery.data.failures}
             href="/dashboard/workflows"
             warn={summaryQuery.data.failures > 0}
@@ -118,20 +136,20 @@ export default function ActionCenterPage() {
           <p className="text-sm text-destructive">
             {feedQuery.error instanceof ApiError
               ? feedQuery.error.message
-              : "Impossible de charger le centre d'action."}
+              : t("Impossible de charger le centre d'action.", "The action centre could not be loaded.")}
           </p>
         </Card>
       )}
 
       {feedQuery.isLoading && (
         <Card>
-          <p className="px-4 py-6 text-center text-sm text-text-muted">Chargement...</p>
+          <p className="px-4 py-6 text-center text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>
         </Card>
       )}
       {!feedQuery.isError && !feedQuery.isLoading && feedQuery.data?.length === 0 && (
         <Card>
           <p className="px-4 py-6 text-center text-sm text-text-muted">
-            Rien ne nécessite votre attention pour le moment.
+            {t("Rien ne nécessite votre attention pour le moment.", "Nothing needs your attention right now.")}
           </p>
         </Card>
       )}
@@ -142,7 +160,7 @@ export default function ActionCenterPage() {
         groupBySeverity(feedQuery.data).map(([severity, items]) => (
           <div key={severity}>
             <div className="mb-2 flex items-center gap-2">
-              <Badge variant={SEVERITY_BADGE_VARIANTS[severity]}>{SEVERITY_LABELS[severity]}</Badge>
+              <Badge variant={SEVERITY_BADGE_VARIANTS[severity]}>{severityLabel(severity, t)}</Badge>
               <span className="text-xs text-text-muted">{items.length}</span>
             </div>
             <Card className="divide-y divide-border overflow-hidden">
@@ -153,7 +171,7 @@ export default function ActionCenterPage() {
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <Badge>{ITEM_TYPE_LABELS[item.type]}</Badge>
+                      <Badge>{itemTypeLabel(item.type, t)}</Badge>
                       <Link
                         href={ITEM_TYPE_LINKS[item.type]}
                         className="text-sm font-medium text-text hover:underline"
@@ -165,7 +183,7 @@ export default function ActionCenterPage() {
                       <p className="mt-0.5 text-sm text-text-muted">{item.description}</p>
                     )}
                     <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
-                      <span>{new Date(item.occurredAt).toLocaleString("fr-FR")}</span>
+                      <span>{new Date(item.occurredAt).toLocaleString(intlLocale(locale))}</span>
                       {item.impact && <span>· {item.impact}</span>}
                     </div>
                   </div>
@@ -177,7 +195,7 @@ export default function ActionCenterPage() {
                         onClick={() => resolveMutation.mutate(item.id)}
                         loading={resolveMutation.isPending}
                       >
-                        Résolue
+                        {t("Résolue", "Resolved")}
                       </Button>
                       <Button
                         variant="ghost"
@@ -185,7 +203,7 @@ export default function ActionCenterPage() {
                         onClick={() => dismissMutation.mutate(item.id)}
                         loading={dismissMutation.isPending}
                       >
-                        Ignorer
+                        {t("Ignorer", "Dismiss")}
                       </Button>
                     </div>
                   )}

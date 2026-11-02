@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BUSINESS_MODEL_DEFINITIONS,
-  tradeVocabulary,
+  tradeVocabularyIn,
   visibleTradeTools,
   type KorvaModule,
   type Organization,
@@ -44,6 +44,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
+import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 
 type NavItem = {
   href: string;
@@ -68,6 +69,7 @@ function navGroups(
   words: TradeVocabulary,
   /** Business, or several establishments to compare (then the page invites to Business). */
   showNetwork: boolean,
+  t: Translate,
 ): { title: string | null; items: NavItem[] }[] {
   const on = (module: KorvaModule) => enabledModules.has(module);
   // A trade tool needs its module AND the trade (or the owner, via Autres outils) — see
@@ -77,39 +79,39 @@ function navGroups(
     {
       title: null,
       items: [
-        { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard, visible: true },
-        { href: "/dashboard/action-center", label: "Centre d'action", icon: BellRing, visible: true },
+        { href: "/dashboard", label: t("Tableau de bord", "Dashboard"), icon: LayoutDashboard, visible: true },
+        { href: "/dashboard/action-center", label: t("Centre d'action", "Action centre"), icon: BellRing, visible: true },
       ],
     },
     {
-      title: "Vendre",
+      title: t("Vendre", "Sell"),
       items: [
         { href: "/dashboard/catalog", label: words.catalog, icon: Package, visible: on("catalog"), prefix: true },
-        { href: "/dashboard/orders", label: "Commandes", icon: ShoppingBag, visible: tool("orders", "commerce"), prefix: true },
+        { href: "/dashboard/orders", label: t("Commandes", "Orders"), icon: ShoppingBag, visible: tool("orders", "commerce"), prefix: true },
         { href: "/dashboard/bookings", label: words.bookings, icon: CalendarDays, visible: tool("bookings", "booking"), prefix: true },
         {
           href: "/dashboard/kitchen",
-          label: "Cuisine",
+          label: t("Cuisine", "Kitchen"),
           icon: ChefHat,
           visible: tool("orders", "commerce") && screens.kitchen && hasKitchen,
         },
-        { href: "/dashboard/returns", label: "Retours", icon: Undo2, visible: tool("returns", "commerce") },
+        { href: "/dashboard/returns", label: t("Retours", "Returns"), icon: Undo2, visible: tool("returns", "commerce") },
         {
           href: "/dashboard/reviews",
-          label: "Avis clients",
+          label: t("Avis clients", "Customer reviews"),
           icon: Star,
           visible: on("commerce") || on("booking"),
         },
       ],
     },
     {
-      title: "Clients",
+      title: t("Clients", "Customers"),
       items: [
         { href: "/dashboard/crm", label: words.crm, icon: Users, visible: on("crm"), prefix: true },
         { href: "/dashboard/marketing", label: "Marketing", icon: Megaphone, visible: on("marketing"), prefix: true },
         {
           href: "/dashboard/communication",
-          label: "Communication",
+          label: t("Communication", "Messages"),
           icon: MessageCircle,
           visible: on("communication"),
           prefix: true,
@@ -117,22 +119,22 @@ function navGroups(
       ],
     },
     {
-      title: "Gestion",
+      title: t("Gestion", "Manage"),
       items: [
-        { href: "/dashboard/finance", label: "Devis & Factures", icon: Receipt, visible: on("finance"), prefix: true },
-        { href: "/dashboard/caisse", label: "Caisse", icon: QrCode, visible: true },
-        { href: "/dashboard/solde", label: "Solde KORVA", icon: Wallet, visible: true },
-        { href: "/dashboard/etablissements", label: "Mes établissements", icon: Building2, visible: showNetwork },
-        { href: "/dashboard/analytics", label: "Statistiques", icon: ChartColumn, visible: on("analytics") },
+        { href: "/dashboard/finance", label: t("Devis & Factures", "Quotes & invoices"), icon: Receipt, visible: on("finance"), prefix: true },
+        { href: "/dashboard/caisse", label: t("Caisse", "Till"), icon: QrCode, visible: true },
+        { href: "/dashboard/solde", label: t("Solde KORVA", "KORVA balance"), icon: Wallet, visible: true },
+        { href: "/dashboard/etablissements", label: t("Mes établissements", "My locations"), icon: Building2, visible: showNetwork },
+        { href: "/dashboard/analytics", label: t("Statistiques", "Statistics"), icon: ChartColumn, visible: on("analytics") },
         { href: "/dashboard/workflows", label: "Workflows", icon: Workflow, visible: on("workflow"), prefix: true },
         {
           href: "/dashboard/formation/courses",
-          label: "Formations",
+          label: t("Formations", "Courses"),
           icon: GraduationCap,
           visible: on("booking") && screens.training,
           prefix: true,
         },
-        { href: "/dashboard/ai", label: "KORVA IA", icon: Sparkles, visible: on("ai") },
+        { href: "/dashboard/ai", label: t("KORVA IA", "KORVA AI"), icon: Sparkles, visible: on("ai") },
       ],
     },
   ];
@@ -156,6 +158,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: organization, error: organizationError } = useActiveOrganization();
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const locale = useDashboardLocale();
+  const t = useT();
 
   const { data: organizations } = useQuery({
     queryKey: ["organizations", "me", "all"],
@@ -242,13 +246,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return (
       <div className="flex min-h-screen items-center justify-center bg-app-background px-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-8 text-center">
-          <h1 className="text-2xl font-semibold">Compte suspendu</h1>
+          <h1 className="text-2xl font-semibold">{t("Compte suspendu", "Account suspended")}</h1>
           <p className="mt-2 text-sm text-text-muted">
-            L&apos;accès à cette entreprise est suspendu et son site est hors ligne. Vos données sont
-            conservées. Contactez le support KORVA pour la réactiver.
+            {t(
+              "L'accès à cette entreprise est suspendu et son site est hors ligne. Vos données sont conservées. Contactez le support KORVA pour la réactiver.",
+              "Access to this business is suspended and its website is offline. Your data is kept. Contact KORVA support to reactivate it.",
+            )}
           </p>
           <Button variant="secondary" className="mt-6" onClick={() => void logout()}>
-            Se déconnecter
+            {t("Se déconnecter", "Sign out")}
           </Button>
         </div>
       </div>
@@ -259,7 +265,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen">
       {sidebarOpen && (
         <button
-          aria-label="Fermer le menu"
+          aria-label={t("Fermer le menu", "Close the menu")}
           onClick={() => setSidebarOpen(false)}
           className="fixed inset-0 z-30 bg-zinc-900/40 md:hidden"
         />
@@ -292,9 +298,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             screens,
             planFeatures.has("kitchen_display"),
             visibleTradeTools(organization?.businessModel, organization?.extraTools),
-            tradeVocabulary(organization?.businessModel),
+            tradeVocabularyIn(organization?.businessModel, locale),
             (planFeatures.planKey !== undefined && planFeatures.has("network_overview")) ||
               (organizations?.length ?? 0) > 1,
+            t,
           ).map((group) => {
             const items = group.items.filter((item) => item.visible);
             if (items.length === 0) return null;
@@ -325,14 +332,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
         <NavLink
           href="/dashboard/avis-korva"
-          label="Votre avis sur KORVA"
+          label={t("Votre avis sur KORVA", "Your feedback on KORVA")}
           icon={HeartHandshake}
           active={pathname === "/dashboard/avis-korva"}
           onClick={() => setSidebarOpen(false)}
         />
         <NavLink
           href="/dashboard/settings"
-          label="Paramètres"
+          label={t("Paramètres", "Settings")}
           icon={Settings}
           active={pathname === "/dashboard/settings"}
           onClick={() => setSidebarOpen(false)}
@@ -344,7 +351,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
-              aria-label="Ouvrir le menu"
+              aria-label={t("Ouvrir le menu", "Open the menu")}
               aria-expanded={sidebarOpen}
               aria-controls="mobile-sidebar"
               onClick={() => setSidebarOpen(true)}
@@ -357,17 +364,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 organizations={organizations}
                 activeOrganizationId={activeOrganizationId}
                 onSwitch={switchOrganization}
+                label={t("Changer d'organisation", "Switch organization")}
               />
             )}
           </div>
 
           <div className="flex items-center gap-2">
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            {organization?.slug && <StorefrontLinkMenu slug={organization.slug} />}
+            {organization?.slug && <StorefrontLinkMenu slug={organization.slug} t={t} />}
             <UserMenu
               name={[user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.email || ""}
               email={user?.email ?? ""}
               onLogout={() => void logout()}
+              logoutLabel={t("Se déconnecter", "Sign out")}
+              closeLabel={t("Fermer le menu utilisateur", "Close the user menu")}
             />
           </div>
         </header>
@@ -376,12 +386,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {viewOnly && (
             <Notice tone="warning" className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <span>
-                Vue de l&apos;administration KORVA, en lecture seule : rien ne peut être modifié. Elle se
-                termine à{" "}
-                {new Date(viewOnly.expiresAt).toLocaleTimeString("fr-FR", { timeStyle: "short" })}.
+                {t(
+                  "Vue de l'administration KORVA, en lecture seule : rien ne peut être modifié. Elle se termine à",
+                  "KORVA administration view, read-only: nothing can be changed. It ends at",
+                )}{" "}
+                {new Date(viewOnly.expiresAt).toLocaleTimeString(intlLocale(locale), { timeStyle: "short" })}.
               </span>
               <Button size="sm" variant="secondary" onClick={() => void logout()}>
-                Fermer la vue
+                {t("Fermer la vue", "Close the view")}
               </Button>
             </Notice>
           )}
@@ -389,26 +401,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             // Visitors of a site whose module is off see "Ce site n'est pas en ligne"; the owner
             // must not have to discover that from a customer.
             <Notice tone="accent" className="mb-4">
-              Votre site public n&apos;est pas en ligne : vos clients voient « Ce site n&apos;est pas
-              en ligne pour le moment ».{" "}
+              {t(
+                "Votre site public n'est pas en ligne : vos clients voient « Ce site n'est pas en ligne pour le moment ».",
+                "Your public website is not online: your customers see “This site is not online at the moment”.",
+              )}{" "}
               <Link href="/dashboard/settings#abonnement" className="font-medium underline">
-                Activez le module Site web
+                {t("Activez le module Site web", "Turn on the Website module")}
               </Link>{" "}
-              pour le publier.
+              {t("pour le publier.", "to publish it.")}
             </Notice>
           )}
           {planFeatures.trialEndsAt && (
             // The trial ends on its own; saying when, and where to choose a plan, is the only
             // way the owner is not surprised by Free coming back.
             <Notice tone="warning" className="mb-4">
-              Essai Pro offert : {trialDaysLeft(planFeatures.trialEndsAt)} jour
-              {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? "s" : ""} restant
-              {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? "s" : ""}. Vos données restent à vous
-              après l&apos;essai ;{" "}
+              {t("Essai Pro offert :", "Free Pro trial:")} {trialDaysLeft(planFeatures.trialEndsAt)}{" "}
+              {trialDaysLeft(planFeatures.trialEndsAt) > 1 ? t("jours restants", "days left") : t("jour restant", "day left")}.{" "}
+              {t("Vos données restent à vous après l'essai ;", "Your data stays yours after the trial;")}{" "}
               <Link href="/dashboard/settings#abonnement" className="font-medium underline">
-                choisissez une formule
+                {t("choisissez une formule", "choose a plan")}
               </Link>{" "}
-              pour garder les fonctions Pro.
+              {t("pour garder les fonctions Pro.", "to keep the Pro features.")}
             </Notice>
           )}{children}</main>
       </div>
@@ -453,14 +466,16 @@ function OrgSwitcher({
   organizations,
   activeOrganizationId,
   onSwitch,
+  label,
 }: {
   organizations: Organization[];
   activeOrganizationId: string | null;
   onSwitch: (organizationId: string) => void;
+  label: string;
 }) {
   return (
     <label className="flex items-center gap-2 text-sm">
-      <span className="sr-only">Changer d&apos;organisation</span>
+      <span className="sr-only">{label}</span>
       <select
         value={activeOrganizationId ?? ""}
         onChange={(event) => onSwitch(event.target.value)}
@@ -483,7 +498,7 @@ function OrgSwitcher({
  * lien pour ses clients" — the owner can grab the exact client-facing URL and share it (WhatsApp,
  * SMS, email, ...) without having to open the storefront tab and copy from the address bar.
  */
-function StorefrontLinkMenu({ slug }: { slug: string }) {
+function StorefrontLinkMenu({ slug, t }: { slug: string; t: Translate }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const storefrontPageUrl = `${STOREFRONT_URL}/${slug}`;
@@ -497,12 +512,12 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
         aria-expanded={open}
         className="hidden sm:inline-flex"
       >
-        Mon site en ligne
+        {t("Mon site en ligne", "My live website")}
       </Button>
       <Button
         variant="secondary"
         size="sm"
-        aria-label="Mon site en ligne"
+        aria-label={t("Mon site en ligne", "My live website")}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         className="p-2 sm:hidden"
@@ -513,7 +528,7 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
       {open && (
         <>
           <button
-            aria-label="Fermer le menu du site"
+            aria-label={t("Fermer le menu du site", "Close the website menu")}
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40"
           />
@@ -525,7 +540,7 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
               onClick={() => setOpen(false)}
               className="block rounded-md px-3 py-2 text-sm font-medium text-text hover:bg-surface-muted"
             >
-              Ouvrir mon site
+              {t("Ouvrir mon site", "Open my website")}
             </a>
             <button
               onClick={() => {
@@ -535,7 +550,7 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
               }}
               className="block w-full rounded-md px-3 py-2 text-left text-sm font-medium text-text hover:bg-surface-muted"
             >
-              {copied ? "Lien copié !" : "Copier le lien pour mes clients"}
+              {copied ? t("Lien copié !", "Link copied!") : t("Copier le lien pour mes clients", "Copy the link for my customers")}
             </button>
             <div className="my-1 h-px bg-border" />
             <Link
@@ -543,7 +558,7 @@ function StorefrontLinkMenu({ slug }: { slug: string }) {
               onClick={() => setOpen(false)}
               className="block rounded-md px-3 py-2 text-sm text-text-muted hover:bg-surface-muted"
             >
-              Personnaliser mon site
+              {t("Personnaliser mon site", "Customise my website")}
             </Link>
           </div>
         </>
@@ -566,7 +581,19 @@ function StorefrontIcon() {
   );
 }
 
-function UserMenu({ name, email, onLogout }: { name: string; email: string; onLogout: () => void }) {
+function UserMenu({
+  name,
+  email,
+  onLogout,
+  logoutLabel,
+  closeLabel,
+}: {
+  name: string;
+  email: string;
+  onLogout: () => void;
+  logoutLabel: string;
+  closeLabel: string;
+}) {
   const [open, setOpen] = useState(false);
   const initials = getInitials(name || email);
 
@@ -583,7 +610,7 @@ function UserMenu({ name, email, onLogout }: { name: string; email: string; onLo
       {open && (
         <>
           <button
-            aria-label="Fermer le menu utilisateur"
+            aria-label={closeLabel}
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-40"
           />
@@ -598,7 +625,7 @@ function UserMenu({ name, email, onLogout }: { name: string; email: string; onLo
               onClick={onLogout}
               className="w-full justify-start text-left"
             >
-              Se déconnecter
+              {logoutLabel}
             </Button>
           </div>
         </>

@@ -8,11 +8,13 @@ import { ApiError, apiClient } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
 import { usePlanFeatures } from "@/lib/use-plan-features";
 import { UpgradeCard } from "./upgrade-card";
+import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
+import type { Locale } from "@korva/types";
 
-function differenceText(closing: TillClosing, currency: string): string {
-  if (closing.difference === 0) return "Caisse juste";
-  const amount = formatCurrency(Math.abs(closing.difference), currency);
-  return closing.difference < 0 ? `Il manque ${amount}` : `${amount} en trop`;
+function differenceText(closing: TillClosing, currency: string, t: Translate, locale: Locale): string {
+  if (closing.difference === 0) return t("Caisse juste", "Till balances");
+  const amount = formatCurrency(Math.abs(closing.difference), currency, locale);
+  return closing.difference < 0 ? t(`Il manque ${amount}`, `${amount} short`) : t(`${amount} en trop`, `${amount} over`);
 }
 
 /**
@@ -22,6 +24,8 @@ function differenceText(closing: TillClosing, currency: string): string {
 export function TillPanel() {
   const queryClient = useQueryClient();
   const planFeatures = usePlanFeatures();
+  const locale = useDashboardLocale();
+  const t = useT();
   const included = planFeatures.has("cash_closing");
   // Only once the plan is known: the hook reads every feature as included while it loads, which
   // is right for a lock badge but would send a request the API refuses.
@@ -54,7 +58,10 @@ export function TillPanel() {
     return (
       <UpgradeCard
         feature="cash_closing"
-        description="Voyez ce que chaque employé a encaissé dans la journée, et fermez la caisse en comparant le tiroir aux ventes."
+        description={t(
+          "Voyez ce que chaque employé a encaissé dans la journée, et fermez la caisse en comparant le tiroir aux ventes.",
+          "See what each employee took during the day, and close the till by comparing the drawer with the sales.",
+        )}
       />
     );
   }
@@ -71,35 +78,38 @@ export function TillPanel() {
   return (
     <section aria-labelledby="till-title" className="space-y-4">
       <h2 id="till-title" className="text-base font-semibold text-text">
-        Caisse du jour
+        {t("Caisse du jour", "Today's till")}
       </h2>
-      {report.isError && <p className="text-sm text-destructive">Impossible de charger la caisse du jour.</p>}
+      {report.isError && <p className="text-sm text-destructive">{t("Impossible de charger la caisse du jour.", "Today's till could not be loaded.")}</p>}
       {data && (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatTile
               tone="emphasis"
-              label="Encaissé aujourd'hui"
-              value={formatCurrency(data.total, data.currency)}
-              hint={`${data.count} paiement${data.count > 1 ? "s" : ""}`}
+              label={t("Encaissé aujourd'hui", "Taken today")}
+              value={formatCurrency(data.total, data.currency, locale)}
+              hint={t(`${data.count} paiement${data.count > 1 ? "s" : ""}`, `${data.count} payment${data.count === 1 ? "" : "s"}`)}
             />
-            <StatTile label="Espèces attendues" value={formatCurrency(data.expectedCash, data.currency)} />
             <StatTile
-              label="QR non payés"
+              label={t("Espèces attendues", "Expected cash")}
+              value={formatCurrency(data.expectedCash, data.currency, locale)}
+            />
+            <StatTile
+              label={t("QR non payés", "Unpaid QR codes")}
               value={data.counterUnpaid}
-              hint={data.counterUnpaid > 0 ? "Clients partis sans payer ?" : undefined}
+              hint={data.counterUnpaid > 0 ? t("Clients partis sans payer ?", "Customers left without paying?") : undefined}
             />
           </div>
 
           {data.count > 0 && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <Card className="overflow-hidden">
-                <Table caption="Encaissements du jour par moyen de paiement">
+                <Table caption={t("Encaissements du jour par moyen de paiement", "Today's takings by payment method")}>
                   <thead>
                     <tr>
-                      <Th>Moyen de paiement</Th>
-                      <Th align="right">Paiements</Th>
-                      <Th align="right">Montant</Th>
+                      <Th>{t("Moyen de paiement", "Payment method")}</Th>
+                      <Th align="right">{t("Paiements", "Payments")}</Th>
+                      <Th align="right">{t("Montant", "Amount")}</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -107,19 +117,19 @@ export function TillPanel() {
                       <tr key={row.method}>
                         <Td>{row.label}</Td>
                         <Td numeric>{row.count}</Td>
-                        <Td numeric>{formatCurrency(row.total, data.currency)}</Td>
+                        <Td numeric>{formatCurrency(row.total, data.currency, locale)}</Td>
                       </tr>
                     ))}
                   </tbody>
                 </Table>
               </Card>
               <Card className="overflow-hidden">
-                <Table caption="Encaissements du jour par employé">
+                <Table caption={t("Encaissements du jour par employé", "Today's takings by employee")}>
                   <thead>
                     <tr>
-                      <Th>Encaissé par</Th>
-                      <Th align="right">Paiements</Th>
-                      <Th align="right">Montant</Th>
+                      <Th>{t("Encaissé par", "Taken by")}</Th>
+                      <Th align="right">{t("Paiements", "Payments")}</Th>
+                      <Th align="right">{t("Montant", "Amount")}</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -127,7 +137,7 @@ export function TillPanel() {
                       <tr key={row.userId ?? "online"}>
                         <Td>{row.name}</Td>
                         <Td numeric>{row.count}</Td>
-                        <Td numeric>{formatCurrency(row.total, data.currency)}</Td>
+                        <Td numeric>{formatCurrency(row.total, data.currency, locale)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -139,20 +149,23 @@ export function TillPanel() {
           <Card className="p-5">
             {data.closing ? (
               <Notice tone={data.closing.difference === 0 ? "info" : "warning"}>
-                Caisse fermée par {data.closing.closedByName} à{" "}
-                {new Date(data.closing.closedAt).toLocaleTimeString("fr-FR", { timeStyle: "short" })} :{" "}
-                {formatCurrency(data.closing.countedCash, data.currency)} comptés,{" "}
-                {differenceText(data.closing, data.currency)}.
+                {t(
+                  `Caisse fermée par ${data.closing.closedByName} à ${new Date(data.closing.closedAt).toLocaleTimeString("fr-FR", { timeStyle: "short" })} : ${formatCurrency(data.closing.countedCash, data.currency)} comptés, ${differenceText(data.closing, data.currency, t, locale)}.`,
+                  `Till closed by ${data.closing.closedByName} at ${new Date(data.closing.closedAt).toLocaleTimeString(intlLocale(locale), { timeStyle: "short" })}: ${formatCurrency(data.closing.countedCash, data.currency, locale)} counted, ${differenceText(data.closing, data.currency, t, locale)}.`,
+                )}
               </Notice>
             ) : (
               <form onSubmit={submit} className="space-y-3">
-                <h3 className="text-sm font-semibold text-text">Fermer la caisse</h3>
+                <h3 className="text-sm font-semibold text-text">{t("Fermer la caisse", "Close the till")}</h3>
                 <p className="text-sm text-text-muted">
-                  Comptez les espèces du tiroir et saisissez le total. La journée ne peut être fermée qu&apos;une fois.
+                  {t(
+                    "Comptez les espèces du tiroir et saisissez le total. La journée ne peut être fermée qu'une fois.",
+                    "Count the cash in the drawer and enter the total. A day can only be closed once.",
+                  )}
                 </p>
                 <div className="flex flex-wrap items-end gap-3">
                   <label className="text-sm">
-                    <span className="mb-1 block font-medium text-text">Espèces comptées</span>
+                    <span className="mb-1 block font-medium text-text">{t("Espèces comptées", "Cash counted")}</span>
                     <Input
                       inputMode="decimal"
                       required
@@ -162,18 +175,18 @@ export function TillPanel() {
                     />
                   </label>
                   <label className="min-w-0 flex-1 text-sm">
-                    <span className="mb-1 block font-medium text-text">Remarque (facultatif)</span>
+                    <span className="mb-1 block font-medium text-text">{t("Remarque (facultatif)", "Note (optional)")}</span>
                     <Input value={note} maxLength={500} onChange={(event) => setNote(event.target.value)} />
                   </label>
                   <Button type="submit" disabled={close.isPending || counted.trim() === ""}>
-                    Fermer la caisse
+                    {t("Fermer la caisse", "Close the till")}
                   </Button>
                 </div>
                 {close.isError && (
                   <p className="text-sm text-destructive">
                     {close.error instanceof ApiError && close.error.code === "TILL_ALREADY_CLOSED"
-                      ? "La caisse de ce jour est déjà fermée."
-                      : "La caisse n'a pas pu être fermée. Réessayez."}
+                      ? t("La caisse de ce jour est déjà fermée.", "This day's till is already closed.")
+                      : t("La caisse n'a pas pu être fermée. Réessayez.", "The till could not be closed. Try again.")}
                   </p>
                 )}
               </form>
@@ -184,26 +197,26 @@ export function TillPanel() {
 
       {closings.data && closings.data.length > 0 && (
         <Card className="overflow-hidden">
-          <h3 className="px-5 pt-5 text-sm font-semibold text-text">Dernières clôtures</h3>
-          <Table caption="Dernières clôtures de caisse">
+          <h3 className="px-5 pt-5 text-sm font-semibold text-text">{t("Dernières clôtures", "Recent closings")}</h3>
+          <Table caption={t("Dernières clôtures de caisse", "Recent till closings")}>
             <thead>
               <tr>
-                <Th>Jour</Th>
-                <Th>Par</Th>
-                <Th align="right">Encaissé</Th>
-                <Th align="right">Espèces comptées</Th>
-                <Th>Écart</Th>
+                <Th>{t("Jour", "Day")}</Th>
+                <Th>{t("Par", "By")}</Th>
+                <Th align="right">{t("Encaissé", "Taken")}</Th>
+                <Th align="right">{t("Espèces comptées", "Cash counted")}</Th>
+                <Th>{t("Écart", "Difference")}</Th>
               </tr>
             </thead>
             <tbody>
               {closings.data.map((closing) => (
                 <tr key={closing.id}>
-                  <Td>{new Date(`${closing.day}T12:00:00`).toLocaleDateString("fr-FR")}</Td>
+                  <Td>{new Date(`${closing.day}T12:00:00`).toLocaleDateString(intlLocale(locale))}</Td>
                   <Td>{closing.closedByName}</Td>
-                  <Td numeric>{formatCurrency(closing.total, data?.currency ?? null)}</Td>
-                  <Td numeric>{formatCurrency(closing.countedCash, data?.currency ?? null)}</Td>
+                  <Td numeric>{formatCurrency(closing.total, data?.currency ?? null, locale)}</Td>
+                  <Td numeric>{formatCurrency(closing.countedCash, data?.currency ?? null, locale)}</Td>
                   <Td className={closing.difference < 0 ? "text-destructive" : undefined}>
-                    {differenceText(closing, data?.currency ?? "")}
+                    {differenceText(closing, data?.currency ?? "", t, locale)}
                   </Td>
                 </tr>
               ))}

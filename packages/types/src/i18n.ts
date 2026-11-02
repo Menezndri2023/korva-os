@@ -1,4 +1,4 @@
-import type { BusinessModel, BusinessModelDefinition, TradeVocabulary } from "./business-models.ts";
+import { tradeVocabulary, type BusinessModel, type BusinessModelDefinition, type TradeVocabulary } from "./business-models.ts";
 import type { PlanFeature } from "./plan-tiers.ts";
 import type { VerticalTemplate } from "./verticals.ts";
 
@@ -76,6 +76,14 @@ const BUSINESS_MODEL_EN: Record<BusinessModel, BusinessModelText> = {
     vocabulary: { catalog: "Memberships and donations", bookings: "Events", crm: "Members" },
   },
 };
+
+const DEFAULT_TRADE_VOCABULARY_EN: TradeVocabulary = { catalog: "Catalogue", bookings: "Bookings", crm: "CRM" };
+
+/** The words of a type of activity's screens in a language; no type of activity → the generic ones. */
+export function tradeVocabularyIn(businessModel: BusinessModel | undefined, locale: Locale): TradeVocabulary {
+  if (locale === "fr") return tradeVocabulary(businessModel);
+  return businessModel ? BUSINESS_MODEL_EN[businessModel].vocabulary : DEFAULT_TRADE_VOCABULARY_EN;
+}
 
 /** A type of activity's words in a language (French comes from BUSINESS_MODEL_DEFINITIONS). */
 export function businessModelText(definition: BusinessModelDefinition, locale: Locale): BusinessModelText {

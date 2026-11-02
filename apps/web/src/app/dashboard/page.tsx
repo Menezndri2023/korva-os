@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { tradeVocabulary, visibleTradeTools, type ActionCenterItem, type ActionCenterSummary, type Offer } from "@korva/types";
+import { tradeVocabularyIn, visibleTradeTools, type ActionCenterItem, type ActionCenterSummary, type Offer } from "@korva/types";
 import { Check } from "lucide-react";
 import { Badge, Card, EmptyState } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
@@ -11,16 +11,29 @@ import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useAnalyticsActivity, useAnalyticsOverview } from "@/lib/use-analytics";
 import { PrioritySupportCard } from "@/components/pro/priority-support-card";
-import { ACTIVITY_ENTITY_LABELS, activityActionLabel, formatCurrency } from "@/lib/analytics-format";
+import {
+  ACTIVITY_ENTITY_LABELS,
+  ACTIVITY_ENTITY_LABELS_EN,
+  activityActionLabel,
+  formatCurrency,
+  labelIn,
+} from "@/lib/analytics-format";
+import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
 import { KorvaReviewPrompt } from "@/components/korva-review-prompt";
 
-const ACTION_ITEM_TYPE_LABELS: Record<ActionCenterItem["type"], string> = {
-  recommendation: "Recommandation",
-  pending_approval: "Approbation requise",
-  workflow_failure: "Échec d'automatisation",
-  webhook_delivery_failure: "Échec de livraison webhook",
-};
+function actionItemTypeLabel(type: ActionCenterItem["type"], t: Translate): string {
+  switch (type) {
+    case "recommendation":
+      return t("Recommandation", "Recommendation");
+    case "pending_approval":
+      return t("Approbation requise", "Approval needed");
+    case "workflow_failure":
+      return t("Échec d'automatisation", "Automation failed");
+    case "webhook_delivery_failure":
+      return t("Échec de livraison webhook", "Webhook delivery failed");
+  }
+}
 
 export default function DashboardPage() {
   const user = useAuthStore((state) => state.user);
@@ -28,6 +41,8 @@ export default function DashboardPage() {
   const authReady = useAuthReady();
   const overviewQuery = useAnalyticsOverview();
   const activityQuery = useAnalyticsActivity(5);
+  const locale = useDashboardLocale();
+  const t = useT();
 
   // Attention-first per docs/BUSINESS_OS_AUDIT.md §5/§10 ("dashboard philosophy shift") — every
   // system role has recommendations.read (see packages/types/src/rbac.ts), and unlike analytics
@@ -76,7 +91,7 @@ export default function DashboardPage() {
   const tools = new Set(
     [...trade].filter((tool) => enabledModules.has(tool === "bookings" ? "booking" : "commerce")),
   );
-  const words = tradeVocabulary(organization?.businessModel);
+  const words = tradeVocabularyIn(organization?.businessModel, locale);
   const totalActivity =
     (overviewQuery.data?.leads.total ?? 0) +
     (overviewQuery.data?.bookings.total ?? 0) +
@@ -87,10 +102,10 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">
-          Bienvenue{user?.firstName ? `, ${user.firstName}` : ""}
+          {t("Bienvenue", "Welcome")}{user?.firstName ? `, ${user.firstName}` : ""}
         </h1>
         <p className="mt-1 text-sm text-text-muted">
-          {isOrganizationLoading ? "Chargement..." : (organization?.name ?? "—")}
+          {isOrganizationLoading ? t("Chargement...", "Loading...") : (organization?.name ?? "—")}
         </p>
       </div>
 
@@ -101,6 +116,7 @@ export default function DashboardPage() {
           siteOnline={organization.enabledModules.includes("website")}
           slug={organization.slug}
           loading={onlineOffersQuery.isLoading}
+          t={t}
         />
       )}
 
@@ -113,18 +129,21 @@ export default function DashboardPage() {
         feed={actionFeedQuery.data}
         isLoading={actionSummaryQuery.isLoading || actionFeedQuery.isLoading}
         total={actionTotal}
+        t={t}
       />
 
       {overviewQuery.isLoading && <SummarySkeleton />}
 
       {overviewQuery.isError && !isPermissionDenied && !isModuleNotEnabled && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger l&apos;activité de votre organisation.</p>
+          <p className="text-sm text-destructive">
+            {t("Impossible de charger l'activité de votre organisation.", "Your organization's activity could not be loaded.")}
+          </p>
           <button
             onClick={() => overviewQuery.refetch()}
             className="mt-2 text-sm font-medium text-text underline"
           >
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -132,7 +151,10 @@ export default function DashboardPage() {
       {isPermissionDenied && (
         <Card className="p-6">
           <p className="text-sm text-text-muted">
-            Les statistiques globales de l&apos;organisation sont réservées aux administrateurs.
+            {t(
+              "Les statistiques globales de l'organisation sont réservées aux administrateurs.",
+              "The organization's overall statistics are for administrators only.",
+            )}
           </p>
         </Card>
       )}
@@ -140,13 +162,16 @@ export default function DashboardPage() {
       {isModuleNotEnabled && (
         <Card className="p-6">
           <p className="text-sm text-text-muted">
-            Activez le module Statistiques pour voir un résumé de votre activité ici.
+            {t(
+              "Activez le module Statistiques pour voir un résumé de votre activité ici.",
+              "Turn on the Statistics module to see a summary of your activity here.",
+            )}
           </p>
           <Link
             href="/dashboard/settings#abonnement"
             className="mt-2 inline-block text-sm font-medium text-text underline"
           >
-            Ouvrir les paramètres
+            {t("Ouvrir les paramètres", "Open settings")}
           </Link>
         </Card>
       )}
@@ -154,8 +179,11 @@ export default function DashboardPage() {
       {overviewQuery.data && totalActivity === 0 && (
         <Card>
           <EmptyState
-            title="Vos chiffres apparaîtront ici"
-            description="Dès votre première réservation, commande ou facture, vous verrez ici votre activité du mois."
+            title={t("Vos chiffres apparaîtront ici", "Your figures will appear here")}
+            description={t(
+              "Dès votre première réservation, commande ou facture, vous verrez ici votre activité du mois.",
+              "From your first booking, order or invoice, you will see this month's activity here.",
+            )}
           />
         </Card>
       )}
@@ -163,24 +191,24 @@ export default function DashboardPage() {
       {overviewQuery.data && totalActivity > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
           {/* auto-fit: three or four figures depending on the trade, always filling the row. */}
-          <SummaryCard label="Prospects" value={overviewQuery.data.leads.total} href="/dashboard/crm/leads" />
+          <SummaryCard label={t("Prospects", "Leads")} value={overviewQuery.data.leads.total} href="/dashboard/crm/leads" />
           {tools.has("bookings") && (
             <SummaryCard
-              label={`${words.bookings} à venir`}
+              label={t(`${words.bookings} à venir`, `Upcoming ${words.bookings.toLowerCase()}`)}
               value={overviewQuery.data.bookings.upcoming}
               href="/dashboard/bookings"
             />
           )}
           {tools.has("orders") && (
             <SummaryCard
-              label="Chiffre d'affaires"
-              value={formatCurrency(overviewQuery.data.orders.revenue, overviewQuery.data.orders.currency)}
+              label={t("Chiffre d'affaires", "Revenue")}
+              value={formatCurrency(overviewQuery.data.orders.revenue, overviewQuery.data.orders.currency, locale)}
               href="/dashboard/orders"
             />
           )}
           <SummaryCard
-            label="Encours factures"
-            value={formatCurrency(overviewQuery.data.invoices.outstanding, overviewQuery.data.invoices.currency)}
+            label={t("Encours factures", "Unpaid invoices")}
+            value={formatCurrency(overviewQuery.data.invoices.outstanding, overviewQuery.data.invoices.currency, locale)}
             href="/dashboard/finance"
           />
         </div>
@@ -189,28 +217,28 @@ export default function DashboardPage() {
       {hasAnalytics && (
         <Card className="p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-text">Activité récente</h2>
+            <h2 className="text-sm font-medium text-text">{t("Activité récente", "Recent activity")}</h2>
             <Link href="/dashboard/analytics" className="text-sm font-medium text-text underline">
-              Voir les statistiques
+              {t("Voir les statistiques", "See statistics")}
             </Link>
           </div>
           <div className="mt-4">
-            {activityQuery.isLoading && <p className="text-sm text-text-muted">Chargement...</p>}
+            {activityQuery.isLoading && <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
             {activityQuery.data && activityQuery.data.length === 0 && (
-              <p className="text-sm text-text-muted">Aucune activité récente.</p>
+              <p className="text-sm text-text-muted">{t("Aucune activité récente.", "No recent activity.")}</p>
             )}
             {activityQuery.data && activityQuery.data.length > 0 && (
               <ul className="divide-y divide-border">
                 {activityQuery.data.map((entry) => (
                   <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
                     <span className="text-text">
-                      {ACTIVITY_ENTITY_LABELS[entry.entity] ?? entry.entity}{" "}
+                      {labelIn(ACTIVITY_ENTITY_LABELS, ACTIVITY_ENTITY_LABELS_EN, entry.entity, locale)}{" "}
                       <span className="text-text-muted">
-                        {activityActionLabel(entry.entity, entry.action)}
+                        {activityActionLabel(entry.entity, entry.action, locale)}
                       </span>
                     </span>
                     <span className="text-text-muted">
-                      {new Date(entry.createdAt).toLocaleString("fr-FR")}
+                      {new Date(entry.createdAt).toLocaleString(intlLocale(locale))}
                     </span>
                   </li>
                 ))}
@@ -230,11 +258,13 @@ function AttentionSection({
   feed,
   isLoading,
   total,
+  t,
 }: {
   summary?: ActionCenterSummary;
   feed?: ActionCenterItem[];
   isLoading: boolean;
   total: number;
+  t: Translate;
 }) {
   if (isLoading) {
     return (
@@ -249,21 +279,24 @@ function AttentionSection({
   return (
     <Card className="p-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-text">Ce qui nécessite votre attention</h2>
+        <h2 className="text-sm font-semibold text-text">{t("Ce qui nécessite votre attention", "What needs your attention")}</h2>
         <Link href="/dashboard/action-center" className="text-sm font-medium text-text underline">
-          Ouvrir le centre d&apos;action
+          {t("Ouvrir le centre d'action", "Open the action centre")}
         </Link>
       </div>
 
       {total === 0 ? (
         <p className="mt-3 text-sm text-text-muted">
-          Rien ne nécessite votre attention pour le moment — tout est sous contrôle.
+          {t(
+            "Rien ne nécessite votre attention pour le moment — tout est sous contrôle.",
+            "Nothing needs your attention right now — everything is under control.",
+          )}
         </p>
       ) : (
         <ul className="mt-3 divide-y divide-border">
           {feed.slice(0, 3).map((item) => (
             <li key={`${item.type}-${item.id}`} className="flex items-center gap-2 py-2 text-sm">
-              <Badge>{ACTION_ITEM_TYPE_LABELS[item.type]}</Badge>
+              <Badge>{actionItemTypeLabel(item.type, t)}</Badge>
               <span className="text-text">{item.title}</span>
             </li>
           ))}
@@ -310,18 +343,20 @@ function GettingStarted({
   siteOnline,
   slug,
   loading,
+  t,
 }: {
   hasLogo: boolean;
   hasOnlineOffer: boolean;
   siteOnline: boolean;
   slug: string;
   loading: boolean;
+  t: Translate;
 }) {
   if (loading) return null;
   const steps = [
-    { done: hasLogo, label: "Ajoutez votre logo", href: "/dashboard/settings#entreprise" },
-    { done: hasOnlineOffer, label: "Mettez une offre en ligne", href: "/dashboard/catalog" },
-    { done: siteOnline, label: "Publiez votre site", href: "/dashboard/settings#abonnement" },
+    { done: hasLogo, label: t("Ajoutez votre logo", "Add your logo"), href: "/dashboard/settings#entreprise" },
+    { done: hasOnlineOffer, label: t("Mettez une offre en ligne", "Put an offer online"), href: "/dashboard/catalog" },
+    { done: siteOnline, label: t("Publiez votre site", "Publish your website"), href: "/dashboard/settings#abonnement" },
   ];
   const remaining = steps.filter((step) => !step.done).length;
   if (remaining === 0) return null;
@@ -330,10 +365,17 @@ function GettingStarted({
     <section className="rounded-2xl bg-sidebar p-6 text-white">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Pour bien démarrer</h2>
+          <h2 className="text-xl font-semibold">{t("Pour bien démarrer", "Getting started")}</h2>
           <p className="mt-1 text-sm text-sidebar-text">
-            {remaining === 1 ? "Plus qu'une étape" : `Encore ${remaining} étapes`} avant que vos
-            clients trouvent votre activité en ligne.
+            {remaining === 1
+              ? t(
+                  "Plus qu'une étape avant que vos clients trouvent votre activité en ligne.",
+                  "One step left before your customers can find your business online.",
+                )
+              : t(
+                  `Encore ${remaining} étapes avant que vos clients trouvent votre activité en ligne.`,
+                  `${remaining} steps left before your customers can find your business online.`,
+                )}
           </p>
         </div>
         {siteOnline && (
@@ -343,7 +385,7 @@ function GettingStarted({
             rel="noreferrer"
             className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-sidebar hover:bg-white/90"
           >
-            Voir mon site
+            {t("Voir mon site", "See my website")}
           </a>
         )}
       </div>
@@ -366,7 +408,7 @@ function GettingStarted({
               </span>
               <span>
                 {step.label}
-                <span className="sr-only">{step.done ? " (fait)" : " (à faire)"}</span>
+                <span className="sr-only">{step.done ? t(" (fait)", " (done)") : t(" (à faire)", " (to do)")}</span>
               </span>
             </Link>
           </li>
