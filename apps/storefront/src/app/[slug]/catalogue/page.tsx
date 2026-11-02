@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { siteLocale, translator, type Translate } from "@/lib/storefront-locale-core";
 import { headers } from "next/headers";
 import CatalogueClient from "./catalogue-client";
 import { serverApi } from "@/lib/server-api";
@@ -34,19 +35,19 @@ async function fetchOrganization(
 /** Same per-template label used client-side (catalogue-client.tsx's CATALOGUE_LABELS) — kept as
  *  a small duplicated literal map rather than a shared import, since generateMetadata runs in a
  *  separate server-only module graph and this is the only place either needs it. */
-function catalogueTitle(template: string): string {
+function catalogueTitle(template: string, t: Translate): string {
   switch (template) {
     case "table":
-      return "Notre menu";
+      return t("Notre menu", "Our menu");
     case "academie":
-      return "Nos formations";
+      return t("Nos formations", "Our courses");
     case "salon":
     case "vitrine":
-      return "Nos services";
+      return t("Nos services", "Our services");
     case "boutique":
-      return "Notre boutique";
+      return t("Notre boutique", "Our shop");
     default:
-      return "Notre catalogue";
+      return t("Notre catalogue", "Our catalogue");
   }
 }
 
@@ -62,9 +63,13 @@ export async function generateMetadata({ params }: CataloguePageProps): Promise<
     };
   }
   const { organization } = lookup;
+  const t = translator(siteLocale(organization.language));
 
-  const title = `${catalogueTitle(organization.storefrontTheme.template)} — ${organization.name}`;
-  const description = `Parcourez l'ensemble du catalogue de ${organization.name}, avec recherche, filtres par catégorie et tri.`;
+  const title = `${catalogueTitle(organization.storefrontTheme.template, t)} — ${organization.name}`;
+  const description = t(
+    `Parcourez l'ensemble du catalogue de ${organization.name}, avec recherche, filtres par catégorie et tri.`,
+    `Browse ${organization.name}'s whole catalogue, with search, category filters and sorting.`,
+  );
 
   return {
     title,

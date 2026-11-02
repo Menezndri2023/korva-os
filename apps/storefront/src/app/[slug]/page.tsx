@@ -7,6 +7,7 @@ import { serverApi } from "@/lib/server-api";
 import { businessJsonLd, jsonLdHtml } from "@/lib/structured-data";
 import { unresolvedStorefrontMetadata } from "@/lib/organization-lookup";
 import { fetchOrganization } from "@/lib/fetch-organization";
+import { siteLocale, translator } from "@/lib/storefront-locale-core";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { StorefrontOffline } from "./storefront-offline";
 
@@ -65,21 +66,24 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
     organization.visibleSections.includes("catalog"),
   );
   const offerNames = offers.slice(0, 3).map((offer) => offer.name);
+  const t = translator(siteLocale(organization.language));
 
   const services: string[] = [];
   if (organization.enabledModules.includes("booking")) {
-    services.push("réservation en ligne");
+    services.push(t("réservation en ligne", "online booking"));
   }
   if (organization.enabledModules.includes("commerce")) {
-    services.push("commande en ligne");
+    services.push(t("commande en ligne", "online ordering"));
   }
 
-  const autoDescriptionParts = [`${organization.name} — boutique propulsée par KORVA OS.`];
+  const autoDescriptionParts = [
+    t(`${organization.name} — boutique propulsée par KORVA OS.`, `${organization.name} — shop powered by KORVA OS.`),
+  ];
   if (services.length > 0) {
-    autoDescriptionParts.push(`Services : ${services.join(", ")}.`);
+    autoDescriptionParts.push(t(`Services : ${services.join(", ")}.`, `Services: ${services.join(", ")}.`));
   }
   if (offerNames.length > 0) {
-    autoDescriptionParts.push(`Offres : ${offerNames.join(", ")}.`);
+    autoDescriptionParts.push(t(`Offres : ${offerNames.join(", ")}.`, `Offers: ${offerNames.join(", ")}.`));
   }
 
   // Phase E4 (docs/KORVA_OS_V2_AUDIT.md §2.6): an org-configured seoTitle/seoDescription always

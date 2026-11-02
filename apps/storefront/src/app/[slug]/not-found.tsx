@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useT } from "@/lib/storefront-locale";
 
 /**
  * Rendered when page.tsx calls notFound() — that is, when the API confirmed no public storefront
@@ -21,15 +24,19 @@ import Link from "next/link";
  * cosmetic. Do not add an undocumented `metadata` export here on the assumption it works.
  */
 export default function StorefrontNotFound() {
+  // A client component so it reads the site's language from the layout's provider.
+  const t = useT();
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-3 px-6 text-center">
-      <h1 className="text-lg font-semibold text-zinc-900">Boutique introuvable</h1>
+      <h1 className="text-lg font-semibold text-zinc-900">{t("Boutique introuvable", "Shop not found")}</h1>
       <p className="max-w-sm text-sm text-zinc-600">
-        Cette adresse ne correspond à aucune boutique. Vérifiez le lien, ou demandez-le à
-        nouveau au commerçant.
+        {t(
+          "Cette adresse ne correspond à aucune boutique. Vérifiez le lien, ou demandez-le à nouveau au commerçant.",
+          "This address matches no shop. Check the link, or ask the business for it again.",
+        )}
       </p>
       <Link href="/" className="mt-2 text-sm font-medium text-zinc-900 underline">
-        Accueil
+        {t("Accueil", "Home")}
       </Link>
     </main>
   );

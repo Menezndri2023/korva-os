@@ -19,6 +19,7 @@ import { Monogram, SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { siteWording } from "../wording";
 import { Confirmation } from "../sections/Confirmation";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
 /** Beauty & wellness, non-medical health, fitness, hospitality, personal services — booking is
  *  the primary call to action everywhere, well above cart/commerce. */
@@ -41,17 +42,19 @@ export function SalonTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const bookableOffers = (offers ?? []).filter((o) => o.type === "booking");
   const otherOffers = (offers ?? []).filter((o) => o.type !== "booking");
   // Also the guesthouse template: its words follow the trade (siteWording).
   const words = siteWording(organization.businessModel, {
-    catalogLink: "Tous nos services",
-    eyebrow: "Sur rendez-vous",
-    title: "Nos prestations",
-    heroCta: "Prendre rendez-vous",
-    book: "Réserver",
-  });
-  const links = siteLinks(slug, catalogVisible, { catalog: words.catalogLink, track: "Suivre ma réservation" });
+    catalogLink: t("Tous nos services", "All our services"),
+    eyebrow: t("Sur rendez-vous", "By appointment"),
+    title: t("Nos prestations", "Our services"),
+    heroCta: t("Prendre rendez-vous", "Book an appointment"),
+    book: t("Réserver", "Book"),
+  }, locale);
+  const links = siteLinks(slug, catalogVisible, { catalog: words.catalogLink, track: t("Suivre ma réservation", "Track my booking") });
   const hasHeroImage = Boolean(organization.heroImage);
 
   return (
@@ -113,7 +116,10 @@ export function SalonTemplate({
       <main id="services" className="mx-auto w-full max-w-3xl scroll-mt-20 space-y-12 px-4 py-10 sm:px-6 sm:py-14">
         <Confirmation message={confirmation} />
 
-        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>Aucune prestation disponible pour le moment.</p>}
+        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>{t(
+          "Aucune prestation disponible pour le moment.",
+          "No services available yet.",
+        )}</p>}
 
         {catalogVisible && offersLoading && (
           <div className="space-y-3">
@@ -126,12 +132,15 @@ export function SalonTemplate({
         {catalogVisible && offersError && (
           <div className={`rounded-2xl border ${KT.border} p-4 text-sm text-destructive`}>
             Impossible de charger les prestations.{" "}
-            <button onClick={onRetryOffers} className="underline">Réessayer</button>
+            <button onClick={onRetryOffers} className="underline">{t("Réessayer", "Try again")}</button>
           </div>
         )}
 
         {catalogVisible && offers && offers.length === 0 && (
-          <p className={`text-sm ${KT.textMuted}`}>Les prestations seront bientôt publiées.</p>
+          <p className={`text-sm ${KT.textMuted}`}>{t(
+            "Les prestations seront bientôt publiées.",
+            "Services will be published soon.",
+          )}</p>
         )}
 
         {catalogVisible && bookableOffers.length > 0 && (
@@ -147,7 +156,7 @@ export function SalonTemplate({
 
         {catalogVisible && commerceEnabled && otherOffers.length > 0 && (
           <section>
-            <SectionHeading eyebrow="À emporter" title="Nos produits" />
+            <SectionHeading eyebrow={t("À emporter", "Takeaway")} title={t("Nos produits", "Our products")} />
             <ul className="space-y-3">
               {otherOffers.map((offer) => (
                 <ServiceCard key={offer.id} slug={slug} offer={offer} onAddToCart={() => onAddToCart(offer)} />
@@ -220,15 +229,20 @@ function ServiceAction({
   onAddToCart?: () => void;
   size?: "sm" | "md";
 }) {
+  const t = useT();
   if (primary && onBook) {
     return (
       <Button size={size} onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-        Réserver
+        {t("Réserver", "Book")}
       </Button>
     );
   }
   if (!primary && onAddToCart) {
-    return <Button size={size} variant="secondary" onClick={onAddToCart}>Ajouter</Button>;
+    return (
+      <Button size={size} variant="secondary" onClick={onAddToCart}>
+        {t("Ajouter", "Add")}
+      </Button>
+    );
   }
   return null;
 }

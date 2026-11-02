@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@korva/ui";
-import { OFFER_TYPE_LABELS } from "@/lib/offer-labels";
+import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
@@ -18,6 +18,7 @@ import { OfferImage } from "../sections/OfferImage";
 import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
 /** Training/coaching — offers presented as course cards (cover image, type badge, price,
  *  enrolment CTA) in a catalog grid, closer to an academy/course-platform look. */
@@ -40,7 +41,8 @@ export function AcademieTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
-  const links = siteLinks(slug, catalogVisible, { catalog: "Toutes nos formations", track: "Suivi" });
+  const t = useT();
+  const links = siteLinks(slug, catalogVisible, { catalog: t("Toutes nos formations", "All our courses"), track: t("Suivi", "Tracking") });
 
   return (
     <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
@@ -73,7 +75,10 @@ export function AcademieTemplate({
       <main className="mx-auto -mt-8 w-full max-w-5xl px-4 pb-12 sm:px-6">
         <Confirmation message={confirmation} />
 
-        {!catalogVisible && <p className={`pt-12 text-sm ${KT.textMuted}`}>Aucune formation disponible pour le moment.</p>}
+        {!catalogVisible && <p className={`pt-12 text-sm ${KT.textMuted}`}>{t(
+          "Aucune formation disponible pour le moment.",
+          "No courses available yet.",
+        )}</p>}
 
         {catalogVisible && offersLoading && (
           <div className="grid gap-5 sm:grid-cols-2">
@@ -86,13 +91,16 @@ export function AcademieTemplate({
         {catalogVisible && offersError && (
           <div className={`rounded-2xl border ${KT.border} ${KT.surface} p-4 text-sm text-destructive`}>
             Impossible de charger les formations.{" "}
-            <button onClick={onRetryOffers} className="underline">Réessayer</button>
+            <button onClick={onRetryOffers} className="underline">{t("Réessayer", "Try again")}</button>
           </div>
         )}
 
         {catalogVisible && offers && offers.length === 0 && (
           <p className={`rounded-2xl border p-6 text-sm ${KT.border} ${KT.surface} ${KT.textMuted}`}>
-            Les prochaines sessions seront bientôt publiées.
+            {t(
+              "Les prochaines sessions seront bientôt publiées.",
+              "The next sessions will be published soon.",
+            )}
           </p>
         )}
 
@@ -142,6 +150,8 @@ function CourseCard({
   onBook: () => void;
   onAddToCart: () => void;
 }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   return (
     <div className={`group flex flex-col overflow-hidden rounded-2xl border shadow-sm transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
       <Link href={`/${slug}/offers/${offer.id}`} tabIndex={-1} aria-hidden>
@@ -149,7 +159,7 @@ function CourseCard({
       </Link>
       <div className="flex flex-1 flex-col p-5">
         <span className={`self-start rounded-full px-2.5 py-0.5 text-xs font-medium ${KT.accentSoftBg} ${KT.accentText}`}>
-          {OFFER_TYPE_LABELS[offer.type]}
+          {offerTypeLabel(offer.type, locale)}
         </span>
         <div className="mt-2 flex items-start justify-between gap-2">
           <Link href={`/${slug}/offers/${offer.id}`} className={`text-lg font-semibold hover:underline ${KT.headingFont}`}>
@@ -162,11 +172,11 @@ function CourseCard({
           <span className="font-semibold"><OfferPrice offer={offer} /></span>
           {offer.type === "booking" && bookingEnabled && (
             <Button size="sm" onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-              S&apos;inscrire
+              {t("S'inscrire", "Sign up")}
             </Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
-            <Button variant="secondary" size="sm" onClick={onAddToCart}>Ajouter</Button>
+            <Button variant="secondary" size="sm" onClick={onAddToCart}>{t("Ajouter", "Add")}</Button>
           )}
         </div>
       </div>

@@ -1,6 +1,7 @@
 import type { OfferOptionGroup } from "@korva/types";
 import { formatOfferPrice } from "@/lib/offer-labels";
 import type { ChosenOptions } from "@/lib/use-cart";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
 /** The chosen ids summarised for the cart: names in group order and the added price. */
 export function summarizeOptions(groups: OfferOptionGroup[], ids: string[]): ChosenOptions {
@@ -35,6 +36,8 @@ export function OfferOptionsPicker({
   onChange: (next: string[]) => void;
   currency: string;
 }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   function toggle(group: OfferOptionGroup, optionId: string, checked: boolean) {
     const others = selected.filter((id) => !group.options.some((option) => option.id === id));
     const inGroup = selected.filter((id) => group.options.some((option) => option.id === id));
@@ -56,7 +59,7 @@ export function OfferOptionsPicker({
               {group.name}
               <span className="ml-1 text-xs font-normal text-text-muted">
                 {group.required ? "obligatoire" : "facultatif"}
-                {group.maxChoices > 1 ? ` · jusqu'à ${group.maxChoices}` : ""}
+                {group.maxChoices > 1 ? t(` · jusqu'à ${group.maxChoices}`, ` · up to ${group.maxChoices}`) : ""}
               </span>
             </legend>
             {group.options.map((option) => {
@@ -74,7 +77,7 @@ export function OfferOptionsPicker({
                   {option.name}
                   {option.priceDelta > 0 && (
                     <span className="text-text-muted">
-                      +{formatOfferPrice(option.priceDelta, currency)}
+                      +{formatOfferPrice(option.priceDelta, currency, locale)}
                     </span>
                   )}
                 </label>

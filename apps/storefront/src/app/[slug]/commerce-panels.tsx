@@ -11,7 +11,12 @@ import {
   type CreatePublicOrderInput,
   type TrackCartCheckoutStartedInput,
 } from "@korva/validation";
-import { FULFILLMENT_MODE_LABELS, type FulfillmentMode, type PaymentMethod } from "@korva/types";
+import {
+  FULFILLMENT_MODE_LABELS,
+  FULFILLMENT_MODE_LABELS_EN,
+  type FulfillmentMode,
+  type PaymentMethod,
+} from "@korva/types";
 import { Button, Dialog, Input, Select } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { optionKey } from "@/lib/use-cart";
@@ -23,12 +28,13 @@ import type {
   PublicSlots,
   PublicStayQuote,
 } from "@/lib/public-types";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
-const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  cash: "Espèces / à la livraison ou au retrait",
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, [string, string]> = {
+  cash: ["Espèces / à la livraison ou au retrait", "Cash / on delivery or collection"],
   // The platform's online payment is mobile money first (GeniusPay: Wave, Orange Money, MTN,
   // Moov) with cards — say it in the words customers here use.
-  online: "Mobile money ou carte (Wave, Orange Money, MTN, Moov)",
+  online: ["Mobile money ou carte (Wave, Orange Money, MTN, Moov)", "Mobile money or card (Wave, Orange Money, MTN, Moov)"],
 };
 
 /** Lengths a visitor may pick for an offer with no duration of its own. An offer that has one
@@ -58,11 +64,12 @@ function localToday(): string {
 // but (per its own docstring) expects the caller to render any explicit close affordance inside
 // `children` — this is that affordance.
 function DialogCloseButton({ onClose }: { onClose: () => void }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onClose}
-      aria-label="Fermer"
+      aria-label={t("Fermer", "Close")}
       className="absolute right-4 top-4 text-sm text-text-muted hover:text-text"
     >
       ✕
@@ -70,11 +77,11 @@ function DialogCloseButton({ onClose }: { onClose: () => void }) {
   );
 }
 
-const STAY_UNAVAILABLE_LABELS: Record<string, string> = {
-  STAY_TOO_SHORT: "Choisissez une date de départ après la date d'arrivée.",
-  STAY_BELOW_MINIMUM: "Ce séjour est trop court pour cette offre.",
-  SLOT_UNAVAILABLE: "Déjà réservé à ces dates.",
-  SLOT_BLOCKED: "Fermé à ces dates.",
+const STAY_UNAVAILABLE_LABELS: Record<string, [string, string]> = {
+  STAY_TOO_SHORT: ["Choisissez une date de départ après la date d'arrivée.", "Choose a departure date after the arrival date."],
+  STAY_BELOW_MINIMUM: ["Ce séjour est trop court pour cette offre.", "This stay is too short for this offer."],
+  SLOT_UNAVAILABLE: ["Déjà réservé à ces dates.", "Already booked on these dates."],
+  SLOT_BLOCKED: ["Fermé à ces dates.", "Closed on these dates."],
 };
 
 export function BookingPanel({
@@ -88,6 +95,7 @@ export function BookingPanel({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const t = useT();
   const [date, setDate] = useState(localToday);
   const [chosenDuration, setChosenDuration] = useState(60);
   const fixedDuration = offer.durationMinutes;
@@ -191,29 +199,31 @@ export function BookingPanel({
   // when there was never any). Say so instead of showing a form that can never be sent.
   if (resourcesQuery.isSuccess && resources.length === 0) {
     return (
-      <Dialog open onClose={onClose} title={`Réserver — ${offer.name}`}>
+      <Dialog open onClose={onClose} title={t(`Réserver — ${offer.name}`, `Book — ${offer.name}`)}>
         <DialogCloseButton onClose={onClose} />
         <p className="text-sm text-text-muted">
-          Les réservations en ligne ne sont pas ouvertes pour le moment. Contactez directement
-          l&apos;établissement pour prendre rendez-vous.
+          {t(
+            "Les réservations en ligne ne sont pas ouvertes pour le moment. Contactez directement l'établissement pour prendre rendez-vous.",
+            "Online booking is not open at the moment. Contact the business directly to book.",
+          )}
         </p>
       </Dialog>
     );
   }
 
   return (
-    <Dialog open onClose={onClose} title={`Réserver — ${offer.name}`}>
+    <Dialog open onClose={onClose} title={t(`Réserver — ${offer.name}`, `Book — ${offer.name}`)}>
       <DialogCloseButton onClose={onClose} />
       <form onSubmit={handleSubmit((values) => bookMutation.mutate(values))} className="space-y-3 text-sm">
         <div>
           {tableMode ? (
             <label className="flex items-center gap-2 text-sm text-text">
-              Nombre de couverts
+              {t("Nombre de couverts", "Number of guests")}
               <Input
                 type="number"
                 min="1"
                 max="100"
-                aria-label="Nombre de couverts"
+                aria-label={t("Nombre de couverts", "Number of guests")}
                 value={partySize}
                 onChange={(e) => setPartySize(Math.max(1, Number(e.target.value) || 1))}
                 className="w-20"
@@ -221,8 +231,8 @@ export function BookingPanel({
             </label>
           ) : staffOnly ? (
             // A salon's customer books a person, not an "emplacement": show who they are.
-            <div role="radiogroup" aria-label="Avec qui ?" className="space-y-1">
-              <p className="text-xs font-medium text-text-muted">Avec qui ?</p>
+            <div role="radiogroup" aria-label={t("Avec qui ?", "With whom?")} className="space-y-1">
+              <p className="text-xs font-medium text-text-muted">{t("Avec qui ?", "With whom?")}</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {resources.map((resource) => (
                   <label
@@ -263,12 +273,12 @@ export function BookingPanel({
           ) : (
           <Select
             {...register("resourceId", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-            aria-label="Emplacement"
+            aria-label={t("Emplacement", "Place")}
             error={!!errors.resourceId}
             className="w-full"
           >
             <option value="" disabled>
-              Choisir un emplacement
+              {t("Choisir un emplacement", "Choose a place")}
             </option>
             {resourcesQuery.data?.map((resource) => (
               <option key={resource.id} value={resource.id}>
@@ -279,9 +289,9 @@ export function BookingPanel({
           )}
           {resourcesQuery.isError && (
             <p className="mt-1 text-xs text-destructive">
-              Impossible de charger les emplacements.{" "}
+              {t("Impossible de charger les emplacements.", "Places could not be loaded.")}{" "}
               <button type="button" onClick={() => resourcesQuery.refetch()} className="underline">
-                Réessayer
+                {t("Réessayer", "Try again")}
               </button>
             </p>
           )}
@@ -292,10 +302,10 @@ export function BookingPanel({
           <div className="space-y-2">
             <div className="flex gap-2">
               <label className="flex-1 text-xs text-text-muted">
-                Arrivée
+                {t("Arrivée", "Arrival")}
                 <Input
                   type="date"
-                  aria-label="Date d'arrivée"
+                  aria-label={t("Date d'arrivée", "Arrival date")}
                   value={checkIn}
                   min={localToday()}
                   onChange={(e) => setCheckIn(e.target.value)}
@@ -303,10 +313,10 @@ export function BookingPanel({
                 />
               </label>
               <label className="flex-1 text-xs text-text-muted">
-                Départ
+                {t("Départ", "Departure")}
                 <Input
                   type="date"
-                  aria-label="Date de départ"
+                  aria-label={t("Date de départ", "Departure date")}
                   value={checkOut}
                   min={checkIn || localToday()}
                   onChange={(e) => setCheckOut(e.target.value)}
@@ -318,11 +328,19 @@ export function BookingPanel({
               <p className={`text-xs ${stayQuery.data.available ? "text-text" : "text-destructive"}`}>
                 {stayQuery.data.available
                   ? `${stayQuery.data.nights} nuit${stayQuery.data.nights > 1 ? "s" : ""} · ${stayQuery.data.total.toFixed(2)} ${stayQuery.data.currency}`
-                  : STAY_UNAVAILABLE_LABELS[stayQuery.data.reason ?? ""] ?? "Indisponible à ces dates."}
+                  : (() => {
+                      const reason = STAY_UNAVAILABLE_LABELS[stayQuery.data.reason ?? ""];
+                      return reason ? t(...reason) : t(
+                        "Indisponible à ces dates.",
+                        "Unavailable on these dates.",
+                      );
+                    })()}
               </p>
             )}
             {offer.minNights && offer.minNights > 1 && (
-              <p className="text-xs text-text-muted">Séjour minimum : {offer.minNights} nuits.</p>
+              <p className="text-xs text-text-muted">
+              {t(`Séjour minimum : ${offer.minNights} nuits.`, `Minimum stay: ${offer.minNights} nights.`)}
+            </p>
             )}
           </div>
         ) : (
@@ -330,17 +348,19 @@ export function BookingPanel({
         <div className="flex gap-2">
           <Input
             type="date"
-            aria-label="Date de réservation"
+            aria-label={t("Date de réservation", "Booking date")}
             value={date}
             min={localToday()}
             onChange={(e) => setDate(e.target.value)}
             className="flex-1"
           />
           {fixedDuration ? (
-            <p className="self-center text-xs text-text-muted">Durée : {formatDuration(fixedDuration)}</p>
+            <p className="self-center text-xs text-text-muted">
+              {t("Durée :", "Length:")} {formatDuration(fixedDuration)}
+            </p>
           ) : (
             <Select
-              aria-label="Durée"
+              aria-label={t("Durée", "Length")}
               value={chosenDuration}
               onChange={(e) => setChosenDuration(Number(e.target.value))}
             >
@@ -355,18 +375,18 @@ export function BookingPanel({
 
         {(resourceId || tableMode) && (
           <div>
-            {slotsQuery.isLoading && <p className="text-xs text-text-muted">Chargement des créneaux...</p>}
+            {slotsQuery.isLoading && <p className="text-xs text-text-muted">{t("Chargement des créneaux...", "Loading time slots...")}</p>}
             {slotsQuery.isError && (
               <p className="text-xs text-destructive">
-                Impossible de charger les créneaux.{" "}
+                {t("Impossible de charger les créneaux.", "Time slots could not be loaded.")}{" "}
                 <button type="button" onClick={() => slotsQuery.refetch()} className="underline">
-                  Réessayer
+                  {t("Réessayer", "Try again")}
                 </button>
               </p>
             )}
             {slotsQuery.data &&
               (slotsQuery.data.slots.length ? (
-                <div role="group" aria-label="Créneaux disponibles" className="flex flex-wrap gap-2">
+                <div role="group" aria-label={t("Créneaux disponibles", "Available slots")} className="flex flex-wrap gap-2">
                   {slotsQuery.data.slots.map((slot) => {
                     const selected = slot.startAt === startAt;
                     return (
@@ -387,7 +407,10 @@ export function BookingPanel({
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-text-muted">Aucun créneau disponible ce jour-là.</p>
+                <p className="text-xs text-text-muted">{t(
+                  "Aucun créneau disponible ce jour-là.",
+                  "No slots available that day.",
+                )}</p>
               ))}
           </div>
         )}
@@ -396,16 +419,16 @@ export function BookingPanel({
         )}
 
         <Input
-          placeholder="Prénom"
-          aria-label="Prénom"
+          placeholder={t("Prénom", "First name")}
+          aria-label={t("Prénom", "First name")}
           {...register("contact.firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
           error={!!errors.contact?.firstName}
         />
         <div>
           <Input
             type="email"
-            placeholder="E-mail"
-            aria-label="Adresse e-mail"
+            placeholder={t("E-mail", "E-mail")}
+            aria-label={t("Adresse e-mail", "Email address")}
             {...register("contact.email")}
             error={!!errors.contact?.email}
           />
@@ -414,15 +437,15 @@ export function BookingPanel({
           )}
         </div>
         <Input
-          placeholder="Téléphone (optionnel)"
-          aria-label="Téléphone"
+          placeholder={t("Téléphone (optionnel)", "Phone (optional)")}
+          aria-label={t("Téléphone", "Phone")}
           {...register("contact.phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
           error={!!errors.contact?.phone}
         />
 
         {bookMutation.isError && (
           <p className="text-xs text-destructive">
-            {bookMutation.error instanceof PublicApiError ? bookMutation.error.message : "Erreur"}
+            {bookMutation.error instanceof PublicApiError ? bookMutation.error.message : t("Erreur", "Error")}
           </p>
         )}
         <Button
@@ -431,7 +454,7 @@ export function BookingPanel({
           disabled={isStay ? !stayReady : !startAt}
           className="w-full"
         >
-          {bookMutation.isPending ? "Envoi..." : "Confirmer la réservation"}
+          {bookMutation.isPending ? t("Envoi...", "Sending...") : t("Confirmer la réservation", "Confirm the booking")}
         </Button>
       </form>
     </Dialog>
@@ -468,6 +491,8 @@ export function CheckoutPanel({
   onClose: () => void;
   onSuccess: (orderNumber: string) => void;
 }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const itemsTotal = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
   const modes = reception?.fulfillmentModes ?? [];
   const zones = reception?.deliveryZones ?? [];
@@ -578,7 +603,7 @@ export function CheckoutPanel({
   });
 
   return (
-    <Dialog open onClose={onClose} title="Finaliser la commande">
+    <Dialog open onClose={onClose} title={t("Finaliser la commande", "Complete the order")}>
       <DialogCloseButton onClose={onClose} />
       <form onSubmit={handleSubmit((values) => orderMutation.mutate(values))} className="space-y-3 text-sm">
         <ul className="divide-y divide-border rounded-md border border-border">
@@ -605,22 +630,22 @@ export function CheckoutPanel({
         </div>
 
         <Input
-          placeholder="Code promo (optionnel)"
-          aria-label="Code promo"
+          placeholder={t("Code promo (optionnel)", "Discount code (optional)")}
+          aria-label={t("Code promo", "Discount code")}
           {...register("discountCode")}
         />
 
         <Input
-          placeholder="Prénom"
-          aria-label="Prénom"
+          placeholder={t("Prénom", "First name")}
+          aria-label={t("Prénom", "First name")}
           {...register("contact.firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
           error={!!errors.contact?.firstName}
         />
         <div>
           <Input
             type="email"
-            placeholder="E-mail"
-            aria-label="Adresse e-mail"
+            placeholder={t("E-mail", "E-mail")}
+            aria-label={t("Adresse e-mail", "Email address")}
             {...emailField}
             onBlur={(event) => {
               void emailField.onBlur(event);
@@ -638,16 +663,16 @@ export function CheckoutPanel({
           )}
         </div>
         <Input
-          placeholder="Téléphone (optionnel)"
-          aria-label="Téléphone"
+          placeholder={t("Téléphone (optionnel)", "Phone (optional)")}
+          aria-label={t("Téléphone", "Phone")}
           {...register("contact.phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
           error={!!errors.contact?.phone}
         />
 
         {configured && (
           <div className="space-y-2 border-t border-border pt-3">
-            <p className="text-xs font-medium text-text-muted">Réception</p>
-            <div role="radiogroup" aria-label="Mode de réception" className="flex flex-wrap gap-3">
+            <p className="text-xs font-medium text-text-muted">{t("Réception", "Receiving")}</p>
+            <div role="radiogroup" aria-label={t("Mode de réception", "How you receive it")} className="flex flex-wrap gap-3">
               {modes.map((candidate) => (
                 <label key={candidate} className="flex items-center gap-2 text-sm text-text">
                   <input
@@ -657,19 +682,19 @@ export function CheckoutPanel({
                     checked={mode === candidate}
                     onChange={() => setMode(candidate)}
                   />
-                  {FULFILLMENT_MODE_LABELS[candidate]}
+                  {(locale === "en" ? FULFILLMENT_MODE_LABELS_EN : FULFILLMENT_MODE_LABELS)[candidate]}
                 </label>
               ))}
             </div>
 
             {mode === "delivery" && zones.length > 0 && (
               <Select
-                aria-label="Zone de livraison"
+                aria-label={t("Zone de livraison", "Delivery zone")}
                 value={zoneId}
                 onChange={(e) => setZoneId(e.target.value)}
                 className="w-full"
               >
-                <option value="">Choisir votre zone</option>
+                <option value="">{t("Choisir votre zone", "Choose your zone")}</option>
                 {zones.map((candidate) => (
                   <option key={candidate.id} value={candidate.id}>
                     {candidate.name} — {candidate.fee.toFixed(2)} {currency}
@@ -682,7 +707,10 @@ export function CheckoutPanel({
             )}
             {belowMinimum && zone?.minimumOrder != null && (
               <p className="text-xs text-destructive">
-                Commande minimum pour {zone.name} : {zone.minimumOrder.toFixed(2)} {currency}.
+                {t(
+                  `Commande minimum pour ${zone.name} : ${zone.minimumOrder.toFixed(2)} ${currency}.`,
+                  `Minimum order for ${zone.name}: ${zone.minimumOrder.toFixed(2)} ${currency}.`,
+                )}
               </p>
             )}
 
@@ -692,8 +720,8 @@ export function CheckoutPanel({
 
             {mode === "dine_in" && (
               <Input
-                placeholder="Table (optionnel)"
-                aria-label="Table"
+                placeholder={t("Table (optionnel)", "Table (optional)")}
+                aria-label={t("Table", "Table")}
                 value={tableLabel}
                 onChange={(e) => setTableLabel(e.target.value)}
               />
@@ -707,7 +735,7 @@ export function CheckoutPanel({
                   checked={when === "asap"}
                   onChange={() => setWhen("asap")}
                 />
-                Dès que possible
+                {t("Dès que possible", "As soon as possible")}
               </label>
               <label className="flex items-center gap-2 text-sm text-text">
                 <input
@@ -716,14 +744,14 @@ export function CheckoutPanel({
                   checked={when === "later"}
                   onChange={() => setWhen("later")}
                 />
-                Choisir une heure
+                {t("Choisir une heure", "Choose a time")}
               </label>
             </div>
             {when === "later" && (
               <div className="flex gap-2">
                 <Input
                   type="date"
-                  aria-label="Date souhaitée"
+                  aria-label={t("Date souhaitée", "Preferred date")}
                   value={requestedDate}
                   min={localToday()}
                   onChange={(e) => setRequestedDate(e.target.value)}
@@ -731,7 +759,7 @@ export function CheckoutPanel({
                 />
                 <Input
                   type="time"
-                  aria-label="Heure souhaitée"
+                  aria-label={t("Heure souhaitée", "Preferred time")}
                   value={requestedTime}
                   onChange={(e) => setRequestedTime(e.target.value)}
                 />
@@ -743,35 +771,35 @@ export function CheckoutPanel({
         {showAddress && (
         <div className="space-y-2 border-t border-border pt-3">
           <p className="text-xs font-medium text-text-muted">
-            {configured ? "Adresse de livraison" : "Adresse de livraison (optionnel)"}
+            {configured ? t("Adresse de livraison", "Delivery address") : t("Adresse de livraison (optionnel)", "Delivery address (optional)")}
           </p>
           <Input
-            placeholder="Adresse"
-            aria-label="Adresse"
+            placeholder={t("Adresse", "Address")}
+            aria-label={t("Adresse", "Address")}
             {...register("shippingAddress.line1")}
           />
           <Input
-            placeholder="Complément d'adresse"
-            aria-label="Complément d'adresse"
+            placeholder={t("Complément d'adresse", "Address line 2")}
+            aria-label={t("Complément d'adresse", "Address line 2")}
             {...register("shippingAddress.line2")}
           />
           <div className="flex gap-2">
             <Input
-              placeholder="Ville"
-              aria-label="Ville"
+              placeholder={t("Ville", "Town")}
+              aria-label={t("Ville", "Town")}
               className="flex-1"
               {...register("shippingAddress.city")}
             />
             <Input
-              placeholder="Code postal"
-              aria-label="Code postal"
+              placeholder={t("Code postal", "Postcode")}
+              aria-label={t("Code postal", "Postcode")}
               className="w-28"
               {...register("shippingAddress.postalCode")}
             />
           </div>
           <Input
-            placeholder="Pays"
-            aria-label="Pays"
+            placeholder={t("Pays", "Country")}
+            aria-label={t("Pays", "Country")}
             {...register("shippingAddress.country")}
           />
         </div>
@@ -779,7 +807,7 @@ export function CheckoutPanel({
 
         {acceptedPaymentMethods.length > 1 && (
           <div className="space-y-1 border-t border-border pt-3">
-            <p className="text-xs font-medium text-text-muted">Mode de paiement</p>
+            <p className="text-xs font-medium text-text-muted">{t("Mode de paiement", "Payment method")}</p>
             {acceptedPaymentMethods.map((method) => (
               <label key={method} className="flex items-center gap-2 text-sm text-text">
                 <input
@@ -789,23 +817,23 @@ export function CheckoutPanel({
                   checked={paymentMethod === method}
                   onChange={() => setPaymentMethod(method)}
                 />
-                {PAYMENT_METHOD_LABELS[method]}
+                {t(...PAYMENT_METHOD_LABELS[method])}
               </label>
             ))}
           </div>
         )}
 
-        {errors.items && <p className="text-xs text-destructive">{errors.items.message ?? "Panier invalide."}</p>}
+        {errors.items && <p className="text-xs text-destructive">{errors.items.message ?? t("Panier invalide.", "The basket is not valid.")}</p>}
         {orderMutation.isError && (
           <p className="text-xs text-destructive">
-            {orderMutation.error instanceof PublicApiError ? orderMutation.error.message : "Erreur"}
+            {orderMutation.error instanceof PublicApiError ? orderMutation.error.message : t("Erreur", "Error")}
           </p>
         )}
         {payMutation.isError && (
           <p className="text-xs text-destructive">
             {payMutation.error instanceof PublicApiError
               ? payMutation.error.message
-              : "Impossible de démarrer le paiement en ligne."}
+              : t("Impossible de démarrer le paiement en ligne.", "Online payment could not be started.")}
           </p>
         )}
         <Button
@@ -820,12 +848,12 @@ export function CheckoutPanel({
           className="w-full"
         >
           {redirecting
-            ? "Redirection vers le paiement..."
+            ? t("Redirection vers le paiement...", "Taking you to payment...")
             : orderMutation.isPending || payMutation.isPending
-              ? "Envoi..."
+              ? t("Envoi...", "Sending...")
               : paymentMethod === "online"
-                ? "Payer par mobile money ou carte"
-                : "Confirmer la commande"}
+                ? t("Payer par mobile money ou carte", "Pay by mobile money or card")
+                : t("Confirmer la commande", "Confirm the order")}
         </Button>
       </form>
     </Dialog>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Badge, Button, Card } from "@korva/ui";
-import { OFFER_TYPE_LABELS } from "@/lib/offer-labels";
+import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
@@ -19,6 +19,7 @@ import { OfferImage } from "../sections/OfferImage";
 import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
 /** The original, sector-agnostic storefront layout — always available regardless of plan, and
  *  the fallback whenever a plan no longer covers the org's chosen template (see
@@ -42,7 +43,8 @@ export function EssentielTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
-  const links = siteLinks(slug, catalogVisible, { catalog: "Catalogue complet", track: "Suivre ma commande" });
+  const t = useT();
+  const links = siteLinks(slug, catalogVisible, { catalog: t("Catalogue complet", "Full catalogue"), track: t("Suivre ma commande", "Track my order") });
 
   return (
     <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
@@ -64,7 +66,10 @@ export function EssentielTemplate({
         <Confirmation message={confirmation} />
 
         {!catalogVisible && (
-          <p className={`text-sm ${KT.textMuted}`}>Aucun catalogue disponible pour le moment.</p>
+          <p className={`text-sm ${KT.textMuted}`}>{t(
+            "Aucun catalogue disponible pour le moment.",
+            "No catalogue available yet.",
+          )}</p>
         )}
 
         {catalogVisible && offersLoading && <OffersSkeleton />}
@@ -73,13 +78,16 @@ export function EssentielTemplate({
           <Card className="p-4 text-sm text-destructive">
             Impossible de charger les offres.{" "}
             <button onClick={onRetryOffers} className="underline">
-              Réessayer
+              {t("Réessayer", "Try again")}
             </button>
           </Card>
         )}
 
         {catalogVisible && offers && offers.length === 0 && (
-          <Card className={`p-6 text-center text-sm ${KT.textMuted}`}>Aucune offre disponible pour le moment.</Card>
+          <Card className={`p-6 text-center text-sm ${KT.textMuted}`}>{t(
+            "Aucune offre disponible pour le moment.",
+            "No offers available yet.",
+          )}</Card>
         )}
 
         {catalogVisible && offers && offers.length > 0 && (
@@ -128,6 +136,8 @@ function OfferCard({
   onBook: () => void;
   onAddToCart: () => void;
 }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   return (
     <div className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.surface} ${KT.border}`}>
       <Link href={`/${slug}/offers/${offer.id}`} tabIndex={-1} aria-hidden>
@@ -141,7 +151,7 @@ function OfferCard({
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>
         <div className="mt-1">
-          <Badge>{OFFER_TYPE_LABELS[offer.type]}</Badge>
+          <Badge>{offerTypeLabel(offer.type, locale)}</Badge>
         </div>
         {offer.description && <p className={`mt-2 line-clamp-2 text-sm ${KT.textMuted}`}>{offer.description}</p>}
         <div className="mt-auto flex items-center justify-between gap-2 pt-4">
@@ -150,12 +160,12 @@ function OfferCard({
           </span>
           {offer.type === "booking" && bookingEnabled && (
             <Button size="sm" onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-              Réserver
+              {t("Réserver", "Book")}
             </Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
             <Button size="sm" onClick={onAddToCart} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-              Ajouter
+              {t("Ajouter", "Add")}
             </Button>
           )}
         </div>

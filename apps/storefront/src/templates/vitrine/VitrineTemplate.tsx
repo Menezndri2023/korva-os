@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@korva/ui";
-import { OFFER_TYPE_LABELS } from "@/lib/offer-labels";
+import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
@@ -21,6 +21,7 @@ import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { siteWording } from "../wording";
 import { Confirmation } from "../sections/Confirmation";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
 /**
  * Services vitrine — professional services, trades/construction, real estate, digital
@@ -46,15 +47,17 @@ export function VitrineTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   // Also the estate agency's and the association's template: words follow the trade.
   const words = siteWording(organization.businessModel, {
-    catalogLink: "Tous nos services",
-    eyebrow: "Ce que nous faisons",
-    title: "Nos services",
+    catalogLink: t("Tous nos services", "All our services"),
+    eyebrow: t("Ce que nous faisons", "What we do"),
+    title: t("Nos services", "Our services"),
     heroCta: "",
-    book: "Réserver",
-  });
-  const links = siteLinks(slug, catalogVisible, { catalog: words.catalogLink, track: "Suivi" });
+    book: t("Réserver", "Book"),
+  }, locale);
+  const links = siteLinks(slug, catalogVisible, { catalog: words.catalogLink, track: t("Suivi", "Tracking") });
 
   return (
     <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
@@ -83,7 +86,7 @@ export function VitrineTemplate({
               href="#services"
               className={`mt-8 inline-flex rounded-full px-6 py-3 text-sm font-semibold shadow-md transition-shadow hover:shadow-lg ${KT.accentBg} ${KT.accentContrastText}`}
             >
-              Découvrir nos services
+              {t("Découvrir nos services", "Discover our services")}
             </a>
           </div>
           {organization.heroImage && <HeroImage src={organization.heroImage} />}
@@ -95,19 +98,25 @@ export function VitrineTemplate({
 
         <Confirmation message={confirmation} />
 
-        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>Aucun service disponible pour le moment.</p>}
+        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>{t(
+          "Aucun service disponible pour le moment.",
+          "No services available yet.",
+        )}</p>}
 
         {catalogVisible && offersLoading && <ListSkeleton />}
 
         {catalogVisible && offersError && (
           <div className={`rounded-2xl border ${KT.border} p-4 text-sm text-destructive`}>
             Impossible de charger les services.{" "}
-            <button onClick={onRetryOffers} className="underline">Réessayer</button>
+            <button onClick={onRetryOffers} className="underline">{t("Réessayer", "Try again")}</button>
           </div>
         )}
 
         {catalogVisible && offers && offers.length === 0 && (
-          <p className={`text-sm ${KT.textMuted}`}>Aucun service publié pour le moment.</p>
+          <p className={`text-sm ${KT.textMuted}`}>{t(
+            "Aucun service publié pour le moment.",
+            "No services published yet.",
+          )}</p>
         )}
 
         {catalogVisible && offers && offers.length > 0 && (
@@ -160,6 +169,8 @@ function ServiceCard({
   onAddToCart: () => void;
   bookLabel: string;
 }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   return (
     <li className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
       <Link href={`/${slug}/offers/${offer.id}`} tabIndex={-1} aria-hidden>
@@ -172,7 +183,7 @@ function ServiceCard({
           </Link>
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>
-        <p className={`mt-0.5 text-sm ${KT.textMuted}`}>{OFFER_TYPE_LABELS[offer.type]}</p>
+        <p className={`mt-0.5 text-sm ${KT.textMuted}`}>{offerTypeLabel(offer.type, locale)}</p>
         {offer.description && <p className={`mt-2 line-clamp-3 text-sm leading-relaxed ${KT.textMuted}`}>{offer.description}</p>}
         <div className="mt-auto flex items-center justify-between gap-3 pt-4">
           <span className="font-semibold"><OfferPrice offer={offer} /></span>
@@ -180,11 +191,11 @@ function ServiceCard({
             <Button size="sm" onClick={onBook} className={`${KT.accentBg} ${KT.accentContrastText}`}>{bookLabel}</Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
-            <Button variant="secondary" size="sm" onClick={onAddToCart}>Ajouter au panier</Button>
+            <Button variant="secondary" size="sm" onClick={onAddToCart}>{t("Ajouter au panier", "Add to basket")}</Button>
           )}
           {offer.type !== "booking" && !commerceEnabled && (
             <Link href={`/${slug}/offers/${offer.id}`} className={`text-sm font-medium hover:underline ${KT.accentText}`}>
-              En savoir plus
+              {t("En savoir plus", "Find out more")}
             </Link>
           )}
         </div>

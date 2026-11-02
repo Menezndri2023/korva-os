@@ -18,6 +18,7 @@ import { OfferImage } from "../sections/OfferImage";
 import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
+import { useT } from "@/lib/storefront-locale";
 
 const UNCATEGORIZED = "Autres";
 
@@ -42,8 +43,9 @@ export function TableTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
+  const t = useT();
   const groups = useMemo(() => groupByCategory(offers), [offers]);
-  const links = siteLinks(slug, catalogVisible, { catalog: "Menu complet", track: "Suivre ma commande" });
+  const links = siteLinks(slug, catalogVisible, { catalog: t("Menu complet", "Full menu"), track: t("Suivre ma commande", "Track my order") });
   const hasHeroImage = Boolean(organization.heroImage);
 
   return (
@@ -93,7 +95,7 @@ export function TableTemplate({
           one endless scroll to find the desserts. */}
       {catalogVisible && groups.length > 1 && (
         <nav
-          aria-label="Rubriques de la carte"
+          aria-label={t("Rubriques de la carte", "Menu sections")}
           className={`sticky top-16 z-20 border-b ${KT.border} ${KT.bg}`}
         >
           <div className="mx-auto flex max-w-3xl gap-2 overflow-x-auto px-4 py-3 sm:px-6">
@@ -103,7 +105,7 @@ export function TableTemplate({
                 href={`#${categoryAnchor(category)}`}
                 className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium ${KT.border} ${KT.surface} ${KT.accentSoftHoverBg}`}
               >
-                {category}
+                {category === UNCATEGORIZED ? t("Autres", "Other") : category}
               </a>
             ))}
           </div>
@@ -113,7 +115,10 @@ export function TableTemplate({
       <main className="mx-auto w-full max-w-3xl space-y-10 px-4 py-10 sm:px-6">
         <Confirmation message={confirmation} />
 
-        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>La carte n&apos;est pas disponible pour le moment.</p>}
+        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>{t(
+          "La carte n'est pas disponible pour le moment.",
+          "The menu is not available at the moment.",
+        )}</p>}
 
         {catalogVisible && offersLoading && (
           <div className="space-y-3">
@@ -126,19 +131,22 @@ export function TableTemplate({
         {catalogVisible && offersError && (
           <div className={`rounded-2xl border ${KT.border} p-4 text-sm text-destructive`}>
             Impossible de charger la carte.{" "}
-            <button onClick={onRetryOffers} className="underline">Réessayer</button>
+            <button onClick={onRetryOffers} className="underline">{t("Réessayer", "Try again")}</button>
           </div>
         )}
 
         {catalogVisible && offers && offers.length === 0 && (
-          <p className={`text-sm ${KT.textMuted}`}>La carte sera bientôt disponible.</p>
+          <p className={`text-sm ${KT.textMuted}`}>{t(
+            "La carte sera bientôt disponible.",
+            "The menu will be available soon.",
+          )}</p>
         )}
 
         {catalogVisible &&
           groups.map(([category, items]) => (
             <section key={category} id={categoryAnchor(category)} className="scroll-mt-32">
               <h2 className={`border-b-2 pb-3 text-2xl font-semibold ${KT.borderAccent} ${KT.text} ${KT.headingFont}`}>
-                {category}
+                {category === UNCATEGORIZED ? t("Autres", "Other") : category}
               </h2>
               <ul className={`mt-2 divide-y ${KT.border}`}>
                 {items.map((offer) => (
@@ -183,6 +191,7 @@ function MenuRow({
   onBook: () => void;
   onAddToCart: () => void;
 }) {
+  const t = useT();
   return (
     <li className="flex items-start gap-4 py-4">
       <div className="min-w-0 flex-1">
@@ -200,11 +209,11 @@ function MenuRow({
         {offer.description && <p className={`mt-1 text-sm leading-relaxed ${KT.textMuted}`}>{offer.description}</p>}
         <div className="mt-2 flex gap-2">
           {offer.type === "booking" && bookingEnabled && (
-            <Button variant="secondary" size="sm" onClick={onBook}>Réserver</Button>
+            <Button variant="secondary" size="sm" onClick={onBook}>{t("Réserver", "Book")}</Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
             <Button size="sm" onClick={onAddToCart} className={`${KT.accentBg} ${KT.accentContrastText}`}>
-              Ajouter
+              {t("Ajouter", "Add")}
             </Button>
           )}
         </div>

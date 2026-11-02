@@ -1,15 +1,17 @@
 import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
 import { SectionHeading } from "./SectionHeading";
+import { useT } from "@/lib/storefront-locale";
 
 export function TestimonialsSection({ organization }: { organization: PublicOrganization }) {
+  const t = useT();
   const testimonials = organization.testimonials;
   if (!testimonials || testimonials.length === 0) return null;
 
   return (
     <section className="px-6 py-16">
       <div className="mx-auto max-w-5xl">
-        <SectionHeading eyebrow="Témoignages" title="Ils nous font confiance" />
+        <SectionHeading eyebrow={t("Témoignages", "Testimonials")} title={t("Ils nous font confiance", "They trust us")} />
         <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
           {testimonials.map((testimonial) => (
             <figure

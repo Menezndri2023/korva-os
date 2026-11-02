@@ -4,6 +4,7 @@ import { telLink, whatsappLink } from "@/lib/contact";
 import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
 import type { SiteHeaderLink } from "./SiteHeader";
+import { useT } from "@/lib/storefront-locale";
 
 /**
  * Closes every template the same way: who the business is, and the same links as the header —
@@ -17,6 +18,7 @@ export function SiteFooter({
   organization: PublicOrganization;
   links: SiteHeaderLink[];
 }) {
+  const t = useT();
   return (
     <footer className={`mt-auto border-t ${KT.border} ${KT.surface}`}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 sm:flex-row sm:items-start sm:justify-between sm:px-6">
@@ -28,7 +30,7 @@ export function SiteFooter({
           <ContactLines organization={organization} />
         </div>
         {links.length > 0 && (
-          <nav aria-label="Liens utiles" className={`flex flex-col gap-2 text-sm ${KT.textMuted}`}>
+          <nav aria-label={t("Liens utiles", "Useful links")} className={`flex flex-col gap-2 text-sm ${KT.textMuted}`}>
             {links.map((link) => (
               <Link key={link.href} href={link.href} className="hover:underline">
                 {link.label}

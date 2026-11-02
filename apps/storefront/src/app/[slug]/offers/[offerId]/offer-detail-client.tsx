@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card } from "@korva/ui";
 import { PublicApiError, publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
-import { OFFER_TYPE_LABELS, formatOfferPrice } from "@/lib/offer-labels";
+import { offerTypeLabel, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOfferReviewSummary, PublicOrganization } from "@/lib/public-types";
 import { BookingPanel, CheckoutPanel } from "../../lazy-commerce-panels";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
@@ -27,6 +27,7 @@ import {
   OfferOptionsPicker,
   summarizeOptions,
 } from "@/templates/sections/OfferOptionsPicker";
+import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 
 export default function OfferDetailClient({
   slug,
@@ -37,6 +38,8 @@ export default function OfferDetailClient({
   offerId: string;
   nonce?: string;
 }) {
+  const locale = useStorefrontLocale();
+  const t = useT();
   const queryClient = useQueryClient();
 
   const orgQuery = useQuery({
@@ -69,9 +72,9 @@ export default function OfferDetailClient({
   if (orgQuery.isError || !orgQuery.data) {
     return (
       <CenteredMessage>
-        <p>Cette boutique n&apos;existe pas.</p>
+        <p>{t("Cette boutique n'existe pas.", "This shop does not exist.")}</p>
         <button onClick={() => orgQuery.refetch()} className="mt-2 text-sm font-medium underline">
-          Réessayer
+          {t("Réessayer", "Try again")}
         </button>
       </CenteredMessage>
     );
@@ -81,7 +84,10 @@ export default function OfferDetailClient({
   if (!organization.enabledModules.includes("catalog")) {
     return (
       <CenteredMessage>
-        <p>Aucun catalogue disponible pour cette boutique.</p>
+        <p>{t(
+          "Aucun catalogue disponible pour cette boutique.",
+          "No catalogue is available for this shop.",
+        )}</p>
         <BackLink slug={slug} />
       </CenteredMessage>
     );
@@ -93,16 +99,19 @@ export default function OfferDetailClient({
     if (isNotFound) {
       return (
         <CenteredMessage>
-          <p>Cette offre n&apos;existe pas ou n&apos;est plus disponible.</p>
+          <p>{t(
+            "Cette offre n'existe pas ou n'est plus disponible.",
+            "This offer does not exist or is no longer available.",
+          )}</p>
           <BackLink slug={slug} />
         </CenteredMessage>
       );
     }
     return (
       <CenteredMessage>
-        <p>Impossible de charger cette offre.</p>
+        <p>{t("Impossible de charger cette offre.", "This offer could not be loaded.")}</p>
         <button onClick={() => offerQuery.refetch()} className="mt-2 text-sm font-medium underline">
-          Réessayer
+          {t("Réessayer", "Try again")}
         </button>
       </CenteredMessage>
     );
@@ -112,7 +121,10 @@ export default function OfferDetailClient({
   if (!offer) {
     return (
       <CenteredMessage>
-        <p>Cette offre n&apos;existe pas ou n&apos;est plus disponible.</p>
+        <p>{t(
+          "Cette offre n'existe pas ou n'est plus disponible.",
+          "This offer does not exist or is no longer available.",
+        )}</p>
         <BackLink slug={slug} />
       </CenteredMessage>
     );
@@ -131,8 +143,8 @@ export default function OfferDetailClient({
   // WhatsApp opens, and it used to be the one page of the site in neutral grey.
   const style = resolveStorefrontStyle(organization.storefrontTheme, organization.brandColor);
   const links = siteLinks(slug, organization.visibleSections.includes("catalog"), {
-    catalog: "Catalogue complet",
-    track: "Suivre ma commande",
+    catalog: t("Catalogue complet", "Full catalogue"),
+    track: t("Suivre ma commande", "Track my order"),
   });
   const activeSrc = images[activeImage];
 
@@ -205,7 +217,7 @@ export default function OfferDetailClient({
 
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge>{OFFER_TYPE_LABELS[offer.type]}</Badge>
+              <Badge>{offerTypeLabel(offer.type, locale)}</Badge>
               {offer.categories.map((category) => (
                 <Badge key={category} variant="default">
                   {category}
@@ -249,7 +261,7 @@ export default function OfferDetailClient({
 
             {offer.variants.length > 0 && (
               <div className="mt-6">
-                <h2 className="text-sm font-medium">Variantes</h2>
+                <h2 className="text-sm font-medium">{t("Variantes", "Variants")}</h2>
                 <Card className="mt-2 overflow-hidden">
                   {/* Separate scroll container from Card's own overflow-hidden (which exists only
                       to clip content to the rounded corners, per packages/ui/src/card/card.tsx) —
@@ -262,9 +274,9 @@ export default function OfferDetailClient({
                           {commerceEnabled && offer.type !== "booking" && (
                             <th className="px-3 py-2" aria-hidden />
                           )}
-                          <th className="px-3 py-2">Variante</th>
-                          <th className="px-3 py-2">SKU</th>
-                          <th className="px-3 py-2">Prix</th>
+                          <th className="px-3 py-2">{t("Variante", "Variant")}</th>
+                          <th className="px-3 py-2">{t("SKU", "SKU")}</th>
+                          <th className="px-3 py-2">{t("Prix", "Price")}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
@@ -293,7 +305,7 @@ export default function OfferDetailClient({
                             </td>
                             <td className="whitespace-nowrap px-3 py-2 text-text-muted">
                               {variant.priceOverride != null
-                                ? formatOfferPrice(variant.priceOverride, offer.pricing.currency)
+                                ? formatOfferPrice(variant.priceOverride, offer.pricing.currency, locale)
                                 : "—"}
                             </td>
                           </tr>
@@ -308,7 +320,7 @@ export default function OfferDetailClient({
             <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center">
               {offer.type === "booking" && bookingEnabled && (
                 <Button size="lg" className={`w-full sm:w-auto ${KT.accentBg} ${KT.accentContrastText}`} onClick={() => setShowBooking(true)}>
-                  Réserver
+                  {t("Réserver", "Book")}
                 </Button>
               )}
               {offer.type !== "booking" && commerceEnabled && (
@@ -325,7 +337,7 @@ export default function OfferDetailClient({
                     setSelectedOptionIds([]);
                   }}
                 >
-                  Ajouter au panier
+                  {t("Ajouter au panier", "Add to basket")}
                 </Button>
               )}
               {organization.whatsappNumber && (
@@ -336,11 +348,14 @@ export default function OfferDetailClient({
                   variant="secondary"
                   className="w-full sm:w-auto"
                   onClick={() => {
-                    const price = formatOfferPrice(offer.pricing.amount, offer.pricing.currency);
+                    const price = formatOfferPrice(offer.pricing.amount, offer.pricing.currency, locale);
                     window.open(
                       whatsappLink(
                         organization.whatsappNumber!,
+                        t(
                         `Bonjour ${organization.name}, je suis intéressé(e) par « ${offer.name} » (${price}) : ${window.location.href}`,
+                        `Hello ${organization.name}, I am interested in “${offer.name}” (${price}): ${window.location.href}`,
+                      ),
                       ),
                       "_blank",
                       "noopener,noreferrer",
@@ -348,11 +363,13 @@ export default function OfferDetailClient({
                   }}
                 >
                   <MessageCircle aria-hidden className="h-5 w-5" />
-                  {offer.type === "booking" ? "Demander sur WhatsApp" : "Commander sur WhatsApp"}
+                  {offer.type === "booking" ? t("Demander sur WhatsApp", "Ask on WhatsApp") : t("Commander sur WhatsApp", "Order on WhatsApp")}
                 </Button>
               )}
               {missingOptions.length > 0 && offer.type !== "booking" && commerceEnabled && (
-                <p className={`text-sm ${KT.textMuted}`}>À choisir : {missingOptions.join(", ")}</p>
+                <p className={`text-sm ${KT.textMuted}`}>
+                    {t("À choisir :", "Still to choose:")} {missingOptions.join(", ")}
+                  </p>
               )}
             </div>
           </div>
@@ -378,7 +395,10 @@ export default function OfferDetailClient({
           onClose={() => setShowBooking(false)}
           onSuccess={() => {
             setShowBooking(false);
-            setConfirmation("Votre réservation a bien été enregistrée.");
+            setConfirmation(t(
+              "Votre réservation a bien été enregistrée.",
+              "Your booking has been recorded.",
+            ));
           }}
         />
       )}
@@ -395,7 +415,7 @@ export default function OfferDetailClient({
           onSuccess={(orderNumber) => {
             clearCart();
             setShowCheckout(false);
-            setConfirmation(`Commande ${orderNumber} confirmée, merci !`);
+            setConfirmation(t(`Commande ${orderNumber} confirmée, merci !`, `Order ${orderNumber} confirmed, thank you!`));
             void queryClient.invalidateQueries({ queryKey: ["public-offers", slug] });
             void queryClient.invalidateQueries({ queryKey: ["public-offer", slug, offerId] });
           }}
@@ -421,6 +441,7 @@ function OfferReviews({
   offerId: string;
   organizationName: string;
 }) {
+  const t = useT();
   const { data } = useQuery({
     queryKey: ["public-offer-reviews", slug, offerId],
     queryFn: () =>
@@ -432,7 +453,7 @@ function OfferReviews({
 
   return (
     <Card className="p-6">
-      <h2 className="mb-3 text-lg font-semibold text-text">Avis clients</h2>
+      <h2 className="mb-3 text-lg font-semibold text-text">{t("Avis clients", "Customer reviews")}</h2>
       <RatingSummary average={data.average} count={data.count} />
       <ul className="mt-5 divide-y divide-border">
         {data.reviews.map((review, index) => (
@@ -446,9 +467,10 @@ function OfferReviews({
 }
 
 function BackLink({ slug }: { slug: string }) {
+  const t = useT();
   return (
     <Link href={`/${slug}`} className="inline-block text-sm text-[var(--kt-text-muted,var(--color-text-muted))] hover:underline">
-      ← Retour à la boutique
+      {t("← Retour à la boutique", "← Back to the shop")}
     </Link>
   );
 }

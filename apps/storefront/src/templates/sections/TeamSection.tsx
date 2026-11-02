@@ -4,15 +4,17 @@ import { useState } from "react";
 import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
 import { SectionHeading } from "./SectionHeading";
+import { useT } from "@/lib/storefront-locale";
 
 export function TeamSection({ organization }: { organization: PublicOrganization }) {
+  const t = useT();
   const team = organization.teamMembers;
   if (!team || team.length === 0) return null;
 
   return (
     <section className="px-6 py-16">
       <div className="mx-auto max-w-5xl">
-        <SectionHeading eyebrow="L'équipe" title="Les personnes derrière ce projet" />
+        <SectionHeading eyebrow={t("L'équipe", "The team")} title={t("Les personnes derrière ce projet", "The people behind this")} />
         <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-3">
           {team.map((member) => (
             <div key={member.id} className="text-center">

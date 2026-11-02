@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Menu, ShoppingBag, UserRound } from "lucide-react";
 import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
+import { useT } from "@/lib/storefront-locale";
 
 export interface SiteHeaderLink {
   href: string;
@@ -46,6 +47,7 @@ export function SiteHeader({
   onOpenCheckout: () => void;
   tone?: "surface" | "accent";
 }) {
+  const t = useT();
   const accent = tone === "accent";
   const bar = accent
     ? `${KT.accentBg} ${KT.accentContrastText}`
@@ -54,7 +56,7 @@ export function SiteHeader({
   const accountHref = `/${slug}/account${isAuthenticated ? "" : "/login"}`;
   // No account can exist here (Free plan, none created before): no sign-in to offer.
   const accountsOffered = isAuthenticated || organization.customerSignInAvailable !== false;
-  const accountLabel = isAuthenticated ? (customerFirstName ?? "Mon compte") : "Se connecter";
+  const accountLabel = isAuthenticated ? (customerFirstName ?? t("Mon compte", "My account")) : t("Se connecter", "Sign in");
 
   return (
     <header className={`sticky top-0 z-30 ${bar}`}>
@@ -66,7 +68,7 @@ export function SiteHeader({
           </span>
         </Link>
 
-        <nav aria-label="Navigation du site" className="hidden items-center gap-6 text-sm md:flex">
+        <nav aria-label={t("Navigation du site", "Site navigation")} className="hidden items-center gap-6 text-sm md:flex">
           {links.map((link) => (
             <Link key={link.href} href={link.href} className={`transition-colors ${linkTone}`}>
               {link.label}
@@ -85,7 +87,7 @@ export function SiteHeader({
             type="button"
             onClick={onOpenCheckout}
             disabled={cartCount === 0}
-            aria-label={cartCount === 0 ? "Panier vide" : `Voir le panier, ${cartCount} article${cartCount > 1 ? "s" : ""}`}
+            aria-label={cartCount === 0 ? t("Panier vide", "Empty basket") : `Voir le panier, ${cartCount} article${cartCount > 1 ? "s" : ""}`}
             className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 ${
               accent ? "bg-white/15 hover:bg-white/25" : `${KT.accentSoftBg} hover:opacity-90`
             }`}
@@ -127,10 +129,11 @@ function MobileMenu({
   accountLabel: string;
   accent: boolean;
 }) {
+  const t = useT();
   return (
     <details className="group relative md:hidden">
       <summary
-        aria-label="Menu"
+        aria-label={t("Menu", "Menu")}
         className={`flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full [&::-webkit-details-marker]:hidden ${
           accent ? "hover:bg-white/15" : KT.accentSoftHoverBg
         }`}

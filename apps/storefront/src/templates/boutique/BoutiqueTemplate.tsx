@@ -18,6 +18,7 @@ import { OfferImage } from "../sections/OfferImage";
 import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
+import { useT } from "@/lib/storefront-locale";
 
 const ALL_CATEGORY = "Tout";
 
@@ -42,6 +43,7 @@ export function BoutiqueTemplate({
   isAuthenticated,
   customerFirstName,
 }: StorefrontTemplateProps) {
+  const t = useT();
   const categories = useMemo(() => {
     const set = new Set<string>();
     for (const offer of offers ?? []) {
@@ -55,7 +57,7 @@ export function BoutiqueTemplate({
     return (offers ?? []).filter((o) => o.categories.includes(activeCategory));
   }, [offers, activeCategory]);
 
-  const links = siteLinks(slug, catalogVisible, { catalog: "Catalogue complet", track: "Suivre ma commande" });
+  const links = siteLinks(slug, catalogVisible, { catalog: t("Catalogue complet", "Full catalogue"), track: t("Suivre ma commande", "Track my order") });
 
   return (
     <div className={`flex min-h-screen flex-col ${KT.bg} ${KT.text} ${KT.bodyFont}`}>
@@ -86,7 +88,10 @@ export function BoutiqueTemplate({
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <Confirmation message={confirmation} />
 
-        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>Le catalogue n&apos;est pas disponible pour le moment.</p>}
+        {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>{t(
+          "Le catalogue n'est pas disponible pour le moment.",
+          "The catalogue is not available at the moment.",
+        )}</p>}
 
         {catalogVisible && categories.length > 1 && (
           // One scrolling row on a phone rather than pills wrapping over three lines.
@@ -102,7 +107,7 @@ export function BoutiqueTemplate({
                     : `shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${KT.border} ${KT.surface} ${KT.textMuted} ${KT.accentSoftHoverBg}`
                 }
               >
-                {category}
+                {category === ALL_CATEGORY ? t("Tout", "All") : category}
               </button>
             ))}
           </div>
@@ -119,13 +124,15 @@ export function BoutiqueTemplate({
         {catalogVisible && offersError && (
           <div className={`rounded-2xl border ${KT.border} p-4 text-sm text-destructive`}>
             Impossible de charger le catalogue.{" "}
-            <button onClick={onRetryOffers} className="underline">Réessayer</button>
+            <button onClick={onRetryOffers} className="underline">{t("Réessayer", "Try again")}</button>
           </div>
         )}
 
         {catalogVisible && offers && visibleOffers.length === 0 && (
           <p className={`text-sm ${KT.textMuted}`}>
-            {activeCategory !== ALL_CATEGORY ? "Aucun produit dans cette catégorie." : "Aucun produit en ligne pour le moment."}
+            {activeCategory !== ALL_CATEGORY
+              ? t("Aucun produit dans cette catégorie.", "No products in this category.")
+              : t("Aucun produit en ligne pour le moment.", "No products online yet.")}
           </p>
         )}
 
@@ -175,6 +182,7 @@ function ProductCard({
   onBook: () => void;
   onAddToCart: () => void;
 }) {
+  const t = useT();
   return (
     <div className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
       <div className="relative">
@@ -194,11 +202,11 @@ function ProductCard({
         </p>
         <div className="mt-auto pt-3">
           {offer.type === "booking" && bookingEnabled && (
-            <Button variant="secondary" size="sm" className="w-full" onClick={onBook}>Réserver</Button>
+            <Button variant="secondary" size="sm" className="w-full" onClick={onBook}>{t("Réserver", "Book")}</Button>
           )}
           {offer.type !== "booking" && commerceEnabled && (
             <Button size="sm" className={`w-full ${KT.accentBg} ${KT.accentContrastText}`} onClick={onAddToCart}>
-              Ajouter
+              {t("Ajouter", "Add")}
             </Button>
           )}
         </div>

@@ -77,7 +77,8 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
 
   const title = `${offer.name} — ${organization.name}`;
   const description =
-    offer.description ?? `${offer.name}, proposé par ${organization.name} sur KORVA OS.`;
+    offer.description ??
+    t(`${offer.name}, proposé par ${organization.name} sur KORVA OS.`, `${offer.name}, offered by ${organization.name} on KORVA OS.`);
   const image = offer.images[0];
 
   return {

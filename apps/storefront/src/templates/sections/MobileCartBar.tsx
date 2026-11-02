@@ -2,6 +2,7 @@
 
 import { ShoppingBag } from "lucide-react";
 import { KT } from "../kt-classes";
+import { useT } from "@/lib/storefront-locale";
 
 /**
  * On a phone, once something is in the cart, a bar along the bottom of the screen leads to the
@@ -17,6 +18,7 @@ export function MobileCartBar({
   cartCount: number;
   onOpenCheckout: () => void;
 }) {
+  const t = useT();
   if (cartCount === 0) return null;
   return (
     <>
@@ -31,7 +33,7 @@ export function MobileCartBar({
             <ShoppingBag aria-hidden className="h-5 w-5" />
             {cartCount} article{cartCount > 1 ? "s" : ""}
           </span>
-          <span>Voir le panier</span>
+          <span>{t("Voir le panier", "View the basket")}</span>
         </button>
       </div>
     </>

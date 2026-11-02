@@ -20,6 +20,7 @@ import { BoutiqueTemplate } from "@/templates/boutique/BoutiqueTemplate";
 import { AcademieTemplate } from "@/templates/academie/AcademieTemplate";
 import { SalonTemplate } from "@/templates/salon/SalonTemplate";
 import { useRouter } from "next/navigation";
+import { useT } from "@/lib/storefront-locale";
 
 /**
  * Renders the concrete, statically-named template component for `props.style`'s template key.
@@ -97,6 +98,7 @@ export default function StorefrontClient({
   initialOrganization?: PublicOrganization;
   initialOffers?: PublicOffer[];
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const previewOverride = usePreviewOverride();
 
@@ -154,9 +156,9 @@ export default function StorefrontClient({
   if (orgQuery.isError || !orgQuery.data) {
     return (
       <CenteredMessage>
-        <p>Cette boutique est momentanément indisponible.</p>
+        <p>{t("Cette boutique est momentanément indisponible.", "This shop is temporarily unavailable.")}</p>
         <button onClick={() => orgQuery.refetch()} className="mt-2 text-sm font-medium text-text underline">
-          Réessayer
+          {t("Réessayer", "Try again")}
         </button>
       </CenteredMessage>
     );
@@ -207,7 +209,7 @@ export default function StorefrontClient({
       )}
       {organization.poweredByKorva && (
         <p className="bg-[var(--kt-surface)] pb-5 text-center text-xs text-[var(--kt-text-muted)]">
-          Site propulsé par{" "}
+          {t("Site propulsé par", "Website powered by")}{" "}
           <a
             href="https://korvasuite.com"
             className="inline-flex items-center gap-1 align-middle font-medium underline-offset-2 hover:underline"
@@ -229,7 +231,10 @@ export default function StorefrontClient({
           onClose={() => setBookingOffer(null)}
           onSuccess={() => {
             setBookingOffer(null);
-            setConfirmation("Votre réservation a bien été enregistrée.");
+            setConfirmation(t(
+              "Votre réservation a bien été enregistrée.",
+              "Your booking has been recorded.",
+            ));
           }}
         />
       )}
@@ -247,7 +252,7 @@ export default function StorefrontClient({
           onSuccess={(orderNumber) => {
             clearCart();
             setShowCheckout(false);
-            setConfirmation(`Commande ${orderNumber} confirmée, merci !`);
+            setConfirmation(t(`Commande ${orderNumber} confirmée, merci !`, `Order ${orderNumber} confirmed, thank you!`));
             void queryClient.invalidateQueries({ queryKey: ["public-offers", slug] });
           }}
         />

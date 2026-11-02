@@ -4,15 +4,17 @@ import { useState } from "react";
 import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
 import { SectionHeading } from "./SectionHeading";
+import { useT } from "@/lib/storefront-locale";
 
 export function GallerySection({ organization }: { organization: PublicOrganization }) {
+  const t = useT();
   const images = organization.galleryImages;
   if (!images || images.length === 0) return null;
 
   return (
     <section className={`px-6 py-16 ${KT.surface}`}>
       <div className="mx-auto max-w-5xl">
-        <SectionHeading eyebrow="En images" title="Galerie" />
+        <SectionHeading eyebrow={t("En images", "In pictures")} title={t("Galerie", "Gallery")} />
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {images.map((image) => (
             <GalleryImage key={image.id} url={image.url} caption={image.caption} />
