@@ -10,17 +10,19 @@ import type { Contact, Quote } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<Quote["status"], string> = {
-  draft: "Brouillon",
-  sent: "Envoyé",
-  viewed: "Consulté",
-  accepted: "Accepté",
-  rejected: "Refusé",
-  expired: "Expiré",
+const STATUS_LABELS: Record<Quote["status"], [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  sent: ["Envoyé", "Sent"],
+  viewed: ["Consulté", "Viewed"],
+  accepted: ["Accepté", "Accepted"],
+  rejected: ["Refusé", "Rejected"],
+  expired: ["Expiré", "Expired"],
 };
 
 export default function QuotesPage() {
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
@@ -78,7 +80,7 @@ export default function QuotesPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouveau devis"}</Button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? t("Annuler", "Cancel") : t("Nouveau devis", "New quote")}</Button>
       </div>
 
       {showForm && (
@@ -95,7 +97,7 @@ export default function QuotesPage() {
             {...register("contactId")}
           >
             <option value="" disabled>
-              Choisir un client
+              {t("Choisir un client", "Choose a customer")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -108,26 +110,26 @@ export default function QuotesPage() {
             {fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-12 gap-2">
                 <Input
-                  placeholder="Description"
+                  placeholder={t("Description", "Description")}
                   className="col-span-5"
                   {...register(`items.${index}.description`)}
                 />
                 <Input
                   type="number"
-                  placeholder="Qté"
+                  placeholder={t("Qté", "Qty")}
                   className="col-span-2"
                   {...register(`items.${index}.quantity`, { valueAsNumber: true })}
                 />
                 <Input
                   type="number"
                   step="0.01"
-                  placeholder="Prix unitaire"
+                  placeholder={t("Prix unitaire", "Unit price")}
                   className="col-span-2"
                   {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
                 />
                 <Input
                   type="number"
-                  placeholder="TVA %"
+                  placeholder={t("TVA %", "VAT %")}
                   className="col-span-2"
                   {...register(`items.${index}.taxRate`, {
                     setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -147,17 +149,17 @@ export default function QuotesPage() {
               onClick={() => append({ description: "", quantity: 1, unitPrice: 0, taxRate: 0 })}
               className="text-sm text-text-muted hover:underline"
             >
-              + Ajouter une ligne
+              {t("+ Ajouter une ligne", "+ Add a line")}
             </button>
           </div>
 
           {createMutation.isError && (
             <p className="text-sm text-destructive">
-              {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
+              {createMutation.error instanceof ApiError ? createMutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer le devis"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le devis", "Create the quote")}
           </Button>
         </form>
       )}
@@ -167,25 +169,25 @@ export default function QuotesPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">N°</th>
-                <th className="px-4 py-2">Client</th>
-                <th className="px-4 py-2">Total</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("N°", "No.")}</th>
+                <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                <th className="px-4 py-2">{t("Total", "Total")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && quotes?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Aucun devis.
+                    {t("Aucun devis.", "No quotes.")}
                   </td>
                 </tr>
               )}
@@ -204,7 +206,7 @@ export default function QuotesPage() {
                     {quote.total} {quote.currency}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge>{STATUS_LABELS[quote.status]}</Badge>
+                    <Badge>{t(...STATUS_LABELS[quote.status])}</Badge>
                   </td>
                   <td className="px-4 py-2 space-x-2">
                     {quote.status === "draft" && (
@@ -212,7 +214,7 @@ export default function QuotesPage() {
                         onClick={() => sendMutation.mutate(quote.id)}
                         className="text-xs text-text-muted hover:underline"
                       >
-                        Envoyer
+                        {t("Envoyer", "Send")}
                       </button>
                     )}
                     {(quote.status === "sent" || quote.status === "viewed") && (
@@ -220,7 +222,7 @@ export default function QuotesPage() {
                         onClick={() => acceptMutation.mutate(quote.id)}
                         className="text-xs text-text-muted hover:underline"
                       >
-                        Accepter
+                        {t("Accepter", "Accept")}
                       </button>
                     )}
                     {quote.status === "accepted" && (
@@ -228,7 +230,7 @@ export default function QuotesPage() {
                         onClick={() => convertMutation.mutate(quote.id)}
                         className="text-xs text-text-muted hover:underline"
                       >
-                        Convertir en facture
+                        {t("Convertir en facture", "Convert to an invoice")}
                       </button>
                     )}
                   </td>

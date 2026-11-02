@@ -10,12 +10,13 @@ import type { Contact, Project, ProjectStatus } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<ProjectStatus, string> = {
-  active: "Actif",
-  on_hold: "En pause",
-  completed: "Terminé",
-  archived: "Archivé",
+const STATUS_LABELS: Record<ProjectStatus, [string, string]> = {
+  active: ["Actif", "Active"],
+  on_hold: ["En pause", "On hold"],
+  completed: ["Terminé", "Completed"],
+  archived: ["Archivé", "Archived"],
 };
 
 const STATUS_VARIANT: Record<
@@ -33,6 +34,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function ProjectsPage() {
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
@@ -89,10 +91,13 @@ export default function ProjectsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-muted">
-          Suivez chaque mission client — heures passées, montant facturé, tâches restantes.
+          {t(
+            "Suivez chaque mission client — heures passées, montant facturé, tâches restantes.",
+            "Follow each customer job — hours spent, amount invoiced, tasks left.",
+          )}
         </p>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouveau projet"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouveau projet", "New project")}
         </Button>
       </div>
 
@@ -107,7 +112,7 @@ export default function ProjectsPage() {
             defaultValue=""
           >
             <option value="" disabled>
-              Client...
+              {t("Client...", "Customer...")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -119,7 +124,7 @@ export default function ProjectsPage() {
             <p className="col-span-2 text-xs text-destructive">{errors.contactId.message}</p>
           )}
 
-          <Input placeholder="Nom du projet" className="col-span-2" {...register("name")} />
+          <Input placeholder={t("Nom du projet", "Project name")} className="col-span-2" {...register("name")} />
           {errors.name && (
             <p className="col-span-2 text-xs text-destructive">{errors.name.message}</p>
           )}
@@ -127,7 +132,7 @@ export default function ProjectsPage() {
           <Input
             type="number"
             step="0.5"
-            placeholder="Budget d'heures (optionnel)"
+            placeholder={t("Budget d'heures (optionnel)", "Hours budget (optional)")}
             {...register("budgetHours", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
             })}
@@ -135,7 +140,7 @@ export default function ProjectsPage() {
           <Input
             type="number"
             step="0.01"
-            placeholder="Budget en montant (optionnel)"
+            placeholder={t("Budget en montant (optionnel)", "Amount budget (optional)")}
             {...register("budgetAmount", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
             })}
@@ -143,20 +148,26 @@ export default function ProjectsPage() {
 
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
-              {errorMessage(createMutation.error, "Impossible de créer ce projet.")}
+              {errorMessage(createMutation.error, t(
+                "Impossible de créer ce projet.",
+                "This project could not be created.",
+              ))}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending} className="col-span-2">
-            {createMutation.isPending ? "Création..." : "Créer le projet"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le projet", "Create the project")}
           </Button>
         </form>
       )}
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les projets.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les projets.",
+            "Projects could not be loaded.",
+          )}</p>
           <button onClick={() => refetch()} className="mt-2 text-sm font-medium text-text underline">
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -167,23 +178,23 @@ export default function ProjectsPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Projet</th>
-                  <th className="px-4 py-2">Client</th>
-                  <th className="px-4 py-2">Statut</th>
+                  <th className="px-4 py-2">{t("Projet", "Project")}</th>
+                  <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                  <th className="px-4 py-2">{t("Statut", "Status")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
                     <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!isLoading && projects?.length === 0 && (
                   <tr>
                     <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
-                      Aucun projet.
+                      {t("Aucun projet.", "No projects.")}
                     </td>
                   </tr>
                 )}
@@ -202,7 +213,7 @@ export default function ProjectsPage() {
                     </td>
                     <td className="px-4 py-2">
                       <Badge variant={STATUS_VARIANT[project.status]}>
-                        {STATUS_LABELS[project.status]}
+                        {t(...STATUS_LABELS[project.status])}
                       </Badge>
                     </td>
                   </tr>

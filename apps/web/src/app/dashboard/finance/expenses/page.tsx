@@ -9,11 +9,12 @@ import { EXPENSE_STATUSES, type Contact, type Expense, type ExpenseStatus } from
 import { Badge, Button, Card, Dialog, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<ExpenseStatus, string> = {
-  recorded: "Enregistrée",
-  invoiced: "Facturée",
-  voided: "Annulée",
+const STATUS_LABELS: Record<ExpenseStatus, [string, string]> = {
+  recorded: ["Enregistrée", "Recorded"],
+  invoiced: ["Facturée", "Invoiced"],
+  voided: ["Annulée", "Cancelled"],
 };
 
 const STATUS_VARIANT: Record<ExpenseStatus, "default" | "success" | "warning"> = {
@@ -35,6 +36,8 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function ExpensesPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const [statusFilter, setStatusFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
@@ -125,9 +128,12 @@ export default function ExpensesPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Dépenses</h1>
+        <h1 className="text-2xl font-semibold">{t("Dépenses", "Expenses")}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Frais et achats professionnels réglés par l&apos;entreprise.
+          {t(
+            "Frais et achats professionnels réglés par l'entreprise.",
+            "Business costs and purchases paid by the company.",
+          )}
         </p>
       </div>
 
@@ -140,15 +146,15 @@ export default function ExpensesPage() {
           }}
           className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
         >
-          <option value="">Tous les statuts</option>
+          <option value="">{t("Tous les statuts", "All statuses")}</option>
           {EXPENSE_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {STATUS_LABELS[status]}
+              {t(...STATUS_LABELS[status])}
             </option>
           ))}
         </select>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouvelle dépense"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouvelle dépense", "New expense")}
         </Button>
       </div>
 
@@ -160,13 +166,13 @@ export default function ExpensesPage() {
           // create-forms (dashboard/catalog, dashboard/orders, dashboard/finance).
           className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
         >
-          <Input placeholder="Catégorie" {...register("category")} />
-          <Input placeholder="Fournisseur (optionnel)" {...register("vendor")} />
+          <Input placeholder={t("Catégorie", "Category")} {...register("category")} />
+          <Input placeholder={t("Fournisseur (optionnel)", "Supplier (optional)")} {...register("vendor")} />
           {errors.category && (
             <p className="text-xs text-destructive">{errors.category.message}</p>
           )}
 
-          <Input placeholder="Description" className="col-span-2" {...register("description")} />
+          <Input placeholder={t("Description", "Description")} className="col-span-2" {...register("description")} />
           {errors.description && (
             <p className="col-span-2 text-xs text-destructive">{errors.description.message}</p>
           )}
@@ -174,10 +180,10 @@ export default function ExpensesPage() {
           <Input
             type="number"
             step="0.01"
-            placeholder="Montant"
+            placeholder={t("Montant", "Amount")}
             {...register("amount", { valueAsNumber: true })}
           />
-          <Input placeholder="Devise (EUR)" {...register("currency")} />
+          <Input placeholder={t("Devise (EUR)", "Currency (EUR)")} {...register("currency")} />
           {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
           {errors.currency && (
             <p className="text-xs text-destructive">{errors.currency.message}</p>
@@ -185,7 +191,7 @@ export default function ExpensesPage() {
 
           <Input
             type="date"
-            aria-label="Date"
+            aria-label={t("Date", "Date")}
             {...register("date", {
               setValueAs: (value: string) => (value ? new Date(value).toISOString() : value),
             })}
@@ -194,7 +200,7 @@ export default function ExpensesPage() {
 
           <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
             <input type="checkbox" {...register("billable")} />
-            Refacturable au client
+            {t("Refacturable au client", "Rechargeable to the customer")}
           </label>
           {billable && (
             <select
@@ -203,7 +209,7 @@ export default function ExpensesPage() {
               {...register("contactId")}
             >
               <option value="" disabled>
-                Choisir un client
+                {t("Choisir un client", "Choose a customer")}
               </option>
               {contacts?.map((contact) => (
                 <option key={contact.id} value={contact.id}>
@@ -217,7 +223,7 @@ export default function ExpensesPage() {
           )}
 
           <textarea
-            placeholder="Notes (optionnel)"
+            placeholder={t("Notes (optionnel)", "Notes (optional)")}
             className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             {...register("notes")}
@@ -225,23 +231,29 @@ export default function ExpensesPage() {
 
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
-              {errorMessage(createMutation.error, "Impossible d'enregistrer la dépense.")}
+              {errorMessage(createMutation.error, t(
+                "Impossible d'enregistrer la dépense.",
+                "The expense could not be saved.",
+              ))}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending} className="col-span-2">
-            {createMutation.isPending ? "Enregistrement..." : "Enregistrer la dépense"}
+            {createMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer la dépense", "Save the expense")}
           </Button>
         </form>
       )}
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les dépenses.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les dépenses.",
+            "Expenses could not be loaded.",
+          )}</p>
           <button
             onClick={() => refetch()}
             className="mt-2 text-sm font-medium text-text underline"
           >
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -249,20 +261,23 @@ export default function ExpensesPage() {
       {selectedIds.length > 0 && (
         <div className="flex items-center justify-between rounded-lg border border-border bg-surface p-3">
           <p className="text-sm text-text-muted">
-            {selectedIds.length} dépense(s) sélectionnée(s)
+            {t(`${selectedIds.length} dépense(s) sélectionnée(s)`, `${selectedIds.length} expense(s) selected`)}
           </p>
           <Button
             size="sm"
             loading={generateInvoiceMutation.isPending}
             onClick={() => generateInvoiceMutation.mutate(selectedIds)}
           >
-            {generateInvoiceMutation.isPending ? "Génération..." : "Générer une facture"}
+            {generateInvoiceMutation.isPending ? t("Génération...", "Generating...") : t("Générer une facture", "Generate an invoice")}
           </Button>
         </div>
       )}
       {generateInvoiceMutation.isError && (
         <p className="text-sm text-destructive">
-          {errorMessage(generateInvoiceMutation.error, "Impossible de générer la facture.")}
+          {errorMessage(generateInvoiceMutation.error, t(
+            "Impossible de générer la facture.",
+            "The invoice could not be generated.",
+          ))}
         </p>
       )}
 
@@ -273,33 +288,34 @@ export default function ExpensesPage() {
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
                   <th className="px-4 py-2"></th>
-                  <th className="px-4 py-2">N°</th>
-                  <th className="px-4 py-2">Catégorie</th>
-                  <th className="px-4 py-2">Description</th>
-                  <th className="px-4 py-2">Montant</th>
-                  <th className="px-4 py-2">Date</th>
-                  <th className="px-4 py-2">Statut</th>
-                  <th className="px-4 py-2">Client</th>
-                  <th className="px-4 py-2">Fournisseur</th>
-                  <th className="px-4 py-2">Actions</th>
+                  <th className="px-4 py-2">{t("N°", "No.")}</th>
+                  <th className="px-4 py-2">{t("Catégorie", "Category")}</th>
+                  <th className="px-4 py-2">{t("Description", "Description")}</th>
+                  <th className="px-4 py-2">{t("Montant", "Amount")}</th>
+                  <th className="px-4 py-2">{t("Date", "Date")}</th>
+                  <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                  <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                  <th className="px-4 py-2">{t("Fournisseur", "Supplier")}</th>
+                  <th className="px-4 py-2">{t("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
                     <td colSpan={10} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!isLoading && expenses?.length === 0 && (
                   <tr>
                     <td colSpan={10} className="px-4 py-6 text-center text-text-muted">
-                      <p>Aucune dépense.</p>
+                      <p>{t("Aucune dépense.", "No expenses.")}</p>
                       <p className="mt-1">
-                        Les dépenses sont les frais et achats professionnels réglés par votre
-                        entreprise (fournisseurs, matériel, frais divers). Enregistrez votre
-                        première dépense pour commencer à les suivre.
+                        {t(
+                          "Les dépenses sont les frais et achats professionnels réglés par votre entreprise (fournisseurs, matériel, frais divers). Enregistrez votre première dépense pour commencer à les suivre.",
+                          "Expenses are the business costs and purchases your company pays (suppliers, equipment, sundries). Record your first expense to start tracking them.",
+                        )}
                       </p>
                     </td>
                   </tr>
@@ -310,7 +326,7 @@ export default function ExpensesPage() {
                       {expense.billable && expense.status === "recorded" && (
                         <input
                           type="checkbox"
-                          aria-label={`Sélectionner ${expense.number}`}
+                          aria-label={t(`Sélectionner ${expense.number}`, `Select ${expense.number}`)}
                           checked={selectedIds.includes(expense.id)}
                           onChange={() => toggleSelected(expense.id)}
                         />
@@ -323,11 +339,11 @@ export default function ExpensesPage() {
                       {expense.amount} {expense.currency}
                     </td>
                     <td className="px-4 py-2 text-text-muted">
-                      {new Date(expense.date).toLocaleDateString("fr-FR")}
+                      {new Date(expense.date).toLocaleDateString(intlLocale(locale))}
                     </td>
                     <td className="px-4 py-2">
                       <Badge variant={STATUS_VARIANT[expense.status]}>
-                        {STATUS_LABELS[expense.status]}
+                        {t(...STATUS_LABELS[expense.status])}
                       </Badge>
                     </td>
                     <td className="px-4 py-2 text-text-muted">
@@ -343,14 +359,14 @@ export default function ExpensesPage() {
                               disabled={voidMutation.isPending}
                               className="text-xs text-text-muted hover:underline"
                             >
-                              {voidMutation.isPending ? "..." : "Confirmer ?"}
+                              {voidMutation.isPending ? "..." : t("Confirmer ?", "Confirm?")}
                             </button>
                             <button
                               onClick={() => setVoidingId(null)}
                               disabled={voidMutation.isPending}
                               className="text-xs text-text-muted hover:underline"
                             >
-                              Retour
+                              {t("Retour", "Back")}
                             </button>
                           </>
                         ) : (
@@ -358,14 +374,14 @@ export default function ExpensesPage() {
                             onClick={() => setVoidingId(expense.id)}
                             className="text-xs text-text-muted hover:underline"
                           >
-                            Annuler
+                            {t("Annuler", "Cancel")}
                           </button>
                         ))}
                       <button
                         onClick={() => setDeletingExpense(expense)}
                         className="text-xs text-destructive hover:underline"
                       >
-                        Supprimer
+                        {t("Supprimer", "Delete")}
                       </button>
                     </td>
                   </tr>
@@ -385,18 +401,23 @@ export default function ExpensesPage() {
 
       {deleteMutation.isError && (
         <p className="text-sm text-destructive">
-          {errorMessage(deleteMutation.error, "Impossible de supprimer la dépense.")}
+          {errorMessage(deleteMutation.error, t(
+            "Impossible de supprimer la dépense.",
+            "The expense could not be deleted.",
+          ))}
         </p>
       )}
 
       <Dialog
         open={deletingExpense !== null}
         onClose={() => setDeletingExpense(null)}
-        title="Supprimer la dépense ?"
+        title={t("Supprimer la dépense ?", "Delete the expense?")}
       >
         <p className="text-sm text-text-muted">
-          Cette action est définitive. Voulez-vous vraiment supprimer la dépense «{" "}
-          {deletingExpense?.number} » ?
+          {t(
+            `Cette action est définitive. Voulez-vous vraiment supprimer la dépense « ${deletingExpense?.number} » ?`,
+            `This cannot be undone. Do you really want to delete expense “${deletingExpense?.number}”?`,
+          )}
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <Button
@@ -405,7 +426,7 @@ export default function ExpensesPage() {
             disabled={deleteMutation.isPending}
             onClick={() => setDeletingExpense(null)}
           >
-            Annuler
+            {t("Annuler", "Cancel")}
           </Button>
           <Button
             variant="secondary"
@@ -413,7 +434,7 @@ export default function ExpensesPage() {
             loading={deleteMutation.isPending}
             onClick={() => deletingExpense && deleteMutation.mutate(deletingExpense.id)}
           >
-            {deleteMutation.isPending ? "Suppression..." : "Confirmer ?"}
+            {deleteMutation.isPending ? t("Suppression...", "Deleting...") : t("Confirmer ?", "Confirm?")}
           </Button>
         </div>
       </Dialog>

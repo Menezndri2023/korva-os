@@ -9,10 +9,11 @@ import { DISCOUNT_CODE_TYPES, type DiscountCode, type DiscountCodeType } from "@
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const TYPE_LABELS: Record<DiscountCodeType, string> = {
-  percentage: "Pourcentage",
-  fixed: "Montant fixe",
+const TYPE_LABELS: Record<DiscountCodeType, [string, string]> = {
+  percentage: ["Pourcentage", "Percentage"],
+  fixed: ["Montant fixe", "Fixed amount"],
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -20,6 +21,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function DiscountCodesPage() {
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
@@ -69,10 +71,13 @@ export default function DiscountCodesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-muted">
-          Codes de réduction applicables aux commandes, devis et factures.
+          {t(
+            "Codes de réduction applicables aux commandes, devis et factures.",
+            "Discount codes for orders, quotes and invoices.",
+          )}
         </p>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouveau code"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouveau code", "New code")}
         </Button>
       </div>
 
@@ -81,16 +86,16 @@ export default function DiscountCodesPage() {
           onSubmit={handleSubmit((values) => createMutation.mutate(values))}
           className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
         >
-          <Input placeholder="Code (ex: PROMO10)" {...register("code")} />
+          <Input placeholder={t("Code (ex: PROMO10)", "Code (e.g. PROMO10)")} {...register("code")} />
           {errors.code && <p className="text-xs text-destructive">{errors.code.message}</p>}
 
           <select
             className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             {...register("type")}
           >
-            {DISCOUNT_CODE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {TYPE_LABELS[t]}
+            {DISCOUNT_CODE_TYPES.map((kind) => (
+              <option key={kind} value={kind}>
+                {t(...TYPE_LABELS[kind])}
               </option>
             ))}
           </select>
@@ -98,14 +103,14 @@ export default function DiscountCodesPage() {
           <Input
             type="number"
             step="0.01"
-            placeholder={type === "percentage" ? "Valeur (%)" : "Montant"}
+            placeholder={type === "percentage" ? t("Valeur (%)", "Value (%)") : t("Montant", "Amount")}
             {...register("value", { valueAsNumber: true })}
           />
           {errors.value && <p className="text-xs text-destructive">{errors.value.message}</p>}
 
           {type === "fixed" && (
             <Input
-              placeholder="Devise (EUR)"
+              placeholder={t("Devise (EUR)", "Currency (EUR)")}
               {...register("currency", {
                 setValueAs: (v: string) => (v === "" ? undefined : v),
               })}
@@ -117,7 +122,7 @@ export default function DiscountCodesPage() {
 
           <Input
             type="number"
-            placeholder="Nombre d'utilisations max (optionnel)"
+            placeholder={t("Nombre d'utilisations max (optionnel)", "Maximum uses (optional)")}
             className="col-span-2"
             {...register("maxRedemptions", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -126,20 +131,26 @@ export default function DiscountCodesPage() {
 
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
-              {errorMessage(createMutation.error, "Impossible de créer ce code.")}
+              {errorMessage(createMutation.error, t(
+                "Impossible de créer ce code.",
+                "This code could not be created.",
+              ))}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending} className="col-span-2">
-            {createMutation.isPending ? "Création..." : "Créer le code"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le code", "Create the code")}
           </Button>
         </form>
       )}
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les codes promo.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les codes promo.",
+            "Discount codes could not be loaded.",
+          )}</p>
           <button onClick={() => refetch()} className="mt-2 text-sm font-medium text-text underline">
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -150,33 +161,33 @@ export default function DiscountCodesPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Code</th>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Valeur</th>
-                  <th className="px-4 py-2">Utilisations</th>
-                  <th className="px-4 py-2">Statut</th>
-                  <th className="px-4 py-2">Actions</th>
+                  <th className="px-4 py-2">{t("Code", "Code")}</th>
+                  <th className="px-4 py-2">{t("Type", "Type")}</th>
+                  <th className="px-4 py-2">{t("Valeur", "Value")}</th>
+                  <th className="px-4 py-2">{t("Utilisations", "Uses")}</th>
+                  <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                  <th className="px-4 py-2">{t("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
                     <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!isLoading && codes?.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
-                      Aucun code promo.
+                      {t("Aucun code promo.", "No discount codes.")}
                     </td>
                   </tr>
                 )}
                 {codes?.map((code) => (
                   <tr key={code.id}>
                     <td className="px-4 py-2 font-medium">{code.code}</td>
-                    <td className="px-4 py-2 text-text-muted">{TYPE_LABELS[code.type]}</td>
+                    <td className="px-4 py-2 text-text-muted">{t(...TYPE_LABELS[code.type])}</td>
                     <td className="px-4 py-2 text-text-muted">
                       {code.type === "percentage" ? `${code.value}%` : `${code.value} ${code.currency ?? ""}`}
                     </td>
@@ -186,7 +197,7 @@ export default function DiscountCodesPage() {
                     </td>
                     <td className="px-4 py-2">
                       <Badge variant={code.active ? "success" : "default"}>
-                        {code.active ? "Actif" : "Inactif"}
+                        {code.active ? t("Actif", "Active") : t("Inactif", "Inactive")}
                       </Badge>
                     </td>
                     <td className="px-4 py-2">
@@ -199,7 +210,7 @@ export default function DiscountCodesPage() {
                           }
                           className="text-xs text-destructive hover:underline"
                         >
-                          Désactiver
+                          {t("Désactiver", "Turn off")}
                         </button>
                       )}
                     </td>

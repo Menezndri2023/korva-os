@@ -10,6 +10,7 @@ import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 interface MemberOption {
   id: string;
@@ -23,16 +24,18 @@ function memberName(member: MemberOption): string {
   );
 }
 
-const STATUS_LABELS: Record<Invoice["status"], string> = {
-  draft: "Brouillon",
-  issued: "Émise",
-  partially_paid: "Partiellement payée",
-  paid: "Payée",
-  overdue: "En retard",
-  cancelled: "Annulée",
+const STATUS_LABELS: Record<Invoice["status"], [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  issued: ["Émise", "Issued"],
+  partially_paid: ["Partiellement payée", "Partly paid"],
+  paid: ["Payée", "Paid"],
+  overdue: ["En retard", "Overdue"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 export default function InvoiceDetailPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
@@ -104,13 +107,16 @@ export default function InvoiceDetailPage() {
   }
 
   if (invoiceQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (invoiceQuery.isError || !invoiceQuery.data) {
     const error = invoiceQuery.error;
     const message =
-      error instanceof ApiError ? error.message : "Impossible de charger cette facture.";
+      error instanceof ApiError ? error.message : t(
+        "Impossible de charger cette facture.",
+        "This invoice could not be loaded.",
+      );
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">{message}</p>
@@ -118,7 +124,7 @@ export default function InvoiceDetailPage() {
           href="/dashboard/finance/invoices"
           className="mt-2 inline-block text-sm font-medium text-text underline"
         >
-          Retour aux factures
+          {t("Retour aux factures", "Back to invoices")}
         </Link>
       </Card>
     );
@@ -133,7 +139,7 @@ export default function InvoiceDetailPage() {
         href="/dashboard/finance/invoices"
         className="text-sm text-text-muted hover:underline"
       >
-        ← Factures
+        {t("← Factures", "← Invoices")}
       </Link>
 
       <Card className="p-6">
@@ -148,7 +154,7 @@ export default function InvoiceDetailPage() {
             </Link>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{STATUS_LABELS[invoice.status]}</Badge>
+            <Badge>{t(...STATUS_LABELS[invoice.status])}</Badge>
             {invoice.status === "draft" && (
               <Button
                 variant="secondary"
@@ -156,7 +162,7 @@ export default function InvoiceDetailPage() {
                 loading={issueMutation.isPending}
                 onClick={() => issueMutation.mutate()}
               >
-                Émettre
+                {t("Émettre", "Issue")}
               </Button>
             )}
             {invoice.status !== "paid" && invoice.status !== "cancelled" && (
@@ -166,7 +172,7 @@ export default function InvoiceDetailPage() {
                 loading={cancelMutation.isPending}
                 onClick={() => cancelMutation.mutate()}
               >
-                Annuler
+                {t("Annuler", "Cancel")}
               </Button>
             )}
           </div>
@@ -178,46 +184,48 @@ export default function InvoiceDetailPage() {
 
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
           <div>
-            <dt className="text-text-muted">Créée le</dt>
-            <dd className="mt-0.5">{new Date(invoice.createdAt).toLocaleString("fr-FR")}</dd>
+            <dt className="text-text-muted">{t("Créée le", "Created")}</dt>
+            <dd className="mt-0.5">{new Date(invoice.createdAt).toLocaleString(intlLocale(locale))}</dd>
           </div>
           {invoice.dueDate && (
             <div>
-              <dt className="text-text-muted">Échéance</dt>
-              <dd className="mt-0.5">{new Date(invoice.dueDate).toLocaleDateString("fr-FR")}</dd>
+              <dt className="text-text-muted">{t("Échéance", "Due date")}</dt>
+              <dd className="mt-0.5">{new Date(invoice.dueDate).toLocaleDateString(intlLocale(locale))}</dd>
             </div>
           )}
           {invoice.reminderSentAt && (
             <div>
-              <dt className="text-text-muted">Relance envoyée</dt>
+              <dt className="text-text-muted">{t("Relance envoyée", "Reminder sent")}</dt>
               <dd className="mt-0.5">
-                {new Date(invoice.reminderSentAt).toLocaleDateString("fr-FR")} par{" "}
-                {invoice.reminderChannel === "whatsapp" ? "WhatsApp" : "e-mail"}
+                {t(
+                  `${new Date(invoice.reminderSentAt).toLocaleDateString(intlLocale(locale))} par ${invoice.reminderChannel === "whatsapp" ? "WhatsApp" : "e-mail"}`,
+                  `${new Date(invoice.reminderSentAt).toLocaleDateString(intlLocale(locale))} by ${invoice.reminderChannel === "whatsapp" ? "WhatsApp" : "e-mail"}`,
+                )}
               </dd>
             </div>
           )}
           {invoice.quoteId && (
             <div>
-              <dt className="text-text-muted">Devis d&apos;origine</dt>
+              <dt className="text-text-muted">{t("Devis d'origine", "Original quote")}</dt>
               <dd className="mt-0.5">
                 <Link
                   href={`/dashboard/finance/${invoice.quoteId}`}
                   className="text-text underline-offset-2 hover:underline"
                 >
-                  Voir le devis
+                  {t("Voir le devis", "See the quote")}
                 </Link>
               </dd>
             </div>
           )}
           <div>
-            <dt className="text-text-muted">Restant dû</dt>
-            <dd className="mt-0.5">{formatCurrency(remaining, invoice.currency)}</dd>
+            <dt className="text-text-muted">{t("Restant dû", "Balance due")}</dt>
+            <dd className="mt-0.5">{formatCurrency(remaining, invoice.currency, locale)}</dd>
           </div>
         </dl>
 
         {invoice.notes && (
           <div className="mt-4">
-            <dt className="text-sm text-text-muted">Notes</dt>
+            <dt className="text-sm text-text-muted">{t("Notes", "Notes")}</dt>
             <dd className="mt-0.5 text-sm text-text">{invoice.notes}</dd>
           </div>
         )}
@@ -228,11 +236,11 @@ export default function InvoiceDetailPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Description</th>
-                <th className="px-4 py-2">Qté</th>
-                <th className="px-4 py-2">Prix unitaire</th>
-                <th className="px-4 py-2">TVA</th>
-                <th className="px-4 py-2">Total ligne</th>
+                <th className="px-4 py-2">{t("Description", "Description")}</th>
+                <th className="px-4 py-2">{t("Qté", "Qty")}</th>
+                <th className="px-4 py-2">{t("Prix unitaire", "Unit price")}</th>
+                <th className="px-4 py-2">{t("TVA", "VAT")}</th>
+                <th className="px-4 py-2">{t("Total ligne", "Line total")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -241,7 +249,7 @@ export default function InvoiceDetailPage() {
                   <td className="px-4 py-2 font-medium">{item.description}</td>
                   <td className="px-4 py-2 text-text-muted">{item.quantity}</td>
                   <td className="px-4 py-2 text-text-muted">
-                    {formatCurrency(item.unitPrice, invoice.currency)}
+                    {formatCurrency(item.unitPrice, invoice.currency, locale)}
                   </td>
                   <td className="px-4 py-2 text-text-muted">{item.taxRate ?? 0}%</td>
                   <td className="px-4 py-2 text-text-muted">
@@ -257,45 +265,45 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="flex justify-end gap-8 border-t border-border px-4 py-3 text-sm">
           <div className="text-right text-text-muted">
-            <p>Sous-total</p>
-            <p>TVA</p>
-            <p className="text-text">Payé</p>
-            <p className="font-semibold text-text">Total</p>
+            <p>{t("Sous-total", "Subtotal")}</p>
+            <p>{t("TVA", "VAT")}</p>
+            <p className="text-text">{t("Payé", "Paid")}</p>
+            <p className="font-semibold text-text">{t("Total", "Total")}</p>
           </div>
           <div className="text-right">
-            <p>{formatCurrency(invoice.subtotal, invoice.currency)}</p>
-            <p>{formatCurrency(invoice.taxTotal, invoice.currency)}</p>
-            <p>{formatCurrency(invoice.amountPaid, invoice.currency)}</p>
-            <p className="font-semibold">{formatCurrency(invoice.total, invoice.currency)}</p>
+            <p>{formatCurrency(invoice.subtotal, invoice.currency, locale)}</p>
+            <p>{formatCurrency(invoice.taxTotal, invoice.currency, locale)}</p>
+            <p>{formatCurrency(invoice.amountPaid, invoice.currency, locale)}</p>
+            <p className="font-semibold">{formatCurrency(invoice.total, invoice.currency, locale)}</p>
           </div>
         </div>
       </Card>
 
       <Card className="p-6">
-        <h2 className="text-sm font-semibold text-text">Paiements</h2>
+        <h2 className="text-sm font-semibold text-text">{t("Paiements", "Payments")}</h2>
         <div className="mt-3">
-          {paymentsQuery.isLoading && <p className="text-sm text-text-muted">Chargement...</p>}
+          {paymentsQuery.isLoading && <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
           {paymentsQuery.isError && (
             <p className="text-sm text-text-muted">
               {paymentsQuery.error instanceof ApiError
                 ? paymentsQuery.error.message
-                : "Non disponible."}
+                : t("Non disponible.", "Not available.")}
             </p>
           )}
           {!paymentsQuery.isLoading &&
             !paymentsQuery.isError &&
             (paymentsQuery.data?.length ?? 0) === 0 && (
-              <p className="text-sm text-text-muted">Aucun paiement enregistré.</p>
+              <p className="text-sm text-text-muted">{t("Aucun paiement enregistré.", "No payments recorded.")}</p>
             )}
           {!paymentsQuery.isLoading && paymentsQuery.data && paymentsQuery.data.length > 0 && (
             <ul className="divide-y divide-border">
               {paymentsQuery.data.map((payment) => (
                 <li key={payment.id} className="flex items-center justify-between py-2 text-sm">
                   <span>
-                    {formatCurrency(payment.amount, payment.currency)}
+                    {formatCurrency(payment.amount, payment.currency, locale)}
                     {payment.method ? ` — ${payment.method}` : ""}
                     {payment.tipAmount
-                      ? ` (+ ${formatCurrency(payment.tipAmount, payment.currency)} pourboire${
+                      ? ` (+ ${formatCurrency(payment.tipAmount, payment.currency, locale)} pourboire${
                           payment.tipStaffMembershipId
                             ? ` pour ${staffName(payment.tipStaffMembershipId)}`
                             : ""
@@ -303,7 +311,7 @@ export default function InvoiceDetailPage() {
                       : ""}
                   </span>
                   <span className="text-text-muted">
-                    {new Date(payment.createdAt).toLocaleString("fr-FR")}
+                    {new Date(payment.createdAt).toLocaleString(intlLocale(locale))}
                   </span>
                 </li>
               ))}
@@ -325,21 +333,26 @@ export default function InvoiceDetailPage() {
             className="mt-4 flex flex-col gap-2 border-t border-border pt-4"
           >
             <p className="text-xs text-text-muted">
-              Ceci enregistre un paiement déjà reçu (espèces, virement...) — ce n&apos;est pas
-              un encaissement en ligne.
+              {t(
+                "Ceci enregistre un paiement déjà reçu (espèces, virement...) — ce n'est pas un encaissement en ligne.",
+                "This records a payment you already received (cash, transfer...) — it is not an online payment.",
+              )}
             </p>
             <div className="flex items-center gap-2">
               <Input
                 type="number"
                 step="0.01"
-                placeholder="Montant"
+                placeholder={t("Montant", "Amount")}
                 {...register("amount", { required: true, valueAsNumber: true })}
               />
-              <Input placeholder="Méthode (cash, virement...)" {...register("method")} />
+              <Input placeholder={t(
+                "Méthode (cash, virement...)",
+                "Method (cash, transfer...)",
+              )} {...register("method")} />
               <Input
                 type="number"
                 step="0.01"
-                placeholder="Pourboire (optionnel)"
+                placeholder={t("Pourboire (optionnel)", "Tip (optional)")}
                 {...register("tipAmount", { valueAsNumber: true })}
               />
               <select
@@ -347,7 +360,7 @@ export default function InvoiceDetailPage() {
                 defaultValue=""
                 {...register("tipStaffMembershipId")}
               >
-                <option value="">Pourboire pour (optionnel)</option>
+                <option value="">{t("Pourboire pour (optionnel)", "Tip for (optional)")}</option>
                 {members?.map((member) => (
                   <option key={member.id} value={member.id}>
                     {memberName(member)}
@@ -355,7 +368,7 @@ export default function InvoiceDetailPage() {
                 ))}
               </select>
               <Button type="submit" loading={payMutation.isPending}>
-                {payMutation.isPending ? "..." : "Enregistrer le paiement"}
+                {payMutation.isPending ? "..." : t("Enregistrer le paiement", "Record the payment")}
               </Button>
             </div>
           </form>

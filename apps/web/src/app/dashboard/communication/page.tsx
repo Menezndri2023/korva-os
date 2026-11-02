@@ -301,10 +301,10 @@ function ConversationRow({
                     >
                       <option value="">{t("Sans modèle", "No template")}</option>
                       {templates
-                        ?.filter((t) => t.channel === conversation.channel)
-                        .map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
+                        ?.filter((template) => template.channel === conversation.channel)
+                        .map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {template.name}
                           </option>
                         ))}
                     </select>

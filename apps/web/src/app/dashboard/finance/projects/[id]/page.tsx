@@ -7,12 +7,13 @@ import { PROJECT_STATUSES } from "@korva/types";
 import { Badge, Card } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<ProjectStatus, string> = {
-  active: "Actif",
-  on_hold: "En pause",
-  completed: "Terminé",
-  archived: "Archivé",
+const STATUS_LABELS: Record<ProjectStatus, [string, string]> = {
+  active: ["Actif", "Active"],
+  on_hold: ["En pause", "On hold"],
+  completed: ["Terminé", "Completed"],
+  archived: ["Archivé", "Archived"],
 };
 
 const STATUS_VARIANT: Record<
@@ -30,6 +31,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function ProjectDetailPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
@@ -64,14 +66,17 @@ export default function ProjectDetailPage() {
   });
 
   if (summaryQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (summaryQuery.isError) {
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">
-          {errorMessage(summaryQuery.error, "Impossible de charger ce projet.")}
+          {errorMessage(summaryQuery.error, t(
+            "Impossible de charger ce projet.",
+            "This project could not be loaded.",
+          ))}
         </p>
       </Card>
     );
@@ -96,32 +101,32 @@ export default function ProjectDetailPage() {
         >
           {PROJECT_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {STATUS_LABELS[status]}
+              {t(...STATUS_LABELS[status])}
             </option>
           ))}
         </select>
       </div>
 
       <div className="flex items-center gap-2">
-        <Badge variant={STATUS_VARIANT[project.status]}>{STATUS_LABELS[project.status]}</Badge>
+        <Badge variant={STATUS_VARIANT[project.status]}>{t(...STATUS_LABELS[project.status])}</Badge>
       </div>
 
       {project.description && <p className="text-sm text-text-muted">{project.description}</p>}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card className="p-4">
-          <p className="text-xs text-text-muted">Heures totales</p>
+          <p className="text-xs text-text-muted">{t("Heures totales", "Total hours")}</p>
           <p className="mt-1 text-2xl font-semibold">{summary.totalHoursLogged}h</p>
           {project.budgetHours && (
             <p className="mt-1 text-xs text-text-muted">Budget : {project.budgetHours}h</p>
           )}
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-text-muted">Heures facturables</p>
+          <p className="text-xs text-text-muted">{t("Heures facturables", "Billable hours")}</p>
           <p className="mt-1 text-2xl font-semibold">{summary.billableHoursLogged}h</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-text-muted">Montant facturé</p>
+          <p className="text-xs text-text-muted">{t("Montant facturé", "Amount invoiced")}</p>
           <p className="mt-1 text-2xl font-semibold">
             {summary.totalBilled} {project.currency ?? ""}
           </p>
@@ -132,7 +137,7 @@ export default function ProjectDetailPage() {
           )}
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-text-muted">Tâches</p>
+          <p className="text-xs text-text-muted">{t("Tâches", "Tasks")}</p>
           <p className="mt-1 text-2xl font-semibold">
             {summary.totalTaskCount - summary.openTaskCount}/{summary.totalTaskCount}
           </p>

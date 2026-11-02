@@ -20,12 +20,14 @@ import {
 import { Badge, Button, Card, Dialog, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import type { Locale } from "@korva/types";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<TimeEntryStatus, string> = {
-  unbilled: "Non facturé",
-  approved: "Approuvé",
-  invoiced: "Facturé",
-  voided: "Annulé",
+const STATUS_LABELS: Record<TimeEntryStatus, [string, string]> = {
+  unbilled: ["Non facturé", "Unbilled"],
+  approved: ["Approuvé", "Approved"],
+  invoiced: ["Facturé", "Invoiced"],
+  voided: ["Annulé", "Cancelled"],
 };
 
 const STATUS_VARIANT: Record<
@@ -42,13 +44,15 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-function formatHours(durationMinutes: number): string {
-  return (durationMinutes / 60).toLocaleString("fr-FR", {
+function formatHours(durationMinutes: number, locale: Locale): string {
+  return (durationMinutes / 60).toLocaleString(intlLocale(locale), {
     maximumFractionDigits: 2,
   });
 }
 
 export default function TimeEntriesPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const [statusFilter, setStatusFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
@@ -172,10 +176,12 @@ export default function TimeEntriesPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Suivi du temps</h1>
+        <h1 className="text-2xl font-semibold">{t("Suivi du temps", "Time tracking")}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Heures facturables saisies pour vos clients — approuvez-les puis
-          générez une facture.
+          {t(
+            "Heures facturables saisies pour vos clients — approuvez-les puis générez une facture.",
+            "Billable hours entered for your customers — approve them, then generate an invoice.",
+          )}
         </p>
       </div>
 
@@ -188,15 +194,15 @@ export default function TimeEntriesPage() {
           }}
           className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
         >
-          <option value="">Tous les statuts</option>
+          <option value="">{t("Tous les statuts", "All statuses")}</option>
           {TIME_ENTRY_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {STATUS_LABELS[status]}
+              {t(...STATUS_LABELS[status])}
             </option>
           ))}
         </select>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouvelle entrée"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouvelle entrée", "New entry")}
         </Button>
       </div>
 
@@ -211,7 +217,7 @@ export default function TimeEntriesPage() {
             {...register("contactId")}
           >
             <option value="" disabled>
-              Choisir un client
+              {t("Choisir un client", "Choose a customer")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -234,7 +240,7 @@ export default function TimeEntriesPage() {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           >
-            <option value="">Aucun projet (optionnel)</option>
+            <option value="">{t("Aucun projet (optionnel)", "No project (optional)")}</option>
             {projects?.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -243,7 +249,7 @@ export default function TimeEntriesPage() {
           </select>
 
           <Input
-            placeholder="Description"
+            placeholder={t("Description", "Description")}
             className="col-span-2"
             {...register("description")}
           />
@@ -255,7 +261,7 @@ export default function TimeEntriesPage() {
 
           <Input
             type="date"
-            aria-label="Date"
+            aria-label={t("Date", "Date")}
             {...register("date", {
               setValueAs: (value: string) =>
                 value ? new Date(value).toISOString() : value,
@@ -268,7 +274,7 @@ export default function TimeEntriesPage() {
           <Input
             type="number"
             step="0.25"
-            placeholder="Heures"
+            placeholder={t("Heures", "Hours")}
             {...register("durationMinutes", {
               setValueAs: (value: string) =>
                 value ? Math.round(parseFloat(value) * 60) : value,
@@ -283,12 +289,12 @@ export default function TimeEntriesPage() {
           <Input
             type="number"
             step="0.01"
-            placeholder="Taux horaire (auto si vide)"
+            placeholder={t("Taux horaire (auto si vide)", "Hourly rate (automatic if empty)")}
             {...register("hourlyRate", {
               setValueAs: (value: string) => (value === "" ? undefined : Number(value)),
             })}
           />
-          <Input placeholder="Devise (EUR)" {...register("currency")} />
+          <Input placeholder={t("Devise (EUR)", "Currency (EUR)")} {...register("currency")} />
           {errors.hourlyRate && (
             <p className="text-xs text-destructive">
               {errors.hourlyRate.message}
@@ -302,11 +308,11 @@ export default function TimeEntriesPage() {
 
           <label className="col-span-2 flex items-center gap-2 text-sm text-text">
             <input type="checkbox" defaultChecked {...register("billable")} />
-            Facturable
+            {t("Facturable", "Billable")}
           </label>
 
           <textarea
-            placeholder="Notes (optionnel)"
+            placeholder={t("Notes (optionnel)", "Notes (optional)")}
             className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             {...register("notes")}
@@ -315,8 +321,10 @@ export default function TimeEntriesPage() {
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
               {errorMessage(
-                createMutation.error,
-                "Impossible d'enregistrer l'entrée de temps.",
+                createMutation.error, t(
+                  "Impossible d'enregistrer l'entrée de temps.",
+                  "The time entry could not be saved.",
+                ),
               )}
             </p>
           )}
@@ -325,7 +333,7 @@ export default function TimeEntriesPage() {
             loading={createMutation.isPending}
             className="col-span-2"
           >
-            {createMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+            {createMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
           </Button>
         </form>
       )}
@@ -333,11 +341,16 @@ export default function TimeEntriesPage() {
       {selectedIds.size > 0 && (
         <div className="flex items-center justify-between rounded-lg border border-border bg-surface p-3">
           <div className="text-sm text-text-muted">
-            {selectedIds.size} entrée{selectedIds.size > 1 ? "s" : ""}{" "}
-            sélectionnée{selectedIds.size > 1 ? "s" : ""}
+            {t(
+              `${selectedIds.size} entrée${selectedIds.size > 1 ? "s" : ""} sélectionnée${selectedIds.size > 1 ? "s" : ""}`,
+              `${selectedIds.size} entr${selectedIds.size === 1 ? "y" : "ies"} selected`,
+            )}
             {selectionMixed && (
               <span className="ml-2 text-destructive">
-                — la sélection doit concerner un seul client et une seule devise
+                {t(
+                  "— la sélection doit concerner un seul client et une seule devise",
+                  "— the selection must be for one customer and one currency",
+                )}
               </span>
             )}
           </div>
@@ -349,15 +362,17 @@ export default function TimeEntriesPage() {
               generateInvoiceMutation.mutate(Array.from(selectedIds))
             }
           >
-            Générer une facture
+            {t("Générer une facture", "Generate an invoice")}
           </Button>
         </div>
       )}
       {generateInvoiceMutation.isError && (
         <p className="text-sm text-destructive">
           {errorMessage(
-            generateInvoiceMutation.error,
-            "Impossible de générer la facture.",
+            generateInvoiceMutation.error, t(
+              "Impossible de générer la facture.",
+              "The invoice could not be generated.",
+            ),
           )}
         </p>
       )}
@@ -365,13 +380,13 @@ export default function TimeEntriesPage() {
       {isError && (
         <Card className="p-6">
           <p className="text-sm text-destructive">
-            Impossible de charger les entrées de temps.
+            {t("Impossible de charger les entrées de temps.", "Time entries could not be loaded.")}
           </p>
           <button
             onClick={() => refetch()}
             className="mt-2 text-sm font-medium text-text underline"
           >
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -383,14 +398,14 @@ export default function TimeEntriesPage() {
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
                   <th className="px-4 py-2" />
-                  <th className="px-4 py-2">Date</th>
-                  <th className="px-4 py-2">Client</th>
-                  <th className="px-4 py-2">Description</th>
-                  <th className="px-4 py-2">Durée</th>
-                  <th className="px-4 py-2">Taux</th>
-                  <th className="px-4 py-2">Montant</th>
-                  <th className="px-4 py-2">Statut</th>
-                  <th className="px-4 py-2">Actions</th>
+                  <th className="px-4 py-2">{t("Date", "Date")}</th>
+                  <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                  <th className="px-4 py-2">{t("Description", "Description")}</th>
+                  <th className="px-4 py-2">{t("Durée", "Length")}</th>
+                  <th className="px-4 py-2">{t("Taux", "Rate")}</th>
+                  <th className="px-4 py-2">{t("Montant", "Amount")}</th>
+                  <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                  <th className="px-4 py-2">{t("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -400,7 +415,7 @@ export default function TimeEntriesPage() {
                       colSpan={9}
                       className="px-4 py-6 text-center text-text-muted"
                     >
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
@@ -410,10 +425,12 @@ export default function TimeEntriesPage() {
                       colSpan={9}
                       className="px-4 py-6 text-center text-text-muted"
                     >
-                      <p>Aucune entrée de temps.</p>
+                      <p>{t("Aucune entrée de temps.", "No time entries.")}</p>
                       <p className="mt-1">
-                        Saisissez les heures travaillées pour un client afin de
-                        les approuver puis les facturer.
+                        {t(
+                          "Saisissez les heures travaillées pour un client afin de les approuver puis les facturer.",
+                          "Enter the hours worked for a customer to approve them and then invoice them.",
+                        )}
                       </p>
                     </td>
                   </tr>
@@ -430,7 +447,7 @@ export default function TimeEntriesPage() {
                       )}
                     </td>
                     <td className="px-4 py-2 text-text-muted">
-                      {new Date(entry.date).toLocaleDateString("fr-FR")}
+                      {new Date(entry.date).toLocaleDateString(intlLocale(locale))}
                     </td>
                     <td className="px-4 py-2 text-text-muted">
                       {contactName(entry.contactId)}
@@ -439,7 +456,7 @@ export default function TimeEntriesPage() {
                       {entry.description}
                     </td>
                     <td className="px-4 py-2 text-text-muted">
-                      {formatHours(entry.durationMinutes)}h
+                      {formatHours(entry.durationMinutes, locale)}h
                     </td>
                     <td className="px-4 py-2 text-text-muted">
                       {entry.hourlyRate ?? "—"}
@@ -449,14 +466,14 @@ export default function TimeEntriesPage() {
                         ? `${(
                             (entry.durationMinutes / 60) *
                             entry.hourlyRate
-                          ).toLocaleString("fr-FR", {
+                          ).toLocaleString(intlLocale(locale), {
                             maximumFractionDigits: 2,
                           })} ${entry.currency}`
                         : "—"}
                     </td>
                     <td className="px-4 py-2">
                       <Badge variant={STATUS_VARIANT[entry.status]}>
-                        {STATUS_LABELS[entry.status]}
+                        {t(...STATUS_LABELS[entry.status])}
                       </Badge>
                     </td>
                     <td className="space-x-2 px-4 py-2">
@@ -466,7 +483,7 @@ export default function TimeEntriesPage() {
                           disabled={approveMutation.isPending}
                           className="text-xs text-text-muted hover:underline"
                         >
-                          Approuver
+                          {t("Approuver", "Approve")}
                         </button>
                       )}
                       {(entry.status === "unbilled" ||
@@ -478,14 +495,14 @@ export default function TimeEntriesPage() {
                               disabled={voidMutation.isPending}
                               className="text-xs text-text-muted hover:underline"
                             >
-                              {voidMutation.isPending ? "..." : "Confirmer ?"}
+                              {voidMutation.isPending ? "..." : t("Confirmer ?", "Confirm?")}
                             </button>
                             <button
                               onClick={() => setVoidingId(null)}
                               disabled={voidMutation.isPending}
                               className="text-xs text-text-muted hover:underline"
                             >
-                              Retour
+                              {t("Retour", "Back")}
                             </button>
                           </>
                         ) : (
@@ -493,7 +510,7 @@ export default function TimeEntriesPage() {
                             onClick={() => setVoidingId(entry.id)}
                             className="text-xs text-text-muted hover:underline"
                           >
-                            Annuler
+                            {t("Annuler", "Cancel")}
                           </button>
                         ))}
                       {entry.status !== "invoiced" && (
@@ -501,7 +518,7 @@ export default function TimeEntriesPage() {
                           onClick={() => setDeletingEntry(entry)}
                           className="text-xs text-destructive hover:underline"
                         >
-                          Supprimer
+                          {t("Supprimer", "Delete")}
                         </button>
                       )}
                     </td>
@@ -523,8 +540,10 @@ export default function TimeEntriesPage() {
       {deleteMutation.isError && (
         <p className="text-sm text-destructive">
           {errorMessage(
-            deleteMutation.error,
-            "Impossible de supprimer l'entrée de temps.",
+            deleteMutation.error, t(
+              "Impossible de supprimer l'entrée de temps.",
+              "The time entry could not be deleted.",
+            ),
           )}
         </p>
       )}
@@ -532,11 +551,13 @@ export default function TimeEntriesPage() {
       <Dialog
         open={deletingEntry !== null}
         onClose={() => setDeletingEntry(null)}
-        title="Supprimer l'entrée de temps ?"
+        title={t("Supprimer l'entrée de temps ?", "Delete the time entry?")}
       >
         <p className="text-sm text-text-muted">
-          Cette action est définitive. Voulez-vous vraiment supprimer cette
-          entrée de temps ?
+          {t(
+            "Cette action est définitive. Voulez-vous vraiment supprimer cette entrée de temps ?",
+            "This cannot be undone. Do you really want to delete this time entry?",
+          )}
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <Button
@@ -545,7 +566,7 @@ export default function TimeEntriesPage() {
             disabled={deleteMutation.isPending}
             onClick={() => setDeletingEntry(null)}
           >
-            Annuler
+            {t("Annuler", "Cancel")}
           </Button>
           <Button
             variant="secondary"
@@ -555,7 +576,7 @@ export default function TimeEntriesPage() {
               deletingEntry && deleteMutation.mutate(deletingEntry.id)
             }
           >
-            {deleteMutation.isPending ? "Suppression..." : "Confirmer ?"}
+            {deleteMutation.isPending ? t("Suppression...", "Deleting...") : t("Confirmer ?", "Confirm?")}
           </Button>
         </div>
       </Dialog>

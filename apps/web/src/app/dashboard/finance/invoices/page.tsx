@@ -9,17 +9,19 @@ import type { Contact, Invoice, Payment } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<Invoice["status"], string> = {
-  draft: "Brouillon",
-  issued: "Émise",
-  partially_paid: "Partiellement payée",
-  paid: "Payée",
-  overdue: "En retard",
-  cancelled: "Annulée",
+const STATUS_LABELS: Record<Invoice["status"], [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  issued: ["Émise", "Issued"],
+  partially_paid: ["Partiellement payée", "Partly paid"],
+  paid: ["Payée", "Paid"],
+  overdue: ["En retard", "Overdue"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 export default function InvoicesPage() {
+  const t = useT();
   const queryClient = useQueryClient();
   const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -65,26 +67,26 @@ export default function InvoicesPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">N°</th>
-                <th className="px-4 py-2">Client</th>
-                <th className="px-4 py-2">Total</th>
-                <th className="px-4 py-2">Payé</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("N°", "No.")}</th>
+                <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                <th className="px-4 py-2">{t("Total", "Total")}</th>
+                <th className="px-4 py-2">{t("Payé", "Paid")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && invoices?.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-text-muted">
-                    Aucune facture.
+                    {t("Aucune facture.", "No invoices.")}
                   </td>
                 </tr>
               )}
@@ -105,7 +107,7 @@ export default function InvoicesPage() {
                     </td>
                     <td className="px-4 py-2 text-text-muted">{invoice.amountPaid}</td>
                     <td className="px-4 py-2">
-                      <Badge>{STATUS_LABELS[invoice.status]}</Badge>
+                      <Badge>{t(...STATUS_LABELS[invoice.status])}</Badge>
                     </td>
                     <td className="px-4 py-2 space-x-2">
                       {invoice.status === "draft" && (
@@ -113,7 +115,7 @@ export default function InvoicesPage() {
                           onClick={() => issueMutation.mutate(invoice.id)}
                           className="text-xs text-text-muted hover:underline"
                         >
-                          Émettre
+                          {t("Émettre", "Issue")}
                         </button>
                       )}
                       {(invoice.status === "issued" || invoice.status === "partially_paid") && (
@@ -123,7 +125,7 @@ export default function InvoicesPage() {
                           }
                           className="text-xs text-text-muted hover:underline"
                         >
-                          Enregistrer un paiement
+                          {t("Enregistrer un paiement", "Record a payment")}
                         </button>
                       )}
                     </td>
@@ -132,8 +134,10 @@ export default function InvoicesPage() {
                     <tr>
                       <td colSpan={6} className="bg-surface-muted px-4 py-3">
                         <p className="mb-2 text-xs text-text-muted">
-                          Ceci enregistre un paiement déjà reçu (espèces, virement...) — ce
-                          n&apos;est pas un encaissement en ligne.
+                          {t(
+                            "Ceci enregistre un paiement déjà reçu (espèces, virement...) — ce n'est pas un encaissement en ligne.",
+                            "This records a payment you already received (cash, transfer...) — it is not an online payment.",
+                          )}
                         </p>
                         <form
                           onSubmit={handleSubmit((values) =>
@@ -148,16 +152,19 @@ export default function InvoicesPage() {
                           <Input
                             type="number"
                             step="0.01"
-                            placeholder="Montant"
+                            placeholder={t("Montant", "Amount")}
                             {...register("amount", { required: true, valueAsNumber: true })}
                           />
-                          <Input placeholder="Méthode (cash, virement...)" {...register("method")} />
+                          <Input placeholder={t(
+                            "Méthode (cash, virement...)",
+                            "Method (cash, transfer...)",
+                          )} {...register("method")} />
                           <Button type="submit" loading={payMutation.isPending}>
-                            {payMutation.isPending ? "..." : "Enregistrer le paiement"}
+                            {payMutation.isPending ? "..." : t("Enregistrer le paiement", "Record the payment")}
                           </Button>
                           {payMutation.isError && (
                             <span className="text-xs text-destructive">
-                              {payMutation.error instanceof ApiError ? payMutation.error.message : "Erreur"}
+                              {payMutation.error instanceof ApiError ? payMutation.error.message : t("Erreur", "Error")}
                             </span>
                           )}
                         </form>

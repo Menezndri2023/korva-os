@@ -18,21 +18,20 @@ import {
 import { Badge, Button, Card, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const INTERVAL_LABELS: Record<RecurringBillingInterval, string> = {
-  monthly: "Mensuel",
-  yearly: "Annuel",
+const INTERVAL_LABELS: Record<RecurringBillingInterval, [string, string]> = {
+  monthly: ["Mensuel", "Monthly"],
+  yearly: ["Annuel", "Yearly"],
 };
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString("fr-FR");
-}
-
 export default function RecurringBillingPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
@@ -107,10 +106,13 @@ export default function RecurringBillingPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-muted">
-          Abonnements clients — factures générées automatiquement à chaque échéance.
+          {t(
+            "Abonnements clients — factures générées automatiquement à chaque échéance.",
+            "Customer subscriptions — invoices generated automatically on each due date.",
+          )}
         </p>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouvel abonnement"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouvel abonnement", "New subscription")}
         </Button>
       </div>
 
@@ -125,7 +127,7 @@ export default function RecurringBillingPage() {
             defaultValue=""
           >
             <option value="" disabled>
-              Client...
+              {t("Client...", "Customer...")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -143,7 +145,7 @@ export default function RecurringBillingPage() {
             defaultValue=""
           >
             <option value="" disabled>
-              Offre...
+              {t("Offre...", "Offer...")}
             </option>
             {offers?.map((o) => (
               <option key={o.id} value={o.id}>
@@ -161,27 +163,33 @@ export default function RecurringBillingPage() {
           >
             {RECURRING_BILLING_INTERVALS.map((i) => (
               <option key={i} value={i}>
-                {INTERVAL_LABELS[i]}
+                {t(...INTERVAL_LABELS[i])}
               </option>
             ))}
           </select>
 
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
-              {errorMessage(createMutation.error, "Impossible de créer cet abonnement.")}
+              {errorMessage(createMutation.error, t(
+                "Impossible de créer cet abonnement.",
+                "This subscription could not be created.",
+              ))}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending} className="col-span-2">
-            {createMutation.isPending ? "Création..." : "Créer l'abonnement"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer l'abonnement", "Create the subscription")}
           </Button>
         </form>
       )}
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les abonnements.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les abonnements.",
+            "Subscriptions could not be loaded.",
+          )}</p>
           <button onClick={() => refetch()} className="mt-2 text-sm font-medium text-text underline">
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -192,27 +200,27 @@ export default function RecurringBillingPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Client</th>
-                  <th className="px-4 py-2">Offre</th>
-                  <th className="px-4 py-2">Fréquence</th>
-                  <th className="px-4 py-2">Montant</th>
-                  <th className="px-4 py-2">Prochaine échéance</th>
-                  <th className="px-4 py-2">Statut</th>
-                  <th className="px-4 py-2">Actions</th>
+                  <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                  <th className="px-4 py-2">{t("Offre", "Offer")}</th>
+                  <th className="px-4 py-2">{t("Fréquence", "Frequency")}</th>
+                  <th className="px-4 py-2">{t("Montant", "Amount")}</th>
+                  <th className="px-4 py-2">{t("Prochaine échéance", "Next due date")}</th>
+                  <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                  <th className="px-4 py-2">{t("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
                     <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!isLoading && plans?.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
-                      Aucun abonnement.
+                      {t("Aucun abonnement.", "No subscriptions.")}
                     </td>
                   </tr>
                 )}
@@ -221,17 +229,17 @@ export default function RecurringBillingPage() {
                     <td className="px-4 py-2 font-medium">{contactName(plan.contactId)}</td>
                     <td className="px-4 py-2 text-text-muted">{offerName(plan.offerId)}</td>
                     <td className="px-4 py-2 text-text-muted">
-                      {INTERVAL_LABELS[plan.interval]}
+                      {t(...INTERVAL_LABELS[plan.interval])}
                     </td>
                     <td className="px-4 py-2 text-text-muted">
                       {plan.amount} {plan.currency}
                     </td>
                     <td className="px-4 py-2 text-text-muted">
-                      {formatDate(plan.nextBillingDate)}
+                      {new Date(plan.nextBillingDate).toLocaleDateString(intlLocale(locale))}
                     </td>
                     <td className="px-4 py-2">
                       <Badge variant={plan.status === "active" ? "success" : "default"}>
-                        {plan.status === "active" ? "Actif" : "Annulé"}
+                        {plan.status === "active" ? t("Actif", "Active") : t("Annulé", "Cancelled")}
                       </Badge>
                     </td>
                     <td className="px-4 py-2">
@@ -243,7 +251,7 @@ export default function RecurringBillingPage() {
                           }
                           className="text-xs text-destructive hover:underline"
                         >
-                          Annuler
+                          {t("Annuler", "Cancel")}
                         </button>
                       )}
                     </td>

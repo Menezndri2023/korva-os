@@ -8,17 +8,20 @@ import { Badge, Button, Card } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<Quote["status"], string> = {
-  draft: "Brouillon",
-  sent: "Envoyé",
-  viewed: "Consulté",
-  accepted: "Accepté",
-  rejected: "Refusé",
-  expired: "Expiré",
+const STATUS_LABELS: Record<Quote["status"], [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  sent: ["Envoyé", "Sent"],
+  viewed: ["Consulté", "Viewed"],
+  accepted: ["Accepté", "Accepted"],
+  rejected: ["Refusé", "Rejected"],
+  expired: ["Expiré", "Expired"],
 };
 
 export default function QuoteDetailPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
@@ -70,13 +73,16 @@ export default function QuoteDetailPage() {
   }
 
   if (quoteQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (quoteQuery.isError || !quoteQuery.data) {
     const error = quoteQuery.error;
     const message =
-      error instanceof ApiError ? error.message : "Impossible de charger ce devis.";
+      error instanceof ApiError ? error.message : t(
+        "Impossible de charger ce devis.",
+        "This quote could not be loaded.",
+      );
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">{message}</p>
@@ -84,7 +90,7 @@ export default function QuoteDetailPage() {
           href="/dashboard/finance"
           className="mt-2 inline-block text-sm font-medium text-text underline"
         >
-          Retour aux devis
+          {t("Retour aux devis", "Back to quotes")}
         </Link>
       </Card>
     );
@@ -95,7 +101,7 @@ export default function QuoteDetailPage() {
   return (
     <div className="space-y-4">
       <Link href="/dashboard/finance" className="text-sm text-text-muted hover:underline">
-        ← Devis
+        {t("← Devis", "← Quotes")}
       </Link>
 
       <Card className="p-6">
@@ -110,7 +116,7 @@ export default function QuoteDetailPage() {
             </Link>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{STATUS_LABELS[quote.status]}</Badge>
+            <Badge>{t(...STATUS_LABELS[quote.status])}</Badge>
             {quote.status === "draft" && (
               <Button
                 variant="secondary"
@@ -118,7 +124,7 @@ export default function QuoteDetailPage() {
                 loading={sendMutation.isPending}
                 onClick={() => sendMutation.mutate()}
               >
-                Envoyer
+                {t("Envoyer", "Send")}
               </Button>
             )}
             {(quote.status === "sent" || quote.status === "viewed") && (
@@ -129,7 +135,7 @@ export default function QuoteDetailPage() {
                   loading={acceptMutation.isPending}
                   onClick={() => acceptMutation.mutate()}
                 >
-                  Accepter
+                  {t("Accepter", "Accept")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -137,7 +143,7 @@ export default function QuoteDetailPage() {
                   loading={rejectMutation.isPending}
                   onClick={() => rejectMutation.mutate()}
                 >
-                  Refuser
+                  {t("Refuser", "Reject")}
                 </Button>
               </>
             )}
@@ -148,7 +154,7 @@ export default function QuoteDetailPage() {
                 loading={convertMutation.isPending}
                 onClick={() => convertMutation.mutate()}
               >
-                Convertir en facture
+                {t("Convertir en facture", "Convert to an invoice")}
               </Button>
             )}
           </div>
@@ -160,20 +166,20 @@ export default function QuoteDetailPage() {
 
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-3">
           <div>
-            <dt className="text-text-muted">Créé le</dt>
-            <dd className="mt-0.5">{new Date(quote.createdAt).toLocaleString("fr-FR")}</dd>
+            <dt className="text-text-muted">{t("Créé le", "Created")}</dt>
+            <dd className="mt-0.5">{new Date(quote.createdAt).toLocaleString(intlLocale(locale))}</dd>
           </div>
           {quote.validUntil && (
             <div>
-              <dt className="text-text-muted">Valide jusqu&apos;au</dt>
-              <dd className="mt-0.5">{new Date(quote.validUntil).toLocaleDateString("fr-FR")}</dd>
+              <dt className="text-text-muted">{t("Valide jusqu'au", "Valid until")}</dt>
+              <dd className="mt-0.5">{new Date(quote.validUntil).toLocaleDateString(intlLocale(locale))}</dd>
             </div>
           )}
         </dl>
 
         {quote.notes && (
           <div className="mt-4">
-            <dt className="text-sm text-text-muted">Notes</dt>
+            <dt className="text-sm text-text-muted">{t("Notes", "Notes")}</dt>
             <dd className="mt-0.5 text-sm text-text">{quote.notes}</dd>
           </div>
         )}
@@ -184,11 +190,11 @@ export default function QuoteDetailPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Description</th>
-                <th className="px-4 py-2">Qté</th>
-                <th className="px-4 py-2">Prix unitaire</th>
-                <th className="px-4 py-2">TVA</th>
-                <th className="px-4 py-2">Total ligne</th>
+                <th className="px-4 py-2">{t("Description", "Description")}</th>
+                <th className="px-4 py-2">{t("Qté", "Qty")}</th>
+                <th className="px-4 py-2">{t("Prix unitaire", "Unit price")}</th>
+                <th className="px-4 py-2">{t("TVA", "VAT")}</th>
+                <th className="px-4 py-2">{t("Total ligne", "Line total")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -197,7 +203,7 @@ export default function QuoteDetailPage() {
                   <td className="px-4 py-2 font-medium">{item.description}</td>
                   <td className="px-4 py-2 text-text-muted">{item.quantity}</td>
                   <td className="px-4 py-2 text-text-muted">
-                    {formatCurrency(item.unitPrice, quote.currency)}
+                    {formatCurrency(item.unitPrice, quote.currency, locale)}
                   </td>
                   <td className="px-4 py-2 text-text-muted">{item.taxRate ?? 0}%</td>
                   <td className="px-4 py-2 text-text-muted">
@@ -213,14 +219,14 @@ export default function QuoteDetailPage() {
         </div>
         <div className="flex justify-end gap-8 border-t border-border px-4 py-3 text-sm">
           <div className="text-right text-text-muted">
-            <p>Sous-total</p>
-            <p>TVA</p>
-            <p className="font-semibold text-text">Total</p>
+            <p>{t("Sous-total", "Subtotal")}</p>
+            <p>{t("TVA", "VAT")}</p>
+            <p className="font-semibold text-text">{t("Total", "Total")}</p>
           </div>
           <div className="text-right">
-            <p>{formatCurrency(quote.subtotal, quote.currency)}</p>
-            <p>{formatCurrency(quote.taxTotal, quote.currency)}</p>
-            <p className="font-semibold">{formatCurrency(quote.total, quote.currency)}</p>
+            <p>{formatCurrency(quote.subtotal, quote.currency, locale)}</p>
+            <p>{formatCurrency(quote.taxTotal, quote.currency, locale)}</p>
+            <p className="font-semibold">{formatCurrency(quote.total, quote.currency, locale)}</p>
           </div>
         </div>
       </Card>
