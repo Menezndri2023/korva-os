@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { ARTICLES, articlePath } from "@/lib/articles";
 import { SEO_TRADES, tradePath } from "@/lib/seo-trades";
 import { appUrl } from "@/lib/site-url";
 
@@ -19,6 +20,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...pair("/", "/en", 1, "weekly"),
     ...pair("/metiers", "/en/trades", 0.9, "monthly"),
     ...SEO_TRADES.flatMap((trade) => pair(tradePath(trade, "fr"), tradePath(trade, "en"), 0.8, "monthly")),
+    ...pair("/conseils", "/en/guides", 0.7, "weekly"),
+    ...ARTICLES.flatMap((article) => pair(articlePath(article, "fr"), articlePath(article, "en"), 0.7, "monthly")),
     { url: `${base}/register`, changeFrequency: "yearly", priority: 0.5 },
   ];
 }

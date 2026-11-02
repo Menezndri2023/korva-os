@@ -14,6 +14,7 @@ import { KorvaGlyph, KorvaWordmark } from "@/components/brand/korva-mark";
 import { landingText } from "@/lib/landing-content";
 import { SEO_TRADES, tradePath, tradeWords, type SeoTrade } from "@/lib/seo-trades";
 import { appUrl } from "@/lib/site-url";
+import { articlesIndexPath } from "@/lib/articles";
 import { JsonLd } from "./json-ld";
 
 const money = (amount: number, currency: "XOF" | "USD", locale: Locale) =>
@@ -25,6 +26,7 @@ const TEXT = {
   fr: {
     home: "Accueil",
     trades: "Métiers",
+    guides: "Conseils",
     plans: "Formules",
     signIn: "Se connecter",
     signUp: "Créer un compte",
@@ -52,6 +54,7 @@ const TEXT = {
   en: {
     home: "Home",
     trades: "Trades",
+    guides: "Guides",
     plans: "Plans",
     signIn: "Sign in",
     signUp: "Create an account",
@@ -174,11 +177,14 @@ export function PublicHeader({ locale = "fr", otherLanguageHref }: { locale?: Lo
           <Link href={en ? "/en/trades" : "/metiers"} className="hidden rounded-md px-3 py-2 text-sm text-ink-muted hover:text-paper sm:inline-block">
             {t.trades}
           </Link>
+          <Link href={articlesIndexPath(locale)} className="hidden rounded-md px-3 py-2 text-sm text-ink-muted hover:text-paper md:inline-block">
+            {t.guides}
+          </Link>
           <Link href={en ? "/en#formules" : "/#formules"} className="hidden rounded-md px-3 py-2 text-sm text-ink-muted hover:text-paper sm:inline-block">
             {t.plans}
           </Link>
           <LanguageLink locale={locale} href={otherLanguageHref} />
-          <Link href={en ? "/login?lang=en" : "/login"} className="rounded-md px-2.5 py-2 text-sm text-ink-muted hover:text-paper">
+          <Link href={en ? "/login?lang=en" : "/login"} className="whitespace-nowrap rounded-md px-2.5 py-2 text-sm text-ink-muted hover:text-paper">
             {t.signIn}
           </Link>
           <Link

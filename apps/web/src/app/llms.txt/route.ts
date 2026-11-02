@@ -1,4 +1,5 @@
 import { PLAN_LIMITS, PLAN_PRICES, commissionPercentLabel } from "@korva/types";
+import { ARTICLES, articlePath } from "@/lib/articles";
 import { SEO_TRADES } from "@/lib/seo-trades";
 import { appUrl } from "@/lib/site-url";
 
@@ -36,6 +37,9 @@ export function GET() {
 ## KORVA OS par métier
 ${SEO_TRADES.map((trade) => `- [${trade.template.label}](${base}/metiers/${trade.slug}) : ${trade.heading}.`).join("\n")}
 
+## Conseils
+${ARTICLES.map((article) => `- [${article.fr.title}](${base}${articlePath(article, "fr")}) : ${article.fr.description}`).join("\n")}
+
 ## Liens
 - [Accueil](${base}/)
 - [Créer un compte gratuit](${base}/register)
@@ -46,6 +50,7 @@ ${SEO_TRADES.map((trade) => `- [${trade.template.label}](${base}/metiers/${trade
 KORVA OS is online management software for small businesses: customers, appointments and bookings, orders, stock, till, quotes and invoices, and a website, in one account set up for the business's trade. Customers pay by card (Visa, Mastercard) and, in West Africa, by mobile money (Wave, Orange Money, MTN, Moov). Free to start, no credit card. Plans: Free, Starter (${usd(PLAN_PRICES.USD.starter)}), Pro (${usd(PLAN_PRICES.USD.pro)}), Business (${usd(PLAN_PRICES.USD.business)}) a month in US dollars; local prices apply in each country.
 
 ${SEO_TRADES.map((trade) => `- [${trade.en.heading}](${base}/en/trades/${trade.en.slug})`).join("\n")}
+${ARTICLES.map((article) => `- [${article.en.title}](${base}${articlePath(article, "en")})`).join("\n")}
 - [Home (English)](${base}/en)
 `;
   return new Response(body, {
