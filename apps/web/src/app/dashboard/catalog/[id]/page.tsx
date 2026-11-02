@@ -50,13 +50,15 @@ import {
   type VariantDraft,
 } from "@/components/offer-editors";
 import { pruneForType } from "@/lib/offer-form-payload";
+import { OFFER_STATUS_LABELS, OFFER_TYPE_LABELS } from "@/lib/catalog-labels";
+import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 
-const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
-  received: "Réception",
-  sold: "Vente",
-  returned: "Retour",
-  damaged: "Casse/perte",
-  correction: "Correction",
+const STOCK_MOVEMENT_LABELS: Record<StockMovementType, [string, string]> = {
+  received: ["Réception", "Received"],
+  sold: ["Vente", "Sale"],
+  returned: ["Retour", "Return"],
+  damaged: ["Casse/perte", "Damage/loss"],
+  correction: ["Correction", "Correction"],
 };
 
 /** "sold" is always automatic (order reservation) — never an option in the manual entry form. */
@@ -64,37 +66,23 @@ const MANUAL_STOCK_MOVEMENT_TYPES = STOCK_MOVEMENT_TYPES.filter(
   (type) => type !== "sold",
 );
 
-const TYPE_LABELS: Record<OfferType, string> = {
-  product: "Produit",
-  service: "Service",
-  booking: "Réservation",
-  digital_product: "Produit numérique",
-  subscription: "Abonnement",
-  package: "Forfait",
-};
-
-/** Shown to owners instead of the API's status keys. "En ligne" is the one that matters: only
- *  those offers appear on the public site. */
-const STATUS_LABELS: Record<Offer["status"], string> = {
-  draft: "Brouillon",
-  active: "En ligne",
-  archived: "Archivée",
-};
-
 const STATUS_VARIANT: Record<Offer["status"], "default" | "success" | "warning"> = {
   active: "success",
   archived: "default",
   draft: "warning",
 };
 
-function deleteErrorMessage(error: unknown): string {
+function deleteErrorMessage(error: unknown, t: Translate): string {
   if (error instanceof ApiError) {
     if (error.code === "OFFER_IN_USE") {
-      return "Cette offre ne peut pas être supprimée car elle est encore utilisée par d'autres données.";
+      return t(
+        "Cette offre ne peut pas être supprimée car elle est encore utilisée par d'autres données.",
+        "This offer cannot be deleted because other records still use it.",
+      );
     }
     return error.message;
   }
-  return "Impossible de supprimer l'offre.";
+  return t("Impossible de supprimer l'offre.", "The offer could not be deleted.");
 }
 
 export default function OfferDetailPage() {
@@ -103,6 +91,9 @@ export default function OfferDetailPage() {
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [isEditing, setIsEditing] = useState(false);
+  const locale = useDashboardLocale();
+  const t = useT();
+  const typeLabel = (type: OfferType) => t(...OFFER_TYPE_LABELS[type]);
 
   const offerQuery = useQuery({
     queryKey: ["offers", id],
@@ -232,13 +223,13 @@ export default function OfferDetailPage() {
   });
 
   if (offerQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (offerQuery.isError || !offerQuery.data) {
     const error = offerQuery.error;
     const message =
-      error instanceof ApiError ? error.message : "Impossible de charger cette offre.";
+      error instanceof ApiError ? error.message : t("Impossible de charger cette offre.", "This offer could not be loaded.");
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">{message}</p>
@@ -246,7 +237,7 @@ export default function OfferDetailPage() {
           href="/dashboard/catalog"
           className="mt-2 inline-block text-sm font-medium text-text underline"
         >
-          Retour au catalogue
+          {t("Retour au catalogue", "Back to the catalogue")}
         </Link>
       </Card>
     );
@@ -257,17 +248,17 @@ export default function OfferDetailPage() {
   return (
     <div className="space-y-4">
       <Link href="/dashboard/catalog" className="text-sm text-text-muted hover:underline">
-        ← Catalogue
+        ← {t("Catalogue", "Catalogue")}
       </Link>
 
       <Card className="p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold">{offer.name}</h1>
-            <p className="text-sm text-text-muted">{TYPE_LABELS[offer.type]}</p>
+            <p className="text-sm text-text-muted">{typeLabel(offer.type)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={STATUS_VARIANT[offer.status]}>{STATUS_LABELS[offer.status]}</Badge>
+            <Badge variant={STATUS_VARIANT[offer.status]}>{t(...OFFER_STATUS_LABELS[offer.status])}</Badge>
             {!isEditing && (
               // One click to put an offer on the site or take it off — the status otherwise sat
               // in the edit form only, as "draft"/"active", and new offers were drafts by default.
@@ -279,7 +270,9 @@ export default function OfferDetailPage() {
                   updateMutation.mutate({ status: offer.status === "active" ? "draft" : "active" })
                 }
               >
-                {offer.status === "active" ? "Retirer du site" : "Publier sur le site"}
+                {offer.status === "active"
+                  ? t("Retirer du site", "Take off the website")
+                  : t("Publier sur le site", "Publish on the website")}
               </Button>
             )}
             <Button
@@ -288,7 +281,7 @@ export default function OfferDetailPage() {
               disabled={deleteConfirming}
               onClick={() => (isEditing ? cancelEdit() : startEdit(offer))}
             >
-              {isEditing ? "Annuler" : "Modifier"}
+              {isEditing ? t("Annuler", "Cancel") : t("Modifier", "Edit")}
             </Button>
             <Button
               variant="ghost"
@@ -296,24 +289,27 @@ export default function OfferDetailPage() {
               disabled={isEditing}
               onClick={() => setDeleteConfirming(true)}
             >
-              Supprimer
+              {t("Supprimer", "Delete")}
             </Button>
           </div>
         </div>
 
         {deleteOfferMutation.isError && (
           <p className="mt-3 text-sm text-destructive">
-            {deleteErrorMessage(deleteOfferMutation.error)}
+            {deleteErrorMessage(deleteOfferMutation.error, t)}
           </p>
         )}
 
         <Dialog
           open={deleteConfirming}
           onClose={() => setDeleteConfirming(false)}
-          title="Supprimer l'offre ?"
+          title={t("Supprimer l'offre ?", "Delete the offer?")}
         >
           <p className="text-sm text-text-muted">
-            Cette action est définitive. Voulez-vous vraiment supprimer « {offer.name} » ?
+            {t(
+              `Cette action est définitive. Voulez-vous vraiment supprimer « ${offer.name} » ?`,
+              `This cannot be undone. Do you really want to delete “${offer.name}”?`,
+            )}
           </p>
           <div className="mt-4 flex justify-end gap-2">
             <Button
@@ -322,7 +318,7 @@ export default function OfferDetailPage() {
               disabled={deleteOfferMutation.isPending}
               onClick={() => setDeleteConfirming(false)}
             >
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
             <Button
               variant="secondary"
@@ -330,7 +326,7 @@ export default function OfferDetailPage() {
               loading={deleteOfferMutation.isPending}
               onClick={() => deleteOfferMutation.mutate()}
             >
-              {deleteOfferMutation.isPending ? "Suppression..." : "Confirmer ?"}
+              {deleteOfferMutation.isPending ? t("Suppression...", "Deleting...") : t("Confirmer ?", "Confirm?")}
             </Button>
           </div>
         </Dialog>
@@ -338,18 +334,18 @@ export default function OfferDetailPage() {
         {!isEditing ? (
           <>
             {offer.images.length > 0 ? (
-              <ul className="mt-4 flex flex-wrap gap-2" aria-label="Photos de l'offre">
+              <ul className="mt-4 flex flex-wrap gap-2" aria-label={t("Photos de l'offre", "Offer photos")}>
                 {offer.images.map((url, index) => (
                   <li key={url} className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset */}
                     <img
                       src={url}
-                      alt={`Photo ${index + 1}`}
+                      alt={t(`Photo ${index + 1}`, `Photo ${index + 1}`)}
                       className="h-24 w-24 rounded-md border border-border object-cover"
                     />
                     {index === 0 && (
                       <span className="absolute left-1 top-1 rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-text">
-                        Principale
+                        {t("Principale", "Main")}
                       </span>
                     )}
                   </li>
@@ -357,7 +353,7 @@ export default function OfferDetailPage() {
               </ul>
             ) : (
               <p className="mt-4 text-sm text-text-muted">
-                Aucune photo — cliquez sur « Modifier » pour en ajouter.
+                {t("Aucune photo — cliquez sur « Modifier » pour en ajouter.", "No photos — click “Edit” to add some.")}
               </p>
             )}
             <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
@@ -366,26 +362,26 @@ export default function OfferDetailPage() {
                 <dd className="mt-0.5">{offer.sku ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Code-barres</dt>
+                <dt className="text-text-muted">{t("Code-barres", "Barcode")}</dt>
                 <dd className="mt-0.5">{offer.barcode ?? "—"}</dd>
               </div>
               <div>
-                <dt className="text-text-muted">Prix</dt>
+                <dt className="text-text-muted">{t("Prix", "Price")}</dt>
                 <dd className="mt-0.5">
-                  {formatCurrency(offer.pricing.amount, offer.pricing.currency)}
+                  {formatCurrency(offer.pricing.amount, offer.pricing.currency, locale)}
                 </dd>
               </div>
               {offer.pricing.taxRate != null && (
                 <div>
-                  <dt className="text-text-muted">TVA</dt>
+                  <dt className="text-text-muted">{t("TVA", "VAT")}</dt>
                   <dd className="mt-0.5">{offer.pricing.taxRate}%</dd>
                 </div>
               )}
               {offer.compareAtPrice != null && (
                 <div>
-                  <dt className="text-text-muted">Prix avant promotion</dt>
+                  <dt className="text-text-muted">{t("Prix avant promotion", "Price before discount")}</dt>
                   <dd className="mt-0.5 line-through">
-                    {formatCurrency(offer.compareAtPrice, offer.pricing.currency)}
+                    {formatCurrency(offer.compareAtPrice, offer.pricing.currency, locale)}
                   </dd>
                 </div>
               )}
@@ -398,21 +394,21 @@ export default function OfferDetailPage() {
                 ))}
               {offer.durationMinutes != null && (
                 <div>
-                  <dt className="text-text-muted">Durée</dt>
+                  <dt className="text-text-muted">{t("Durée", "Length")}</dt>
                   <dd className="mt-0.5">{offer.durationMinutes} min</dd>
                 </div>
               )}
               {offer.variants.length === 0 && (
                 <div>
-                  <dt className="text-text-muted">Stock</dt>
+                  <dt className="text-text-muted">{t("Stock", "Stock")}</dt>
                   <dd className="mt-0.5">
-                    {offer.trackStock ? offer.stockOnHand ?? 0 : "Non suivi"}
+                    {offer.trackStock ? offer.stockOnHand ?? 0 : t("Non suivi", "Not tracked")}
                   </dd>
                 </div>
               )}
               {offer.trackStock && offer.lowStockThreshold != null && (
                 <div>
-                  <dt className="text-text-muted">Seuil d&apos;alerte</dt>
+                  <dt className="text-text-muted">{t("Seuil d'alerte", "Alert threshold")}</dt>
                   <dd className="mt-0.5">{offer.lowStockThreshold}</dd>
                 </div>
               )}
@@ -427,7 +423,7 @@ export default function OfferDetailPage() {
                 <Input
                   type="number"
                   step="1"
-                  placeholder="Nouveau stock"
+                  placeholder={t("Nouveau stock", "New stock")}
                   value={stockInput}
                   onChange={(e) => setStockInput(e.target.value)}
                   className="w-40"
@@ -441,7 +437,7 @@ export default function OfferDetailPage() {
                     adjustStockMutation.mutate({ stockOnHand: Number(stockInput) })
                   }
                 >
-                  Ajuster le stock
+                  {t("Ajuster le stock", "Adjust stock")}
                 </Button>
                 {offer.stockOnHand !== 0 && (
                   <Button
@@ -450,7 +446,7 @@ export default function OfferDetailPage() {
                     loading={adjustStockMutation.isPending}
                     onClick={() => adjustStockMutation.mutate({ stockOnHand: 0 })}
                   >
-                    86 (marquer indisponible)
+                    {t("86 (marquer indisponible)", "86 (mark unavailable)")}
                   </Button>
                 )}
               </div>
@@ -458,14 +454,14 @@ export default function OfferDetailPage() {
 
             {offer.description && (
               <div className="mt-4">
-                <dt className="text-sm text-text-muted">Description</dt>
+                <dt className="text-sm text-text-muted">{t("Description", "Description")}</dt>
                 <dd className="mt-0.5 text-sm text-text">{offer.description}</dd>
               </div>
             )}
 
             {offer.categories.length > 0 && (
               <div className="mt-4">
-                <dt className="text-sm text-text-muted">Catégories</dt>
+                <dt className="text-sm text-text-muted">{t("Catégories", "Categories")}</dt>
                 <dd className="mt-1 flex flex-wrap gap-1">
                   {offer.categories.map((category) => (
                     <Badge key={category}>{category}</Badge>
@@ -493,26 +489,26 @@ export default function OfferDetailPage() {
             )}
             className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
           >
-            <Select aria-label="Type" {...register("type")}>
+            <Select aria-label={t("Type", "Type")} {...register("type")}>
               {OFFER_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {TYPE_LABELS[type]}
+                  {typeLabel(type)}
                 </option>
               ))}
             </Select>
-            <Select aria-label="Statut" {...register("status")}>
+            <Select aria-label={t("Statut", "Status")} {...register("status")}>
               {OFFER_STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {STATUS_LABELS[status]}
+                  {t(...OFFER_STATUS_LABELS[status])}
                 </option>
               ))}
             </Select>
-            <Input placeholder="Nom" className="col-span-2" {...register("name")} />
+            <Input placeholder={t("Nom", "Name")} className="col-span-2" {...register("name")} />
             {errors.name && (
               <p className="col-span-2 text-xs text-destructive">{errors.name.message}</p>
             )}
             <textarea
-              placeholder="Description"
+              placeholder={t("Description", "Description")}
               className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               rows={2}
               {...register("description")}
@@ -524,11 +520,11 @@ export default function OfferDetailPage() {
             <Input
               type="number"
               step="0.01"
-              placeholder="Prix"
-              aria-label="Prix"
+              placeholder={t("Prix", "Price")}
+              aria-label={t("Prix", "Price")}
               {...register("pricing.amount", { valueAsNumber: true })}
             />
-            <Input placeholder="Devise (EUR)" {...register("pricing.currency")} />
+            <Input placeholder={t("Devise (EUR)", "Currency (EUR)")} {...register("pricing.currency")} />
             {errors.pricing?.currency && (
               <p className="col-span-2 text-xs text-destructive">
                 {errors.pricing.currency.message}
@@ -539,8 +535,8 @@ export default function OfferDetailPage() {
               type="number"
               step="0.01"
               min="0"
-              placeholder="Prix avant promotion (optionnel)"
-              aria-label="Prix avant promotion"
+              placeholder={t("Prix avant promotion (optionnel)", "Price before discount (optional)")}
+              aria-label={t("Prix avant promotion", "Price before discount")}
               disabled={compareAtLocked}
               className="flex-1"
               {...register("compareAtPrice", {
@@ -550,14 +546,16 @@ export default function OfferDetailPage() {
             />
               {compareAtLocked && <PlanLock feature="compare_at_price" />}
             </div>
-            {fields.reference && <Input placeholder="Référence (SKU)" {...register("sku")} />}
+            {fields.reference && <Input placeholder={t("Référence (SKU)", "Reference (SKU)")} {...register("sku")} />}
             {fields.barcode && (
-              <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />
+              <Input placeholder={t("Code-barres (EAN/UPC)", "Barcode (EAN/UPC)")} {...register("barcode")} />
             )}
             {fields.duration && (
-              <Select aria-label="Vendu" className="col-span-2" {...register("bookingUnit")}>
-                <option value="slot">Par créneau (rendez-vous, séance, cours)</option>
-                <option value="night">Par nuit (séjour, de la date d&apos;arrivée à la date de départ)</option>
+              <Select aria-label={t("Vendu", "Sold")} className="col-span-2" {...register("bookingUnit")}>
+                <option value="slot">{t("Par créneau (rendez-vous, séance, cours)", "Per slot (appointment, session, class)")}</option>
+                <option value="night">
+                  {t("Par nuit (séjour, de la date d'arrivée à la date de départ)", "Per night (stay, from arrival date to departure date)")}
+                </option>
               </Select>
             )}
             {fields.duration && bookingUnit === "night" && (
@@ -565,8 +563,8 @@ export default function OfferDetailPage() {
                 type="number"
                 min="1"
                 step="1"
-                aria-label="Séjour minimum (nuits)"
-                placeholder="Séjour minimum en nuits (optionnel)"
+                aria-label={t("Séjour minimum (nuits)", "Minimum stay (nights)")}
+                placeholder={t("Séjour minimum en nuits (optionnel)", "Minimum stay in nights (optional)")}
                 className="col-span-2"
                 {...register("minNights", {
                   setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
@@ -579,8 +577,11 @@ export default function OfferDetailPage() {
                 min="0"
                 max="240"
                 step="5"
-                aria-label="Temps de battement après (minutes)"
-                placeholder="Temps de battement après chaque rendez-vous, en minutes (optionnel)"
+                aria-label={t("Temps de battement après (minutes)", "Buffer time after (minutes)")}
+                placeholder={t(
+                  "Temps de battement après chaque rendez-vous, en minutes (optionnel)",
+                  "Buffer time after each appointment, in minutes (optional)",
+                )}
                 className="col-span-2"
                 {...register("bufferMinutes", {
                   setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
@@ -593,8 +594,8 @@ export default function OfferDetailPage() {
                 step="5"
                 min={OFFER_MIN_DURATION_MINUTES}
                 max={OFFER_MAX_DURATION_MINUTES}
-                aria-label="Durée de la prestation (minutes)"
-                placeholder="Durée de la prestation (minutes)"
+                aria-label={t("Durée de la prestation (minutes)", "Service length (minutes)")}
+                placeholder={t("Durée de la prestation (minutes)", "Service length (minutes)")}
                 className="col-span-2"
                 {...register("durationMinutes", {
                   setValueAs: (v: string | number | null) =>
@@ -604,20 +605,23 @@ export default function OfferDetailPage() {
             )}
             {errors.durationMinutes && (
               <p className="col-span-2 text-xs text-destructive">
-                Durée entre {OFFER_MIN_DURATION_MINUTES} et {OFFER_MAX_DURATION_MINUTES} minutes.
+                {t(
+                  `Durée entre ${OFFER_MIN_DURATION_MINUTES} et ${OFFER_MAX_DURATION_MINUTES} minutes.`,
+                  `Length between ${OFFER_MIN_DURATION_MINUTES} and ${OFFER_MAX_DURATION_MINUTES} minutes.`,
+                )}
               </p>
             )}
             {fields.stock && (
               <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
                 <input type="checkbox" {...register("trackStock")} />
-                Suivre le stock pour cette offre
+                {t("Suivre le stock pour cette offre", "Track stock for this offer")}
               </label>
             )}
             {fields.stock && trackStock && variantDrafts.length === 0 && (
               <Input
                 type="number"
                 step="1"
-                placeholder="Stock"
+                placeholder={t("Stock", "Stock")}
                 className="col-span-2"
                 {...register("stockOnHand", {
                   setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -629,7 +633,7 @@ export default function OfferDetailPage() {
                 type="number"
                 step="1"
                 min="0"
-                placeholder="Seuil d'alerte stock bas (optionnel)"
+                placeholder={t("Seuil d'alerte stock bas (optionnel)", "Low stock alert threshold (optional)")}
                 className="col-span-2"
                 {...register("lowStockThreshold", {
                   setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -678,16 +682,16 @@ export default function OfferDetailPage() {
               <p className="col-span-2 text-sm text-destructive">
                 {updateMutation.error instanceof ApiError
                   ? updateMutation.error.message
-                  : "Impossible d'enregistrer l'offre."}
+                  : t("Impossible d'enregistrer l'offre.", "The offer could not be saved.")}
               </p>
             )}
 
             <div className="col-span-2 flex gap-2">
               <Button type="submit" loading={updateMutation.isPending}>
-                {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                {updateMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
               </Button>
               <Button type="button" variant="ghost" onClick={cancelEdit}>
-                Annuler
+                {t("Annuler", "Cancel")}
               </Button>
             </div>
           </form>
@@ -700,10 +704,10 @@ export default function OfferDetailPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Variante</th>
+                  <th className="px-4 py-2">{t("Variante", "Variant")}</th>
                   <th className="px-4 py-2">SKU</th>
-                  <th className="px-4 py-2">Prix</th>
-                  {offer.trackStock && <th className="px-4 py-2">Stock</th>}
+                  <th className="px-4 py-2">{t("Prix", "Price")}</th>
+                  {offer.trackStock && <th className="px-4 py-2">{t("Stock", "Stock")}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -713,7 +717,7 @@ export default function OfferDetailPage() {
                     <td className="px-4 py-2 text-text-muted">{variant.sku ?? "—"}</td>
                     <td className="px-4 py-2 text-text-muted">
                       {variant.priceOverride != null
-                        ? formatCurrency(variant.priceOverride, offer.pricing.currency)
+                        ? formatCurrency(variant.priceOverride, offer.pricing.currency, locale)
                         : "—"}
                     </td>
                     {offer.trackStock && (
@@ -766,6 +770,7 @@ function StockLevelsSection({
     queryFn: () => apiClient.get<Warehouse[]>("/warehouses"),
   });
   const levels = levelsQuery.data;
+  const t = useT();
   const warehouses = warehousesQuery.data;
 
   if (!levels || levels.length === 0) return null;
@@ -780,14 +785,14 @@ function StockLevelsSection({
 
   return (
     <Card className="p-6">
-      <h2 className="text-sm font-semibold text-text">Stock par entrepôt</h2>
+      <h2 className="text-sm font-semibold text-text">{t("Stock par entrepôt", "Stock by warehouse")}</h2>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
             <tr>
-              <th className="px-3 py-2">Entrepôt</th>
-              {variants.length > 0 && <th className="px-3 py-2">Variante</th>}
-              <th className="px-3 py-2">Quantité</th>
+              <th className="px-3 py-2">{t("Entrepôt", "Warehouse")}</th>
+              {variants.length > 0 && <th className="px-3 py-2">{t("Variante", "Variant")}</th>}
+              <th className="px-3 py-2">{t("Quantité", "Quantity")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -881,6 +886,8 @@ function StockMovementsSection({
   const authReady = useAuthReady();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
+  const locale = useDashboardLocale();
+  const t = useT();
 
   const {
     register,
@@ -927,21 +934,21 @@ function StockMovementsSection({
 
   return (
     <Card className="p-6">
-      <h2 className="text-sm font-semibold text-text">Mouvements de stock</h2>
+      <h2 className="text-sm font-semibold text-text">{t("Mouvements de stock", "Stock movements")}</h2>
 
       <form
         onSubmit={handleSubmit((values) => recordMutation.mutate(values))}
         className="mt-3 flex flex-wrap items-end gap-2"
       >
-        <Select aria-label="Type de mouvement" {...register("type")}>
+        <Select aria-label={t("Type de mouvement", "Movement type")} {...register("type")}>
           {MANUAL_STOCK_MOVEMENT_TYPES.map((type) => (
             <option key={type} value={type}>
-              {STOCK_MOVEMENT_LABELS[type]}
+              {t(...STOCK_MOVEMENT_LABELS[type])}
             </option>
           ))}
         </Select>
         {variants.length > 0 && (
-          <Select aria-label="Variante" {...register("variantId")}>
+          <Select aria-label={t("Variante", "Variant")} {...register("variantId")}>
             {variants.map((variant) => (
               <option key={variant.id} value={variant.id}>
                 {variant.name}
@@ -951,12 +958,12 @@ function StockMovementsSection({
         )}
         {warehouses && warehouses.length > 0 && (
           <Select
-            aria-label="Entrepôt"
+            aria-label={t("Entrepôt", "Warehouse")}
             {...register("warehouseId", {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           >
-            <option value="">Aucun entrepôt (global)</option>
+            <option value="">{t("Aucun entrepôt (global)", "No warehouse (overall)")}</option>
             {warehouses.map((warehouse) => (
               <option key={warehouse.id} value={warehouse.id}>
                 {warehouse.name}
@@ -967,18 +974,18 @@ function StockMovementsSection({
         <Input
           type="number"
           step="1"
-          aria-label="Quantité"
-          placeholder={movementType === "correction" ? "± Quantité" : "Quantité"}
+          aria-label={t("Quantité", "Quantity")}
+          placeholder={movementType === "correction" ? t("± Quantité", "± Quantity") : t("Quantité", "Quantity")}
           className="w-32"
           {...register("quantity", { valueAsNumber: true })}
         />
         <Input
-          placeholder="Motif (optionnel)"
+          placeholder={t("Motif (optionnel)", "Reason (optional)")}
           className="w-56"
           {...register("reason")}
         />
         <Button type="submit" size="sm" loading={recordMutation.isPending}>
-          Enregistrer
+          {t("Enregistrer", "Save")}
         </Button>
       </form>
       {errors.quantity && (
@@ -988,7 +995,7 @@ function StockMovementsSection({
         <p className="mt-1 text-xs text-destructive">
           {recordMutation.error instanceof ApiError
             ? recordMutation.error.message
-            : "Impossible d'enregistrer ce mouvement."}
+            : t("Impossible d'enregistrer ce mouvement.", "This movement could not be saved.")}
         </p>
       )}
 
@@ -996,34 +1003,34 @@ function StockMovementsSection({
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
             <tr>
-              <th className="px-3 py-2">Date</th>
-              <th className="px-3 py-2">Type</th>
-              <th className="px-3 py-2">Quantité</th>
-              <th className="px-3 py-2">Stock après</th>
-              <th className="px-3 py-2">Motif</th>
+              <th className="px-3 py-2">{t("Date", "Date")}</th>
+              <th className="px-3 py-2">{t("Type", "Type")}</th>
+              <th className="px-3 py-2">{t("Quantité", "Quantity")}</th>
+              <th className="px-3 py-2">{t("Stock après", "Stock after")}</th>
+              <th className="px-3 py-2">{t("Motif", "Reason")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {movementsQuery.isLoading && (
               <tr>
                 <td colSpan={5} className="px-3 py-4 text-center text-text-muted">
-                  Chargement...
+                  {t("Chargement...", "Loading...")}
                 </td>
               </tr>
             )}
             {!movementsQuery.isLoading && movements?.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-3 py-4 text-center text-text-muted">
-                  Aucun mouvement enregistré.
+                  {t("Aucun mouvement enregistré.", "No movements recorded.")}
                 </td>
               </tr>
             )}
             {movements?.map((movement) => (
               <tr key={movement.id}>
                 <td className="px-3 py-2 text-text-muted">
-                  {new Date(movement.createdAt).toLocaleDateString("fr-FR")}
+                  {new Date(movement.createdAt).toLocaleDateString(intlLocale(locale))}
                 </td>
-                <td className="px-3 py-2">{STOCK_MOVEMENT_LABELS[movement.type]}</td>
+                <td className="px-3 py-2">{t(...STOCK_MOVEMENT_LABELS[movement.type])}</td>
                 <td
                   className={`px-3 py-2 font-medium ${
                     movement.quantity < 0 ? "text-destructive" : "text-success"

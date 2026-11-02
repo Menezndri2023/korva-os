@@ -16,25 +16,28 @@ import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
 import { PlanLock } from "@/components/plan-lock";
 import { usePlanFeatures } from "@/lib/use-plan-features";
+import { useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
-  draft: "Brouillon",
-  ordered: "Commandée",
-  received: "Réceptionnée",
-  cancelled: "Annulée",
+const STATUS_LABELS: Record<PurchaseOrderStatus, [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  ordered: ["Commandée", "Ordered"],
+  received: ["Réceptionnée", "Received"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 function poTotal(po: PurchaseOrder): number {
   return po.items.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
 }
 
-function actionErrorMessage(error: unknown): string {
+function actionErrorMessage(error: unknown, t: Translate): string {
   if (error instanceof ApiError) return error.message;
-  return "Une erreur est survenue.";
+  return t("Une erreur est survenue.", "Something went wrong.");
 }
 
 export default function PurchaseOrdersPage() {
   const planFeatures = usePlanFeatures();
+  const locale = useDashboardLocale();
+  const t = useT();
   const [statusFilter, setStatusFilter] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
@@ -94,7 +97,7 @@ export default function PurchaseOrdersPage() {
         await mutationFn(id);
         invalidate();
       } catch (error) {
-        setActionErrorFor({ id, message: actionErrorMessage(error) });
+        setActionErrorFor({ id, message: actionErrorMessage(error, t) });
       }
     };
   }
@@ -128,7 +131,7 @@ export default function PurchaseOrdersPage() {
       invalidate();
       setReceivingPo(null);
     },
-    onError: (error: unknown) => setReceiveError(actionErrorMessage(error)),
+    onError: (error: unknown) => setReceiveError(actionErrorMessage(error, t)),
   });
 
   function openReceiveDialog(po: PurchaseOrder) {
@@ -153,17 +156,17 @@ export default function PurchaseOrdersPage() {
           }}
           className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
         >
-          <option value="">Tous les statuts</option>
+          <option value="">{t("Tous les statuts", "All statuses")}</option>
           {PURCHASE_ORDER_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {STATUS_LABELS[status]}
+              {t(...STATUS_LABELS[status])}
             </option>
           ))}
         </select>
         {/* Creating needs the plan; what already exists stays listed and usable. */}
         {planFeatures.has("suppliers") ? (
           <Button onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "Annuler" : "Nouvelle commande fournisseur"}
+            {showForm ? t("Annuler", "Cancel") : t("Nouvelle commande fournisseur", "New purchase order")}
           </Button>
         ) : (
           <PlanLock feature="suppliers" />
@@ -181,7 +184,7 @@ export default function PurchaseOrdersPage() {
             {...register("supplierId")}
           >
             <option value="" disabled>
-              Choisir un fournisseur
+              {t("Choisir un fournisseur", "Choose a supplier")}
             </option>
             {suppliers?.map((s) => (
               <option key={s.id} value={s.id}>
@@ -202,7 +205,7 @@ export default function PurchaseOrdersPage() {
                   {...register(`items.${index}.offerId`)}
                 >
                   <option value="" disabled>
-                    Choisir un article
+                    {t("Choisir un article", "Choose an item")}
                   </option>
                   {offers?.map((offer) => (
                     <option key={offer.id} value={offer.id}>
@@ -214,7 +217,7 @@ export default function PurchaseOrdersPage() {
                 <input
                   type="number"
                   min={1}
-                  placeholder="Qté"
+                  placeholder={t("Qté", "Qty")}
                   className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
                   {...register(`items.${index}.quantity`, { valueAsNumber: true })}
                 />
@@ -222,7 +225,7 @@ export default function PurchaseOrdersPage() {
                   type="number"
                   step="0.01"
                   min={0}
-                  placeholder="Coût unitaire"
+                  placeholder={t("Coût unitaire", "Unit cost")}
                   className="col-span-3 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
                   {...register(`items.${index}.unitCost`, { valueAsNumber: true })}
                 />
@@ -240,12 +243,12 @@ export default function PurchaseOrdersPage() {
               onClick={() => append({ offerId: "", quantity: 1, unitCost: 0 })}
               className="text-sm text-text-muted hover:underline"
             >
-              + Ajouter une ligne
+              {t("+ Ajouter une ligne", "+ Add a line")}
             </button>
           </div>
 
           <textarea
-            placeholder="Notes (optionnel)"
+            placeholder={t("Notes (optionnel)", "Notes (optional)")}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             {...register("notes", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
@@ -255,11 +258,11 @@ export default function PurchaseOrdersPage() {
             <p className="text-sm text-destructive">
               {createMutation.error instanceof ApiError
                 ? createMutation.error.message
-                : "Erreur"}
+                : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer la commande"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer la commande", "Create the order")}
           </Button>
         </form>
       )}
@@ -269,25 +272,25 @@ export default function PurchaseOrdersPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Fournisseur</th>
-                <th className="px-4 py-2">Articles</th>
-                <th className="px-4 py-2">Total</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("Fournisseur", "Supplier")}</th>
+                <th className="px-4 py-2">{t("Articles", "Items")}</th>
+                <th className="px-4 py-2">{t("Total", "Total")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && purchaseOrders?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Aucune commande fournisseur.
+                    {t("Aucune commande fournisseur.", "No purchase orders.")}
                   </td>
                 </tr>
               )}
@@ -298,16 +301,19 @@ export default function PurchaseOrdersPage() {
                     {po.items
                       .map((item) =>
                         po.status === "ordered" && item.receivedQuantity > 0
-                          ? `${item.name} (${item.receivedQuantity}/${item.quantity} reçus)`
+                          ? t(
+                              `${item.name} (${item.receivedQuantity}/${item.quantity} reçus)`,
+                              `${item.name} (${item.receivedQuantity}/${item.quantity} received)`,
+                            )
                           : item.name,
                       )
                       .join(", ")}
                   </td>
                   <td className="px-4 py-2 text-text-muted">
-                    {formatCurrency(poTotal(po), po.currency)}
+                    {formatCurrency(poTotal(po), po.currency, locale)}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge>{STATUS_LABELS[po.status]}</Badge>
+                    <Badge>{t(...STATUS_LABELS[po.status])}</Badge>
                   </td>
                   <td className="px-4 py-2 space-x-2">
                     {po.status === "draft" && (
@@ -315,7 +321,7 @@ export default function PurchaseOrdersPage() {
                         onClick={() => markOrdered(po.id)}
                         className="text-xs text-text-muted hover:underline"
                       >
-                        Marquer commandée
+                        {t("Marquer commandée", "Mark as ordered")}
                       </button>
                     )}
                     {po.status === "ordered" && (
@@ -323,7 +329,7 @@ export default function PurchaseOrdersPage() {
                         onClick={() => openReceiveDialog(po)}
                         className="text-xs text-text-muted hover:underline"
                       >
-                        Réceptionner
+                        {t("Réceptionner", "Receive")}
                       </button>
                     )}
                     {(po.status === "draft" || po.status === "ordered") && (
@@ -331,7 +337,7 @@ export default function PurchaseOrdersPage() {
                         onClick={() => cancel(po.id)}
                         className="text-xs text-destructive hover:underline"
                       >
-                        Annuler
+                        {t("Annuler", "Cancel")}
                       </button>
                     )}
                     {actionErrorFor?.id === po.id && (
@@ -355,14 +361,15 @@ export default function PurchaseOrdersPage() {
       <Dialog
         open={receivingPo !== null}
         onClose={() => setReceivingPo(null)}
-        title="Réceptionner la commande"
+        title={t("Réceptionner la commande", "Receive the order")}
       >
         {receivingPo && (
           <div className="space-y-3">
             <p className="text-sm text-text-muted">
-              Indiquez la quantité effectivement reçue pour chaque article — une livraison
-              partielle laisse la commande au statut « Commandée » jusqu&apos;à réception
-              complète.
+              {t(
+                "Indiquez la quantité effectivement reçue pour chaque article — une livraison partielle laisse la commande au statut « Commandée » jusqu'à réception complète.",
+                "Enter the quantity actually received for each item — a partial delivery keeps the order “Ordered” until everything arrives.",
+              )}
             </p>
             {receivingPo.items.map((item) => {
               const remaining = item.quantity - item.receivedQuantity;
@@ -391,13 +398,13 @@ export default function PurchaseOrdersPage() {
             })}
             {warehousesQuery.data && warehousesQuery.data.length > 0 && (
               <label className="flex items-center gap-2 text-sm text-text-muted">
-                Entrepôt de réception
+                {t("Entrepôt de réception", "Receiving warehouse")}
                 <Select
                   value={receiveWarehouseId}
                   onChange={(e) => setReceiveWarehouseId(e.target.value)}
                   className="w-56"
                 >
-                  <option value="">Aucun entrepôt (global)</option>
+                  <option value="">{t("Aucun entrepôt (global)", "No warehouse (overall)")}</option>
                   {warehousesQuery.data.map((warehouse) => (
                     <option key={warehouse.id} value={warehouse.id}>
                       {warehouse.name}
@@ -409,7 +416,7 @@ export default function PurchaseOrdersPage() {
             {receiveError && <p className="text-sm text-destructive">{receiveError}</p>}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setReceivingPo(null)}>
-                Annuler
+                {t("Annuler", "Cancel")}
               </Button>
               <Button
                 loading={receiveMutation.isPending}
@@ -419,7 +426,10 @@ export default function PurchaseOrdersPage() {
                     .filter(([, quantity]) => quantity > 0)
                     .map(([offerId, quantity]) => ({ offerId, quantity }));
                   if (items.length === 0) {
-                    setReceiveError("Indiquez au moins une quantité à réceptionner.");
+                    setReceiveError(t(
+                      "Indiquez au moins une quantité à réceptionner.",
+                      "Enter at least one quantity to receive.",
+                    ));
                     return;
                   }
                   receiveMutation.mutate({
@@ -429,7 +439,7 @@ export default function PurchaseOrdersPage() {
                   });
                 }}
               >
-                {receiveMutation.isPending ? "Réception..." : "Confirmer la réception"}
+                {receiveMutation.isPending ? t("Réception...", "Receiving...") : t("Confirmer la réception", "Confirm receipt")}
               </Button>
             </div>
           </div>

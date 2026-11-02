@@ -10,6 +10,7 @@ import { useAuthReady } from "@/lib/use-auth-ready";
 import { usePlanFeatures } from "@/lib/use-plan-features";
 import { UpgradeCard } from "@/components/pro/upgrade-card";
 import { AccountStatus, CustomerAccountActions, formatSeen } from "@/components/customer-account-actions";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 /**
  * Clients › Espaces clients: the customers who created an account on the business's site, when
@@ -18,6 +19,8 @@ import { AccountStatus, CustomerAccountActions, formatSeen } from "@/components/
 export default function CustomerAccountsPage() {
   const authReady = useAuthReady();
   const planFeatures = usePlanFeatures();
+  const locale = useDashboardLocale();
+  const t = useT();
   const [search, setSearch] = useState("");
   const term = search.trim();
   const { data, isLoading, isError } = useQuery({
@@ -32,49 +35,65 @@ export default function CustomerAccountsPage() {
   return (
     <div className="space-y-4">
       <p className="max-w-2xl text-sm text-text-muted">
-        Vos clients peuvent créer un compte sur votre site pour retrouver leurs commandes, réservations
-        et factures. Vous ne voyez jamais leur mot de passe : envoyez-leur un lien s&apos;ils l&apos;ont oublié.
+        {t(
+          "Vos clients peuvent créer un compte sur votre site pour retrouver leurs commandes, réservations et factures. Vous ne voyez jamais leur mot de passe : envoyez-leur un lien s'ils l'ont oublié.",
+          "Your customers can create an account on your website to find their orders, bookings and invoices. You never see their password: send them a link if they forget it.",
+        )}
       </p>
 
       {planFeatures.planKey !== undefined && !planFeatures.has("customer_accounts") && (
         <UpgradeCard
           feature="customer_accounts"
-          description="Laissez vos clients créer un compte sur votre site pour suivre leurs achats et leurs réservations."
+          description={t(
+            "Laissez vos clients créer un compte sur votre site pour suivre leurs achats et leurs réservations.",
+            "Let your customers create an account on your website to follow their purchases and bookings.",
+          )}
         />
       )}
 
       <label className="block max-w-sm text-sm">
-        <span className="sr-only">Rechercher un compte par e-mail</span>
+        <span className="sr-only">{t("Rechercher un compte par e-mail", "Search for an account by e-mail")}</span>
         <Input
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Rechercher par e-mail"
+          placeholder={t("Rechercher par e-mail", "Search by e-mail")}
           className="w-full"
         />
       </label>
 
       {isLoading && <SkeletonList rows={3} />}
-      {isError && <p className="text-sm text-destructive">Impossible de charger les espaces clients.</p>}
+      {isError && <p className="text-sm text-destructive">{t("Impossible de charger les espaces clients.", "Customer accounts could not be loaded.")}</p>}
       {data && data.length === 0 && (
         <Card>
           <EmptyState
-            title={term ? `Aucun compte ne correspond à « ${term} ».` : "Aucun client n'a encore créé de compte."}
-            description={term ? undefined : "Le lien « Se connecter » de votre site leur permet d'en créer un."}
+            title={
+              term
+                ? t(`Aucun compte ne correspond à « ${term} ».`, `No account matches “${term}”.`)
+                : t("Aucun client n'a encore créé de compte.", "No customer has created an account yet.")
+            }
+            description={
+              term
+                ? undefined
+                : t(
+                    "Le lien « Se connecter » de votre site leur permet d'en créer un.",
+                    "The “Sign in” link on your website lets them create one.",
+                  )
+            }
           />
         </Card>
       )}
       {data && data.length > 0 && (
         <Card className="overflow-hidden">
-          <Table caption="Espaces clients">
+          <Table caption={t("Espaces clients", "Customer accounts")}>
             <thead>
               <tr>
-                <Th>Client</Th>
-                <Th>État</Th>
-                <Th>Créé le</Th>
-                <Th>Dernière connexion</Th>
+                <Th>{t("Client", "Customer")}</Th>
+                <Th>{t("État", "Status")}</Th>
+                <Th>{t("Créé le", "Created")}</Th>
+                <Th>{t("Dernière connexion", "Last sign-in")}</Th>
                 <Th>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{t("Actions", "Actions")}</span>
                 </Th>
               </tr>
             </thead>
@@ -90,8 +109,8 @@ export default function CustomerAccountsPage() {
                   <Td>
                     <AccountStatus account={account} />
                   </Td>
-                  <Td>{new Date(account.createdAt).toLocaleDateString("fr-FR")}</Td>
-                  <Td>{formatSeen(account.lastLoginAt)}</Td>
+                  <Td>{new Date(account.createdAt).toLocaleDateString(intlLocale(locale))}</Td>
+                  <Td>{formatSeen(account.lastLoginAt, locale)}</Td>
                   <Td>
                     <CustomerAccountActions account={account} />
                   </Td>

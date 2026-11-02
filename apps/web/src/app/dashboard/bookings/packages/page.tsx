@@ -12,12 +12,14 @@ import type { Contact, CreditBalance, Offer } from "@korva/types";
 import { Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
 export default function PackagesPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
   const authReady = useAuthReady();
+  const t = useT();
 
   const { data: balancesPage, isLoading } = useQuery({
     queryKey: ["credit-balances", page],
@@ -74,11 +76,13 @@ export default function PackagesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-muted">
-          Forfaits de séances prépayées — le solde se décrémente automatiquement quand une
-          réservation pour ce forfait est marquée terminée avec présence.
+          {t(
+            "Forfaits de séances prépayées — le solde se décrémente automatiquement quand une réservation pour ce forfait est marquée terminée avec présence.",
+            "Prepaid session packages — the balance goes down by itself when a booking for the package is marked completed and attended.",
+          )}
         </p>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Vendre un forfait"}
+          {showForm ? t("Annuler", "Cancel") : t("Vendre un forfait", "Sell a package")}
         </Button>
       </div>
 
@@ -94,7 +98,7 @@ export default function PackagesPage() {
               {...register("contactId", { required: true })}
             >
               <option value="" disabled>
-                Client
+                {t("Client", "Customer")}
               </option>
               {contacts?.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -108,7 +112,7 @@ export default function PackagesPage() {
               {...register("offerId", { required: true })}
             >
               <option value="" disabled>
-                Forfait
+                {t("Forfait", "Package")}
               </option>
               {packageOffers?.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -118,7 +122,7 @@ export default function PackagesPage() {
             </select>
             <Input
               type="number"
-              placeholder="Nombre de séances"
+              placeholder={t("Nombre de séances", "Number of sessions")}
               {...register("credits", { valueAsNumber: true })}
             />
           </div>
@@ -127,8 +131,10 @@ export default function PackagesPage() {
           )}
           {!packageOffers?.length && (
             <p className="text-xs text-text-muted">
-              Aucune offre de type &laquo; forfait &raquo; — créez-en une dans le catalogue avant
-              de vendre un forfait.
+              {t(
+                "Aucune offre de type « forfait » — créez-en une dans le catalogue avant de vendre un forfait.",
+                "No “package” offer yet — create one in the catalogue before selling a package.",
+              )}
             </p>
           )}
 
@@ -136,11 +142,11 @@ export default function PackagesPage() {
             <p className="text-sm text-red-600">
               {topUpMutation.error instanceof ApiError
                 ? topUpMutation.error.message
-                : "Erreur"}
+                : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={topUpMutation.isPending}>
-            {topUpMutation.isPending ? "Enregistrement..." : "Créditer le forfait"}
+            {topUpMutation.isPending ? t("Enregistrement...", "Saving...") : t("Créditer le forfait", "Credit the package")}
           </Button>
         </form>
       )}
@@ -150,23 +156,23 @@ export default function PackagesPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Client</th>
-                <th className="px-4 py-2">Forfait</th>
-                <th className="px-4 py-2">Solde restant</th>
+                <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                <th className="px-4 py-2">{t("Forfait", "Package")}</th>
+                <th className="px-4 py-2">{t("Solde restant", "Remaining balance")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && balances?.length === 0 && (
                 <tr>
                   <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
-                    Aucun forfait vendu.
+                    {t("Aucun forfait vendu.", "No packages sold.")}
                   </td>
                 </tr>
               )}

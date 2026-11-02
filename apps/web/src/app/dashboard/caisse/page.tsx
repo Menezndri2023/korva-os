@@ -9,23 +9,34 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { TillPanel } from "@/components/pro/till-panel";
+import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 
-const ERRORS: Record<string, string> = {
-  ONLINE_PAYMENT_NOT_AVAILABLE: "Le paiement mobile money n'est pas encore disponible pour votre entreprise. Contactez KORVA.",
-  CURRENCY_NOT_CHARGEABLE: "Le paiement mobile money n'est pas disponible dans la devise de votre entreprise.",
-  VALIDATION_ERROR: "Saisissez un montant supérieur à zéro.",
-};
-
-function errorText(error: unknown): string {
-  return (error instanceof ApiError && ERRORS[error.code]) || "Le QR code n'a pas pu être créé. Réessayez.";
+function errorText(error: unknown, t: Translate): string {
+  if (error instanceof ApiError) {
+    switch (error.code) {
+      case "ONLINE_PAYMENT_NOT_AVAILABLE":
+        return t(
+          "Le paiement mobile money n'est pas encore disponible pour votre entreprise. Contactez KORVA.",
+          "Mobile money payment is not available for your business yet. Contact KORVA.",
+        );
+      case "CURRENCY_NOT_CHARGEABLE":
+        return t(
+          "Le paiement mobile money n'est pas disponible dans la devise de votre entreprise.",
+          "Mobile money payment is not available in your business's currency.",
+        );
+      case "VALIDATION_ERROR":
+        return t("Saisissez un montant supérieur à zéro.", "Enter an amount above zero.");
+    }
+  }
+  return t("Le QR code n'a pas pu être créé. Réessayez.", "The QR code could not be created. Try again.");
 }
 
-const STATUS: Record<string, { label: string; variant: "default" | "success" | "warning" }> = {
-  pending: { label: "En attente", variant: "default" },
-  processing: { label: "En attente", variant: "default" },
-  completed: { label: "Payé", variant: "success" },
-  failed: { label: "Échoué", variant: "warning" },
-  refunded: { label: "Remboursé", variant: "default" },
+const STATUS: Record<string, { label: [string, string]; variant: "default" | "success" | "warning" }> = {
+  pending: { label: ["En attente", "Pending"], variant: "default" },
+  processing: { label: ["En attente", "Pending"], variant: "default" },
+  completed: { label: ["Payé", "Paid"], variant: "success" },
+  failed: { label: ["Échoué", "Failed"], variant: "warning" },
+  refunded: { label: ["Remboursé", "Refunded"], variant: "default" },
 };
 
 /** The screen stops asking GeniusPay after this long; the webhook still records a late payment. */
@@ -40,6 +51,8 @@ const POLL_EVERY_MS = 3000;
 export default function CounterPage() {
   const authReady = useAuthReady();
   const queryClient = useQueryClient();
+  const locale = useDashboardLocale();
+  const t = useT();
   const [amount, setAmount] = useState("");
   const [label, setLabel] = useState("");
   const [current, setCurrent] = useState<{ id: string; expired: boolean } | null>(null);
@@ -109,8 +122,11 @@ export default function CounterPage() {
   return (
     <div className="max-w-3xl space-y-5">
       <PageHeader
-        title="Caisse"
-        description="Saisissez le montant et montrez le QR code : le client le scanne avec son téléphone et paie par Wave, Orange Money, MTN, Moov ou carte. L'argent arrive dans votre Solde KORVA."
+        title={t("Caisse", "Till")}
+        description={t(
+          "Saisissez le montant et montrez le QR code : le client le scanne avec son téléphone et paie par Wave, Orange Money, MTN, Moov ou carte. L'argent arrive dans votre Solde KORVA.",
+          "Enter the amount and show the QR code: the customer scans it with their phone and pays by Wave, Orange Money, MTN, Moov or card. The money arrives in your KORVA balance.",
+        )}
       />
 
       {!current ? (
@@ -118,7 +134,7 @@ export default function CounterPage() {
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label htmlFor="counter-amount" className="text-sm font-medium text-text">
-                Montant à encaisser
+                {t("Montant à encaisser", "Amount to take")}
               </label>
               <Input
                 id="counter-amount"
@@ -133,7 +149,10 @@ export default function CounterPage() {
             </div>
             <div>
               <label htmlFor="counter-label" className="text-sm font-medium text-text">
-                Pour quoi ? <span className="font-normal text-text-muted">(facultatif, apparaît sur la facture)</span>
+                {t("Pour quoi ?", "What for?")}{" "}
+                <span className="font-normal text-text-muted">
+                  {t("(facultatif, apparaît sur la facture)", "(optional, shown on the invoice)")}
+                </span>
               </label>
               <Input
                 id="counter-label"
@@ -141,45 +160,47 @@ export default function CounterPage() {
                 value={label}
                 onChange={(event) => setLabel(event.target.value)}
                 className="mt-1"
-                placeholder="Vente au comptoir"
+                placeholder={t("Vente au comptoir", "Counter sale")}
               />
             </div>
             {create.isError && (
               <p className="text-sm text-destructive" role="alert">
-                {errorText(create.error)}
+                {errorText(create.error, t)}
               </p>
             )}
             <Button type="submit" loading={create.isPending} disabled={!(parsedAmount > 0)}>
-              Afficher le QR code
+              {t("Afficher le QR code", "Show the QR code")}
             </Button>
           </form>
         </Card>
       ) : (
         <Card className="p-5">
           {sale.data ? <SaleDisplay sale={sale.data} onNewSale={newSale} expired={current.expired} /> : (
-            <p className="text-sm text-text-muted">Chargement…</p>
+            <p className="text-sm text-text-muted">{t("Chargement…", "Loading…")}</p>
           )}
         </Card>
       )}
 
       <Card className="p-5">
-        <h2 className="text-base font-semibold text-text">Dernières ventes à la caisse</h2>
+        <h2 className="text-base font-semibold text-text">{t("Dernières ventes à la caisse", "Recent till sales")}</h2>
         {recent.data && recent.data.length === 0 && (
-          <p className="mt-2 text-sm text-text-muted">Aucune vente encaissée par QR code pour l&apos;instant.</p>
+          <p className="mt-2 text-sm text-text-muted">
+            {t("Aucune vente encaissée par QR code pour l'instant.", "No sales taken by QR code yet.")}
+          </p>
         )}
         <ul className="mt-3 divide-y divide-border">
           {recent.data?.map((payment) => {
-            const badge = STATUS[payment.status] ?? { label: payment.status, variant: "default" as const };
+            const badge = STATUS[payment.status] ?? { label: [payment.status, payment.status] as [string, string], variant: "default" as const };
             return (
               <li key={payment.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-sm">
                 <span>
-                  <span className="font-medium tabular-nums">{formatCurrency(payment.amount, payment.currency)}</span>{" "}
+                  <span className="font-medium tabular-nums">{formatCurrency(payment.amount, payment.currency, locale)}</span>{" "}
                   <span className="text-text-muted">{payment.label}</span>
                   <span className="block text-xs text-text-muted">
-                    {payment.invoiceNumber} — {new Date(payment.createdAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                    {payment.invoiceNumber} — {new Date(payment.createdAt).toLocaleString(intlLocale(locale), { dateStyle: "short", timeStyle: "short" })}
                   </span>
                 </span>
-                <Badge variant={badge.variant}>{badge.label}</Badge>
+                <Badge variant={badge.variant}>{t(...badge.label)}</Badge>
               </li>
             );
           })}
@@ -200,7 +221,9 @@ function SaleDisplay({
   expired: boolean;
   onNewSale: () => void;
 }) {
-  const amount = formatCurrency(sale.amount, sale.currency);
+  const locale = useDashboardLocale();
+  const t = useT();
+  const amount = formatCurrency(sale.amount, sale.currency, locale);
   const [copied, setCopied] = useState(false);
   const copy = (url: string) =>
     void navigator.clipboard?.writeText(url).then(
@@ -211,21 +234,29 @@ function SaleDisplay({
   if (sale.status === "completed") {
     return (
       <div className="space-y-4 py-6 text-center" role="status">
-        <p className="text-3xl font-semibold text-text">Payé</p>
+        <p className="text-3xl font-semibold text-text">{t("Payé", "Paid")}</p>
         <p className="text-lg tabular-nums text-text">{amount}</p>
         <p className="text-sm text-text-muted">
-          Facture {sale.invoiceNumber} réglée. Le montant arrive dans votre Solde KORVA, frais et commission déduits.
+          {t(
+            `Facture ${sale.invoiceNumber} réglée. Le montant arrive dans votre Solde KORVA, frais et commission déduits.`,
+            `Invoice ${sale.invoiceNumber} paid. The amount arrives in your KORVA balance, fees and commission deducted.`,
+          )}
         </p>
-        <Button onClick={onNewSale}>Nouvelle vente</Button>
+        <Button onClick={onNewSale}>{t("Nouvelle vente", "New sale")}</Button>
       </div>
     );
   }
   if (sale.status === "failed") {
     return (
       <div className="space-y-4 py-6 text-center" role="status">
-        <p className="text-2xl font-semibold text-text">Paiement non abouti</p>
-        <p className="text-sm text-text-muted">Le client n&apos;a pas pu payer {amount}. Créez un nouveau QR code pour réessayer.</p>
-        <Button onClick={onNewSale}>Nouvelle vente</Button>
+        <p className="text-2xl font-semibold text-text">{t("Paiement non abouti", "Payment not completed")}</p>
+        <p className="text-sm text-text-muted">
+          {t(
+            `Le client n'a pas pu payer ${amount}. Créez un nouveau QR code pour réessayer.`,
+            `The customer could not pay ${amount}. Create a new QR code to try again.`,
+          )}
+        </p>
+        <Button onClick={onNewSale}>{t("Nouvelle vente", "New sale")}</Button>
       </div>
     );
   }
@@ -237,21 +268,24 @@ function SaleDisplay({
       {sale.checkoutUrl && <QrImage value={sale.checkoutUrl} />}
       {expired ? (
         <Notice tone="warning">
-          Ce QR code n&apos;est plus surveillé par cet écran. Si le client a payé, la vente apparaîtra comme payée dans la liste ci-dessous.
+          {t(
+            "Ce QR code n'est plus surveillé par cet écran. Si le client a payé, la vente apparaîtra comme payée dans la liste ci-dessous.",
+            "This screen no longer watches this QR code. If the customer paid, the sale will show as paid in the list below.",
+          )}
         </Notice>
       ) : (
         <p className="text-sm text-text-muted" aria-live="polite">
-          En attente du paiement… L&apos;écran se met à jour tout seul.
+          {t("En attente du paiement… L'écran se met à jour tout seul.", "Waiting for the payment… The screen updates by itself.")}
         </p>
       )}
       <div className="flex flex-wrap justify-center gap-2">
         {sale.checkoutUrl && (
           <Button size="sm" variant="secondary" onClick={() => copy(sale.checkoutUrl!)}>
-            {copied ? "Lien copié" : "Copier le lien de paiement"}
+            {copied ? t("Lien copié", "Link copied") : t("Copier le lien de paiement", "Copy the payment link")}
           </Button>
         )}
         <Button size="sm" variant="ghost" onClick={onNewSale}>
-          Annuler et revenir
+          {t("Annuler et revenir", "Cancel and go back")}
         </Button>
       </div>
     </div>
@@ -260,6 +294,7 @@ function SaleDisplay({
 
 /** Black on white whatever the theme: phone cameras read a dark-mode (inverted) QR code badly. */
 function QrImage({ value }: { value: string }) {
+  const t = useT();
   const [svg, setSvg] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -274,7 +309,7 @@ function QrImage({ value }: { value: string }) {
   return (
     <div
       role="img"
-      aria-label="QR code de paiement mobile money"
+      aria-label={t("QR code de paiement mobile money", "Mobile money payment QR code")}
       className="size-64 rounded-lg bg-white p-2 [&>svg]:size-full"
       // The SVG is generated locally by the qrcode library from GeniusPay's URL — never user HTML.
       dangerouslySetInnerHTML={svg ? { __html: svg } : undefined}

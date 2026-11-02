@@ -7,6 +7,7 @@ import { Button, Input, Select } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { PlanLock } from "@/components/plan-lock";
+import { useT } from "@/lib/dashboard-locale";
 
 /**
  * Which parts of the offer form apply to each offer type. One table, read by both the creation
@@ -70,6 +71,7 @@ export function VariantsEditor({
   /** False when the plan does not include variants: existing ones stay editable, none added. */
   canAdd?: boolean;
 }) {
+  const t = useT();
   function update(index: number, patch: Partial<VariantDraft>) {
     onChange(variants.map((variant, i) => (i === index ? { ...variant, ...patch } : variant)));
   }
@@ -77,7 +79,7 @@ export function VariantsEditor({
   return (
     <fieldset className="col-span-2 space-y-2">
       <div className="flex items-center justify-between">
-        <legend className="text-sm font-medium text-text">Variantes</legend>
+        <legend className="text-sm font-medium text-text">{t("Variantes", "Variants")}</legend>
         {canAdd ? (
           <Button
             type="button"
@@ -85,7 +87,7 @@ export function VariantsEditor({
             size="sm"
             onClick={() => onChange([...variants, { name: "" }])}
           >
-            Ajouter une variante
+            {t("Ajouter une variante", "Add a variant")}
           </Button>
         ) : (
           <PlanLock feature="offer_variants" />
@@ -93,30 +95,32 @@ export function VariantsEditor({
       </div>
       {variants.length === 0 ? (
         <p className="text-xs text-text-muted">
-          Aucune variante. Ajoutez-en pour vendre plusieurs tailles, couleurs ou formats avec un
-          prix et un stock propres.
+          {t(
+            "Aucune variante. Ajoutez-en pour vendre plusieurs tailles, couleurs ou formats avec un prix et un stock propres.",
+            "No variants. Add some to sell several sizes, colours or formats, each with its own price and stock.",
+          )}
         </p>
       ) : (
         <ul className="space-y-2">
           {variants.map((variant, index) => (
             <li key={variant.id ?? `new-${index}`} className="flex flex-wrap items-center gap-2">
               <input
-                aria-label={`Nom de la variante ${index + 1}`}
-                placeholder="Nom (ex. M, Rouge)"
+                aria-label={t(`Nom de la variante ${index + 1}`, `Variant ${index + 1} name`)}
+                placeholder={t("Nom (ex. M, Rouge)", "Name (e.g. M, Red)")}
                 className={`${FIELD} w-36`}
                 value={variant.name}
                 onChange={(e) => update(index, { name: e.target.value })}
               />
               <input
-                aria-label={`Référence de la variante ${index + 1}`}
-                placeholder="Référence"
+                aria-label={t(`Référence de la variante ${index + 1}`, `Variant ${index + 1} reference`)}
+                placeholder={t("Référence", "Reference")}
                 className={`${FIELD} w-28`}
                 value={variant.sku ?? ""}
                 onChange={(e) => update(index, { sku: optionalText(e.target.value) })}
               />
               <input
-                aria-label={`Prix de la variante ${index + 1}`}
-                placeholder="Prix (si différent)"
+                aria-label={t(`Prix de la variante ${index + 1}`, `Variant ${index + 1} price`)}
+                placeholder={t("Prix (si différent)", "Price (if different)")}
                 type="number"
                 step="0.01"
                 min="0"
@@ -127,12 +131,12 @@ export function VariantsEditor({
               {trackStock &&
                 (variant.id ? (
                   <span className="text-xs text-text-muted">
-                    Stock : {variant.stockOnHand ?? 0}
+                    {t("Stock :", "Stock:")} {variant.stockOnHand ?? 0}
                   </span>
                 ) : (
                   <input
-                    aria-label={`Stock initial de la variante ${index + 1}`}
-                    placeholder="Stock initial"
+                    aria-label={t(`Stock initial de la variante ${index + 1}`, `Variant ${index + 1} opening stock`)}
+                    placeholder={t("Stock initial", "Opening stock")}
                     type="number"
                     step="1"
                     min="0"
@@ -143,11 +147,11 @@ export function VariantsEditor({
                 ))}
               <button
                 type="button"
-                aria-label={`Retirer la variante ${index + 1}`}
+                aria-label={t(`Retirer la variante ${index + 1}`, `Remove variant ${index + 1}`)}
                 onClick={() => onChange(variants.filter((_, i) => i !== index))}
                 className="text-xs text-destructive hover:underline"
               >
-                Retirer
+                {t("Retirer", "Remove")}
               </button>
             </li>
           ))}
@@ -168,6 +172,7 @@ export function AttributesEditor({
   attributes: Record<string, string>;
   onChange: (next: Record<string, string>) => void;
 }) {
+  const t = useT();
   const [rows, setRows] = useState<{ key: string; value: string }[]>(() =>
     Object.entries(attributes).map(([key, value]) => ({ key, value })),
   );
@@ -185,27 +190,30 @@ export function AttributesEditor({
   return (
     <fieldset className="col-span-2 space-y-2">
       <div className="flex items-center justify-between">
-        <legend className="text-sm font-medium text-text">Caractéristiques</legend>
+        <legend className="text-sm font-medium text-text">{t("Caractéristiques", "Characteristics")}</legend>
         <Button
           type="button"
           variant="secondary"
           size="sm"
           onClick={() => setRows([...rows, { key: "", value: "" }])}
         >
-          Ajouter une caractéristique
+          {t("Ajouter une caractéristique", "Add a characteristic")}
         </Button>
       </div>
       {rows.length === 0 ? (
         <p className="text-xs text-text-muted">
-          Par exemple : matière, marque, origine, équipements. Affichées sur la fiche publique.
+          {t(
+            "Par exemple : matière, marque, origine, équipements. Affichées sur la fiche publique.",
+            "For example: material, brand, origin, amenities. Shown on the public page.",
+          )}
         </p>
       ) : (
         <ul className="space-y-2">
           {rows.map((row, index) => (
             <li key={index} className="flex flex-wrap items-center gap-2">
               <input
-                aria-label={`Caractéristique ${index + 1}`}
-                placeholder="Caractéristique (ex. Matière)"
+                aria-label={t(`Caractéristique ${index + 1}`, `Characteristic ${index + 1}`)}
+                placeholder={t("Caractéristique (ex. Matière)", "Characteristic (e.g. Material)")}
                 className={`${FIELD} w-44`}
                 value={row.key}
                 onChange={(e) =>
@@ -213,8 +221,8 @@ export function AttributesEditor({
                 }
               />
               <input
-                aria-label={`Valeur de la caractéristique ${index + 1}`}
-                placeholder="Valeur (ex. Coton)"
+                aria-label={t(`Valeur de la caractéristique ${index + 1}`, `Characteristic ${index + 1} value`)}
+                placeholder={t("Valeur (ex. Coton)", "Value (e.g. Cotton)")}
                 className={`${FIELD} flex-1`}
                 value={row.value}
                 onChange={(e) =>
@@ -223,11 +231,11 @@ export function AttributesEditor({
               />
               <button
                 type="button"
-                aria-label={`Retirer la caractéristique ${index + 1}`}
+                aria-label={t(`Retirer la caractéristique ${index + 1}`, `Remove characteristic ${index + 1}`)}
                 onClick={() => commit(rows.filter((_, i) => i !== index))}
                 className="text-xs text-destructive hover:underline"
               >
-                Retirer
+                {t("Retirer", "Remove")}
               </button>
             </li>
           ))}
@@ -256,6 +264,7 @@ export function BundleItemsEditor({
   excludeOfferId?: string;
 }) {
   const authReady = useAuthReady();
+  const t = useT();
   const [pick, setPick] = useState("");
   const offersQuery = useQuery({
     queryKey: ["offers", "bundle-candidates"],
@@ -266,7 +275,7 @@ export function BundleItemsEditor({
     (offer) => offer.id !== excludeOfferId && !offer.isBundle,
   );
   const nameOf = (offerId: string) =>
-    candidates.find((offer) => offer.id === offerId)?.name ?? "Offre";
+    candidates.find((offer) => offer.id === offerId)?.name ?? t("Offre", "Offer");
 
   function add() {
     if (!pick) return;
@@ -283,15 +292,15 @@ export function BundleItemsEditor({
 
   return (
     <fieldset className="col-span-2 space-y-2">
-      <legend className="text-sm font-medium text-text">Contenu du pack</legend>
+      <legend className="text-sm font-medium text-text">{t("Contenu du pack", "Pack contents")}</legend>
       <div className="flex gap-2">
         <Select
-          aria-label="Offre à ajouter au pack"
+          aria-label={t("Offre à ajouter au pack", "Offer to add to the pack")}
           value={pick}
           onChange={(e) => setPick(e.target.value)}
           className="flex-1"
         >
-          <option value="">Choisir une offre</option>
+          <option value="">{t("Choisir une offre", "Choose an offer")}</option>
           {candidates.map((offer) => (
             <option key={offer.id} value={offer.id}>
               {offer.name}
@@ -299,7 +308,7 @@ export function BundleItemsEditor({
           ))}
         </Select>
         <Button type="button" variant="secondary" size="sm" disabled={!pick} onClick={add}>
-          Ajouter au pack
+          {t("Ajouter au pack", "Add to the pack")}
         </Button>
       </div>
       {items.length > 0 && (
@@ -311,7 +320,7 @@ export function BundleItemsEditor({
                 type="number"
                 min="1"
                 step="1"
-                aria-label={`Quantité de ${nameOf(item.offerId)}`}
+                aria-label={t(`Quantité de ${nameOf(item.offerId)}`, `Quantity of ${nameOf(item.offerId)}`)}
                 value={item.quantity}
                 onChange={(e) =>
                   onChange(
@@ -324,19 +333,21 @@ export function BundleItemsEditor({
               />
               <button
                 type="button"
-                aria-label={`Retirer ${nameOf(item.offerId)} du pack`}
+                aria-label={t(`Retirer ${nameOf(item.offerId)} du pack`, `Remove ${nameOf(item.offerId)} from the pack`)}
                 onClick={() => onChange(items.filter((_, i) => i !== index))}
                 className="text-xs text-destructive hover:underline"
               >
-                Retirer
+                {t("Retirer", "Remove")}
               </button>
             </li>
           ))}
         </ul>
       )}
       <p className="text-xs text-text-muted">
-        Le pack est vendu à son propre prix. Sa vente ne décompte pas encore le stock des offres
-        qu&apos;il contient.
+        {t(
+          "Le pack est vendu à son propre prix. Sa vente ne décompte pas encore le stock des offres qu'il contient.",
+          "The pack is sold at its own price. Selling it does not yet reduce the stock of the offers it contains.",
+        )}
       </p>
     </fieldset>
   );
@@ -354,6 +365,7 @@ export function OptionGroupsEditor({
   groups: OfferOptionGroup[];
   onChange: (next: OfferOptionGroup[]) => void;
 }) {
+  const t = useT();
   function updateGroup(index: number, patch: Partial<OfferOptionGroup>) {
     onChange(groups.map((group, i) => (i === index ? { ...group, ...patch } : group)));
   }
@@ -361,7 +373,7 @@ export function OptionGroupsEditor({
   return (
     <fieldset className="col-span-2 space-y-3">
       <div className="flex items-center justify-between">
-        <legend className="text-sm font-medium text-text">Options et suppléments</legend>
+        <legend className="text-sm font-medium text-text">{t("Options et suppléments", "Options and extras")}</legend>
         <Button
           type="button"
           variant="secondary"
@@ -379,20 +391,23 @@ export function OptionGroupsEditor({
             ])
           }
         >
-          Ajouter un groupe d&apos;options
+          {t("Ajouter un groupe d'options", "Add an option group")}
         </Button>
       </div>
       {groups.length === 0 && (
         <p className="text-xs text-text-muted">
-          Par exemple : cuisson, taille, accompagnement, suppléments payants.
+          {t(
+            "Par exemple : cuisson, taille, accompagnement, suppléments payants.",
+            "For example: cooking, size, side dish, paid extras.",
+          )}
         </p>
       )}
       {groups.map((group, groupIndex) => (
         <div key={group.id} className="space-y-2 rounded-md border border-border p-3">
           <div className="flex flex-wrap items-center gap-2">
             <input
-              aria-label={`Nom du groupe ${groupIndex + 1}`}
-              placeholder="Nom du groupe (ex. Taille)"
+              aria-label={t(`Nom du groupe ${groupIndex + 1}`, `Group ${groupIndex + 1} name`)}
+              placeholder={t("Nom du groupe (ex. Taille)", "Group name (e.g. Size)")}
               className={`${FIELD} w-48`}
               value={group.name}
               onChange={(e) => updateGroup(groupIndex, { name: e.target.value })}
@@ -403,12 +418,12 @@ export function OptionGroupsEditor({
                 checked={group.required}
                 onChange={(e) => updateGroup(groupIndex, { required: e.target.checked })}
               />
-              Obligatoire
+              {t("Obligatoire", "Required")}
             </label>
             <label className="flex items-center gap-1 text-xs text-text">
-              Choix maximum
+              {t("Choix maximum", "Maximum choices")}
               <input
-                aria-label={`Choix maximum du groupe ${groupIndex + 1}`}
+                aria-label={t(`Choix maximum du groupe ${groupIndex + 1}`, `Group ${groupIndex + 1} maximum choices`)}
                 type="number"
                 min="1"
                 max={group.options.length}
@@ -426,19 +441,19 @@ export function OptionGroupsEditor({
             </label>
             <button
               type="button"
-              aria-label={`Retirer le groupe ${groupIndex + 1}`}
+              aria-label={t(`Retirer le groupe ${groupIndex + 1}`, `Remove group ${groupIndex + 1}`)}
               onClick={() => onChange(groups.filter((_, i) => i !== groupIndex))}
               className="ml-auto text-xs text-destructive hover:underline"
             >
-              Retirer le groupe
+              {t("Retirer le groupe", "Remove the group")}
             </button>
           </div>
           <ul className="space-y-1">
             {group.options.map((option, optionIndex) => (
               <li key={option.id} className="flex flex-wrap items-center gap-2">
                 <input
-                  aria-label={`Option ${optionIndex + 1} du groupe ${groupIndex + 1}`}
-                  placeholder="Option (ex. Grand)"
+                  aria-label={t(`Option ${optionIndex + 1} du groupe ${groupIndex + 1}`, `Group ${groupIndex + 1} option ${optionIndex + 1}`)}
+                  placeholder={t("Option (ex. Grand)", "Option (e.g. Large)")}
                   className={`${FIELD} w-48`}
                   value={option.name}
                   onChange={(e) =>
@@ -450,8 +465,11 @@ export function OptionGroupsEditor({
                   }
                 />
                 <input
-                  aria-label={`Supplément de l'option ${optionIndex + 1} du groupe ${groupIndex + 1}`}
-                  placeholder="Supplément"
+                  aria-label={t(
+                    `Supplément de l'option ${optionIndex + 1} du groupe ${groupIndex + 1}`,
+                    `Group ${groupIndex + 1} option ${optionIndex + 1} extra price`,
+                  )}
+                  placeholder={t("Supplément", "Extra price")}
                   type="number"
                   min="0"
                   step="0.01"
@@ -468,7 +486,10 @@ export function OptionGroupsEditor({
                 {group.options.length > 1 && (
                   <button
                     type="button"
-                    aria-label={`Retirer l'option ${optionIndex + 1} du groupe ${groupIndex + 1}`}
+                    aria-label={t(
+                      `Retirer l'option ${optionIndex + 1} du groupe ${groupIndex + 1}`,
+                      `Remove group ${groupIndex + 1} option ${optionIndex + 1}`,
+                    )}
                     onClick={() => {
                       const options = group.options.filter((_, i) => i !== optionIndex);
                       updateGroup(groupIndex, {
@@ -478,7 +499,7 @@ export function OptionGroupsEditor({
                     }}
                     className="text-xs text-destructive hover:underline"
                   >
-                    Retirer
+                    {t("Retirer", "Remove")}
                   </button>
                 )}
               </li>
@@ -493,7 +514,7 @@ export function OptionGroupsEditor({
             }
             className="text-xs text-text hover:underline"
           >
-            + Ajouter une option
+            + {t("Ajouter une option", "Add an option")}
           </button>
         </div>
       ))}
@@ -516,9 +537,10 @@ export function GuidedFieldsEditor({
   attributes: Record<string, string>;
   onChange: (label: string, value: string | undefined) => void;
 }) {
+  const t = useT();
   return (
     <fieldset className="col-span-2 grid gap-2 sm:grid-cols-2">
-      <legend className="col-span-2 mb-1 text-sm font-medium text-text">Détails</legend>
+      <legend className="col-span-2 mb-1 text-sm font-medium text-text">{t("Détails", "Details")}</legend>
       {fields.map((field) => {
         const value = attributes[field.label] ?? "";
         const set = (next: string) => onChange(field.label, next.trim() === "" ? undefined : next);

@@ -9,6 +9,9 @@ import { createResourceSchema, type CreateResourceInput } from "@korva/validatio
 import {
   RESOURCE_KINDS,
   RESOURCE_KIND_LABELS,
+  RESOURCE_KIND_LABELS_EN,
+  WEEKDAY_SHORT,
+  type Locale,
   type BusinessModel,
   type Resource,
   type ResourceKind,
@@ -17,8 +20,7 @@ import { Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError, uploadFile } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useActiveOrganization } from "@/lib/use-active-organization";
-
-const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 interface MemberOption {
   id: string;
@@ -38,8 +40,8 @@ function defaultKind(businessModel: BusinessModel | undefined): ResourceKind {
   return businessModel === "restaurant" || businessModel === "lodging" ? "room" : "person";
 }
 
-function kindLabel(type: string): string {
-  return (RESOURCE_KIND_LABELS as Record<string, string>)[type] ?? type;
+function kindLabel(type: string, locale: Locale): string {
+  return ((locale === "en" ? RESOURCE_KIND_LABELS_EN : RESOURCE_KIND_LABELS) as Record<string, string>)[type] ?? type;
 }
 
 export default function ResourcesPage() {
@@ -47,6 +49,9 @@ export default function ResourcesPage() {
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const { data: organization } = useActiveOrganization();
+  const locale = useDashboardLocale();
+  const t = useT();
+  const DAY_LABELS = WEEKDAY_SHORT[locale];
   const [photo, setPhoto] = useState<string | undefined>();
   const [photoUploading, setPhotoUploading] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -92,7 +97,7 @@ export default function ResourcesPage() {
     try {
       setPhoto((await uploadFile(file)).url);
     } catch (error) {
-      setPhotoError(error instanceof ApiError ? error.message : "Échec de l'envoi de la photo.");
+      setPhotoError(error instanceof ApiError ? error.message : t("Échec de l'envoi de la photo.", "The photo could not be uploaded."));
     } finally {
       setPhotoUploading(false);
     }
@@ -114,13 +119,13 @@ export default function ResourcesPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="max-w-2xl text-sm text-text-muted">
-          Ce que vos clients réservent : les membres de l&apos;équipe (coiffeurs, coachs,
-          formateurs), les lieux (salles, cabines, tables, chambres) et les équipements. Un membre
-          de l&apos;équipe n&apos;a pas besoin de compte et ne compte pas comme utilisateur de
-          votre abonnement.
+          {t(
+            "Ce que vos clients réservent : les membres de l'équipe (coiffeurs, coachs, formateurs), les lieux (salles, cabines, tables, chambres) et les équipements. Un membre de l'équipe n'a pas besoin de compte et ne compte pas comme utilisateur de votre abonnement.",
+            "What your customers book: team members (hairdressers, coaches, trainers), places (rooms, booths, tables, bedrooms) and equipment. A team member needs no account and does not count as a user of your subscription.",
+          )}
         </p>
         <Button onClick={() => (showForm ? setShowForm(false) : openForm())}>
-          {showForm ? "Annuler" : "Nouvelle ressource"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouvelle ressource", "New resource")}
         </Button>
       </div>
 
@@ -135,37 +140,37 @@ export default function ResourcesPage() {
           className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
           <div className="grid gap-2 sm:grid-cols-3">
-            <Select aria-label="Nature" {...register("type")}>
+            <Select aria-label={t("Nature", "Kind")} {...register("type")}>
               {RESOURCE_KINDS.map((value) => (
                 <option key={value} value={value}>
-                  {RESOURCE_KIND_LABELS[value]}
+                  {kindLabel(value, locale)}
                 </option>
               ))}
             </Select>
             <Input
-              aria-label="Nom"
-              placeholder={isPerson ? "Prénom (ex: Awa)" : "Nom (ex: Salle 1)"}
+              aria-label={t("Nom", "Name")}
+              placeholder={isPerson ? t("Prénom (ex: Awa)", "First name (e.g. Awa)") : t("Nom (ex: Salle 1)", "Name (e.g. Room 1)")}
               className="sm:col-span-2"
               {...register("name")}
             />
           </div>
           <label className="flex items-center gap-2 text-sm text-text">
-            {isPerson ? "Clients en même temps" : "Capacité"}
+            {isPerson ? t("Clients en même temps", "Customers at the same time") : t("Capacité", "Capacity")}
             <Input
               type="number"
               min="1"
-              aria-label="Capacité"
+              aria-label={t("Capacité", "Capacity")}
               className="w-24"
               {...register("capacity", { valueAsNumber: true })}
             />
           </label>
           {kind === "room" && (
             <label className="flex items-center gap-2 text-sm text-text">
-              Places assises (pour une table de restaurant)
+              {t("Places assises (pour une table de restaurant)", "Seats (for a restaurant table)")}
               <Input
                 type="number"
                 min="1"
-                aria-label="Places assises"
+                aria-label={t("Places assises", "Seats")}
                 className="w-24"
                 {...register("seats", {
                   setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -174,11 +179,14 @@ export default function ResourcesPage() {
             </label>
           )}
           <textarea
-            aria-label="Présentation"
+            aria-label={t("Présentation", "Introduction")}
             placeholder={
               isPerson
-                ? "Présentation (optionnel), affichée aux clients : spécialités, expérience..."
-                : "Description (optionnel)"
+                ? t(
+                    "Présentation (optionnel), affichée aux clients : spécialités, expérience...",
+                    "Introduction (optional), shown to customers: specialities, experience...",
+                  )
+                : t("Description (optionnel)", "Description (optional)")
             }
             rows={2}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
@@ -193,11 +201,11 @@ export default function ResourcesPage() {
                 <img src={photo} alt="" className="h-12 w-12 rounded-full object-cover" />
               )}
               <label className="text-sm text-text">
-                <span className="mr-2">{photoUploading ? "Envoi..." : "Photo (optionnel)"}</span>
+                <span className="mr-2">{photoUploading ? t("Envoi...", "Uploading...") : t("Photo (optionnel)", "Photo (optional)")}</span>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  aria-label="Photo"
+                  aria-label={t("Photo", "Photo")}
                   onChange={(e) => void handlePhoto(e.target.files?.[0])}
                   className="text-xs"
                 />
@@ -209,7 +217,7 @@ export default function ResourcesPage() {
               submits "" (never undefined), which fails validation unless converted here; same
               pattern as dashboard/settings/page.tsx's brandColor/logo/heroImage fields. */}
           <Input
-            placeholder="URL calendrier externe (ICS, optionnel)"
+            placeholder={t("URL calendrier externe (ICS, optionnel)", "External calendar URL (ICS, optional)")}
             {...register("externalCalendarUrl", {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
@@ -217,18 +225,20 @@ export default function ResourcesPage() {
           {isPerson && (
             <label className="block text-sm text-text">
               <span className="mb-1 block text-xs text-text-muted">
-                Optionnel : relier à un utilisateur du tableau de bord, s&apos;il en a un, pour
-                qu&apos;il voie son propre planning.
+                {t(
+                  "Optionnel : relier à un utilisateur du tableau de bord, s'il en a un, pour qu'il voie son propre planning.",
+                  "Optional: link to a dashboard user, if they have one, so they see their own schedule.",
+                )}
               </span>
               <select
-                aria-label="Compte utilisateur lié"
+                aria-label={t("Compte utilisateur lié", "Linked user account")}
                 className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
                 defaultValue=""
                 {...register("membershipId", {
                   setValueAs: (v: string) => (v === "" ? undefined : v),
                 })}
               >
-                <option value="">Aucun compte (cas le plus courant)</option>
+                <option value="">{t("Aucun compte (cas le plus courant)", "No account (the usual case)")}</option>
                 {members?.map((member) => (
                   <option key={member.id} value={member.id}>
                     {memberName(member)}
@@ -239,7 +249,7 @@ export default function ResourcesPage() {
           )}
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-text">Horaires hebdomadaires</p>
+            <p className="text-sm font-medium text-text">{t("Horaires hebdomadaires", "Weekly hours")}</p>
             {fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-12 gap-2">
                 <select
@@ -259,7 +269,7 @@ export default function ResourcesPage() {
                   onClick={() => remove(index)}
                   className="col-span-2 text-sm text-destructive hover:underline"
                 >
-                  Retirer
+                  {t("Retirer", "Remove")}
                 </button>
               </div>
             ))}
@@ -268,17 +278,17 @@ export default function ResourcesPage() {
               onClick={() => append({ dayOfWeek: 1, startTime: "09:00", endTime: "18:00" })}
               className="text-sm text-text-muted hover:underline"
             >
-              + Ajouter un créneau
+              + {t("Ajouter un créneau", "Add a slot")}
             </button>
           </div>
 
           {createMutation.isError && (
             <p className="text-sm text-destructive">
-              {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
+              {createMutation.error instanceof ApiError ? createMutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer la ressource"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer la ressource", "Create the resource")}
           </Button>
         </form>
       )}
@@ -288,25 +298,25 @@ export default function ResourcesPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Nom</th>
-                <th className="px-4 py-2">Nature</th>
-                <th className="px-4 py-2">Capacité</th>
-                <th className="px-4 py-2">Horaires</th>
-                <th className="px-4 py-2">Compte lié</th>
+                <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                <th className="px-4 py-2">{t("Nature", "Kind")}</th>
+                <th className="px-4 py-2">{t("Capacité", "Capacity")}</th>
+                <th className="px-4 py-2">{t("Horaires", "Hours")}</th>
+                <th className="px-4 py-2">{t("Compte lié", "Linked account")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && resources?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Aucune ressource.
+                    {t("Aucune ressource.", "No resources.")}
                   </td>
                 </tr>
               )}
@@ -320,7 +330,7 @@ export default function ResourcesPage() {
                       {resource.name}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-text-muted">{kindLabel(resource.type)}</td>
+                  <td className="px-4 py-2 text-text-muted">{kindLabel(resource.type, locale)}</td>
                   <td className="px-4 py-2 text-text-muted">{resource.capacity}</td>
                   <td className="px-4 py-2 text-text-muted">
                     {resource.weeklyAvailability

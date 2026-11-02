@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { OFFER_MAX_IMAGES } from "@korva/validation";
 import { Button } from "@korva/ui";
 import { ApiError, uploadFile } from "@/lib/api-client";
+import { useT } from "@/lib/dashboard-locale";
 
 /** Mirrors ALLOWED_UPLOAD_MIME_TYPES / MAX_UPLOAD_BYTES in apps/api/src/shared/storage/
  *  storage.constants.ts. The API stays the authority; checking here only spares the owner a
@@ -28,6 +29,7 @@ export function OfferImagesEditor({
   images: string[];
   onChange: (next: string[]) => void;
 }) {
+  const t = useT();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,11 +46,16 @@ export function OfferImagesEditor({
     );
     const problems: string[] = [];
     if (accepted.length < files.length) {
-      problems.push("Formats acceptés : JPG, PNG, WebP ou GIF, 5 Mo maximum par photo.");
+      problems.push(
+        t(
+          "Formats acceptés : JPG, PNG, WebP ou GIF, 5 Mo maximum par photo.",
+          "Accepted formats: JPG, PNG, WebP or GIF, 5 MB maximum per photo.",
+        ),
+      );
     }
     const toUpload = accepted.slice(0, Math.max(remaining, 0));
     if (toUpload.length < accepted.length) {
-      problems.push(`${OFFER_MAX_IMAGES} photos maximum par offre.`);
+      problems.push(t(`${OFFER_MAX_IMAGES} photos maximum par offre.`, `${OFFER_MAX_IMAGES} photos maximum per offer.`));
     }
 
     setUploading(true);
@@ -62,7 +69,7 @@ export function OfferImagesEditor({
       }
     } catch (uploadError) {
       problems.push(
-        uploadError instanceof ApiError ? uploadError.message : "Échec de l'envoi d'une photo.",
+        uploadError instanceof ApiError ? uploadError.message : t("Échec de l'envoi d'une photo.", "A photo could not be uploaded."),
       );
     } finally {
       setUploading(false);
@@ -93,7 +100,7 @@ export function OfferImagesEditor({
     <div className="col-span-2 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-text">
-          Photos{" "}
+          {t("Photos", "Photos")}{" "}
           <span className="font-normal text-text-muted">
             ({images.length}/{OFFER_MAX_IMAGES})
           </span>
@@ -104,7 +111,7 @@ export function OfferImagesEditor({
           accept={ACCEPTED_TYPES.join(",")}
           multiple
           className="hidden"
-          aria-label="Choisir des photos"
+          aria-label={t("Choisir des photos", "Choose photos")}
           onChange={(event) => void handleFiles(event.target.files)}
         />
         <Button
@@ -115,14 +122,16 @@ export function OfferImagesEditor({
           disabled={remaining <= 0}
           onClick={() => fileInputRef.current?.click()}
         >
-          {uploading ? "Envoi..." : "Ajouter des photos"}
+          {uploading ? t("Envoi...", "Uploading...") : t("Ajouter des photos", "Add photos")}
         </Button>
       </div>
 
       {images.length === 0 ? (
         <p className="text-xs text-text-muted">
-          Aucune photo. La première photo ajoutée devient la photo principale, affichée sur votre
-          site et dans le catalogue.
+          {t(
+            "Aucune photo. La première photo ajoutée devient la photo principale, affichée sur votre site et dans le catalogue.",
+            "No photos. The first photo you add becomes the main photo, shown on your website and in the catalogue.",
+          )}
         </p>
       ) : (
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -132,12 +141,12 @@ export function OfferImagesEditor({
                 {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset */}
                 <img
                   src={url}
-                  alt={`Photo ${index + 1}`}
+                  alt={t(`Photo ${index + 1}`, `Photo ${index + 1}`)}
                   className="h-full w-full object-cover"
                 />
                 {index === 0 && (
                   <span className="absolute left-1 top-1 rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-text">
-                    Principale
+                    {t("Principale", "Main")}
                   </span>
                 )}
               </div>
@@ -145,7 +154,7 @@ export function OfferImagesEditor({
                 <div className="flex gap-1">
                   <button
                     type="button"
-                    aria-label={`Déplacer la photo ${index + 1} vers la gauche`}
+                    aria-label={t(`Déplacer la photo ${index + 1} vers la gauche`, `Move photo ${index + 1} left`)}
                     disabled={index === 0}
                     onClick={() => move(index, -1)}
                     className="rounded px-1.5 py-0.5 text-text-muted hover:bg-surface-muted disabled:opacity-40"
@@ -154,7 +163,7 @@ export function OfferImagesEditor({
                   </button>
                   <button
                     type="button"
-                    aria-label={`Déplacer la photo ${index + 1} vers la droite`}
+                    aria-label={t(`Déplacer la photo ${index + 1} vers la droite`, `Move photo ${index + 1} right`)}
                     disabled={index === images.length - 1}
                     onClick={() => move(index, 1)}
                     className="rounded px-1.5 py-0.5 text-text-muted hover:bg-surface-muted disabled:opacity-40"
@@ -169,16 +178,16 @@ export function OfferImagesEditor({
                       onClick={() => makeMain(index)}
                       className="text-text hover:underline"
                     >
-                      Principale
+                      {t("Principale", "Main")}
                     </button>
                   )}
                   <button
                     type="button"
-                    aria-label={`Retirer la photo ${index + 1}`}
+                    aria-label={t(`Retirer la photo ${index + 1}`, `Remove photo ${index + 1}`)}
                     onClick={() => remove(index)}
                     className="text-destructive hover:underline"
                   >
-                    Retirer
+                    {t("Retirer", "Remove")}
                   </button>
                 </div>
               </div>

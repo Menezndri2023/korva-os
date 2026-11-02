@@ -1,5 +1,12 @@
-import { tradeVocabulary, type BusinessModel, type BusinessModelDefinition, type TradeVocabulary } from "./business-models.ts";
+import {
+  tradeVocabulary,
+  type BusinessModel,
+  type BusinessModelDefinition,
+  type TradeTool,
+  type TradeVocabulary,
+} from "./business-models.ts";
 import type { PlanFeature } from "./plan-tiers.ts";
+import type { ResourceKind } from "./booking.ts";
 import type { VerticalTemplate } from "./verticals.ts";
 
 /**
@@ -261,6 +268,24 @@ export const PLAN_FEATURE_LABELS_EN: Record<PlanFeature, string> = {
   network_overview: "Overview of all your locations",
   accounting_export: "Accounting exports: sales journal and VAT",
   custom_roles: "Custom roles and permissions for your team",
+};
+
+export const TRADE_TOOL_LABELS_EN: Record<TradeTool, string> = {
+  orders: "Orders",
+  returns: "Returns",
+  bookings: "Bookings",
+};
+
+export const RESOURCE_KIND_LABELS_EN: Record<ResourceKind, string> = {
+  person: "Team member",
+  room: "Place (room, booth, table, bedroom)",
+  equipment: "Equipment",
+};
+
+/** Sunday-first short weekday names, as the API's dayOfWeek (0 = Sunday). */
+export const WEEKDAY_SHORT: Record<Locale, readonly string[]> = {
+  fr: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"],
+  en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
 };
 
 const STARTER_WORKFLOW_NAMES_EN: Record<string, string> = {

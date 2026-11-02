@@ -2,21 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { tradeVocabulary } from "@korva/types";
+import { tradeVocabularyIn } from "@korva/types";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const TABS = [
-  { href: "/dashboard/bookings", label: "Réservations" },
-  { href: "/dashboard/bookings/resources", label: "Équipe et ressources" },
-  { href: "/dashboard/bookings/waitlist", label: "Liste d'attente" },
-  { href: "/dashboard/bookings/packages", label: "Forfaits" },
+const TABS: { href: string; label: [string, string] }[] = [
+  { href: "/dashboard/bookings", label: ["Réservations", "Bookings"] },
+  { href: "/dashboard/bookings/resources", label: ["Équipe et ressources", "Team and resources"] },
+  { href: "/dashboard/bookings/waitlist", label: ["Liste d'attente", "Waiting list"] },
+  { href: "/dashboard/bookings/packages", label: ["Forfaits", "Packages"] },
 ];
 
 export default function BookingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: organization } = useActiveOrganization();
+  const locale = useDashboardLocale();
+  const t = useT();
   // The trade's own word, as in the menu: "Rendez-vous" for a salon, "Visites" for an agency.
-  const title = tradeVocabulary(organization?.businessModel).bookings;
+  const title = tradeVocabularyIn(organization?.businessModel, locale).bookings;
 
   return (
     <div className="space-y-6">
@@ -34,7 +37,7 @@ export default function BookingsLayout({ children }: { children: React.ReactNode
                   : "text-text-muted hover:text-text"
               }`}
             >
-              {index === 0 ? title : tab.label}
+              {index === 0 ? title : t(...tab.label)}
             </Link>
           ))}
         </nav>

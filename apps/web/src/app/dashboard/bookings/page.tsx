@@ -8,12 +8,13 @@ import type { Booking, Contact, DayAvailability, Offer, Resource } from "@korva/
 import { Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<Booking["status"], string> = {
-  pending: "En attente",
-  confirmed: "Confirmée",
-  cancelled: "Annulée",
-  completed: "Terminée",
+const BOOKING_STATUS_LABELS: Record<Booking["status"], [string, string]> = {
+  pending: ["En attente", "Pending"],
+  confirmed: ["Confirmée", "Confirmed"],
+  cancelled: ["Annulée", "Cancelled"],
+  completed: ["Terminée", "Completed"],
 };
 
 interface BookingFormValues {
@@ -43,6 +44,8 @@ export default function BookingsPage() {
   const [page, setPage] = useState(1);
   const [staffFilter, setStaffFilter] = useState("");
   const authReady = useAuthReady();
+  const locale = useDashboardLocale();
+  const t = useT();
 
   const { data: bookingsPage, isLoading } = useQuery({
     queryKey: ["bookings", page],
@@ -124,7 +127,7 @@ export default function BookingsPage() {
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouvelle réservation"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouvelle réservation", "New booking")}
         </Button>
       </div>
 
@@ -141,7 +144,7 @@ export default function BookingsPage() {
             value={staffFilter}
             onChange={(e) => setStaffFilter(e.target.value)}
           >
-            <option value="">Tous les praticiens</option>
+            <option value="">{t("Tous les praticiens", "All practitioners")}</option>
             {members?.map((member) => (
               <option key={member.id} value={member.id}>
                 {memberName(member)}
@@ -156,7 +159,7 @@ export default function BookingsPage() {
               {...register("resourceId", { required: true })}
             >
               <option value="" disabled>
-                Ressource
+                {t("Ressource", "Resource")}
               </option>
               {resources?.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -171,7 +174,7 @@ export default function BookingsPage() {
               {...register("offerId", { required: true })}
             >
               <option value="" disabled>
-                Offre
+                {t("Offre", "Offer")}
               </option>
               {offers?.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -185,7 +188,7 @@ export default function BookingsPage() {
               {...register("contactId", { required: true })}
             >
               <option value="" disabled>
-                Client
+                {t("Client", "Customer")}
               </option>
               {contacts?.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -204,20 +207,22 @@ export default function BookingsPage() {
           {dayAvailability && (
             <div className="rounded-md bg-surface-muted p-3 text-xs text-text-muted">
               <p>
-                Horaires du jour :{" "}
-                {dayAvailability.windows.map((w) => `${w.startTime}-${w.endTime}`).join(", ") || "fermé"}
+                {t("Horaires du jour :", "Opening hours that day:")}{" "}
+                {dayAvailability.windows.map((w) => `${w.startTime}-${w.endTime}`).join(", ") || t("fermé", "closed")}
               </p>
-              <p>Réservations existantes : {dayAvailability.bookings.length}</p>
+              <p>
+                {t("Réservations existantes :", "Existing bookings:")} {dayAvailability.bookings.length}
+              </p>
             </div>
           )}
 
           {createMutation.isError && (
             <p className="text-sm text-red-600">
-              {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
+              {createMutation.error instanceof ApiError ? createMutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer la réservation"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer la réservation", "Create the booking")}
           </Button>
         </form>
       )}
@@ -227,27 +232,27 @@ export default function BookingsPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Ressource</th>
-                <th className="px-4 py-2">Praticien</th>
-                <th className="px-4 py-2">Client</th>
-                <th className="px-4 py-2">Début</th>
-                <th className="px-4 py-2">Fin</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("Ressource", "Resource")}</th>
+                <th className="px-4 py-2">{t("Praticien", "Practitioner")}</th>
+                <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                <th className="px-4 py-2">{t("Début", "Start")}</th>
+                <th className="px-4 py-2">{t("Fin", "End")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && bookings?.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
-                    Aucune réservation.
+                    {t("Aucune réservation.", "No bookings.")}
                   </td>
                 </tr>
               )}
@@ -265,11 +270,11 @@ export default function BookingsPage() {
                     {staffName(booking.staffMembershipId)}
                   </td>
                   <td className="px-4 py-2 text-text-muted">{contactName(booking.contactId)}</td>
-                  <td className="px-4 py-2 text-text-muted">{new Date(booking.startAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</td>
-                  <td className="px-4 py-2 text-text-muted">{new Date(booking.endAt).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</td>
+                  <td className="px-4 py-2 text-text-muted">{new Date(booking.startAt).toLocaleString(intlLocale(locale), { dateStyle: "short", timeStyle: "short" })}</td>
+                  <td className="px-4 py-2 text-text-muted">{new Date(booking.endAt).toLocaleString(intlLocale(locale), { dateStyle: "short", timeStyle: "short" })}</td>
                   <td className="px-4 py-2">
                     <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-text">
-                      {STATUS_LABELS[booking.status]}
+                      {t(...BOOKING_STATUS_LABELS[booking.status])}
                     </span>
                   </td>
                   <td className="px-4 py-2">
@@ -278,7 +283,7 @@ export default function BookingsPage() {
                         onClick={() => cancelMutation.mutate(booking.id)}
                         className="text-xs text-red-600 hover:underline"
                       >
-                        Annuler
+                        {t("Annuler", "Cancel")}
                       </button>
                     )}
                   </td>

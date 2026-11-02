@@ -2,21 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BUSINESS_MODEL_DEFINITIONS, tradeVocabulary } from "@korva/types";
+import { BUSINESS_MODEL_DEFINITIONS, tradeVocabularyIn } from "@korva/types";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const TABS = [
-  { href: "/dashboard/catalog", label: "Offres" },
-  { href: "/dashboard/catalog/categories", label: "Catégories" },
-  { href: "/dashboard/catalog/warehouses", label: "Entrepôts", stock: true },
-  { href: "/dashboard/catalog/suppliers", label: "Fournisseurs", stock: true },
-  { href: "/dashboard/catalog/purchase-orders", label: "Commandes fournisseurs", stock: true },
+const TABS: { href: string; label: [string, string]; stock?: boolean }[] = [
+  { href: "/dashboard/catalog", label: ["Offres", "Offers"] },
+  { href: "/dashboard/catalog/categories", label: ["Catégories", "Categories"] },
+  { href: "/dashboard/catalog/warehouses", label: ["Entrepôts", "Warehouses"], stock: true },
+  { href: "/dashboard/catalog/suppliers", label: ["Fournisseurs", "Suppliers"], stock: true },
+  { href: "/dashboard/catalog/purchase-orders", label: ["Commandes fournisseurs", "Purchase orders"], stock: true },
 ];
 
 export default function CatalogLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: organization } = useActiveOrganization();
-  const title = tradeVocabulary(organization?.businessModel).catalog;
+  const locale = useDashboardLocale();
+  const t = useT();
+  const title = tradeVocabularyIn(organization?.businessModel, locale).catalog;
   // Stock tools only for a trade that keeps goods (and for an organization with no type of
   // activity, as before). The pages stay reachable by their address.
   const stock = organization?.businessModel
@@ -39,7 +42,7 @@ export default function CatalogLayout({ children }: { children: React.ReactNode 
                   : "text-text-muted hover:text-text"
               }`}
             >
-              {tab.label}
+              {t(...tab.label)}
             </Link>
           ))}
         </nav>

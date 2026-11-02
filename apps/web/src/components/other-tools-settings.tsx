@@ -4,17 +4,20 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BUSINESS_MODEL_DEFINITIONS,
   TRADE_TOOL_LABELS,
+  TRADE_TOOL_LABELS_EN,
   TRADE_TOOLS,
+  businessModelText,
   type Organization,
   type TradeTool,
 } from "@korva/types";
 import { Switch } from "@korva/ui";
 import { ApiError, apiClient } from "@/lib/api-client";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const TOOL_DESCRIPTIONS: Record<TradeTool, string> = {
-  orders: "Recevoir et suivre des commandes de produits.",
-  returns: "Gérer les retours et remboursements de commandes.",
-  bookings: "Prendre des réservations ou des rendez-vous.",
+const TOOL_DESCRIPTIONS: Record<TradeTool, [string, string]> = {
+  orders: ["Recevoir et suivre des commandes de produits.", "Receive and track product orders."],
+  returns: ["Gérer les retours et remboursements de commandes.", "Handle order returns and refunds."],
+  bookings: ["Prendre des réservations ou des rendez-vous.", "Take bookings or appointments."],
 };
 
 /**
@@ -27,6 +30,8 @@ const TOOL_DESCRIPTIONS: Record<TradeTool, string> = {
  */
 export function OtherToolsSettings({ organization }: { organization: Organization }) {
   const queryClient = useQueryClient();
+  const locale = useDashboardLocale();
+  const t = useT();
   const mutation = useMutation({
     mutationFn: (extraTools: TradeTool[]) =>
       apiClient.patch<Organization>("/organizations/me", { extraTools }),
@@ -41,16 +46,18 @@ export function OtherToolsSettings({ organization }: { organization: Organizatio
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
-      <h2 className="text-sm font-semibold text-text">Autres outils</h2>
+      <h2 className="text-sm font-semibold text-text">{t("Autres outils", "Other tools")}</h2>
       <p className="mt-1 text-sm text-text-muted">
-        Votre menu ne montre que les outils d&apos;une activité « {definition.label} ». Ajoutez-en
-        un si votre façon de travailler en a besoin.
+        {t(
+          `Votre menu ne montre que les outils d'une activité « ${definition.label} ». Ajoutez-en un si votre façon de travailler en a besoin.`,
+          `Your menu only shows the tools of a “${businessModelText(definition, locale).label}” business. Add one if the way you work needs it.`,
+        )}
       </p>
       {mutation.isError && (
         <p className="mt-3 text-xs text-destructive">
           {mutation.error instanceof ApiError
             ? mutation.error.message
-            : "Impossible d'enregistrer. Réessayez."}
+            : t("Impossible d'enregistrer. Réessayez.", "Could not save. Try again.")}
         </p>
       )}
       <div className="mt-4 space-y-4">
@@ -60,10 +67,10 @@ export function OtherToolsSettings({ organization }: { organization: Organizatio
             checked={current.includes(tool)}
             disabled={mutation.isPending}
             onCheckedChange={(checked) =>
-              mutation.mutate(checked ? [...current, tool] : current.filter((t) => t !== tool))
+              mutation.mutate(checked ? [...current, tool] : current.filter((other) => other !== tool))
             }
-            label={TRADE_TOOL_LABELS[tool]}
-            description={TOOL_DESCRIPTIONS[tool]}
+            label={locale === "en" ? TRADE_TOOL_LABELS_EN[tool] : TRADE_TOOL_LABELS[tool]}
+            description={t(...TOOL_DESCRIPTIONS[tool])}
           />
         ))}
       </div>

@@ -14,18 +14,23 @@ import type { Category } from "@korva/types";
 import { Button, Card, Dialog, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT, type Translate } from "@/lib/dashboard-locale";
 
-function deleteErrorMessage(error: unknown): string {
+function deleteErrorMessage(error: unknown, t: Translate): string {
   if (error instanceof ApiError) {
     if (error.code === "CATEGORY_IN_USE") {
-      return "Cette catégorie est encore utilisée par une ou plusieurs offres et ne peut pas être supprimée.";
+      return t(
+        "Cette catégorie est encore utilisée par une ou plusieurs offres et ne peut pas être supprimée.",
+        "This category is still used by one or more offers and cannot be deleted.",
+      );
     }
     return error.message;
   }
-  return "Impossible de supprimer la catégorie.";
+  return t("Impossible de supprimer la catégorie.", "The category could not be deleted.");
 }
 
 export default function CategoriesPage() {
+  const t = useT();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
@@ -100,25 +105,31 @@ export default function CategoriesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="text-sm text-text-muted">
-          Organisez votre catalogue en regroupant vos offres par catégorie.
+          {t(
+            "Organisez votre catalogue en regroupant vos offres par catégorie.",
+            "Organise your catalogue by grouping your offers into categories.",
+          )}
         </p>
-        <Button onClick={() => setIsCreateOpen(true)}>Nouvelle catégorie</Button>
+        <Button onClick={() => setIsCreateOpen(true)}>{t("Nouvelle catégorie", "New category")}</Button>
       </div>
 
       {categoriesQuery.isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les catégories.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les catégories.",
+            "Categories could not be loaded.",
+          )}</p>
           <button
             onClick={() => categoriesQuery.refetch()}
             className="mt-2 text-sm font-medium text-text underline"
           >
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
 
       {deleteMutation.isError && (
-        <p className="text-sm text-destructive">{deleteErrorMessage(deleteMutation.error)}</p>
+        <p className="text-sm text-destructive">{deleteErrorMessage(deleteMutation.error, t)}</p>
       )}
 
       {!categoriesQuery.isError && (
@@ -127,8 +138,8 @@ export default function CategoriesPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Nom</th>
-                  <th className="px-4 py-2">Description</th>
+                  <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                  <th className="px-4 py-2">{t("Description", "Description")}</th>
                   <th className="px-4 py-2" />
                 </tr>
               </thead>
@@ -136,17 +147,19 @@ export default function CategoriesPage() {
                 {categoriesQuery.isLoading && (
                   <tr>
                     <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!categoriesQuery.isLoading && categories?.length === 0 && (
                   <tr>
                     <td colSpan={3} className="px-4 py-8 text-center text-text-muted">
-                      <p>Aucune catégorie pour le moment.</p>
+                      <p>{t("Aucune catégorie pour le moment.", "No categories yet.")}</p>
                       <p className="mt-1 text-xs">
-                        Les catégories vous permettent de regrouper vos offres pour mieux les
-                        organiser et les retrouver. Créez votre première catégorie pour commencer.
+                        {t(
+                          "Les catégories vous permettent de regrouper vos offres pour mieux les organiser et les retrouver. Créez votre première catégorie pour commencer.",
+                          "Categories let you group your offers to organise and find them more easily. Create your first category to start.",
+                        )}
                       </p>
                     </td>
                   </tr>
@@ -158,14 +171,14 @@ export default function CategoriesPage() {
                     <td className="px-4 py-2">
                       <div className="flex justify-end gap-2">
                         <Button variant="secondary" size="sm" onClick={() => startEdit(category)}>
-                          Modifier
+                          {t("Modifier", "Edit")}
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => setDeletingCategory(category)}
                         >
-                          Supprimer
+                          {t("Supprimer", "Delete")}
                         </Button>
                       </div>
                     </td>
@@ -177,19 +190,19 @@ export default function CategoriesPage() {
         </Card>
       )}
 
-      <Dialog open={isCreateOpen} onClose={closeCreateDialog} title="Nouvelle catégorie">
+      <Dialog open={isCreateOpen} onClose={closeCreateDialog} title={t("Nouvelle catégorie", "New category")}>
         <form
           onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}
           className="space-y-3"
         >
-          <Input placeholder="Nom" {...createForm.register("name")} />
+          <Input placeholder={t("Nom", "Name")} {...createForm.register("name")} />
           {createForm.formState.errors.name && (
             <p className="text-xs text-destructive">
               {createForm.formState.errors.name.message}
             </p>
           )}
           <textarea
-            placeholder="Description"
+            placeholder={t("Description", "Description")}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={3}
             {...createForm.register("description")}
@@ -204,16 +217,16 @@ export default function CategoriesPage() {
             <p className="text-sm text-destructive">
               {createMutation.error instanceof ApiError
                 ? createMutation.error.message
-                : "Impossible de créer la catégorie."}
+                : t("Impossible de créer la catégorie.", "The category could not be created.")}
             </p>
           )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={closeCreateDialog}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
             <Button type="submit" loading={createMutation.isPending}>
-              {createMutation.isPending ? "Création..." : "Créer"}
+              {createMutation.isPending ? t("Création...", "Creating...") : t("Créer", "Create")}
             </Button>
           </div>
         </form>
@@ -222,18 +235,18 @@ export default function CategoriesPage() {
       <Dialog
         open={editingCategory !== null}
         onClose={closeEditDialog}
-        title="Modifier la catégorie"
+        title={t("Modifier la catégorie", "Edit the category")}
       >
         <form
           onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values))}
           className="space-y-3"
         >
-          <Input placeholder="Nom" {...editForm.register("name")} />
+          <Input placeholder={t("Nom", "Name")} {...editForm.register("name")} />
           {editForm.formState.errors.name && (
             <p className="text-xs text-destructive">{editForm.formState.errors.name.message}</p>
           )}
           <textarea
-            placeholder="Description"
+            placeholder={t("Description", "Description")}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={3}
             {...editForm.register("description")}
@@ -248,16 +261,16 @@ export default function CategoriesPage() {
             <p className="text-sm text-destructive">
               {updateMutation.error instanceof ApiError
                 ? updateMutation.error.message
-                : "Impossible d'enregistrer la catégorie."}
+                : t("Impossible d'enregistrer la catégorie.", "The category could not be saved.")}
             </p>
           )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={closeEditDialog}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
             <Button type="submit" loading={updateMutation.isPending}>
-              {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              {updateMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
             </Button>
           </div>
         </form>
@@ -266,11 +279,13 @@ export default function CategoriesPage() {
       <Dialog
         open={deletingCategory !== null}
         onClose={() => setDeletingCategory(null)}
-        title="Supprimer la catégorie ?"
+        title={t("Supprimer la catégorie ?", "Delete the category?")}
       >
         <p className="text-sm text-text-muted">
-          Cette action est définitive. Voulez-vous vraiment supprimer «{" "}
-          {deletingCategory?.name} » ?
+          {t(
+            `Cette action est définitive. Voulez-vous vraiment supprimer « ${deletingCategory?.name} » ?`,
+            `This cannot be undone. Do you really want to delete “${deletingCategory?.name}”?`,
+          )}
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <Button
@@ -279,7 +294,7 @@ export default function CategoriesPage() {
             disabled={deleteMutation.isPending}
             onClick={() => setDeletingCategory(null)}
           >
-            Annuler
+            {t("Annuler", "Cancel")}
           </Button>
           <Button
             variant="secondary"
@@ -287,7 +302,7 @@ export default function CategoriesPage() {
             loading={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate()}
           >
-            {deleteMutation.isPending ? "Suppression..." : "Confirmer"}
+            {deleteMutation.isPending ? t("Suppression...", "Deleting...") : t("Confirmer", "Confirm")}
           </Button>
         </div>
       </Dialog>

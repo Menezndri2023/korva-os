@@ -14,20 +14,25 @@ import type { Supplier } from "@korva/types";
 import { Button, Card, Dialog, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT, type Translate } from "@/lib/dashboard-locale";
 import { PlanLock } from "@/components/plan-lock";
 import { usePlanFeatures } from "@/lib/use-plan-features";
 
-function deleteErrorMessage(error: unknown): string {
+function deleteErrorMessage(error: unknown, t: Translate): string {
   if (error instanceof ApiError) {
     if (error.code === "SUPPLIER_IN_USE") {
-      return "Ce fournisseur a encore une commande fournisseur active et ne peut pas être supprimé.";
+      return t(
+        "Ce fournisseur a encore une commande fournisseur active et ne peut pas être supprimé.",
+        "This supplier still has an active purchase order and cannot be deleted.",
+      );
     }
     return error.message;
   }
-  return "Impossible de supprimer le fournisseur.";
+  return t("Impossible de supprimer le fournisseur.", "The supplier could not be deleted.");
 }
 
 export default function SuppliersPage() {
+  const t = useT();
   const planFeatures = usePlanFeatures();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
@@ -108,21 +113,21 @@ export default function SuppliersPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Input
           type="search"
-          placeholder="Rechercher un fournisseur..."
+          placeholder={t("Rechercher un fournisseur...", "Search for a supplier...")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-64"
         />
         {/* Creating needs the plan; what already exists stays listed and usable. */}
         {planFeatures.has("suppliers") ? (
-          <Button onClick={() => setIsCreateOpen(true)}>Nouveau fournisseur</Button>
+          <Button onClick={() => setIsCreateOpen(true)}>{t("Nouveau fournisseur", "New supplier")}</Button>
         ) : (
           <PlanLock feature="suppliers" />
         )}
       </div>
 
       {deleteMutation.isError && (
-        <p className="text-sm text-destructive">{deleteErrorMessage(deleteMutation.error)}</p>
+        <p className="text-sm text-destructive">{deleteErrorMessage(deleteMutation.error, t)}</p>
       )}
 
       <Card className="overflow-hidden">
@@ -130,9 +135,9 @@ export default function SuppliersPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Nom</th>
-                <th className="px-4 py-2">Email</th>
-                <th className="px-4 py-2">Téléphone</th>
+                <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                <th className="px-4 py-2">{t("Email", "Email")}</th>
+                <th className="px-4 py-2">{t("Téléphone", "Phone")}</th>
                 <th className="px-4 py-2" />
               </tr>
             </thead>
@@ -140,14 +145,14 @@ export default function SuppliersPage() {
               {suppliersQuery.isLoading && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!suppliersQuery.isLoading && suppliers?.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Aucun fournisseur.
+                    {t("Aucun fournisseur.", "No suppliers.")}
                   </td>
                 </tr>
               )}
@@ -159,14 +164,14 @@ export default function SuppliersPage() {
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" size="sm" onClick={() => startEdit(supplier)}>
-                        Modifier
+                        {t("Modifier", "Edit")}
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setDeletingSupplier(supplier)}
                       >
-                        Supprimer
+                        {t("Supprimer", "Delete")}
                       </Button>
                     </div>
                   </td>
@@ -177,36 +182,39 @@ export default function SuppliersPage() {
         </div>
       </Card>
 
-      <Dialog open={isCreateOpen} onClose={closeCreateDialog} title="Nouveau fournisseur">
+      <Dialog open={isCreateOpen} onClose={closeCreateDialog} title={t(
+        "Nouveau fournisseur",
+        "New supplier",
+      )}>
         <form
           onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}
           className="space-y-3"
         >
-          <Input placeholder="Nom" {...createForm.register("name")} />
+          <Input placeholder={t("Nom", "Name")} {...createForm.register("name")} />
           {createForm.formState.errors.name && (
             <p className="text-xs text-destructive">{createForm.formState.errors.name.message}</p>
           )}
           <Input
-            placeholder="Email"
+            placeholder={t("Email", "Email")}
             type="email"
             {...createForm.register("email", {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           />
           <Input
-            placeholder="Téléphone"
+            placeholder={t("Téléphone", "Phone")}
             {...createForm.register("phone", {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           />
           <Input
-            placeholder="Adresse"
+            placeholder={t("Adresse", "Address")}
             {...createForm.register("address", {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           />
           <textarea
-            placeholder="Notes"
+            placeholder={t("Notes", "Notes")}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             {...createForm.register("notes", {
@@ -217,15 +225,15 @@ export default function SuppliersPage() {
             <p className="text-sm text-destructive">
               {createMutation.error instanceof ApiError
                 ? createMutation.error.message
-                : "Impossible de créer le fournisseur."}
+                : t("Impossible de créer le fournisseur.", "The supplier could not be created.")}
             </p>
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={closeCreateDialog}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
             <Button type="submit" loading={createMutation.isPending}>
-              {createMutation.isPending ? "Création..." : "Créer"}
+              {createMutation.isPending ? t("Création...", "Creating...") : t("Créer", "Create")}
             </Button>
           </div>
         </form>
@@ -234,34 +242,34 @@ export default function SuppliersPage() {
       <Dialog
         open={editingSupplier !== null}
         onClose={closeEditDialog}
-        title="Modifier le fournisseur"
+        title={t("Modifier le fournisseur", "Edit the supplier")}
       >
         <form
           onSubmit={editForm.handleSubmit((values) => updateMutation.mutate(values))}
           className="space-y-3"
         >
-          <Input placeholder="Nom" {...editForm.register("name")} />
+          <Input placeholder={t("Nom", "Name")} {...editForm.register("name")} />
           <Input
-            placeholder="Email"
+            placeholder={t("Email", "Email")}
             type="email"
             {...editForm.register("email", {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           />
           <Input
-            placeholder="Téléphone"
+            placeholder={t("Téléphone", "Phone")}
             {...editForm.register("phone", {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           />
           <Input
-            placeholder="Adresse"
+            placeholder={t("Adresse", "Address")}
             {...editForm.register("address", {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           />
           <textarea
-            placeholder="Notes"
+            placeholder={t("Notes", "Notes")}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             {...editForm.register("notes", {
@@ -272,15 +280,15 @@ export default function SuppliersPage() {
             <p className="text-sm text-destructive">
               {updateMutation.error instanceof ApiError
                 ? updateMutation.error.message
-                : "Impossible d'enregistrer le fournisseur."}
+                : t("Impossible d'enregistrer le fournisseur.", "The supplier could not be saved.")}
             </p>
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={closeEditDialog}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
             <Button type="submit" loading={updateMutation.isPending}>
-              {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              {updateMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
             </Button>
           </div>
         </form>
@@ -289,11 +297,13 @@ export default function SuppliersPage() {
       <Dialog
         open={deletingSupplier !== null}
         onClose={() => setDeletingSupplier(null)}
-        title="Supprimer le fournisseur ?"
+        title={t("Supprimer le fournisseur ?", "Delete the supplier?")}
       >
         <p className="text-sm text-text-muted">
-          Cette action est définitive. Voulez-vous vraiment supprimer «{" "}
-          {deletingSupplier?.name} » ?
+          {t(
+            `Cette action est définitive. Voulez-vous vraiment supprimer « ${deletingSupplier?.name} » ?`,
+            `This cannot be undone. Do you really want to delete “${deletingSupplier?.name}”?`,
+          )}
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <Button
@@ -302,7 +312,7 @@ export default function SuppliersPage() {
             disabled={deleteMutation.isPending}
             onClick={() => setDeletingSupplier(null)}
           >
-            Annuler
+            {t("Annuler", "Cancel")}
           </Button>
           <Button
             variant="secondary"
@@ -310,7 +320,7 @@ export default function SuppliersPage() {
             loading={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate()}
           >
-            {deleteMutation.isPending ? "Suppression..." : "Confirmer"}
+            {deleteMutation.isPending ? t("Suppression...", "Deleting...") : t("Confirmer", "Confirm")}
           </Button>
         </div>
       </Dialog>

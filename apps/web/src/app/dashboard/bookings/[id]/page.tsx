@@ -10,18 +10,19 @@ import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<Booking["status"], string> = {
-  pending: "En attente",
-  confirmed: "Confirmée",
-  cancelled: "Annulée",
-  completed: "Terminée",
+const STATUS_LABELS: Record<Booking["status"], [string, string]> = {
+  pending: ["En attente", "Pending"],
+  confirmed: ["Confirmée", "Confirmed"],
+  cancelled: ["Annulée", "Cancelled"],
+  completed: ["Terminée", "Completed"],
 };
 
-const PAYMENT_STATUS_LABELS: Record<Booking["paymentStatus"], string> = {
-  unpaid: "Non payé",
-  deposit_paid: "Acompte versé",
-  paid: "Payé",
+const PAYMENT_STATUS_LABELS: Record<Booking["paymentStatus"], [string, string]> = {
+  unpaid: ["Non payé", "Unpaid"],
+  deposit_paid: ["Acompte versé", "Deposit paid"],
+  paid: ["Payé", "Paid"],
 };
 
 interface RescheduleFormValues {
@@ -36,6 +37,9 @@ export default function BookingDetailPage() {
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const locale = useDashboardLocale();
+  const t = useT();
+  const intl = intlLocale(locale);
 
   const bookingQuery = useQuery({
     queryKey: ["bookings", id],
@@ -125,13 +129,13 @@ export default function BookingDetailPage() {
   }
 
   if (bookingQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (bookingQuery.isError || !bookingQuery.data) {
     const error = bookingQuery.error;
     const message =
-      error instanceof ApiError ? error.message : "Impossible de charger cette réservation.";
+      error instanceof ApiError ? error.message : t("Impossible de charger cette réservation.", "This booking could not be loaded.");
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">{message}</p>
@@ -139,7 +143,7 @@ export default function BookingDetailPage() {
           href="/dashboard/bookings"
           className="mt-2 inline-block text-sm font-medium text-text underline"
         >
-          Retour aux réservations
+          {t("Retour aux réservations", "Back to bookings")}
         </Link>
       </Card>
     );
@@ -150,7 +154,7 @@ export default function BookingDetailPage() {
   return (
     <div className="space-y-4">
       <Link href="/dashboard/bookings" className="text-sm text-text-muted hover:underline">
-        ← Réservations
+        ← {t("Réservations", "Bookings")}
       </Link>
 
       <Card className="p-6">
@@ -165,8 +169,8 @@ export default function BookingDetailPage() {
             </Link>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{STATUS_LABELS[booking.status]}</Badge>
-            <Badge>{PAYMENT_STATUS_LABELS[booking.paymentStatus]}</Badge>
+            <Badge>{t(...STATUS_LABELS[booking.status])}</Badge>
+            <Badge>{t(...PAYMENT_STATUS_LABELS[booking.paymentStatus])}</Badge>
             {(booking.status === "confirmed" || booking.status === "completed") && (
               <Button
                 variant="secondary"
@@ -175,7 +179,7 @@ export default function BookingDetailPage() {
                 disabled={isRescheduling}
                 onClick={() => createOrderMutation.mutate()}
               >
-                {createOrderMutation.isPending ? "Création..." : "Créer une commande"}
+                {createOrderMutation.isPending ? t("Création...", "Creating...") : t("Créer une commande", "Create an order")}
               </Button>
             )}
             {(booking.status === "pending" || booking.status === "confirmed") && (
@@ -186,7 +190,7 @@ export default function BookingDetailPage() {
                   disabled={cancelMutation.isPending}
                   onClick={() => (isRescheduling ? setIsRescheduling(false) : setIsRescheduling(true))}
                 >
-                  {isRescheduling ? "Annuler la modification" : "Déplacer"}
+                  {isRescheduling ? t("Annuler la modification", "Cancel the change") : t("Déplacer", "Move")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -195,7 +199,7 @@ export default function BookingDetailPage() {
                   loading={completeMutation.isPending && completeMutation.variables === true}
                   onClick={() => completeMutation.mutate(true)}
                 >
-                  Marquer présent(e)
+                  {t("Marquer présent(e)", "Mark as attended")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -204,7 +208,7 @@ export default function BookingDetailPage() {
                   loading={completeMutation.isPending && completeMutation.variables === false}
                   onClick={() => completeMutation.mutate(false)}
                 >
-                  Marquer absent(e)
+                  {t("Marquer absent(e)", "Mark as no-show")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -213,7 +217,7 @@ export default function BookingDetailPage() {
                   loading={cancelMutation.isPending}
                   onClick={() => cancelMutation.mutate()}
                 >
-                  Annuler la réservation
+                  {t("Annuler la réservation", "Cancel the booking")}
                 </Button>
               </>
             )}
@@ -222,7 +226,7 @@ export default function BookingDetailPage() {
 
         {orderAlreadyExists ? (
           <p className="mt-3 text-sm text-text-muted">
-            Une commande existe déjà pour cette réservation.
+            {t("Une commande existe déjà pour cette réservation.", "An order already exists for this booking.")}
           </p>
         ) : (
           actionError instanceof ApiError && (
@@ -233,39 +237,42 @@ export default function BookingDetailPage() {
         {!isRescheduling ? (
           <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
             <div>
-              <dt className="text-text-muted">Offre</dt>
+              <dt className="text-text-muted">{t("Offre", "Offer")}</dt>
               <dd className="mt-0.5">{offerName(booking.offerId)}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Début</dt>
-              <dd className="mt-0.5">{new Date(booking.startAt).toLocaleString("fr-FR")}</dd>
+              <dt className="text-text-muted">{t("Début", "Start")}</dt>
+              <dd className="mt-0.5">{new Date(booking.startAt).toLocaleString(intl)}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Fin</dt>
-              <dd className="mt-0.5">{new Date(booking.endAt).toLocaleString("fr-FR")}</dd>
+              <dt className="text-text-muted">{t("Fin", "End")}</dt>
+              <dd className="mt-0.5">{new Date(booking.endAt).toLocaleString(intl)}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Prix</dt>
+              <dt className="text-text-muted">{t("Prix", "Price")}</dt>
               <dd className="mt-0.5">
-                {formatCurrency(booking.pricing.amount, booking.pricing.currency)}
+                {formatCurrency(booking.pricing.amount, booking.pricing.currency, locale)}
               </dd>
             </div>
             <div>
-              <dt className="text-text-muted">Rappel</dt>
+              <dt className="text-text-muted">{t("Rappel", "Reminder")}</dt>
               <dd className="mt-0.5">
                 {booking.reminderSentAt
-                  ? `Envoyé le ${new Date(booking.reminderSentAt).toLocaleString("fr-FR")}`
+                  ? t(
+                      `Envoyé le ${new Date(booking.reminderSentAt).toLocaleString("fr-FR")}`,
+                      `Sent ${new Date(booking.reminderSentAt).toLocaleString(intl)}`,
+                    )
                   : "—"}
               </dd>
             </div>
             <div>
-              <dt className="text-text-muted">Présence</dt>
+              <dt className="text-text-muted">{t("Présence", "Attendance")}</dt>
               <dd className="mt-0.5">
                 {booking.attended === undefined
                   ? "—"
                   : booking.attended
-                    ? "Présent(e)"
-                    : "Absent(e)"}
+                    ? t("Présent(e)", "Attended")
+                    : t("Absent(e)", "No-show")}
               </dd>
             </div>
           </dl>
@@ -278,14 +285,14 @@ export default function BookingDetailPage() {
             <Input type="time" {...register("startTime", { required: true })} />
             <Input type="time" {...register("endTime", { required: true })} />
             <Button type="submit" size="sm" loading={rescheduleMutation.isPending}>
-              {rescheduleMutation.isPending ? "..." : "Confirmer le nouveau créneau"}
+              {rescheduleMutation.isPending ? "..." : t("Confirmer le nouveau créneau", "Confirm the new slot")}
             </Button>
           </form>
         )}
 
         {booking.notes && (
           <div className="mt-4">
-            <dt className="text-sm text-text-muted">Notes</dt>
+            <dt className="text-sm text-text-muted">{t("Notes", "Notes")}</dt>
             <dd className="mt-0.5 text-sm text-text">{booking.notes}</dd>
           </div>
         )}

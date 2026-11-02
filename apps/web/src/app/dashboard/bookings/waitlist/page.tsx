@@ -7,11 +7,12 @@ import type { Contact, Offer, Resource, WaitlistEntry } from "@korva/types";
 import { Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<WaitlistEntry["status"], string> = {
-  waiting: "En attente",
-  notified: "Prévenu",
-  cancelled: "Annulé",
+const STATUS_LABELS: Record<WaitlistEntry["status"], [string, string]> = {
+  waiting: ["En attente", "Waiting"],
+  notified: ["Prévenu", "Notified"],
+  cancelled: ["Annulé", "Cancelled"],
 };
 
 interface WaitlistFormValues {
@@ -28,6 +29,8 @@ export default function WaitlistPage() {
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
   const authReady = useAuthReady();
+  const locale = useDashboardLocale();
+  const t = useT();
 
   const { data: entriesPage, isLoading } = useQuery({
     queryKey: ["waitlist", page],
@@ -92,11 +95,13 @@ export default function WaitlistPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-muted">
-          Clients en attente d&apos;un créneau complet — prévenus automatiquement dès qu&apos;une
-          annulation libère leur plage souhaitée.
+          {t(
+            "Clients en attente d'un créneau complet — prévenus automatiquement dès qu'une annulation libère leur plage souhaitée.",
+            "Customers waiting for a full slot — told automatically as soon as a cancellation frees the time they want.",
+          )}
         </p>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Ajouter à la liste d'attente"}
+          {showForm ? t("Annuler", "Cancel") : t("Ajouter à la liste d'attente", "Add to the waiting list")}
         </Button>
       </div>
 
@@ -112,7 +117,7 @@ export default function WaitlistPage() {
               {...register("resourceId", { required: true })}
             >
               <option value="" disabled>
-                Ressource
+                {t("Ressource", "Resource")}
               </option>
               {resources?.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -126,7 +131,7 @@ export default function WaitlistPage() {
               {...register("offerId", { required: true })}
             >
               <option value="" disabled>
-                Offre
+                {t("Offre", "Offer")}
               </option>
               {offers?.map((o) => (
                 <option key={o.id} value={o.id}>
@@ -140,7 +145,7 @@ export default function WaitlistPage() {
               {...register("contactId", { required: true })}
             >
               <option value="" disabled>
-                Client
+                {t("Client", "Customer")}
               </option>
               {contacts?.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -160,11 +165,11 @@ export default function WaitlistPage() {
             <p className="text-sm text-red-600">
               {createMutation.error instanceof ApiError
                 ? createMutation.error.message
-                : "Erreur"}
+                : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Ajout..." : "Ajouter"}
+            {createMutation.isPending ? t("Ajout...", "Adding...") : t("Ajouter", "Add")}
           </Button>
         </form>
       )}
@@ -174,25 +179,25 @@ export default function WaitlistPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Ressource</th>
-                <th className="px-4 py-2">Client</th>
-                <th className="px-4 py-2">Créneau souhaité</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("Ressource", "Resource")}</th>
+                <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                <th className="px-4 py-2">{t("Créneau souhaité", "Wanted slot")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && entries?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Aucune entrée en liste d&apos;attente.
+                    {t("Aucune entrée en liste d'attente.", "Nobody on the waiting list.")}
                   </td>
                 </tr>
               )}
@@ -201,12 +206,12 @@ export default function WaitlistPage() {
                   <td className="px-4 py-2 font-medium">{resourceName(entry.resourceId)}</td>
                   <td className="px-4 py-2 text-text-muted">{contactName(entry.contactId)}</td>
                   <td className="px-4 py-2 text-text-muted">
-                    {new Date(entry.startAt).toLocaleString()} –{" "}
-                    {new Date(entry.endAt).toLocaleTimeString()}
+                    {new Date(entry.startAt).toLocaleString(intlLocale(locale))} –{" "}
+                    {new Date(entry.endAt).toLocaleTimeString(intlLocale(locale))}
                   </td>
                   <td className="px-4 py-2">
                     <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-text">
-                      {STATUS_LABELS[entry.status]}
+                      {t(...STATUS_LABELS[entry.status])}
                     </span>
                   </td>
                   <td className="px-4 py-2">
@@ -215,7 +220,7 @@ export default function WaitlistPage() {
                         onClick={() => cancelMutation.mutate(entry.id)}
                         className="text-xs text-red-600 hover:underline"
                       >
-                        Retirer
+                        {t("Retirer", "Remove")}
                       </button>
                     )}
                   </td>

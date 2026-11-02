@@ -16,6 +16,7 @@ import {
   BUSINESS_MODEL_OFFER_FIELDS,
   OFFER_TYPES,
   verticalForOrganizationType,
+  verticalText,
   type CustomFieldValues,
   type Offer,
   type OfferOptionGroup,
@@ -40,23 +41,8 @@ import {
   type VariantDraft,
 } from "@/components/offer-editors";
 import { pruneForType } from "@/lib/offer-form-payload";
-
-const TYPE_LABELS: Record<OfferType, string> = {
-  product: "Produit",
-  service: "Service",
-  booking: "Réservation",
-  digital_product: "Produit numérique",
-  subscription: "Abonnement",
-  package: "Forfait",
-};
-
-/** Shown to owners instead of the API's status keys. "En ligne" is the one that matters: only
- *  those offers appear on the public site. */
-const STATUS_LABELS: Record<Offer["status"], string> = {
-  draft: "Brouillon",
-  active: "En ligne",
-  archived: "Archivée",
-};
+import { OFFER_STATUS_LABELS, OFFER_TYPE_LABELS } from "@/lib/catalog-labels";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 const STATUS_VARIANT: Record<Offer["status"], "default" | "success" | "warning"> = {
   active: "success",
@@ -71,9 +57,13 @@ export default function CatalogPage() {
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const { data: organization } = useActiveOrganization();
+  const locale = useDashboardLocale();
+  const t = useT();
+  const typeLabel = (type: OfferType) => t(...OFFER_TYPE_LABELS[type]);
   // Best-effort: `Organization.type` is free-form, so an owner who typed their own sector simply
   // gets no suggestions rather than the wrong trade's.
   const vertical = verticalForOrganizationType(organization?.type);
+  const verticalWords = vertical ? verticalText(vertical, locale) : undefined;
   // The type of activity puts its own offer types first and picks the first one by default; the
   // others stay one click away (a salon may sell products too). Without one, every type is listed
   // in the usual order, as before.
@@ -210,12 +200,14 @@ export default function CatalogPage() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-text-muted">Produits, services et autres offres.</p>
+      <p className="text-sm text-text-muted">{t("Produits, services et autres offres.", "Products, services and other offers.")}</p>
 
       {nothingOnline && (
         <p className="rounded-md border border-border bg-surface-muted px-4 py-3 text-sm text-text">
-          Aucune de vos offres n&apos;est en ligne : votre site n&apos;affiche rien pour
-          l&apos;instant. Ouvrez une offre et cliquez sur « Publier sur le site ».
+          {t(
+            "Aucune de vos offres n'est en ligne : votre site n'affiche rien pour l'instant. Ouvrez une offre et cliquez sur « Publier sur le site ».",
+            "None of your offers is online: your website shows nothing yet. Open an offer and click “Publish on the website”.",
+          )}
         </p>
       )}
 
@@ -228,15 +220,15 @@ export default function CatalogPage() {
           }}
           className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
         >
-          <option value="">Tous les types</option>
+          <option value="">{t("Tous les types", "All types")}</option>
           {OFFER_TYPES.map((type) => (
             <option key={type} value={type}>
-              {TYPE_LABELS[type]}
+              {typeLabel(type)}
             </option>
           ))}
         </select>
         <Button onClick={() => (showForm ? setShowForm(false) : openForm())}>
-          {showForm ? "Annuler" : "Nouvelle offre"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouvelle offre", "New offer")}
         </Button>
       </div>
 
@@ -259,39 +251,39 @@ export default function CatalogPage() {
           className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-surface p-4"
         >
           <select
-            aria-label="Type d'offre"
+            aria-label={t("Type d'offre", "Offer type")}
             className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             {...register("type")}
           >
             {otherOfferTypes.length === 0 ? (
               recommendedOfferTypes.map((type) => (
                 <option key={type} value={type}>
-                  {TYPE_LABELS[type]}
+                  {typeLabel(type)}
                 </option>
               ))
             ) : (
               <>
-                <optgroup label="Pour votre activité">
+                <optgroup label={t("Pour votre activité", "For your business")}>
                   {recommendedOfferTypes.map((type) => (
                     <option key={type} value={type}>
-                      {TYPE_LABELS[type]}
+                      {typeLabel(type)}
                     </option>
                   ))}
                 </optgroup>
-                <optgroup label="Autres types">
+                <optgroup label={t("Autres types", "Other types")}>
                   {otherOfferTypes.map((type) => (
                     <option key={type} value={type}>
-                      {TYPE_LABELS[type]}
+                      {typeLabel(type)}
                     </option>
                   ))}
                 </optgroup>
               </>
             )}
           </select>
-          <Input placeholder="Nom" className="col-span-2" {...register("name")} />
+          <Input placeholder={t("Nom", "Name")} className="col-span-2" {...register("name")} />
           {errors.name && <p className="col-span-2 text-xs text-destructive">{errors.name.message}</p>}
           <textarea
-            placeholder="Description"
+            placeholder={t("Description", "Description")}
             className="col-span-2 rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={2}
             {...register("description")}
@@ -303,11 +295,11 @@ export default function CatalogPage() {
           <Input
             type="number"
             step="0.01"
-            placeholder="Prix"
-            aria-label="Prix"
+            placeholder={t("Prix", "Price")}
+            aria-label={t("Prix", "Price")}
             {...register("pricing.amount", { valueAsNumber: true })}
           />
-          <Input placeholder="Devise (EUR)" {...register("pricing.currency")} />
+          <Input placeholder={t("Devise (EUR)", "Currency (EUR)")} {...register("pricing.currency")} />
           {errors.pricing?.currency && (
             <p className="col-span-2 text-xs text-destructive">{errors.pricing.currency.message}</p>
           )}
@@ -316,8 +308,8 @@ export default function CatalogPage() {
             type="number"
             step="0.01"
             min="0"
-            placeholder="Prix avant promotion (optionnel)"
-            aria-label="Prix avant promotion"
+            placeholder={t("Prix avant promotion (optionnel)", "Price before discount (optional)")}
+            aria-label={t("Prix avant promotion", "Price before discount")}
             disabled={compareAtLocked}
             className="flex-1"
             {...register("compareAtPrice", {
@@ -326,12 +318,14 @@ export default function CatalogPage() {
           />
             {compareAtLocked && <PlanLock feature="compare_at_price" />}
           </div>
-          {fields.reference && <Input placeholder="Référence (SKU)" {...register("sku")} />}
-          {fields.barcode && <Input placeholder="Code-barres (EAN/UPC)" {...register("barcode")} />}
+          {fields.reference && <Input placeholder={t("Référence (SKU)", "Reference (SKU)")} {...register("sku")} />}
+          {fields.barcode && <Input placeholder={t("Code-barres (EAN/UPC)", "Barcode (EAN/UPC)")} {...register("barcode")} />}
           {fields.duration && (
-            <Select aria-label="Vendu" className="col-span-2" {...register("bookingUnit")}>
-              <option value="slot">Par créneau (rendez-vous, séance, cours)</option>
-              <option value="night">Par nuit (séjour, de la date d&apos;arrivée à la date de départ)</option>
+            <Select aria-label={t("Vendu", "Sold")} className="col-span-2" {...register("bookingUnit")}>
+              <option value="slot">{t("Par créneau (rendez-vous, séance, cours)", "Per slot (appointment, session, class)")}</option>
+              <option value="night">
+                {t("Par nuit (séjour, de la date d'arrivée à la date de départ)", "Per night (stay, from arrival date to departure date)")}
+              </option>
             </Select>
           )}
           {fields.duration && bookingUnit === "night" && (
@@ -339,8 +333,8 @@ export default function CatalogPage() {
               type="number"
               min="1"
               step="1"
-              aria-label="Séjour minimum (nuits)"
-              placeholder="Séjour minimum en nuits (optionnel)"
+              aria-label={t("Séjour minimum (nuits)", "Minimum stay (nights)")}
+              placeholder={t("Séjour minimum en nuits (optionnel)", "Minimum stay in nights (optional)")}
               className="col-span-2"
               {...register("minNights", {
                 setValueAs: (v: string | number | null) => (v === "" || v == null ? undefined : Number(v)),
@@ -353,8 +347,11 @@ export default function CatalogPage() {
               min="0"
               max="240"
               step="5"
-              aria-label="Temps de battement après (minutes)"
-              placeholder="Temps de battement après chaque rendez-vous, en minutes (optionnel)"
+              aria-label={t("Temps de battement après (minutes)", "Buffer time after (minutes)")}
+              placeholder={t(
+                "Temps de battement après chaque rendez-vous, en minutes (optionnel)",
+                "Buffer time after each appointment, in minutes (optional)",
+              )}
               className="col-span-2"
               {...register("bufferMinutes", {
                 setValueAs: (v: string | number | null) => (v === "" || v == null ? undefined : Number(v)),
@@ -367,8 +364,8 @@ export default function CatalogPage() {
               step="5"
               min={OFFER_MIN_DURATION_MINUTES}
               max={OFFER_MAX_DURATION_MINUTES}
-              aria-label="Durée de la prestation (minutes)"
-              placeholder="Durée de la prestation (minutes)"
+              aria-label={t("Durée de la prestation (minutes)", "Service length (minutes)")}
+              placeholder={t("Durée de la prestation (minutes)", "Service length (minutes)")}
               className="col-span-2"
               {...register("durationMinutes", {
                 setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -377,20 +374,23 @@ export default function CatalogPage() {
           )}
           {errors.durationMinutes && (
             <p className="col-span-2 text-xs text-destructive">
-              Durée entre {OFFER_MIN_DURATION_MINUTES} et {OFFER_MAX_DURATION_MINUTES} minutes.
+              {t(
+                `Durée entre ${OFFER_MIN_DURATION_MINUTES} et ${OFFER_MAX_DURATION_MINUTES} minutes.`,
+                `Length between ${OFFER_MIN_DURATION_MINUTES} and ${OFFER_MAX_DURATION_MINUTES} minutes.`,
+              )}
             </p>
           )}
           {fields.stock && (
             <label className="col-span-2 flex items-center gap-2 text-sm text-text-muted">
               <input type="checkbox" {...register("trackStock")} />
-              Suivre le stock pour cette offre
+              {t("Suivre le stock pour cette offre", "Track stock for this offer")}
             </label>
           )}
           {fields.stock && trackStock && variantDrafts.length === 0 && (
             <Input
               type="number"
               step="1"
-              placeholder="Stock initial"
+              placeholder={t("Stock initial", "Opening stock")}
               className="col-span-2"
               {...register("stockOnHand", {
                 setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -434,9 +434,12 @@ export default function CatalogPage() {
               checked={watch("status") !== "draft"}
               onChange={(e) => setValue("status", e.target.checked ? "active" : "draft")}
             />
-            Publier sur mon site
+            {t("Publier sur mon site", "Publish on my website")}
             <span className="text-xs text-text-muted">
-              (décochez pour garder l&apos;offre en brouillon, invisible de vos clients)
+              {t(
+                "(décochez pour garder l'offre en brouillon, invisible de vos clients)",
+                "(untick to keep the offer as a draft, hidden from your customers)",
+              )}
             </span>
           </label>
 
@@ -449,11 +452,11 @@ export default function CatalogPage() {
 
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
-              {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
+              {createMutation.error instanceof ApiError ? createMutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending} className="col-span-2">
-            {createMutation.isPending ? "Création..." : "Créer l'offre"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer l'offre", "Create the offer")}
           </Button>
         </form>
       )}
@@ -463,17 +466,17 @@ export default function CatalogPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Nom</th>
-                <th className="px-4 py-2">Type</th>
-                <th className="px-4 py-2">Prix</th>
-                <th className="px-4 py-2">Statut</th>
+                <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                <th className="px-4 py-2">{t("Type", "Type")}</th>
+                <th className="px-4 py-2">{t("Prix", "Price")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
@@ -485,31 +488,35 @@ export default function CatalogPage() {
                         obvious, the empty state offers what this trade usually sells — names
                         only, from VERTICAL_TEMPLATES. Clicking one opens the form pre-filled so
                         the owner sets their own price; nothing is ever created for them. */}
-                    {vertical?.suggestedOffers?.length ? (
+                    {vertical?.suggestedOffers?.length && verticalWords ? (
                       <div className="text-center">
                         <p className="text-text-muted">
-                          Votre catalogue est vide. Voici ce que propose généralement un
-                          établissement du secteur « {vertical.label} ».
+                          {t(
+                            `Votre catalogue est vide. Voici ce que propose généralement un établissement du secteur « ${verticalWords.label} ».`,
+                            `Your catalogue is empty. Here is what a business in “${verticalWords.label}” usually offers.`,
+                          )}
                         </p>
                         <div className="mt-3 flex flex-wrap justify-center gap-2">
                           {vertical.suggestedOffers.map((suggestion) => (
                             <button
                               key={suggestion.name}
                               type="button"
-                              onClick={() => openForm(suggestion)}
+                              onClick={() => openForm({ ...suggestion, name: verticalWords.offerName(suggestion.name) })}
                               className="rounded-full border border-border-input px-3 py-1.5 text-sm text-text transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                             >
-                              {suggestion.name}
+                              {verticalWords.offerName(suggestion.name)}
                             </button>
                           ))}
                         </div>
                         <p className="mt-3 text-xs text-text-muted">
-                          Vous fixez vous-même le prix. Ce sont des suggestions, rien n&apos;est
-                          créé sans vous.
+                          {t(
+                            "Vous fixez vous-même le prix. Ce sont des suggestions, rien n'est créé sans vous.",
+                            "You set the price yourself. These are suggestions; nothing is created without you.",
+                          )}
                         </p>
                       </div>
                     ) : (
-                      <p className="text-center text-text-muted">Aucune offre.</p>
+                      <p className="text-center text-text-muted">{t("Aucune offre.", "No offers.")}</p>
                     )}
                   </td>
                 </tr>
@@ -538,12 +545,12 @@ export default function CatalogPage() {
                       </Link>
                     </div>
                   </td>
-                  <td className="px-4 py-2 text-text-muted">{TYPE_LABELS[offer.type]}</td>
+                  <td className="px-4 py-2 text-text-muted">{typeLabel(offer.type)}</td>
                   <td className="px-4 py-2 text-text-muted">
                     {offer.pricing.amount} {offer.pricing.currency}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge variant={STATUS_VARIANT[offer.status]}>{STATUS_LABELS[offer.status]}</Badge>
+                    <Badge variant={STATUS_VARIANT[offer.status]}>{t(...OFFER_STATUS_LABELS[offer.status])}</Badge>
                   </td>
                 </tr>
               ))}

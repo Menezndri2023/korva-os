@@ -6,17 +6,18 @@ import { Button, Card } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useKitchenSocket } from "@/lib/use-kitchen-socket";
+import { useT } from "@/lib/dashboard-locale";
 
-const COLUMNS: { status: KitchenTicketStatus; label: string }[] = [
-  { status: "new", label: "Nouveau" },
-  { status: "preparing", label: "En préparation" },
-  { status: "ready", label: "Prêt" },
+const COLUMNS: { status: KitchenTicketStatus; label: [string, string] }[] = [
+  { status: "new", label: ["Nouveau", "New"] },
+  { status: "preparing", label: ["En préparation", "Preparing"] },
+  { status: "ready", label: ["Prêt", "Ready"] },
 ];
 
-const ADVANCE_LABEL: Record<string, string> = {
-  new: "Commencer",
-  preparing: "Marquer prêt",
-  ready: "Marquer servi",
+const ADVANCE_LABEL: Record<string, [string, string]> = {
+  new: ["Commencer", "Start"],
+  preparing: ["Marquer prêt", "Mark ready"],
+  ready: ["Marquer servi", "Mark served"],
 };
 
 function elapsedMinutes(createdAt: string): number {
@@ -30,6 +31,7 @@ function errorMessage(error: unknown, fallback: string): string {
 export default function KitchenDisplayPage() {
   const authReady = useAuthReady();
   const queryClient = useQueryClient();
+  const t = useT();
 
   const ticketsQuery = useQuery({
     queryKey: ["kitchen-tickets"],
@@ -54,16 +56,19 @@ export default function KitchenDisplayPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Cuisine</h1>
+        <h1 className="text-2xl font-semibold">{t("Cuisine", "Kitchen")}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Vue en temps réel des additions ouvertes — se met à jour automatiquement.
+          {t(
+            "Vue en temps réel des additions ouvertes — se met à jour automatiquement.",
+            "A live view of open tabs — it updates by itself.",
+          )}
         </p>
       </div>
 
       {ticketsQuery.isError && (
         <Card className="p-6">
           <p className="text-sm text-destructive">
-            {errorMessage(ticketsQuery.error, "Impossible de charger les tickets.")}
+            {errorMessage(ticketsQuery.error, t("Impossible de charger les tickets.", "The tickets could not be loaded."))}
           </p>
         </Card>
       )}
@@ -71,26 +76,26 @@ export default function KitchenDisplayPage() {
       {!ticketsQuery.isError && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {COLUMNS.map((column) => {
-            const columnTickets = tickets.filter((t) => t.ticket.status === column.status);
+            const columnTickets = tickets.filter((entry) => entry.ticket.status === column.status);
             return (
               <div key={column.status} className="space-y-2">
                 <h2 className="text-sm font-semibold text-text-muted">
-                  {column.label} ({columnTickets.length})
+                  {t(...column.label)} ({columnTickets.length})
                 </h2>
                 <div className="space-y-2">
                   {columnTickets.length === 0 && (
-                    <Card className="p-4 text-center text-xs text-text-muted">Vide</Card>
+                    <Card className="p-4 text-center text-xs text-text-muted">{t("Vide", "Empty")}</Card>
                   )}
                   {columnTickets.map(({ ticket, order }) => (
                     <Card key={ticket.id} className="p-4">
                       <div className="flex items-center justify-between">
-                        <p className="font-medium text-text">Commande {order.number}</p>
+                        <p className="font-medium text-text">{t("Commande", "Order")} {order.number}</p>
                         <p className="text-xs text-text-muted">
                           {elapsedMinutes(order.createdAt)} min
                         </p>
                       </div>
                       <ul className="mt-2 space-y-0.5 text-sm text-text-muted">
-                        {order.items.length === 0 && <li>Aucun article</li>}
+                        {order.items.length === 0 && <li>{t("Aucun article", "No items")}</li>}
                         {order.items.map((item, index) => (
                           <li key={index}>
                             {item.quantity}× {item.description}
@@ -107,7 +112,7 @@ export default function KitchenDisplayPage() {
                         }
                         onClick={() => advanceMutation.mutate(ticket.id)}
                       >
-                        {ADVANCE_LABEL[ticket.status]}
+                        {ADVANCE_LABEL[ticket.status] ? t(...ADVANCE_LABEL[ticket.status]!) : ticket.status}
                       </Button>
                     </Card>
                   ))}

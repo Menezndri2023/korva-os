@@ -12,12 +12,11 @@ import {
   type AddBlockedSlotInput,
   type UpdateResourceInput,
 } from "@korva/validation";
-import { RESOURCE_KINDS, RESOURCE_KIND_LABELS, type Resource } from "@korva/types";
+import { RESOURCE_KINDS, RESOURCE_KIND_LABELS, RESOURCE_KIND_LABELS_EN, WEEKDAY_SHORT, type Resource } from "@korva/types";
 import { Badge, Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
-
-const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 interface MemberOption {
   id: string;
@@ -43,6 +42,10 @@ export default function ResourceDetailPage() {
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [isEditing, setIsEditing] = useState(false);
+  const locale = useDashboardLocale();
+  const t = useT();
+  const DAY_LABELS = WEEKDAY_SHORT[locale];
+  const kindLabels: Record<string, string> = locale === "en" ? RESOURCE_KIND_LABELS_EN : RESOURCE_KIND_LABELS;
 
   const resourceQuery = useQuery({
     queryKey: ["resources", id],
@@ -119,13 +122,13 @@ export default function ResourceDetailPage() {
   }
 
   if (resourceQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (resourceQuery.isError || !resourceQuery.data) {
     const error = resourceQuery.error;
     const message =
-      error instanceof ApiError ? error.message : "Impossible de charger cette ressource.";
+      error instanceof ApiError ? error.message : t("Impossible de charger cette ressource.", "This resource could not be loaded.");
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">{message}</p>
@@ -133,7 +136,7 @@ export default function ResourceDetailPage() {
           href="/dashboard/bookings/resources"
           className="mt-2 inline-block text-sm font-medium text-text underline"
         >
-          Retour aux ressources
+          {t("Retour aux ressources", "Back to resources")}
         </Link>
       </Card>
     );
@@ -147,7 +150,7 @@ export default function ResourceDetailPage() {
         href="/dashboard/bookings/resources"
         className="text-sm text-text-muted hover:underline"
       >
-        ← Ressources
+        ← {t("Ressources", "Resources")}
       </Link>
 
       <Card className="p-6">
@@ -155,19 +158,19 @@ export default function ResourceDetailPage() {
           <div>
             <h1 className="text-xl font-semibold">{resource.name}</h1>
             <p className="text-sm text-text-muted">
-              {resource.type} · capacité {resource.capacity}
+              {kindLabels[resource.type] ?? resource.type} · {t("capacité", "capacity")} {resource.capacity}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={resource.active ? "success" : "default"}>
-              {resource.active ? "Active" : "Inactive"}
+              {resource.active ? t("Active", "Active") : t("Inactive", "Inactive")}
             </Badge>
             <Button
               variant="secondary"
               size="sm"
               onClick={() => (isEditing ? cancelEdit() : startEdit(resource))}
             >
-              {isEditing ? "Annuler" : "Modifier"}
+              {isEditing ? t("Annuler", "Cancel") : t("Modifier", "Edit")}
             </Button>
           </div>
         </div>
@@ -175,7 +178,7 @@ export default function ResourceDetailPage() {
         {!isEditing ? (
           <>
             <div className="mt-4">
-              <dt className="text-sm text-text-muted">Compte utilisateur lié</dt>
+              <dt className="text-sm text-text-muted">{t("Compte utilisateur lié", "Linked user account")}</dt>
               <dd className="mt-0.5 text-sm text-text">
                 {(() => {
                   const member = members?.find((m) => m.id === resource.membershipId);
@@ -185,13 +188,13 @@ export default function ResourceDetailPage() {
             </div>
             {resource.description && (
               <div className="mt-4">
-                <dt className="text-sm text-text-muted">Description</dt>
+                <dt className="text-sm text-text-muted">{t("Description", "Description")}</dt>
                 <dd className="mt-0.5 text-sm text-text">{resource.description}</dd>
               </div>
             )}
             {resource.externalCalendarUrl && (
               <div className="mt-4">
-                <dt className="text-sm text-text-muted">Calendrier externe synchronisé</dt>
+                <dt className="text-sm text-text-muted">{t("Calendrier externe synchronisé", "Synced external calendar")}</dt>
                 <dd className="mt-0.5 truncate text-sm text-text">
                   {resource.externalCalendarUrl}
                 </dd>
@@ -204,11 +207,11 @@ export default function ResourceDetailPage() {
             className="mt-4 space-y-3 rounded-lg border border-border bg-surface p-4"
           >
             <div className="grid grid-cols-3 gap-2">
-              <Input placeholder="Nom" className="col-span-2" {...register("name")} />
-              <Select aria-label="Nature" {...register("type")}>
+              <Input placeholder={t("Nom", "Name")} className="col-span-2" {...register("name")} />
+              <Select aria-label={t("Nature", "Kind")} {...register("type")}>
                 {RESOURCE_KINDS.map((value) => (
                   <option key={value} value={value}>
-                    {RESOURCE_KIND_LABELS[value]}
+                    {kindLabels[value]}
                   </option>
                 ))}
                 {/* A free-text type from before the kinds existed stays selectable as it is. */}
@@ -221,20 +224,20 @@ export default function ResourceDetailPage() {
             <div className="flex items-center gap-3">
               <Input
                 type="number"
-                placeholder="Capacité"
+                placeholder={t("Capacité", "Capacity")}
                 className="w-32"
                 {...register("capacity", { valueAsNumber: true })}
               />
               <label className="flex items-center gap-2 text-sm text-text">
                 <input type="checkbox" {...register("active")} />
-                Active
+                {t("Active", "Active")}
               </label>
             </div>
             {/* setValueAs: optional + format-constrained (.url()) — an untouched field always
                 submits "" (never undefined), which fails validation unless converted here; same
                 pattern as dashboard/settings/page.tsx's brandColor/logo/heroImage fields. */}
             <Input
-              placeholder="URL calendrier externe (ICS, optionnel)"
+              placeholder={t("URL calendrier externe (ICS, optionnel)", "External calendar URL (ICS, optional)")}
               {...register("externalCalendarUrl", {
                 setValueAs: (v: string) => (v === "" ? undefined : v),
               })}
@@ -249,7 +252,7 @@ export default function ResourceDetailPage() {
                 setValueAs: (v: string) => (v === "" ? undefined : v),
               })}
             >
-              <option value="">Aucun membre assigné (ressource générique)</option>
+              <option value="">{t("Aucun membre assigné (ressource générique)", "No member assigned (generic resource)")}</option>
               {members?.map((member) => (
                 <option key={member.id} value={member.id}>
                   {memberName(member)}
@@ -258,7 +261,7 @@ export default function ResourceDetailPage() {
             </select>
 
             <div className="space-y-2">
-              <p className="text-sm font-medium text-text">Horaires hebdomadaires</p>
+              <p className="text-sm font-medium text-text">{t("Horaires hebdomadaires", "Weekly hours")}</p>
               {fields.map((field, index) => (
                 <div key={field.id} className="grid grid-cols-12 gap-2">
                   <select
@@ -286,7 +289,7 @@ export default function ResourceDetailPage() {
                     onClick={() => remove(index)}
                     className="col-span-2 text-sm text-destructive hover:underline"
                   >
-                    Retirer
+                    {t("Retirer", "Remove")}
                   </button>
                 </div>
               ))}
@@ -295,7 +298,7 @@ export default function ResourceDetailPage() {
                 onClick={() => append({ dayOfWeek: 1, startTime: "09:00", endTime: "18:00" })}
                 className="text-sm text-text-muted hover:underline"
               >
-                + Ajouter un créneau
+                + {t("Ajouter un créneau", "Add a slot")}
               </button>
             </div>
 
@@ -303,15 +306,15 @@ export default function ResourceDetailPage() {
               <p className="text-sm text-destructive">
                 {updateMutation.error instanceof ApiError
                   ? updateMutation.error.message
-                  : "Impossible d'enregistrer la ressource."}
+                  : t("Impossible d'enregistrer la ressource.", "The resource could not be saved.")}
               </p>
             )}
             <div className="flex gap-2">
               <Button type="submit" loading={updateMutation.isPending}>
-                {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                {updateMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
               </Button>
               <Button type="button" variant="ghost" onClick={cancelEdit}>
-                Annuler
+                {t("Annuler", "Cancel")}
               </Button>
             </div>
           </form>
@@ -319,46 +322,46 @@ export default function ResourceDetailPage() {
       </Card>
 
       <Card className="p-6">
-        <h2 className="text-sm font-semibold text-text">Indisponibilités</h2>
+        <h2 className="text-sm font-semibold text-text">{t("Indisponibilités", "Unavailable times")}</h2>
 
         <form
           onSubmit={handleSlotSubmit(submitBlockedSlot)}
           className="mt-3 flex flex-wrap items-center gap-2"
         >
-          <Input type="date" aria-label="Date" {...registerSlot("date", { required: true })} />
+          <Input type="date" aria-label={t("Date", "Date")} {...registerSlot("date", { required: true })} />
           <Input
             type="time"
-            aria-label="Début"
+            aria-label={t("Début", "Start")}
             {...registerSlot("startTime", { required: true })}
           />
-          <Input type="time" aria-label="Fin" {...registerSlot("endTime", { required: true })} />
+          <Input type="time" aria-label={t("Fin", "End")} {...registerSlot("endTime", { required: true })} />
           <Input
-            placeholder="Raison (optionnel)"
-            aria-label="Raison"
+            placeholder={t("Raison (optionnel)", "Reason (optional)")}
+            aria-label={t("Raison", "Reason")}
             {...registerSlot("reason")}
           />
           <Button type="submit" size="sm" loading={addSlotMutation.isPending}>
-            Ajouter
+            {t("Ajouter", "Add")}
           </Button>
         </form>
         {addSlotMutation.isError && (
           <p className="mt-2 text-xs text-destructive">
             {addSlotMutation.error instanceof ApiError
               ? addSlotMutation.error.message
-              : "Impossible d'ajouter cette indisponibilité."}
+              : t("Impossible d'ajouter cette indisponibilité.", "This unavailable time could not be added.")}
           </p>
         )}
 
         <div className="mt-4">
           {resource.blockedSlots.length === 0 ? (
-            <p className="text-sm text-text-muted">Aucune indisponibilité.</p>
+            <p className="text-sm text-text-muted">{t("Aucune indisponibilité.", "No unavailable times.")}</p>
           ) : (
             <ul className="divide-y divide-border">
               {resource.blockedSlots.map((slot) => (
                 <li key={slot.id} className="flex items-center justify-between py-2 text-sm">
                   <span>
-                    {new Date(slot.startAt).toLocaleString("fr-FR")} →{" "}
-                    {new Date(slot.endAt).toLocaleString("fr-FR")}
+                    {new Date(slot.startAt).toLocaleString(intlLocale(locale))} →{" "}
+                    {new Date(slot.endAt).toLocaleString(intlLocale(locale))}
                     {slot.reason ? ` — ${slot.reason}` : ""}
                   </span>
                   <Button
@@ -369,7 +372,7 @@ export default function ResourceDetailPage() {
                     }
                     onClick={() => removeSlotMutation.mutate(slot.id)}
                   >
-                    Retirer
+                    {t("Retirer", "Remove")}
                   </Button>
                 </li>
               ))}
