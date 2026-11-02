@@ -16,15 +16,17 @@ import {
 import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const CHANNEL_LABELS: Record<CommunicationChannel, string> = {
-  email: "E-mail",
-  whatsapp: "WhatsApp",
-  sms: "SMS",
-  internal: "Note interne",
+const CHANNEL_LABELS: Record<CommunicationChannel, [string, string]> = {
+  email: ["E-mail", "E-mail"],
+  whatsapp: ["WhatsApp", "WhatsApp"],
+  sms: ["SMS", "SMS"],
+  internal: ["Note interne", "Internal note"],
 };
 
 export default function MessageTemplatesPage() {
+  const t = useT();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export default function MessageTemplatesPage() {
       setShowForm(false);
       setFormError(null);
     },
-    onError: (error) => setFormError(error instanceof ApiError ? error.message : "Erreur"),
+    onError: (error) => setFormError(error instanceof ApiError ? error.message : t("Erreur", "Error")),
   });
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -102,7 +104,7 @@ export default function MessageTemplatesPage() {
     setFormError(null);
     const result = createMessageTemplateSchema.safeParse(values);
     if (!result.success) {
-      setFormError(result.error.issues[0]?.message ?? "Formulaire invalide");
+      setFormError(result.error.issues[0]?.message ?? t("Formulaire invalide", "The form is not valid"));
       return;
     }
     createMutation.mutate(result.data);
@@ -111,7 +113,7 @@ export default function MessageTemplatesPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouveau modèle"}</Button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? t("Annuler", "Cancel") : t("Nouveau modèle", "New template")}</Button>
       </div>
 
       {showForm && (
@@ -123,23 +125,29 @@ export default function MessageTemplatesPage() {
           className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
           <div className="grid grid-cols-2 gap-3">
-            <Input placeholder="Nom du modèle" {...register("name", { required: true })} />
+            <Input placeholder={t("Nom du modèle", "Template name")} {...register("name", { required: true })} />
             <select
               className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               {...register("channel", { required: true })}
             >
               {COMMUNICATION_CHANNELS.map((c) => (
                 <option key={c} value={c}>
-                  {CHANNEL_LABELS[c]}
+                  {t(...CHANNEL_LABELS[c])}
                 </option>
               ))}
             </select>
           </div>
           {channel !== "internal" && (
-            <Input placeholder="Objet (ex: Bienvenue {{contact.firstName}})" className="w-full" {...register("subject")} />
+            <Input placeholder={t(
+              "Objet (ex: Bienvenue {{contact.firstName}})",
+              "Subject (e.g. Welcome {{contact.firstName}})",
+            )} className="w-full" {...register("subject")} />
           )}
           <textarea
-            placeholder="Corps du message — variables: {{contact.firstName}}, {{contact.lastName}}, {{contact.email}}, {{contact.phone}}"
+            placeholder={t(
+              "Corps du message — variables: {{contact.firstName}}, {{contact.lastName}}, {{contact.email}}, {{contact.phone}}",
+              "Message body — variables: {{contact.firstName}}, {{contact.lastName}}, {{contact.email}}, {{contact.phone}}",
+            )}
             rows={4}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             {...register("body", { required: true })}
@@ -147,7 +155,7 @@ export default function MessageTemplatesPage() {
 
           {formError && <p className="text-sm text-destructive">{formError}</p>}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer le modèle"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le modèle", "Create the template")}
           </Button>
         </form>
       )}
@@ -157,24 +165,24 @@ export default function MessageTemplatesPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Nom</th>
-                <th className="px-4 py-2">Canal</th>
-                <th className="px-4 py-2">Corps</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                <th className="px-4 py-2">{t("Canal", "Channel")}</th>
+                <th className="px-4 py-2">{t("Corps", "Body")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && templates?.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Aucun modèle.
+                    {t("Aucun modèle.", "No templates.")}
                   </td>
                 </tr>
               )}
@@ -192,7 +200,7 @@ export default function MessageTemplatesPage() {
                     <tr>
                       <td className="px-4 py-2 font-medium">{template.name}</td>
                       <td className="px-4 py-2 text-text-muted">
-                        {CHANNEL_LABELS[template.channel]}
+                        {t(...CHANNEL_LABELS[template.channel])}
                       </td>
                       <td className="max-w-xs truncate px-4 py-2 text-text-muted">
                         {template.body}
@@ -205,7 +213,7 @@ export default function MessageTemplatesPage() {
                             disabled={isDeleteConfirming}
                             onClick={() => (isEditing ? cancelEdit() : startEdit(template))}
                           >
-                            {isEditing ? "Annuler" : "Modifier"}
+                            {isEditing ? t("Annuler", "Cancel") : t("Modifier", "Edit")}
                           </Button>
                           {isDeleteConfirming ? (
                             <>
@@ -215,7 +223,7 @@ export default function MessageTemplatesPage() {
                                 loading={isDeletePending}
                                 onClick={() => deleteMutation.mutate(template.id)}
                               >
-                                {isDeletePending ? "Suppression..." : "Confirmer ?"}
+                                {isDeletePending ? t("Suppression...", "Deleting...") : t("Confirmer ?", "Confirm?")}
                               </Button>
                               <Button
                                 variant="ghost"
@@ -223,7 +231,7 @@ export default function MessageTemplatesPage() {
                                 disabled={isDeletePending}
                                 onClick={() => setDeletingConfirmId(null)}
                               >
-                                Annuler
+                                {t("Annuler", "Cancel")}
                               </Button>
                             </>
                           ) : (
@@ -233,7 +241,7 @@ export default function MessageTemplatesPage() {
                               disabled={isEditing}
                               onClick={() => setDeletingConfirmId(template.id)}
                             >
-                              Supprimer
+                              {t("Supprimer", "Delete")}
                             </Button>
                           )}
                         </div>
@@ -244,7 +252,7 @@ export default function MessageTemplatesPage() {
                         <td colSpan={4} className="px-4 pb-2 text-xs text-destructive">
                           {deleteError instanceof ApiError
                             ? deleteError.message
-                            : "Impossible de supprimer le modèle."}
+                            : t("Impossible de supprimer le modèle.", "The template could not be deleted.")}
                         </td>
                       </tr>
                     )}
@@ -259,7 +267,7 @@ export default function MessageTemplatesPage() {
                           >
                             <div className="grid grid-cols-2 gap-3">
                               <Input
-                                placeholder="Nom du modèle"
+                                placeholder={t("Nom du modèle", "Template name")}
                                 {...registerEdit("name", { required: true })}
                               />
                               <select
@@ -268,20 +276,23 @@ export default function MessageTemplatesPage() {
                               >
                                 {COMMUNICATION_CHANNELS.map((c) => (
                                   <option key={c} value={c}>
-                                    {CHANNEL_LABELS[c]}
+                                    {t(...CHANNEL_LABELS[c])}
                                   </option>
                                 ))}
                               </select>
                             </div>
                             {editChannel !== "internal" && (
                               <Input
-                                placeholder="Objet (ex: Bienvenue {{contact.firstName}})"
+                                placeholder={t(
+                                  "Objet (ex: Bienvenue {{contact.firstName}})",
+                                  "Subject (e.g. Welcome {{contact.firstName}})",
+                                )}
                                 className="w-full"
                                 {...registerEdit("subject")}
                               />
                             )}
                             <textarea
-                              placeholder="Corps du message"
+                              placeholder={t("Corps du message", "Message body")}
                               rows={4}
                               className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
                               {...registerEdit("body", { required: true })}
@@ -291,15 +302,18 @@ export default function MessageTemplatesPage() {
                               <p className="text-sm text-destructive">
                                 {updateMutation.error instanceof ApiError
                                   ? updateMutation.error.message
-                                  : "Impossible d'enregistrer le modèle."}
+                                  : t(
+                                    "Impossible d'enregistrer le modèle.",
+                                    "The template could not be saved.",
+                                  )}
                               </p>
                             )}
                             <div className="flex gap-2">
                               <Button type="submit" loading={updateMutation.isPending}>
-                                {updateMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                                {updateMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
                               </Button>
                               <Button type="button" variant="ghost" onClick={cancelEdit}>
-                                Annuler
+                                {t("Annuler", "Cancel")}
                               </Button>
                             </div>
                           </form>

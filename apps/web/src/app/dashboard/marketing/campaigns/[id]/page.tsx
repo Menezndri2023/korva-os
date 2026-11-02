@@ -7,12 +7,13 @@ import type { Campaign, CampaignRecipient, CampaignRecipientStatus } from "@korv
 import { Badge, Card, Pagination } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const RECIPIENT_STATUS_LABELS: Record<CampaignRecipientStatus, string> = {
-  pending: "En attente",
-  sent: "Envoyé",
-  failed: "Échec",
-  skipped: "Ignoré",
+const RECIPIENT_STATUS_LABELS: Record<CampaignRecipientStatus, [string, string]> = {
+  pending: ["En attente", "Pending"],
+  sent: ["Envoyé", "Sent"],
+  failed: ["Échec", "Failed"],
+  skipped: ["Ignoré", "Skipped"],
 };
 
 const RECIPIENT_STATUS_VARIANTS: Record<
@@ -35,6 +36,7 @@ function StatTile({ label, value }: { label: string; value: number }) {
 }
 
 export default function CampaignDetailPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const [page, setPage] = useState(1);
   const authReady = useAuthReady();
@@ -54,7 +56,7 @@ export default function CampaignDetailPage() {
   const recipients = recipientsPage?.data;
 
   if (isLoading || !campaign) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   return (
@@ -65,15 +67,15 @@ export default function CampaignDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <StatTile label="Total" value={campaign.stats.totalRecipients} />
-        <StatTile label="Traités" value={campaign.stats.processedCount} />
-        <StatTile label="Envoyés" value={campaign.stats.sentCount} />
-        <StatTile label="Échecs" value={campaign.stats.failedCount} />
-        <StatTile label="Ignorés" value={campaign.stats.skippedCount} />
+        <StatTile label={t("Total", "Total")} value={campaign.stats.totalRecipients} />
+        <StatTile label={t("Traités", "Processed")} value={campaign.stats.processedCount} />
+        <StatTile label={t("Envoyés", "Sent")} value={campaign.stats.sentCount} />
+        <StatTile label={t("Échecs", "Failed")} value={campaign.stats.failedCount} />
+        <StatTile label={t("Ignorés", "Skipped")} value={campaign.stats.skippedCount} />
       </div>
 
       <Card className="p-4">
-        <p className="text-sm font-medium text-text">Message</p>
+        <p className="text-sm font-medium text-text">{t("Message", "Message")}</p>
         <p className="mt-1 whitespace-pre-wrap text-sm text-text-muted">{campaign.body}</p>
       </Card>
 
@@ -82,17 +84,17 @@ export default function CampaignDetailPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Contact</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Canal</th>
-                <th className="px-4 py-2">Erreur</th>
+                <th className="px-4 py-2">{t("Contact", "Contact")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Canal", "Channel")}</th>
+                <th className="px-4 py-2">{t("Erreur", "Error")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {recipients?.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Aucun destinataire.
+                    {t("Aucun destinataire.", "No recipients.")}
                   </td>
                 </tr>
               )}
@@ -103,7 +105,7 @@ export default function CampaignDetailPage() {
                   </td>
                   <td className="px-4 py-2">
                     <Badge variant={RECIPIENT_STATUS_VARIANTS[recipient.status]}>
-                      {RECIPIENT_STATUS_LABELS[recipient.status]}
+                      {t(...RECIPIENT_STATUS_LABELS[recipient.status])}
                     </Badge>
                   </td>
                   <td className="px-4 py-2 text-text-muted">{recipient.channelUsed ?? "—"}</td>

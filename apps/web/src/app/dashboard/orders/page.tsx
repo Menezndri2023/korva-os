@@ -16,16 +16,18 @@ import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<Order["status"], string> = {
-  open: "Addition ouverte",
-  pending: "En attente",
-  confirmed: "Confirmée",
-  fulfilled: "Livrée",
-  cancelled: "Annulée",
+const STATUS_LABELS: Record<Order["status"], [string, string]> = {
+  open: ["Addition ouverte", "Open tab"],
+  pending: ["En attente", "Pending"],
+  confirmed: ["Confirmée", "Confirmed"],
+  fulfilled: ["Livrée", "Fulfilled"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 export default function OrdersPage() {
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [showOpenForm, setShowOpenForm] = useState(false);
   const [page, setPage] = useState(1);
@@ -121,15 +123,18 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Commandes</h1>
-        <p className="mt-1 text-sm text-text-muted">Commandes manuelles, issues du panier ou d&apos;une réservation.</p>
+        <h1 className="text-2xl font-semibold">{t("Commandes", "Orders")}</h1>
+        <p className="mt-1 text-sm text-text-muted">{t(
+          "Commandes manuelles, issues du panier ou d'une réservation.",
+          "Orders entered by hand, from the basket or from a booking.",
+        )}</p>
       </div>
 
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={() => setShowOpenForm((v) => !v)}>
-          {showOpenForm ? "Annuler" : "Ouvrir une addition"}
+          {showOpenForm ? t("Annuler", "Cancel") : t("Ouvrir une addition", "Open a tab")}
         </Button>
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouvelle commande"}</Button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? t("Annuler", "Cancel") : t("Nouvelle commande", "New order")}</Button>
       </div>
 
       {showOpenForm && (
@@ -143,7 +148,7 @@ export default function OrdersPage() {
             {...registerOpen("contactId")}
           >
             <option value="" disabled>
-              Choisir un client
+              {t("Choisir un client", "Choose a customer")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -151,7 +156,7 @@ export default function OrdersPage() {
               </option>
             ))}
           </select>
-          <Input placeholder="Devise (EUR)" className="w-28" {...registerOpen("currency")} />
+          <Input placeholder={t("Devise (EUR)", "Currency (EUR)")} className="w-28" {...registerOpen("currency")} />
           <select
             className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             defaultValue=""
@@ -159,7 +164,7 @@ export default function OrdersPage() {
               setValueAs: (v: string) => (v === "" ? undefined : v),
             })}
           >
-            <option value="">Table (optionnel)</option>
+            <option value="">{t("Table (optionnel)", "Table (optional)")}</option>
             {resources?.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
@@ -170,11 +175,11 @@ export default function OrdersPage() {
             <p className="w-full text-sm text-destructive">
               {createOpenMutation.error instanceof ApiError
                 ? createOpenMutation.error.message
-                : "Erreur"}
+                : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createOpenMutation.isPending}>
-            {createOpenMutation.isPending ? "Ouverture..." : "Ouvrir"}
+            {createOpenMutation.isPending ? t("Ouverture...", "Opening...") : t("Ouvrir", "Open")}
           </Button>
         </form>
       )}
@@ -193,7 +198,7 @@ export default function OrdersPage() {
             {...register("contactId")}
           >
             <option value="" disabled>
-              Choisir un client
+              {t("Choisir un client", "Choose a customer")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -206,26 +211,26 @@ export default function OrdersPage() {
             {fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-12 gap-2">
                 <Input
-                  placeholder="Description"
+                  placeholder={t("Description", "Description")}
                   className="col-span-5"
                   {...register(`items.${index}.description`)}
                 />
                 <Input
                   type="number"
-                  placeholder="Qté"
+                  placeholder={t("Qté", "Qty")}
                   className="col-span-2"
                   {...register(`items.${index}.quantity`, { valueAsNumber: true })}
                 />
                 <Input
                   type="number"
                   step="0.01"
-                  placeholder="Prix unitaire"
+                  placeholder={t("Prix unitaire", "Unit price")}
                   className="col-span-2"
                   {...register(`items.${index}.unitPrice`, { valueAsNumber: true })}
                 />
                 <Input
                   type="number"
-                  placeholder="TVA %"
+                  placeholder={t("TVA %", "VAT %")}
                   className="col-span-2"
                   {...register(`items.${index}.taxRate`, {
                     setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
@@ -245,17 +250,17 @@ export default function OrdersPage() {
               onClick={() => append({ description: "", quantity: 1, unitPrice: 0, taxRate: 0 })}
               className="text-sm text-text-muted hover:underline"
             >
-              + Ajouter une ligne
+              {t("+ Ajouter une ligne", "+ Add a line")}
             </button>
           </div>
 
           {createMutation.isError && (
             <p className="text-sm text-destructive">
-              {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
+              {createMutation.error instanceof ApiError ? createMutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer la commande"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer la commande", "Create the order")}
           </Button>
         </form>
       )}
@@ -265,27 +270,27 @@ export default function OrdersPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">N°</th>
-                <th className="px-4 py-2">Client</th>
-                <th className="px-4 py-2">Table</th>
-                <th className="px-4 py-2">Origine</th>
-                <th className="px-4 py-2">Total</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("N°", "No.")}</th>
+                <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                <th className="px-4 py-2">{t("Table", "Table")}</th>
+                <th className="px-4 py-2">{t("Origine", "Source")}</th>
+                <th className="px-4 py-2">{t("Total", "Total")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && orders?.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
-                    Aucune commande.
+                    {t("Aucune commande.", "No orders.")}
                   </td>
                 </tr>
               )}
@@ -313,7 +318,7 @@ export default function OrdersPage() {
                     {order.total} {order.currency}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge>{STATUS_LABELS[order.status]}</Badge>
+                    <Badge>{t(...STATUS_LABELS[order.status])}</Badge>
                   </td>
                   <td className="px-4 py-2 space-x-2">
                     {order.status === "pending" && (
@@ -321,7 +326,7 @@ export default function OrdersPage() {
                         onClick={() => confirmMutation.mutate(order.id)}
                         className="text-xs text-text-muted hover:underline"
                       >
-                        Confirmer
+                        {t("Confirmer", "Confirm")}
                       </button>
                     )}
                     {order.status === "confirmed" && !order.invoiceId && (
@@ -329,7 +334,7 @@ export default function OrdersPage() {
                         onClick={() => invoiceMutation.mutate(order.id)}
                         className="text-xs text-text-muted hover:underline"
                       >
-                        Facturer
+                        {t("Facturer", "Invoice")}
                       </button>
                     )}
                     {order.status === "confirmed" && (
@@ -337,7 +342,7 @@ export default function OrdersPage() {
                         onClick={() => fulfillMutation.mutate(order.id)}
                         className="text-xs text-text-muted hover:underline"
                       >
-                        Livrer
+                        {t("Livrer", "Fulfil")}
                       </button>
                     )}
                     {(order.status === "pending" || order.status === "confirmed") && (
@@ -345,7 +350,7 @@ export default function OrdersPage() {
                         onClick={() => cancelMutation.mutate(order.id)}
                         className="text-xs text-destructive hover:underline"
                       >
-                        Annuler
+                        {t("Annuler", "Cancel")}
                       </button>
                     )}
                   </td>

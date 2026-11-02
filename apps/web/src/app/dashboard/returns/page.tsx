@@ -7,11 +7,12 @@ import type { Contact, ReturnRequest, ReturnRequestStatus } from "@korva/types";
 import { Badge, Card, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<ReturnRequestStatus, string> = {
-  pending: "En attente",
-  approved: "Approuvé",
-  rejected: "Refusé",
+const STATUS_LABELS: Record<ReturnRequestStatus, [string, string]> = {
+  pending: ["En attente", "Pending"],
+  approved: ["Approuvé", "Approved"],
+  rejected: ["Refusé", "Rejected"],
 };
 
 const STATUS_VARIANT: Record<
@@ -27,11 +28,9 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString("fr-FR");
-}
-
 export default function ReturnsPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const [statusFilter, setStatusFilter] = useState<ReturnRequestStatus | "">(
     "pending",
   );
@@ -92,11 +91,12 @@ export default function ReturnsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Retours</h1>
+        <h1 className="text-2xl font-semibold">{t("Retours", "Returns")}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Les clients demandent un retour depuis leur espace client — approuvez
-          ou refusez la demande ici. Une approbation déclenche un remboursement
-          réel et remet le stock à jour automatiquement.
+          {t(
+            "Les clients demandent un retour depuis leur espace client — approuvez ou refusez la demande ici. Une approbation déclenche un remboursement réel et remet le stock à jour automatiquement.",
+            "Customers ask for a return from their customer area — approve or reject the request here. Approving triggers a real refund and updates stock automatically.",
+          )}
         </p>
       </div>
 
@@ -114,7 +114,7 @@ export default function ReturnsPage() {
                 : "border-border text-text-muted hover:text-text"
             }`}
           >
-            {status ? STATUS_LABELS[status] : "Tous"}
+            {status ? t(...STATUS_LABELS[status]) : t("Tous", "All")}
           </button>
         ))}
       </div>
@@ -122,13 +122,13 @@ export default function ReturnsPage() {
       {isError && (
         <Card className="p-6">
           <p className="text-sm text-destructive">
-            Impossible de charger les demandes de retour.
+            {t("Impossible de charger les demandes de retour.", "Return requests could not be loaded.")}
           </p>
           <button
             onClick={() => refetch()}
             className="mt-2 text-sm font-medium text-text underline"
           >
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -139,27 +139,27 @@ export default function ReturnsPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Client</th>
-                  <th className="px-4 py-2">Commande</th>
-                  <th className="px-4 py-2">Motif</th>
-                  <th className="px-4 py-2">Montant</th>
-                  <th className="px-4 py-2">Demandé le</th>
-                  <th className="px-4 py-2">Statut</th>
-                  <th className="px-4 py-2">Actions</th>
+                  <th className="px-4 py-2">{t("Client", "Customer")}</th>
+                  <th className="px-4 py-2">{t("Commande", "Order")}</th>
+                  <th className="px-4 py-2">{t("Motif", "Reason")}</th>
+                  <th className="px-4 py-2">{t("Montant", "Amount")}</th>
+                  <th className="px-4 py-2">{t("Demandé le", "Requested")}</th>
+                  <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                  <th className="px-4 py-2">{t("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
                     <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!isLoading && returns?.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-6 text-center text-text-muted">
-                      Aucune demande de retour.
+                      {t("Aucune demande de retour.", "No return requests.")}
                     </td>
                   </tr>
                 )}
@@ -173,7 +173,7 @@ export default function ReturnsPage() {
                         href={`/dashboard/orders/${returnRequest.orderId}`}
                         className="text-text underline"
                       >
-                        Voir la commande
+                        {t("Voir la commande", "See the order")}
                       </Link>
                     </td>
                     <td className="max-w-xs truncate px-4 py-2 text-text-muted">
@@ -183,11 +183,11 @@ export default function ReturnsPage() {
                       {returnRequest.refundAmount} {returnRequest.currency}
                     </td>
                     <td className="px-4 py-2 text-text-muted">
-                      {formatDate(returnRequest.createdAt)}
+                      {new Date(returnRequest.createdAt).toLocaleDateString(intlLocale(locale))}
                     </td>
                     <td className="px-4 py-2">
                       <Badge variant={STATUS_VARIANT[returnRequest.status]}>
-                        {STATUS_LABELS[returnRequest.status]}
+                        {t(...STATUS_LABELS[returnRequest.status])}
                       </Badge>
                     </td>
                     <td className="px-4 py-2">
@@ -201,7 +201,7 @@ export default function ReturnsPage() {
                             }
                             className="text-xs font-medium text-emerald-700 hover:underline"
                           >
-                            Approuver (rembourser)
+                            {t("Approuver (rembourser)", "Approve (refund)")}
                           </button>
                           {rejectingId === returnRequest.id ? (
                             <button
@@ -212,14 +212,14 @@ export default function ReturnsPage() {
                               }
                               className="text-xs font-medium text-destructive hover:underline"
                             >
-                              Confirmer ?
+                              {t("Confirmer ?", "Confirm?")}
                             </button>
                           ) : (
                             <button
                               onClick={() => setRejectingId(returnRequest.id)}
                               className="text-xs text-destructive hover:underline"
                             >
-                              Refuser
+                              {t("Refuser", "Reject")}
                             </button>
                           )}
                         </div>
@@ -228,8 +228,10 @@ export default function ReturnsPage() {
                         approveMutation.variables === returnRequest.id && (
                           <p className="mt-1 text-xs text-destructive">
                             {errorMessage(
-                              approveMutation.error,
-                              "Impossible d'approuver ce retour.",
+                              approveMutation.error, t(
+                                "Impossible d'approuver ce retour.",
+                                "This return could not be approved.",
+                              ),
                             )}
                           </p>
                         )}

@@ -19,15 +19,17 @@ import {
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const CHANNEL_LABELS: Record<CommunicationChannel, string> = {
-  email: "E-mail",
-  whatsapp: "WhatsApp",
-  sms: "SMS",
-  internal: "Note interne",
+const CHANNEL_LABELS: Record<CommunicationChannel, [string, string]> = {
+  email: ["E-mail", "E-mail"],
+  whatsapp: ["WhatsApp", "WhatsApp"],
+  sms: ["SMS", "SMS"],
+  internal: ["Note interne", "Internal note"],
 };
 
 export default function ConversationsPage() {
+  const t = useT();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -61,14 +63,14 @@ export default function ConversationsPage() {
       setShowForm(false);
       setFormError(null);
     },
-    onError: (error) => setFormError(error instanceof ApiError ? error.message : "Erreur"),
+    onError: (error) => setFormError(error instanceof ApiError ? error.message : t("Erreur", "Error")),
   });
 
   function onSubmit(values: CreateConversationInput) {
     setFormError(null);
     const result = createConversationSchema.safeParse(values);
     if (!result.success) {
-      setFormError(result.error.issues[0]?.message ?? "Formulaire invalide");
+      setFormError(result.error.issues[0]?.message ?? t("Formulaire invalide", "The form is not valid"));
       return;
     }
     createMutation.mutate(result.data);
@@ -83,7 +85,7 @@ export default function ConversationsPage() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouvelle conversation"}</Button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? t("Annuler", "Cancel") : t("Nouvelle conversation", "New conversation")}</Button>
       </div>
 
       {showForm && (
@@ -100,7 +102,7 @@ export default function ConversationsPage() {
             {...register("contactId", { required: true })}
           >
             <option value="" disabled>
-              Choisir un contact
+              {t("Choisir un contact", "Choose a contact")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -114,15 +116,15 @@ export default function ConversationsPage() {
           >
             {COMMUNICATION_CHANNELS.map((channel) => (
               <option key={channel} value={channel}>
-                {CHANNEL_LABELS[channel]}
+                {t(...CHANNEL_LABELS[channel])}
               </option>
             ))}
           </select>
-          <Input placeholder="Sujet (optionnel)" {...register("subject")} />
+          <Input placeholder={t("Sujet (optionnel)", "Subject (optional)")} {...register("subject")} />
 
           {formError && <p className="col-span-3 text-sm text-destructive">{formError}</p>}
           <Button type="submit" loading={createMutation.isPending} className="col-span-3">
-            {createMutation.isPending ? "Création..." : "Créer la conversation"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer la conversation", "Create the conversation")}
           </Button>
         </form>
       )}
@@ -132,25 +134,25 @@ export default function ConversationsPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Contact</th>
-                <th className="px-4 py-2">Canal</th>
-                <th className="px-4 py-2">Sujet</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("Contact", "Contact")}</th>
+                <th className="px-4 py-2">{t("Canal", "Channel")}</th>
+                <th className="px-4 py-2">{t("Sujet", "Subject")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && conversations?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Aucune conversation.
+                    {t("Aucune conversation.", "No conversations.")}
                   </td>
                 </tr>
               )}
@@ -183,6 +185,8 @@ function ConversationRow({
   conversation: Conversation;
   contactName: string;
 }) {
+  const locale = useDashboardLocale();
+  const t = useT();
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [body, setBody] = useState("");
@@ -223,16 +227,16 @@ function ConversationRow({
       setTemplateId("");
       setSendError(null);
     },
-    onError: (error) => setSendError(error instanceof ApiError ? error.message : "Erreur"),
+    onError: (error) => setSendError(error instanceof ApiError ? error.message : t("Erreur", "Error")),
   });
 
   function send() {
     if (!body.trim() && !templateId) {
-      setSendError("Écrivez un message ou choisissez un modèle.");
+      setSendError(t("Écrivez un message ou choisissez un modèle.", "Write a message or choose a template."));
       return;
     }
     sendMutation.mutate({
-      body: body.trim() || "(modèle)",
+      body: body.trim() || t("(modèle)", "(template)"),
       templateId: templateId || undefined,
     });
   }
@@ -241,19 +245,19 @@ function ConversationRow({
     <>
       <tr>
         <td className="px-4 py-2 font-medium">{contactName}</td>
-        <td className="px-4 py-2 text-text-muted">{CHANNEL_LABELS[conversation.channel]}</td>
+        <td className="px-4 py-2 text-text-muted">{t(...CHANNEL_LABELS[conversation.channel])}</td>
         <td className="px-4 py-2 text-text-muted">{conversation.subject ?? "—"}</td>
         <td className="px-4 py-2">
           <Badge variant={conversation.status === "open" ? "success" : "default"}>
-            {conversation.status === "open" ? "Ouverte" : "Fermée"}
+            {conversation.status === "open" ? t("Ouverte", "Open") : t("Fermée", "Closed")}
           </Badge>
         </td>
         <td className="space-x-2 px-4 py-2">
           <button onClick={() => setExpanded((v) => !v)} className="text-xs text-text-muted hover:underline">
-            {expanded ? "Fermer" : "Voir le fil"}
+            {expanded ? t("Fermer", "Close") : t("Voir le fil", "See the thread")}
           </button>
           <button onClick={() => toggleStatusMutation.mutate()} className="text-xs text-text-muted hover:underline">
-            {conversation.status === "open" ? "Clore" : "Rouvrir"}
+            {conversation.status === "open" ? t("Clore", "Close") : t("Rouvrir", "Reopen")}
           </button>
         </td>
       </tr>
@@ -263,18 +267,18 @@ function ConversationRow({
             <div className="space-y-3">
               <ul className="space-y-2">
                 {messagesQuery.data?.length === 0 && (
-                  <li className="text-xs text-text-muted">Aucun message pour l&apos;instant.</li>
+                  <li className="text-xs text-text-muted">{t("Aucun message pour l'instant.", "No messages yet.")}</li>
                 )}
                 {messagesQuery.data?.map((message) => (
                   <li key={message.id} className="rounded-md border border-border bg-surface p-2 text-xs">
                     <div className="mb-1 flex justify-between text-text-muted">
-                      <span>{message.direction === "outbound" ? "Envoyé" : "Reçu"}</span>
-                      <span>{new Date(message.createdAt).toLocaleString("fr-FR")}</span>
+                      <span>{message.direction === "outbound" ? t("Envoyé", "Sent") : t("Reçu", "Received")}</span>
+                      <span>{new Date(message.createdAt).toLocaleString(intlLocale(locale))}</span>
                     </div>
                     <p className="text-text">{message.body}</p>
                     <p className="mt-1 text-text-muted">
                       statut: {message.status}
-                      {message.to ? ` — à ${message.to}` : ""}
+                      {message.to ? t(` — à ${message.to}`, ` — to ${message.to}`) : ""}
                     </p>
                   </li>
                 ))}
@@ -285,7 +289,7 @@ function ConversationRow({
                   <textarea
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
-                    placeholder="Écrire un message..."
+                    placeholder={t("Écrire un message...", "Write a message...")}
                     rows={2}
                     className="w-full rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none"
                   />
@@ -295,7 +299,7 @@ function ConversationRow({
                       onChange={(e) => setTemplateId(e.target.value)}
                       className="rounded-md border border-border-input px-2 py-1.5 text-xs focus:border-focus focus:outline-none"
                     >
-                      <option value="">Sans modèle</option>
+                      <option value="">{t("Sans modèle", "No template")}</option>
                       {templates
                         ?.filter((t) => t.channel === conversation.channel)
                         .map((t) => (
@@ -305,7 +309,7 @@ function ConversationRow({
                         ))}
                     </select>
                     <Button size="sm" onClick={send} loading={sendMutation.isPending}>
-                      {sendMutation.isPending ? "Envoi..." : "Envoyer"}
+                      {sendMutation.isPending ? t("Envoi...", "Sending...") : t("Envoyer", "Send")}
                     </Button>
                     {sendError && <span className="text-xs text-destructive">{sendError}</span>}
                   </div>

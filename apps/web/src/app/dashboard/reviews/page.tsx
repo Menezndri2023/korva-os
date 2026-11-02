@@ -6,25 +6,25 @@ import type { Review, ReviewEntity, ReviewStats, ReviewStatus } from "@korva/typ
 import { Badge, Button, Card, EmptyState, PageHeader, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const ENTITY_LABELS: Record<ReviewEntity, string> = {
-  order: "Commande",
-  booking: "Réservation",
+const ENTITY_LABELS: Record<ReviewEntity, [string, string]> = {
+  order: ["Commande", "Order"],
+  booking: ["Réservation", "Booking"],
 };
 
 type Filter = "all" | ReviewStatus;
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "Tous" },
-  { key: "published", label: "En ligne" },
-  { key: "hidden", label: "Masqués" },
+const FILTERS: { key: Filter; label: [string, string] }[] = [
+  { key: "all", label: ["Tous", "All"] },
+  { key: "published", label: ["En ligne", "Online"] },
+  { key: "hidden", label: ["Masqués", "Hidden"] },
 ];
 
-const dateFormat = new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium" });
-
 function Stars({ rating, className = "" }: { rating: number; className?: string }) {
+  const t = useT();
   const full = Math.round(rating);
   return (
-    <span role="img" aria-label={`${full} sur 5`} className={`text-amber-500 ${className}`}>
+    <span role="img" aria-label={t(`${full} sur 5`, `${full} out of 5`)} className={`text-amber-500 ${className}`}>
       {"★".repeat(full)}
       <span className="text-border">{"★".repeat(5 - full)}</span>
     </span>
@@ -37,6 +37,7 @@ function Stars({ rating, className = "" }: { rating: number; className?: string 
  * publicly, and can take a review off the site — never edit it.
  */
 export default function ReviewsPage() {
+  const t = useT();
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<Filter>("all");
   const authReady = useAuthReady();
@@ -75,8 +76,11 @@ export default function ReviewsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Avis clients"
-        description="Ce que vos clients pensent de vous, après une commande livrée ou un rendez-vous terminé. Les avis en ligne s'affichent sur votre site."
+        title={t("Avis clients", "Customer reviews")}
+        description={t(
+          "Ce que vos clients pensent de vous, après une commande livrée ou un rendez-vous terminé. Les avis en ligne s'affichent sur votre site.",
+          "What your customers think of you, after a fulfilled order or a completed appointment. Online reviews show on your website.",
+        )}
       />
 
       {stats && stats.count > 0 && <StatsCard stats={stats} />}
@@ -84,18 +88,28 @@ export default function ReviewsPage() {
       {stats && (
         <Card className="flex flex-wrap items-start justify-between gap-4 p-5">
           <div className="max-w-xl">
-            <p className="font-medium text-text">Demander un avis automatiquement</p>
+            <p className="font-medium text-text">{t(
+              "Demander un avis automatiquement",
+              "Ask for a review automatically",
+            )}</p>
             <p className="mt-1 text-sm text-text-muted">
-              Après chaque commande livrée ou rendez-vous terminé, votre client reçoit un message
-              (WhatsApp, sinon e-mail) avec un lien pour vous noter. Pas de compte à créer : il
-              note en 30 secondes.
+              {t(
+                "Après chaque commande livrée ou rendez-vous terminé, votre client reçoit un message (WhatsApp, sinon e-mail) avec un lien pour vous noter. Pas de compte à créer : il note en 30 secondes.",
+                "After each fulfilled order or completed appointment, your customer gets a message (WhatsApp, otherwise e-mail) with a link to rate you. No account to create: it takes 30 seconds.",
+              )}
             </p>
             {requestsMutation.isError && (
               <p className="mt-2 text-sm text-destructive">
                 {requestsMutation.error instanceof ApiError &&
                 requestsMutation.error.code === "PERMISSION_DENIED"
-                  ? "Seuls les rôles qui gèrent les paramètres peuvent changer ce réglage."
-                  : "Le réglage n'a pas pu être enregistré. Réessayez."}
+                  ? t(
+                    "Seuls les rôles qui gèrent les paramètres peuvent changer ce réglage.",
+                    "Only roles that manage settings can change this.",
+                  )
+                  : t(
+                    "Le réglage n'a pas pu être enregistré. Réessayez.",
+                    "The setting could not be saved. Try again.",
+                  )}
               </p>
             )}
           </div>
@@ -112,12 +126,12 @@ export default function ReviewsPage() {
               aria-hidden
               className="relative h-6 w-11 rounded-full bg-border transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-action peer-checked:after:translate-x-5 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus"
             />
-            {stats.requestsEnabled ? "Activé" : "Désactivé"}
+            {stats.requestsEnabled ? t("Activé", "On") : t("Désactivé", "Off")}
           </label>
         </Card>
       )}
 
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrer les avis">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t("Filtrer les avis", "Filter reviews")}>
         {FILTERS.map(({ key, label }) => (
           <button
             key={key}
@@ -133,36 +147,45 @@ export default function ReviewsPage() {
                 : "border-border-input bg-surface hover:bg-surface-muted"
             }`}
           >
-            {label}
+            {t(...label)}
             {key === "hidden" && stats ? ` (${stats.hidden})` : ""}
           </button>
         ))}
       </div>
 
-      {isLoading && <Card className="p-6 text-center text-sm text-text-muted">Chargement…</Card>}
+      {isLoading && <Card className="p-6 text-center text-sm text-text-muted">{t("Chargement…", "Loading…")}</Card>}
 
       {isError && !isPermissionDenied && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les avis.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les avis.",
+            "Reviews could not be loaded.",
+          )}</p>
           <button onClick={() => refetch()} className="mt-2 text-sm font-medium text-text underline">
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
 
       {isPermissionDenied && (
         <Card className="p-6 text-sm text-text-muted">
-          Les avis clients sont réservés aux rôles ayant accès aux commandes.
+          {t(
+            "Les avis clients sont réservés aux rôles ayant accès aux commandes.",
+            "Customer reviews are for roles with access to orders.",
+          )}
         </Card>
       )}
 
       {reviews && reviews.length === 0 && (
         <Card>
           <EmptyState
-            title={filter === "hidden" ? "Aucun avis masqué." : "Aucun avis pour le moment."}
+            title={filter === "hidden" ? t("Aucun avis masqué.", "No hidden reviews.") : t("Aucun avis pour le moment.", "No reviews yet.")}
             description={
               filter === "all"
-                ? "Les avis arrivent après vos premières commandes livrées ou vos premiers rendez-vous terminés."
+                ? t(
+                  "Les avis arrivent après vos premières commandes livrées ou vos premiers rendez-vous terminés.",
+                  "Reviews arrive after your first fulfilled orders or completed appointments.",
+                )
                 : undefined
             }
           />
@@ -189,20 +212,25 @@ export default function ReviewsPage() {
 }
 
 function StatsCard({ stats }: { stats: ReviewStats }) {
+  const locale = useDashboardLocale();
+  const t = useT();
   const max = Math.max(...stats.distribution, 1);
   return (
     <Card className="grid gap-6 p-5 sm:grid-cols-[auto_1fr] sm:items-center">
       <div>
         <p className="text-4xl font-semibold text-text tabular-nums">
-          {stats.average?.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+          {stats.average?.toLocaleString(intlLocale(locale), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
           <span className="text-base font-normal text-text-muted"> / 5</span>
         </p>
         {stats.average != null && <Stars rating={stats.average} className="text-lg" />}
         <p className="text-sm text-text-muted">
-          {stats.count} avis{stats.hidden > 0 ? `, dont ${stats.hidden} masqué${stats.hidden > 1 ? "s" : ""}` : ""}
+          {t(
+              `${stats.count} avis${stats.hidden > 0 ? `, dont ${stats.hidden} masqué${stats.hidden > 1 ? "s" : ""}` : ""}`,
+              `${stats.count} review${stats.count === 1 ? "" : "s"}${stats.hidden > 0 ? `, ${stats.hidden} hidden` : ""}`,
+            )}
         </p>
       </div>
-      <ul className="space-y-1.5" aria-label="Répartition des notes">
+      <ul className="space-y-1.5" aria-label={t("Répartition des notes", "Rating breakdown")}>
         {[5, 4, 3, 2, 1].map((star) => {
           const count = stats.distribution[star - 1] ?? 0;
           return (
@@ -224,6 +252,8 @@ function StatsCard({ stats }: { stats: ReviewStats }) {
 }
 
 function ReviewCard({ review, onChanged }: { review: Review; onChanged: () => void }) {
+  const locale = useDashboardLocale();
+  const t = useT();
   const [replying, setReplying] = useState(false);
   const [draft, setDraft] = useState(review.reply?.body ?? "");
   const hidden = review.status === "hidden";
@@ -246,27 +276,27 @@ function ReviewCard({ review, onChanged }: { review: Review; onChanged: () => vo
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Stars rating={review.rating} />
-          <span className="text-xs text-text-muted">{dateFormat.format(new Date(review.createdAt))}</span>
+          <span className="text-xs text-text-muted">{new Date(review.createdAt).toLocaleDateString(intlLocale(locale), { dateStyle: "medium" })}</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {hidden && <Badge variant="warning">Masqué du site</Badge>}
-          <Badge>{ENTITY_LABELS[review.entity]}</Badge>
+          {hidden && <Badge variant="warning">{t("Masqué du site", "Hidden from the website")}</Badge>}
+          <Badge>{t(...ENTITY_LABELS[review.entity])}</Badge>
         </div>
       </div>
 
       {review.comment ? (
         <p className="text-sm text-text">{review.comment}</p>
       ) : (
-        <p className="text-sm italic text-text-muted">Note sans commentaire.</p>
+        <p className="text-sm italic text-text-muted">{t("Note sans commentaire.", "Rating with no comment.")}</p>
       )}
       <p className="text-xs text-text-muted">
-        {review.authorName ?? "Client vérifié"}
+        {review.authorName ?? t("Client vérifié", "Verified customer")}
         {review.offerName ? ` · ${review.offerName}` : ""}
       </p>
 
       {review.reply && !replying && (
         <div className="rounded-lg border-l-2 border-primary bg-surface-muted px-3 py-2">
-          <p className="text-xs font-medium text-text">Votre réponse</p>
+          <p className="text-xs font-medium text-text">{t("Votre réponse", "Your reply")}</p>
           <p className="mt-0.5 text-sm text-text-muted">{review.reply.body}</p>
         </div>
       )}
@@ -280,7 +310,10 @@ function ReviewCard({ review, onChanged }: { review: Review; onChanged: () => vo
           }}
         >
           <label className="block text-sm">
-            <span className="mb-1 block text-text-muted">Réponse publique, visible sous l&apos;avis</span>
+            <span className="mb-1 block text-text-muted">{t(
+              "Réponse publique, visible sous l'avis",
+              "Public reply, shown under the review",
+            )}</span>
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -292,10 +325,10 @@ function ReviewCard({ review, onChanged }: { review: Review; onChanged: () => vo
           </label>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" size="sm" loading={replyMutation.isPending} disabled={!draft.trim()}>
-              Publier la réponse
+              {t("Publier la réponse", "Publish the reply")}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setReplying(false)}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
           </div>
         </form>
@@ -304,15 +337,15 @@ function ReviewCard({ review, onChanged }: { review: Review; onChanged: () => vo
       {failure && (
         <p className="text-sm text-destructive">
           {failure instanceof ApiError && failure.code === "PERMISSION_DENIED"
-            ? "Votre rôle ne permet pas de modifier les avis."
-            : "L'action n'a pas abouti. Réessayez."}
+            ? t("Votre rôle ne permet pas de modifier les avis.", "Your role cannot change reviews.")
+            : t("L'action n'a pas abouti. Réessayez.", "That did not work. Try again.")}
         </p>
       )}
 
       {!replying && (
         <div className="flex flex-wrap gap-2 border-t border-border pt-3">
           <Button type="button" size="sm" variant="secondary" onClick={() => setReplying(true)}>
-            {review.reply ? "Modifier la réponse" : "Répondre"}
+            {review.reply ? t("Modifier la réponse", "Edit the reply") : t("Répondre", "Reply")}
           </Button>
           {review.reply && (
             <Button
@@ -325,7 +358,7 @@ function ReviewCard({ review, onChanged }: { review: Review; onChanged: () => vo
                 replyMutation.mutate("");
               }}
             >
-              Retirer la réponse
+              {t("Retirer la réponse", "Remove the reply")}
             </Button>
           )}
           <Button
@@ -335,7 +368,7 @@ function ReviewCard({ review, onChanged }: { review: Review; onChanged: () => vo
             loading={statusMutation.isPending}
             onClick={() => statusMutation.mutate(hidden ? "published" : "hidden")}
           >
-            {hidden ? "Remettre en ligne" : "Masquer du site"}
+            {hidden ? t("Remettre en ligne", "Put back online") : t("Masquer du site", "Hide from the website")}
           </Button>
         </div>
       )}

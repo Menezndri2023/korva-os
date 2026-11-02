@@ -15,15 +15,16 @@ import {
 import { Badge, Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const OPERATOR_LABELS: Record<SegmentRuleOperator, string> = {
-  has_tag: "a le tag",
-  not_has_tag: "n'a pas le tag",
-  equals: "est égal à",
-  not_equals: "est différent de",
-  contains: "contient",
-  is_set: "est renseigné",
-  is_not_set: "n'est pas renseigné",
+const OPERATOR_LABELS: Record<SegmentRuleOperator, [string, string]> = {
+  has_tag: ["a le tag", "has the tag"],
+  not_has_tag: ["n'a pas le tag", "does not have the tag"],
+  equals: ["est égal à", "equals"],
+  not_equals: ["est différent de", "is not"],
+  contains: ["contient", "contains"],
+  is_set: ["est renseigné", "is filled in"],
+  is_not_set: ["n'est pas renseigné", "is empty"],
 };
 
 const OPERATORS_NEEDING_VALUE = new Set<SegmentRuleOperator>([
@@ -39,6 +40,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function MarketingSegmentsPage() {
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const queryClient = useQueryClient();
@@ -97,10 +99,13 @@ export default function MarketingSegmentsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-muted">
-          Segments de contacts réutilisables pour vos campagnes marketing.
+          {t(
+            "Segments de contacts réutilisables pour vos campagnes marketing.",
+            "Reusable contact segments for your marketing campaigns.",
+          )}
         </p>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouveau segment"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouveau segment", "New segment")}
         </Button>
       </div>
 
@@ -110,27 +115,27 @@ export default function MarketingSegmentsPage() {
           className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
           <div className="grid grid-cols-2 gap-3">
-            <Input placeholder="Nom du segment" {...register("name")} />
+            <Input placeholder={t("Nom du segment", "Segment name")} {...register("name")} />
             <Select {...register("criteria.match")}>
               {SEGMENT_MATCH_MODES.map((mode) => (
                 <option key={mode} value={mode}>
-                  {mode === "all" ? "Toutes les règles" : "Au moins une règle"}
+                  {mode === "all" ? t("Toutes les règles", "All the rules") : t("Au moins une règle", "At least one rule")}
                 </option>
               ))}
             </Select>
           </div>
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
-          <Input placeholder="Description (optionnel)" {...register("description")} />
+          <Input placeholder={t("Description (optionnel)", "Description (optional)")} {...register("description")} />
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-text">Règles</p>
+            <p className="text-sm font-medium text-text">{t("Règles", "Rules")}</p>
             {ruleFields.fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-12 gap-2">
                 <Select
                   className="col-span-4"
                   {...register(`criteria.rules.${index}.field`)}
                 >
-                  <option value="tag">Tag</option>
+                  <option value="tag">{t("Tag", "Tag")}</option>
                   {customFields?.map((cf) => (
                     <option key={cf.id} value={`customField:${cf.key}`}>
                       {cf.label}
@@ -143,13 +148,13 @@ export default function MarketingSegmentsPage() {
                 >
                   {SEGMENT_RULE_OPERATORS.map((operator) => (
                     <option key={operator} value={operator}>
-                      {OPERATOR_LABELS[operator]}
+                      {t(...OPERATOR_LABELS[operator])}
                     </option>
                   ))}
                 </Select>
                 <Input
                   className="col-span-3"
-                  placeholder="Valeur"
+                  placeholder={t("Valeur", "Value")}
                   disabled={
                     !OPERATORS_NEEDING_VALUE.has(
                       getValues(`criteria.rules.${index}.operator`),
@@ -173,7 +178,7 @@ export default function MarketingSegmentsPage() {
               }
               className="text-sm text-text-muted hover:underline"
             >
-              + Ajouter une règle
+              {t("+ Ajouter une règle", "+ Add a rule")}
             </button>
           </div>
 
@@ -184,7 +189,7 @@ export default function MarketingSegmentsPage() {
               loading={previewMutation.isPending}
               onClick={() => previewMutation.mutate(getValues("criteria"))}
             >
-              Aperçu
+              {t("Aperçu", "Preview")}
             </Button>
             {previewCount !== null && (
               <span className="text-sm text-text-muted">
@@ -196,20 +201,26 @@ export default function MarketingSegmentsPage() {
 
           {createMutation.isError && (
             <p className="text-sm text-destructive">
-              {errorMessage(createMutation.error, "Impossible de créer ce segment.")}
+              {errorMessage(createMutation.error, t(
+                "Impossible de créer ce segment.",
+                "This segment could not be created.",
+              ))}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer le segment"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le segment", "Create the segment")}
           </Button>
         </form>
       )}
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les segments.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les segments.",
+            "Segments could not be loaded.",
+          )}</p>
           <button onClick={() => refetch()} className="mt-2 text-sm font-medium text-text underline">
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -220,23 +231,23 @@ export default function MarketingSegmentsPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Nom</th>
-                  <th className="px-4 py-2">Règles</th>
-                  <th className="px-4 py-2">Actions</th>
+                  <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                  <th className="px-4 py-2">{t("Règles", "Rules")}</th>
+                  <th className="px-4 py-2">{t("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
                     <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!isLoading && segments?.length === 0 && (
                   <tr>
                     <td colSpan={3} className="px-4 py-6 text-center text-text-muted">
-                      Aucun segment.
+                      {t("Aucun segment.", "No segments.")}
                     </td>
                   </tr>
                 )}
@@ -252,9 +263,10 @@ export default function MarketingSegmentsPage() {
                     </td>
                     <td className="px-4 py-2 text-text-muted">
                       <Badge>
-                        {segment.criteria.rules.length} règle
-                        {segment.criteria.rules.length > 1 ? "s" : ""} (
-                        {segment.criteria.match === "all" ? "toutes" : "au moins une"})
+                        {t(
+                          `${segment.criteria.rules.length} règle${segment.criteria.rules.length > 1 ? "s" : ""} (${segment.criteria.match === "all" ? "toutes" : "au moins une"})`,
+                          `${segment.criteria.rules.length} rule${segment.criteria.rules.length === 1 ? "" : "s"} (${segment.criteria.match === "all" ? "all" : "at least one"})`,
+                        )}
                       </Badge>
                     </td>
                     <td className="px-4 py-2">
@@ -263,7 +275,7 @@ export default function MarketingSegmentsPage() {
                         disabled={deleteMutation.isPending && deleteMutation.variables === segment.id}
                         className="text-xs text-destructive hover:underline"
                       >
-                        Supprimer
+                        {t("Supprimer", "Delete")}
                       </button>
                     </td>
                   </tr>

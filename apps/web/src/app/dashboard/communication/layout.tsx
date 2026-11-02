@@ -2,20 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useT } from "@/lib/dashboard-locale";
 
 const TABS = [
-  { href: "/dashboard/communication", label: "Conversations" },
-  { href: "/dashboard/communication/templates", label: "Modèles" },
-  { href: "/dashboard/communication/notifications", label: "Notifications" },
-];
+  { href: "/dashboard/communication", label: ["Conversations", "Conversations"] },
+  { href: "/dashboard/communication/templates", label: ["Modèles", "Templates"] },
+  { href: "/dashboard/communication/notifications", label: ["Notifications", "Notifications"] },
+] satisfies { href: string; label: [string, string] }[];
 
 export default function CommunicationLayout({ children }: { children: React.ReactNode }) {
+  const t = useT();
   const pathname = usePathname();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Communication</h1>
+        <h1 className="text-2xl font-semibold">{t("Communication", "Messages")}</h1>
         <nav className="mt-3 flex gap-1 overflow-x-auto border-b border-border">
           {TABS.map((tab) => (
             <Link
@@ -27,7 +29,7 @@ export default function CommunicationLayout({ children }: { children: React.Reac
                   : "text-text-muted hover:text-text"
               }`}
             >
-              {tab.label}
+              {t(...tab.label)}
             </Link>
           ))}
         </nav>

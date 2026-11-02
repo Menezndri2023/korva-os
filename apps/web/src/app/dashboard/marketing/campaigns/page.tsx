@@ -10,11 +10,12 @@ import type { Campaign, CampaignStatus, Segment } from "@korva/types";
 import { Badge, Button, Card, Dialog, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<CampaignStatus, string> = {
-  draft: "Brouillon",
-  sending: "Envoi en cours",
-  sent: "Envoyée",
+const STATUS_LABELS: Record<CampaignStatus, [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  sending: ["Envoi en cours", "Sending"],
+  sent: ["Envoyée", "Sent"],
 };
 
 const STATUS_VARIANTS: Record<CampaignStatus, "default" | "success" | "warning"> = {
@@ -28,6 +29,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function MarketingCampaignsPage() {
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [confirmSendId, setConfirmSendId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -79,10 +81,13 @@ export default function MarketingCampaignsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-text-muted">
-          Envoyez un message (WhatsApp puis email en secours) à tous les contacts d&apos;un segment.
+          {t(
+            "Envoyez un message (WhatsApp puis email en secours) à tous les contacts d'un segment.",
+            "Send a message (WhatsApp, with e-mail as a fallback) to every contact in a segment.",
+          )}
         </p>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouvelle campagne"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouvelle campagne", "New campaign")}
         </Button>
       </div>
 
@@ -92,9 +97,9 @@ export default function MarketingCampaignsPage() {
           className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
           <div className="grid grid-cols-2 gap-3">
-            <Input placeholder="Nom de la campagne" {...register("name")} />
+            <Input placeholder={t("Nom de la campagne", "Campaign name")} {...register("name")} />
             <Select {...register("segmentId")}>
-              <option value="">Sélectionner un segment</option>
+              <option value="">{t("Sélectionner un segment", "Select a segment")}</option>
               {segments?.map((segment) => (
                 <option key={segment.id} value={segment.id}>
                   {segment.name}
@@ -107,9 +112,15 @@ export default function MarketingCampaignsPage() {
             <p className="text-xs text-destructive">{errors.segmentId.message}</p>
           )}
 
-          <Input placeholder="Objet (pour l'email, optionnel)" {...register("subject")} />
+          <Input placeholder={t(
+            "Objet (pour l'email, optionnel)",
+            "Subject (for e-mail, optional)",
+          )} {...register("subject")} />
           <textarea
-            placeholder="Message — utilisez {{contact.firstName}} pour personnaliser"
+            placeholder={t(
+              "Message — utilisez {{contact.firstName}} pour personnaliser",
+              "Message — use {{contact.firstName}} to personalise",
+            )}
             className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
             rows={4}
             {...register("body")}
@@ -118,20 +129,26 @@ export default function MarketingCampaignsPage() {
 
           {createMutation.isError && (
             <p className="text-sm text-destructive">
-              {errorMessage(createMutation.error, "Impossible de créer cette campagne.")}
+              {errorMessage(createMutation.error, t(
+                "Impossible de créer cette campagne.",
+                "This campaign could not be created.",
+              ))}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer en brouillon"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer en brouillon", "Create as a draft")}
           </Button>
         </form>
       )}
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les campagnes.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les campagnes.",
+            "Campaigns could not be loaded.",
+          )}</p>
           <button onClick={() => refetch()} className="mt-2 text-sm font-medium text-text underline">
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -142,24 +159,24 @@ export default function MarketingCampaignsPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Nom</th>
-                  <th className="px-4 py-2">Statut</th>
-                  <th className="px-4 py-2">Destinataires</th>
-                  <th className="px-4 py-2">Actions</th>
+                  <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                  <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                  <th className="px-4 py-2">{t("Destinataires", "Recipients")}</th>
+                  <th className="px-4 py-2">{t("Actions", "Actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!isLoading && campaigns?.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                      Aucune campagne.
+                      {t("Aucune campagne.", "No campaigns.")}
                     </td>
                   </tr>
                 )}
@@ -172,7 +189,7 @@ export default function MarketingCampaignsPage() {
                     </td>
                     <td className="px-4 py-2">
                       <Badge variant={STATUS_VARIANTS[campaign.status]}>
-                        {STATUS_LABELS[campaign.status]}
+                        {t(...STATUS_LABELS[campaign.status])}
                       </Badge>
                     </td>
                     <td className="px-4 py-2 text-text-muted">
@@ -184,7 +201,7 @@ export default function MarketingCampaignsPage() {
                           onClick={() => setConfirmSendId(campaign.id)}
                           className="text-xs font-medium text-text underline"
                         >
-                          Envoyer
+                          {t("Envoyer", "Send")}
                         </button>
                       )}
                     </td>
@@ -199,26 +216,31 @@ export default function MarketingCampaignsPage() {
       <Dialog
         open={confirmSendId !== null}
         onClose={() => setConfirmSendId(null)}
-        title="Envoyer cette campagne ?"
+        title={t("Envoyer cette campagne ?", "Send this campaign?")}
       >
         <p className="text-sm text-text-muted">
-          Le message sera envoyé à tous les contacts du segment sélectionné. Cette action est
-          irréversible.
+          {t(
+            "Le message sera envoyé à tous les contacts du segment sélectionné. Cette action est irréversible.",
+            "The message will be sent to every contact in the selected segment. This cannot be undone.",
+          )}
         </p>
         {sendMutation.isError && (
           <p className="mt-2 text-sm text-destructive">
-            {errorMessage(sendMutation.error, "Impossible d'envoyer cette campagne.")}
+            {errorMessage(sendMutation.error, t(
+              "Impossible d'envoyer cette campagne.",
+              "This campaign could not be sent.",
+            ))}
           </p>
         )}
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setConfirmSendId(null)}>
-            Annuler
+            {t("Annuler", "Cancel")}
           </Button>
           <Button
             loading={sendMutation.isPending}
             onClick={() => confirmSendId && sendMutation.mutate(confirmSendId)}
           >
-            Envoyer
+            {t("Envoyer", "Send")}
           </Button>
         </div>
       </Dialog>

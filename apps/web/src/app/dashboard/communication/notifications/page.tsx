@@ -6,8 +6,11 @@ import type { Notification } from "@korva/types";
 import { Button, Card, Pagination } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 export default function NotificationsPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [page, setPage] = useState(1);
@@ -37,7 +40,7 @@ export default function NotificationsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-text-muted">
-          {unreadCount > 0 ? `${unreadCount} notification(s) non lue(s)` : "Tout est à jour."}
+          {unreadCount > 0 ? `${unreadCount} notification(s) non lue(s)` : t("Tout est à jour.", "You are all caught up.")}
         </p>
         {unreadCount > 0 && (
           <Button
@@ -46,28 +49,31 @@ export default function NotificationsPage() {
             onClick={() => markAllReadMutation.mutate()}
             loading={markAllReadMutation.isPending}
           >
-            Tout marquer comme lu
+            {t("Tout marquer comme lu", "Mark all as read")}
           </Button>
         )}
       </div>
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger vos notifications.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger vos notifications.",
+            "Your notifications could not be loaded.",
+          )}</p>
           <button
             onClick={() => void refetch()}
             className="mt-2 text-sm font-medium text-text underline"
           >
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
 
       {!isError && (
         <Card className="divide-y divide-border overflow-hidden">
-          {isLoading && <p className="px-4 py-6 text-center text-sm text-text-muted">Chargement...</p>}
+          {isLoading && <p className="px-4 py-6 text-center text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
           {!isLoading && notifications?.length === 0 && (
-            <p className="px-4 py-6 text-center text-sm text-text-muted">Aucune notification.</p>
+            <p className="px-4 py-6 text-center text-sm text-text-muted">{t("Aucune notification.", "No notifications.")}</p>
           )}
           {notifications?.map((notification) => (
             <div
@@ -80,7 +86,7 @@ export default function NotificationsPage() {
                 <p className="text-sm font-medium text-text">{notification.title}</p>
                 {notification.body && <p className="mt-0.5 text-sm text-text-muted">{notification.body}</p>}
                 <p className="mt-1 text-xs text-text-muted">
-                  {new Date(notification.createdAt).toLocaleString("fr-FR")}
+                  {new Date(notification.createdAt).toLocaleString(intlLocale(locale))}
                 </p>
               </div>
               {!notification.read && (
@@ -88,7 +94,7 @@ export default function NotificationsPage() {
                   onClick={() => markReadMutation.mutate(notification.id)}
                   className="shrink-0 text-xs text-text-muted hover:underline"
                 >
-                  Marquer comme lu
+                  {t("Marquer comme lu", "Mark as read")}
                 </button>
               )}
             </div>
