@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { TradePage } from "@/components/seo/trade-page";
-import { seoTradeBySlug } from "@/lib/seo-trades";
+import { seoTradeBySlug, tradePath } from "@/lib/seo-trades";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -12,7 +12,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: trade.heading,
     description,
-    alternates: { canonical: `/metiers/${trade.slug}` },
+    alternates: {
+      canonical: `/metiers/${trade.slug}`,
+      languages: { fr: tradePath(trade, "fr"), en: tradePath(trade, "en") },
+    },
     openGraph: { title: trade.heading, description, url: `/metiers/${trade.slug}`, type: "website" },
   };
 }

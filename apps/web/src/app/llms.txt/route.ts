@@ -4,6 +4,7 @@ import { appUrl } from "@/lib/site-url";
 
 // Plain spaces: French formatting puts a narrow no-break space in "9 900", fine in a page,
 // noise in the plain text an assistant reads.
+const usd = (amount: number) => `$${amount}`;
 const xof = (amount: number) => `${amount.toLocaleString("fr-FR").replace(/\s/g, " ")} F CFA`;
 
 /**
@@ -39,6 +40,13 @@ ${SEO_TRADES.map((trade) => `- [${trade.template.label}](${base}/metiers/${trade
 - [Accueil](${base}/)
 - [Créer un compte gratuit](${base}/register)
 - [Tous les métiers](${base}/metiers)
+
+## In English
+
+KORVA OS is online management software for small businesses: customers, appointments and bookings, orders, stock, till, quotes and invoices, and a website, in one account set up for the business's trade. Customers pay by card (Visa, Mastercard) and, in West Africa, by mobile money (Wave, Orange Money, MTN, Moov). Free to start, no credit card. Plans: Free, Starter (${usd(PLAN_PRICES.USD.starter)}), Pro (${usd(PLAN_PRICES.USD.pro)}), Business (${usd(PLAN_PRICES.USD.business)}) a month in US dollars; local prices apply in each country.
+
+${SEO_TRADES.map((trade) => `- [${trade.en.heading}](${base}/en/trades/${trade.en.slug})`).join("\n")}
+- [Home (English)](${base}/en)
 `;
   return new Response(body, {
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" },

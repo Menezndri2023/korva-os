@@ -3,8 +3,11 @@ import { screen } from "@testing-library/react";
 import LoginPage from "./page";
 import { renderWithProviders } from "@/test/render";
 
+// The page language follows ?lang=; French unless a test sets it.
+let searchParams = "";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(searchParams),
 }));
 
 vi.mock("next/link", () => ({
@@ -38,4 +41,16 @@ describe("LoginPage — refused sign-ins, in French", () => {
     fireEvent.click(screen.getByRole("button", { name: "Se connecter" }));
     expect(await screen.findByText("Ce compte a été désactivé. Contactez le support KORVA.")).toBeInTheDocument();
   });
+
+  it("speaks English when the link says so", async () => {
+    searchParams = "lang=en";
+    renderWithProviders(<LoginPage />);
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Forgot your password?" })).toHaveAttribute(
+      "href",
+      "/forgot-password?lang=en",
+    );
+    searchParams = "";
+  });
 });
+

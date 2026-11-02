@@ -8,12 +8,16 @@ import { forgotPasswordSchema, type ForgotPasswordInput } from "@korva/validatio
 import { Button, Input } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { AuthShell } from "@/components/landing/auth-shell";
+import { AUTH_TEXT } from "@/lib/auth-text";
+import { useLocale, withLang } from "@/lib/locale";
 
 interface ForgotPasswordResponse {
   message: string;
 }
 
 export default function ForgotPasswordPage() {
+  const locale = useLocale();
+  const t = AUTH_TEXT[locale];
   const {
     register,
     handleSubmit,
@@ -29,11 +33,12 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthShell
-      title="Mot de passe oublié"
-      intro="Indiquez votre email pour recevoir un lien de réinitialisation."
+      locale={locale}
+      title={t.forgotTitle}
+      intro={t.forgotIntro}
       footer={
-        <Link href="/login" className="font-medium text-text underline">
-          Retour à la connexion
+        <Link href={withLang("/login", locale)} className="font-medium text-text underline">
+          {t.backToLogin}
         </Link>
       }
     >
@@ -41,7 +46,9 @@ export default function ForgotPasswordPage() {
         // Anti-énumération : ce message est strictement identique que le compte existe ou
         // non — jamais "cet email n'existe pas" ou équivalent.
         <p className="text-sm text-text">
-          Si un compte existe avec cette adresse e-mail, un lien de réinitialisation a été envoyé.
+          {locale === "en"
+            ? "If an account exists with this e-mail address, a reset link has been sent."
+            : "Si un compte existe avec cette adresse e-mail, un lien de réinitialisation a été envoyé."}
         </p>
       ) : (
         <form
@@ -55,7 +62,7 @@ export default function ForgotPasswordPage() {
         >
           <div>
             <label className="block text-sm font-medium" htmlFor="email">
-              Email
+              {t.email}
             </label>
             <Input
               id="email"
@@ -71,11 +78,11 @@ export default function ForgotPasswordPage() {
           </div>
 
           {mutation.isError && (
-            <p className="text-sm text-destructive">Une erreur est survenue. Veuillez réessayer.</p>
+            <p className="text-sm text-destructive">{t.forgotError}</p>
           )}
 
           <Button type="submit" loading={mutation.isPending} size="lg" className="w-full">
-            {mutation.isPending ? "Envoi..." : "Envoyer le lien"}
+            {mutation.isPending ? t.forgotPending : t.forgotButton}
           </Button>
         </form>
       )}

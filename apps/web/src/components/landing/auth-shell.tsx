@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { KorvaWordmark } from "@/components/brand/korva-mark";
+import type { Locale } from "@korva/types";
+import { AUTH_TEXT } from "@/lib/auth-text";
 
 /**
  * Shared frame for the four pre-auth form pages (login, register, forgot-password,
@@ -24,7 +26,9 @@ export function AuthShell({
   aside,
   children,
   footer,
+  locale = "fr",
 }: {
+  locale?: Locale;
   title: string;
   intro: string;
   /** Shown only from lg: — it is reassurance, and on a phone the form has to come first. */
@@ -32,16 +36,18 @@ export function AuthShell({
   children: ReactNode;
   footer: ReactNode;
 }) {
+  const t = AUTH_TEXT[locale];
+  const home = locale === "en" ? "/en" : "/";
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
+    <div className="flex min-h-screen flex-col lg:flex-row" lang={locale}>
       <div className="flex flex-col bg-ink-deep text-paper lg:w-[24rem] lg:shrink-0">
         <div className="px-4 py-5 sm:px-6 lg:px-9 lg:py-10">
           <Link
-            href="/"
+            href={home}
             className="inline-block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deep"
           >
             <KorvaWordmark />
-            <span className="sr-only">KORVA OS, accueil</span>
+            <span className="sr-only">{t.home}</span>
           </Link>
         </div>
 
@@ -53,10 +59,10 @@ export function AuthShell({
 
         <div className="mt-auto hidden px-9 pb-10 lg:block">
           <Link
-            href="/"
+            href={home}
             className="rounded text-sm text-ink-muted transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper"
           >
-            Retour à l&apos;accueil
+            {t.backHome}
           </Link>
         </div>
       </div>
@@ -77,45 +83,25 @@ export function AuthShell({
  * The ink column's content on /login: where the owner lands once signed in, so the column is not
  * an empty slab on the page people see most often.
  */
-export function LoginAside() {
+function Aside({ items }: { items: readonly (readonly string[])[] }) {
   return (
     <ul className="space-y-5 text-sm leading-relaxed text-ink-muted">
-      <li>
-        <span className="block font-medium text-paper">Votre journée en un coup d&apos;œil</span>
-        Le tableau de bord ouvre sur ce qui vous attend : réservations, commandes et factures à
-        traiter.
-      </li>
-      <li>
-        <span className="block font-medium text-paper">Votre site toujours à jour</span>
-        Une offre mise en ligne dans le catalogue apparaît aussitôt sur votre site.
-      </li>
+      {items.map(([title, body]) => (
+        <li key={title}>
+          <span className="block font-medium text-paper">{title}</span>
+          {body}
+        </li>
+      ))}
     </ul>
   );
 }
 
-/**
- * The ink column's content on /register: three facts about what the account actually does, read
- * off the product rather than written as benefits. Lives here, next to the only page that uses
- * it, rather than in landing-content.ts, because it is layout as much as copy.
- */
-export function RegisterAside() {
-  return (
-    <ul className="space-y-5 text-sm leading-relaxed text-ink-muted">
-      <li>
-        <span className="block font-medium text-paper">Configuré pour votre métier</span>
-        Vous choisissez votre activité à l&apos;étape suivante, et vos modules, votre première
-        automatisation et votre site sont installés avec.
-      </li>
-      <li>
-        <span className="block font-medium text-paper">Gratuit pour commencer</span>
-        Aucune carte bancaire, et 14 jours de formule Pro offerts. Vous passez à une formule
-        payante le jour où vous en avez besoin.
-      </li>
-      <li>
-        <span className="block font-medium text-paper">Vos données restent les vôtres</span>
-        Changer de formule ne vous fait rien perdre, et vous pouvez fermer le compte quand vous
-        voulez.
-      </li>
-    </ul>
-  );
+/** The ink column on /login: where the owner lands once signed in. */
+export function LoginAside({ locale = "fr" }: { locale?: Locale }) {
+  return <Aside items={AUTH_TEXT[locale].loginAside} />;
+}
+
+/** The ink column on /register: three facts about what the account actually does. */
+export function RegisterAside({ locale = "fr" }: { locale?: Locale }) {
+  return <Aside items={AUTH_TEXT[locale].registerAside} />;
 }

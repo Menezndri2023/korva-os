@@ -115,3 +115,110 @@ export const PLAN_AUDIENCE: Record<string, string> = {
   pro: "Pour une équipe qui veut arrêter le travail manuel",
   business: "Pour un réseau ou une activité multi-sites",
 };
+
+/* ---------------------------------------------------------------------------------------- */
+/* English (2026-11-01). Same keys as the French tables above, so a missing line is a type   */
+/* error. landingText(locale) is what the public pages read.                                  */
+/* ---------------------------------------------------------------------------------------- */
+
+const MODULE_PROMISES_EN: Record<KorvaModule, string> = {
+  crm: "Every customer record, with its history",
+  catalog: "Your catalogue of services and products",
+  booking: "A booking diary your whole team shares",
+  commerce: "Orders tracked from basket to delivery",
+  finance: "Quotes, invoices and payment reminders",
+  workflow: "Automations that run without you",
+  communication: "Messages and reminders sent by e-mail",
+  analytics: "Your revenue, always up to date",
+  ai: "An assistant that writes and summarises for you",
+  website: "A public website, online on day one",
+  marketing: "Campaigns that bring your customers back",
+};
+
+const TRIGGER_SENTENCES_EN: Partial<Record<SystemEvent, string>> = {
+  "booking.created": "As soon as a customer books",
+  "order.created": "As soon as an order comes in",
+  "lead.created": "As soon as a lead contacts you",
+};
+
+const ACTION_SENTENCES_EN: Partial<Record<WorkflowAction["type"], string>> = {
+  internal_notification: "your team is told, without you thinking about it",
+  create_task: "a follow-up task is created so nothing slips",
+};
+
+const REPLACES_EN: ReadonlyArray<{ today: string; korva: string }> = [
+  {
+    today: "An appointment book only you can read",
+    korva: "A shared schedule your team checks from their phones",
+  },
+  {
+    today: "Orders jotted down between two WhatsApp messages",
+    korva: "Every order recorded, with its status and its customer",
+  },
+  {
+    today: "Stock you count in your head, and that surprises you",
+    korva: "Stock that goes down with every sale",
+  },
+  {
+    today: "Invoices retyped one by one on Sunday evening",
+    korva: "Invoices generated, sent and chased on their own",
+  },
+  {
+    today: "A phone number as your only shop window",
+    korva: "A public website with your hours, services and prices",
+  },
+  {
+    today: "Revenue you piece together at the end of the month",
+    korva: "Your figures up to date, every morning",
+  },
+];
+
+const PLAN_PERKS_EN: Record<string, readonly string[]> = {
+  free: ["Your public website on korvasuite.com", "Your trade's website template"],
+  starter: ["Your own domain name"],
+  pro: ["Your choice of website colours and fonts"],
+  business: ["Your brand colour on your website"],
+};
+
+const PLAN_AUDIENCE_EN: Record<string, string> = {
+  free: "To get started on your own, no credit card",
+  starter: "For a business that is already running",
+  pro: "For a team that wants to stop doing things by hand",
+  business: "For a network or a multi-site business",
+};
+
+/** Storefront templates as the public pages name them (packages/types holds the French). */
+export const STOREFRONT_TEMPLATE_TEXT_EN: Record<string, { label: string; description: string }> = {
+  essentiel: { label: "Essential", description: "A universal, clean template — available on every plan." },
+  vitrine: {
+    label: "Services showcase",
+    description: "Professional services, trades, real estate, agencies, associations, events.",
+  },
+  table: { label: "Table", description: "Restaurants, light hospitality, catering." },
+  boutique: { label: "Shop", description: "Retail and e-commerce, fashion, groceries, farming and direct sales." },
+  academie: { label: "Academy", description: "Training, coaching, workshops." },
+  salon: {
+    label: "Salon",
+    description: "Beauty and wellbeing, fitness, hospitality, personal services — booking first.",
+  },
+};
+
+export function landingText(locale: "fr" | "en") {
+  return locale === "en"
+    ? {
+        modulePromises: MODULE_PROMISES_EN,
+        triggerSentences: TRIGGER_SENTENCES_EN,
+        actionSentences: ACTION_SENTENCES_EN,
+        replaces: REPLACES_EN,
+        planPerks: PLAN_PERKS_EN,
+        planAudience: PLAN_AUDIENCE_EN,
+      }
+    : {
+        modulePromises: MODULE_PROMISES,
+        triggerSentences: TRIGGER_SENTENCES,
+        actionSentences: ACTION_SENTENCES,
+        replaces: REPLACES,
+        planPerks: PLAN_PERKS,
+        planAudience: PLAN_AUDIENCE,
+      };
+}

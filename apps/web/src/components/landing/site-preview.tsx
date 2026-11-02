@@ -3,10 +3,14 @@ import { ShoppingBag } from "lucide-react";
 import {
   BUSINESS_MODEL_DEFINITIONS,
   STOREFRONT_PALETTES,
+  businessModelText,
   getStorefrontTemplate,
+  verticalText,
+  type Locale,
   type OfferType,
   type VerticalTemplate,
 } from "@korva/types";
+import { STOREFRONT_TEMPLATE_TEXT_EN } from "@/lib/landing-content";
 
 /**
  * A phone showing the public site the visitor's trade gets, drawn in HTML from the same data
@@ -22,21 +26,33 @@ import {
  * style-src (see middleware.ts), and the values are our own palette constants, never input.
  */
 
-const ACTION_LABEL: Record<OfferType, string> = {
-  booking: "Réserver",
-  product: "Ajouter",
-  service: "Devis",
-  package: "Ajouter",
-  digital_product: "Acheter",
-  subscription: "S'abonner",
+const ACTION_LABEL: Record<Locale, Record<OfferType, string>> = {
+  fr: {
+    booking: "Réserver",
+    product: "Ajouter",
+    service: "Devis",
+    package: "Ajouter",
+    digital_product: "Acheter",
+    subscription: "S'abonner",
+  },
+  en: {
+    booking: "Book",
+    product: "Add",
+    service: "Quote",
+    package: "Add",
+    digital_product: "Buy",
+    subscription: "Subscribe",
+  },
 };
 
-export function SitePreview({ vertical }: { vertical: VerticalTemplate }) {
+export function SitePreview({ vertical, locale = "fr" }: { vertical: VerticalTemplate; locale?: Locale }) {
+  const words = verticalText(vertical, locale);
   const template = getStorefrontTemplate(vertical.defaultStorefrontTemplate);
   const palette = STOREFRONT_PALETTES[template.palettes[0] ?? "graphite"];
-  const model = BUSINESS_MODEL_DEFINITIONS[vertical.businessModel];
+  const model = businessModelText(BUSINESS_MODEL_DEFINITIONS[vertical.businessModel], locale);
+  const primaryChannel = BUSINESS_MODEL_DEFINITIONS[vertical.businessModel].primaryChannel;
   const offers = (vertical.suggestedOffers ?? []).slice(0, 4);
-  const sellsOnline = model.primaryChannel === "orders";
+  const sellsOnline = primaryChannel === "orders";
 
   const vars = {
     "--p-bg": palette.background,
@@ -60,9 +76,9 @@ export function SitePreview({ vertical }: { vertical: VerticalTemplate }) {
 
         <div className="flex items-center gap-2 border-b border-[var(--p-border)] bg-[var(--p-surface)] px-3.5 pb-2.5 pt-7">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--p-accent)] text-[11px] font-bold text-[var(--p-on-accent)]">
-            {vertical.label.charAt(0)}
+            {words.label.charAt(0)}
           </span>
-          <span className="truncate text-xs font-semibold">{vertical.label}</span>
+          <span className="truncate text-xs font-semibold">{words.label}</span>
           {sellsOnline && (
             <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-[var(--p-accent)]/15">
               <ShoppingBag className="h-3.5 w-3.5" />
@@ -72,7 +88,7 @@ export function SitePreview({ vertical }: { vertical: VerticalTemplate }) {
 
         <div className="bg-[var(--p-accent)] px-4 py-6 text-[var(--p-on-accent)]">
           <p className="text-base font-semibold leading-tight">{model.siteKind}</p>
-          <p className="mt-1 text-[11px] opacity-85">{vertical.description}</p>
+          <p className="mt-1 text-[11px] opacity-85">{words.description}</p>
         </div>
 
         <ul className="space-y-2 px-3 py-3">
@@ -82,9 +98,9 @@ export function SitePreview({ vertical }: { vertical: VerticalTemplate }) {
               className="flex items-center gap-2.5 rounded-xl border border-[var(--p-border)] bg-[var(--p-surface)] p-2"
             >
               <span className="h-9 w-9 shrink-0 rounded-lg bg-[var(--p-accent)]/15" />
-              <span className="min-w-0 flex-1 truncate text-[11px] font-medium">{offer.name}</span>
+              <span className="min-w-0 flex-1 truncate text-[11px] font-medium">{words.offerName(offer.name)}</span>
               <span className="shrink-0 rounded-md bg-[var(--p-accent)] px-2 py-1 text-[10px] font-semibold text-[var(--p-on-accent)]">
-                {ACTION_LABEL[offer.type]}
+                {ACTION_LABEL[locale][offer.type]}
               </span>
             </li>
           ))}
@@ -96,7 +112,9 @@ export function SitePreview({ vertical }: { vertical: VerticalTemplate }) {
         </div>
       </div>
       <figcaption className="mt-4 text-center text-sm text-ink-muted">
-        Votre site, modèle « {template.label} »
+        {locale === "en"
+          ? `Your website, “${(STOREFRONT_TEMPLATE_TEXT_EN[template.key] ?? template).label}” template`
+          : `Votre site, modèle « ${template.label} »`}
       </figcaption>
     </figure>
   );

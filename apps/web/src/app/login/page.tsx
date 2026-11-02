@@ -11,6 +11,9 @@ import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { AuthShell, LoginAside } from "@/components/landing/auth-shell";
+import type { Locale } from "@korva/types";
+import { AUTH_TEXT } from "@/lib/auth-text";
+import { useLocale, withLang } from "@/lib/locale";
 
 interface LoginResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
@@ -18,6 +21,8 @@ interface LoginResponse {
 }
 
 export default function LoginPage() {
+  const locale = useLocale();
+  const t = AUTH_TEXT[locale];
   const router = useRouter();
   const setSession = useAuthStore((state) => state.setSession);
   const setActiveOrganization = useAuthStore((state) => state.setActiveOrganization);
@@ -46,14 +51,15 @@ export default function LoginPage() {
 
   return (
     <AuthShell
-      title="Se connecter"
-      intro="Retrouvez vos clients, vos réservations et vos factures."
-      aside={<LoginAside />}
+      locale={locale}
+      title={t.loginTitle}
+      intro={t.loginIntro}
+      aside={<LoginAside locale={locale} />}
       footer={
         <>
-          Pas encore de compte ?{" "}
-          <Link href="/register" className="font-medium text-text underline">
-            Créer un compte
+          {t.noAccount}{" "}
+          <Link href={withLang("/register", locale)} className="font-medium text-text underline">
+            {t.createAccount}
           </Link>
         </>
       }
@@ -61,7 +67,7 @@ export default function LoginPage() {
       <form className="space-y-4" onSubmit={handleSubmit((data) => mutation.mutate(data))}>
         <div>
           <label className="block text-sm font-medium" htmlFor="email">
-            Email
+            {t.email}
           </label>
           <Input
             id="email"
@@ -76,7 +82,7 @@ export default function LoginPage() {
 
         <div>
           <label className="block text-sm font-medium" htmlFor="password">
-            Mot de passe
+            {t.password}
           </label>
           <Input
             id="password"
@@ -90,21 +96,21 @@ export default function LoginPage() {
             <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>
           )}
           <Link
-            href="/forgot-password"
+            href={withLang("/forgot-password", locale)}
             className="mt-1.5 inline-block text-xs text-text-muted underline"
           >
-            Mot de passe oublié ?
+            {t.forgot}
           </Link>
         </div>
 
         {mutation.isError && (
           <p className="text-sm text-destructive">
-            {loginErrorMessage(mutation.error)}
+            {loginErrorMessage(mutation.error, locale)}
           </p>
         )}
 
         <Button type="submit" loading={mutation.isPending} size="lg" className="w-full">
-          {mutation.isPending ? "Connexion..." : "Se connecter"}
+          {mutation.isPending ? t.loginPending : t.loginButton}
         </Button>
       </form>
     </AuthShell>
@@ -112,13 +118,8 @@ export default function LoginPage() {
 }
 
 /** The API's messages are written for developers, in English; the person signing in gets these. */
-const LOGIN_ERRORS: Record<string, string> = {
-  INVALID_CREDENTIALS: "E-mail ou mot de passe incorrect.",
-  ACCOUNT_LOCKED: "Trop de tentatives : ce compte est bloqué quelques minutes. Réessayez plus tard.",
-  ACCOUNT_DISABLED: "Ce compte a été désactivé. Contactez le support KORVA.",
-};
-
-function loginErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) return LOGIN_ERRORS[error.code] ?? error.message;
-  return "Une erreur est survenue.";
+function loginErrorMessage(error: unknown, locale: Locale): string {
+  const t = AUTH_TEXT[locale];
+  if (error instanceof ApiError) return t.loginErrors[error.code] ?? error.message;
+  return t.genericError;
 }

@@ -7,8 +7,11 @@ import { apiClient } from "@/lib/api-client";
 
 const replaceMock = vi.fn();
 
+// The page language follows ?lang=; French unless a test sets it.
+const searchParams = "";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: replaceMock }),
+  useSearchParams: () => new URLSearchParams(searchParams),
 }));
 
 vi.mock("next/link", () => ({

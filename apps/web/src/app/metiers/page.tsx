@@ -8,14 +8,14 @@ export const metadata: Metadata = {
   title: "KORVA OS pour votre métier : salons, restaurants, boutiques, artisans…",
   description:
     "Un logiciel de gestion configuré pour chaque métier : salons de coiffure, restaurants, boutiques, hôtels, centres de formation, artisans, agences, associations. Gratuit pour commencer.",
-  alternates: { canonical: "/metiers" },
+  alternates: { canonical: "/metiers", languages: { fr: "/metiers", en: "/en/trades" } },
 };
 
 /** Every trade KORVA configures, each linking to its own page. */
 export default function TradesIndex() {
   return (
     <div className="bg-paper text-ink">
-      <PublicHeader />
+      <PublicHeader otherLanguageHref="/en/trades" />
       <section className="bg-ink-deep text-paper">
         <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-8">
           <h1 className="max-w-3xl text-[2rem] font-semibold leading-[1.12] tracking-[-0.02em] sm:text-[2.6rem]">

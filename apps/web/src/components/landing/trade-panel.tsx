@@ -8,13 +8,12 @@ import {
   VERTICAL_TEMPLATES,
   getStorefrontTemplate,
   modulesForPlan,
+  starterWorkflowName,
+  verticalText,
+  type Locale,
   type VerticalTemplate,
 } from "@korva/types";
-import {
-  ACTION_SENTENCES,
-  MODULE_PROMISES,
-  TRIGGER_SENTENCES,
-} from "@/lib/landing-content";
+import { STOREFRONT_TEMPLATE_TEXT_EN, landingText } from "@/lib/landing-content";
 import { SitePreview } from "./site-preview";
 
 /**
@@ -37,16 +36,50 @@ import { SitePreview } from "./site-preview";
 /** What a brand-new organization actually gets: every account starts on the free plan. */
 const FREE_PLAN_MODULES = modulesForPlan("free");
 
-function starterSentence(vertical: VerticalTemplate): string | null {
+function starterSentence(vertical: VerticalTemplate, locale: Locale): string | null {
   const workflow = vertical.starterWorkflow;
   if (!workflow) return null;
-  const when = TRIGGER_SENTENCES[workflow.trigger];
-  const then = ACTION_SENTENCES[workflow.action.type];
+  const text = landingText(locale);
+  const when = text.triggerSentences[workflow.trigger];
+  const then = text.actionSentences[workflow.action.type];
   if (!when || !then) return null;
   return `${when}, ${then}.`;
 }
 
-export function TradePanel() {
+const TEXT = {
+  fr: {
+    question: "Quel est votre métier ?",
+    youGet: "Ce que vous obtenez en ouvrant le compte",
+    dayOne: "Dès le premier jour, gratuitement",
+    plan: (name: string) => `formule ${name}`,
+    automation: "Une automatisation, déjà configurée",
+    automationPlan: (name: string) => `Les automatisations demandent la formule ${name}.`,
+    site: "Votre site public",
+    template: (label: string) => `Modèle « ${label} »`,
+    templatePlan: (name: string) =>
+      `Ce modèle demande la formule ${name}. En gratuit, votre site utilise le modèle « Essentiel ».`,
+    cta: "Créer mon compte",
+    ctaNote: "Gratuit, sans carte bancaire. Vous changez de formule quand vous voulez.",
+  },
+  en: {
+    question: "What is your trade?",
+    youGet: "What you get when you open your account",
+    dayOne: "From day one, for free",
+    plan: (name: string) => `${name} plan`,
+    automation: "An automation, already set up",
+    automationPlan: (name: string) => `Automations need the ${name} plan.`,
+    site: "Your public website",
+    template: (label: string) => `“${label}” template`,
+    templatePlan: (name: string) =>
+      `This template needs the ${name} plan. On Free, your website uses the “Essential” template.`,
+    cta: "Create my account",
+    ctaNote: "Free, no credit card. Change plans whenever you like.",
+  },
+} satisfies Record<Locale, unknown>;
+
+export function TradePanel({ locale = "fr" }: { locale?: Locale }) {
+  const t = TEXT[locale];
+  const promises = landingText(locale).modulePromises;
   const [selectedKey, setSelectedKey] = useState(VERTICAL_TEMPLATES[0]!.key);
   const groupId = useId();
   const selectId = useId();
@@ -54,7 +87,9 @@ export function TradePanel() {
   const vertical =
     VERTICAL_TEMPLATES.find((item) => item.key === selectedKey) ?? VERTICAL_TEMPLATES[0]!;
   const template = getStorefrontTemplate(vertical.defaultStorefrontTemplate);
-  const automation = starterSentence(vertical);
+  const automation = starterSentence(vertical, locale);
+  const words = verticalText(vertical, locale);
+  const templateText = locale === "en" ? (STOREFRONT_TEMPLATE_TEXT_EN[template.key] ?? template) : template;
   const freeModules = vertical.suggestedModules.filter((module) =>
     FREE_PLAN_MODULES.includes(module),
   );
@@ -72,7 +107,7 @@ export function TradePanel() {
           one out of the accessibility tree, so only one control is ever announced. */}
       <div className="sm:hidden">
         <label htmlFor={selectId} className="block text-sm text-ink-muted">
-          Quel est votre métier ?
+          {t.question}
         </label>
         <select
           id={selectId}
@@ -82,7 +117,7 @@ export function TradePanel() {
         >
           {VERTICAL_TEMPLATES.map((item) => (
             <option key={item.key} value={item.key}>
-              {item.label}
+              {verticalText(item, locale).label}
             </option>
           ))}
         </select>
@@ -93,7 +128,7 @@ export function TradePanel() {
           for free. The input stays in the DOM (sr-only, not hidden) so all of that keeps
           working; has-[:checked] and has-[:focus-visible] style the label around it. */}
       <fieldset className="hidden sm:block" aria-describedby={groupId}>
-        <legend className="text-sm text-ink-muted">Quel est votre métier ?</legend>
+        <legend className="text-sm text-ink-muted">{t.question}</legend>
         <div className="mt-3 flex flex-wrap gap-2">
           {VERTICAL_TEMPLATES.map((item) => (
             <label
@@ -108,7 +143,7 @@ export function TradePanel() {
                 onChange={() => setSelectedKey(item.key)}
                 className="sr-only"
               />
-              {item.label}
+              {verticalText(item, locale).label}
             </label>
           ))}
         </div>
@@ -118,7 +153,7 @@ export function TradePanel() {
           the visitor their own site, so on a small screen it comes before the details. */}
       <div className="mt-6 grid gap-8 sm:mt-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-12">
         <div className="lg:sticky lg:top-8 lg:order-last">
-          <SitePreview vertical={vertical} />
+          <SitePreview vertical={vertical} locale={locale} />
         </div>
         {/* aria-live so the panel's replacement is announced: a sighted visitor sees the content
             swap under the control they just used, a screen-reader user otherwise gets silence. */}
@@ -127,12 +162,12 @@ export function TradePanel() {
           aria-live="polite"
           className="rounded-2xl bg-paper p-6 text-ink shadow-xl sm:p-8"
         >
-          <p className="text-sm text-ink-soft">Ce que vous obtenez en ouvrant le compte</p>
+          <p className="text-sm text-ink-soft">{t.youGet}</p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-            {vertical.label}
+            {words.label}
           </h2>
           <p className="mt-2 max-w-prose text-[0.9375rem] leading-relaxed text-ink-soft">
-            {vertical.description}
+            {words.description}
           </p>
 
           {/* Split by what the free plan actually grants. Onboarding clamps a vertical's
@@ -140,14 +175,14 @@ export function TradePanel() {
               update otherwise), so listing all of them under "day one" would promise a new signup
               modules their account will not have. */}
           <div className="mt-6 border-t border-rule pt-5">
-            <h3 className="text-sm font-medium">Dès le premier jour, gratuitement</h3>
+            <h3 className="text-sm font-medium">{t.dayOne}</h3>
             <ul className="mt-3 grid gap-x-8 gap-y-2 sm:grid-cols-2">
               {freeModules.map((module) => (
                 <li key={module} className="flex gap-2.5 text-[0.9375rem] leading-snug">
                   <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                     ✓
                   </span>
-                  {MODULE_PROMISES[module]}
+                  {promises[module]}
                 </li>
               ))}
             </ul>
@@ -162,10 +197,10 @@ export function TradePanel() {
                       +
                     </span>
                     <span>
-                      {MODULE_PROMISES[module]}
+                      {promises[module]}
                       <span className="text-mark">
                         {" "}
-                        — formule {PLAN_NAMES[MODULE_MIN_PLAN[module]]}
+                        — {t.plan(PLAN_NAMES[MODULE_MIN_PLAN[module]])}
                       </span>
                     </span>
                   </li>
@@ -176,12 +211,10 @@ export function TradePanel() {
 
           {automation && vertical.starterWorkflow && (
             <div className="mt-5 border-t border-rule pt-5">
-              <h3 className="text-sm font-medium">
-                Une automatisation, déjà configurée
-              </h3>
+              <h3 className="text-sm font-medium">{t.automation}</h3>
               <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
                 <span className="font-medium text-ink">
-                  {vertical.starterWorkflow.name}.
+                  {starterWorkflowName(vertical.starterWorkflow.name, locale)}.
                 </span>{" "}
                 {automation}
               </p>
@@ -190,42 +223,34 @@ export function TradePanel() {
                   account this automation is prepared and not created. Saying so beats letting
                   someone discover it after signing up. */}
               {MODULE_MIN_PLAN.workflow !== "free" && (
-                <p className="mt-2 text-sm text-mark">
-                  Les automatisations demandent la formule{" "}
-                  {PLAN_NAMES[MODULE_MIN_PLAN.workflow]}.
-                </p>
+                <p className="mt-2 text-sm text-mark">{t.automationPlan(PLAN_NAMES[MODULE_MIN_PLAN.workflow])}</p>
               )}
             </div>
           )}
 
           <div className="mt-5 border-t border-rule pt-5">
-            <h3 className="text-sm font-medium">Votre site public</h3>
+            <h3 className="text-sm font-medium">{t.site}</h3>
             <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">
-              <span className="font-medium text-ink">Modèle « {template.label} »</span>{" "}
-              {template.description}
+              <span className="font-medium text-ink">{t.template(templateText.label)}</span>{" "}
+              {templateText.description}
             </p>
             {/* Kept as a conditional even though every template is reachable from free today: the
                 gate is real (assertStorefrontThemeAllowed), and if a template is ever put behind a
                 tier again this says so instead of promising a prospect something the API refuses.
                 It renders nothing while minPlan is "free" everywhere. */}
             {template.minPlan !== "free" && (
-              <p className="mt-2 text-sm text-mark">
-                Ce modèle demande la formule {PLAN_NAMES[template.minPlan] ?? template.minPlan}. En
-                gratuit, votre site utilise le modèle « Essentiel ».
-              </p>
+              <p className="mt-2 text-sm text-mark">{t.templatePlan(PLAN_NAMES[template.minPlan] ?? template.minPlan)}</p>
             )}
           </div>
 
           <div className="mt-7 flex flex-col gap-3 border-t border-rule pt-6 sm:flex-row sm:items-center">
             <Link
-              href="/register"
+              href={locale === "en" ? "/register?lang=en" : "/register"}
               className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
             >
-              Créer mon compte
+              {t.cta}
             </Link>
-            <p className="text-sm text-ink-soft">
-              Gratuit, sans carte bancaire. Vous changez de formule quand vous voulez.
-            </p>
+            <p className="text-sm text-ink-soft">{t.ctaNote}</p>
           </div>
         </div>
       </div>

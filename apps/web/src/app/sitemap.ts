@@ -1,18 +1,24 @@
 import type { MetadataRoute } from "next";
-import { SEO_TRADES } from "@/lib/seo-trades";
+import { SEO_TRADES, tradePath } from "@/lib/seo-trades";
 import { appUrl } from "@/lib/site-url";
 
-/** KORVA's own public pages. The businesses' sites have their own sitemap on sites.korvasuite.com. */
+/**
+ * KORVA's own public pages, in French and English, each telling search engines where its other
+ * language lives. The businesses' sites have their own sitemap on sites.korvasuite.com.
+ */
 export default function sitemap(): MetadataRoute.Sitemap {
   const base = appUrl();
+  const pair = (fr: string, en: string, priority: number, changeFrequency: "weekly" | "monthly") =>
+    [fr, en].map((path) => ({
+      url: `${base}${path}`,
+      changeFrequency,
+      priority,
+      alternates: { languages: { fr: `${base}${fr}`, en: `${base}${en}` } },
+    }));
   return [
-    { url: `${base}/`, changeFrequency: "weekly", priority: 1 },
-    { url: `${base}/metiers`, changeFrequency: "monthly", priority: 0.9 },
-    ...SEO_TRADES.map((trade) => ({
-      url: `${base}/metiers/${trade.slug}`,
-      changeFrequency: "monthly" as const,
-      priority: 0.8,
-    })),
+    ...pair("/", "/en", 1, "weekly"),
+    ...pair("/metiers", "/en/trades", 0.9, "monthly"),
+    ...SEO_TRADES.flatMap((trade) => pair(tradePath(trade, "fr"), tradePath(trade, "en"), 0.8, "monthly")),
     { url: `${base}/register`, changeFrequency: "yearly", priority: 0.5 },
   ];
 }

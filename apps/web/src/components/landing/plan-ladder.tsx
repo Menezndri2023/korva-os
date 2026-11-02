@@ -14,16 +14,18 @@ import {
   PLAN_NAMES,
   PLAN_PAYOUT_RULES,
   PLAN_FEATURE_LABELS,
+  PLAN_FEATURE_LABELS_EN,
   PLAN_FEATURE_MIN_PLAN,
   PLAN_PRICES,
   commissionPercentLabel,
   SIGNUP_TRIAL,
   countryFromTimeZone,
   currencyForCountry,
+  type Locale,
   type PlanFeature,
   type PlanKey,
 } from "@korva/types";
-import { MODULE_PROMISES, PLAN_AUDIENCE, PLAN_PERKS } from "@/lib/landing-content";
+import { landingText } from "@/lib/landing-content";
 
 /**
  * The public pricing ladder, in the visitor's own currency.
@@ -41,10 +43,11 @@ import { MODULE_PROMISES, PLAN_AUDIENCE, PLAN_PERKS } from "@/lib/landing-conten
  */
 
 /** The paid features whose threshold IS this tier — read from the same table the API enforces. */
-function featuresGainedAt(plan: PlanKey): string[] {
+function featuresGainedAt(plan: PlanKey, locale: Locale): string[] {
+  const labels = locale === "en" ? PLAN_FEATURE_LABELS_EN : PLAN_FEATURE_LABELS;
   return (Object.keys(PLAN_FEATURE_MIN_PLAN) as PlanFeature[])
     .filter((feature) => PLAN_FEATURE_MIN_PLAN[feature] === plan)
-    .map((feature) => PLAN_FEATURE_LABELS[feature]);
+    .map((feature) => labels[feature]);
 }
 
 /** The modules whose threshold IS this tier — i.e. what you gain by moving up to it. */
@@ -54,15 +57,32 @@ function modulesGainedAt(plan: PlanKey) {
 
 /** "Utilisateurs" are dashboard logins — bookable staff (coiffeurs, coachs) are a separate,
  *  much larger allowance, which is the point of keeping the two words apart. */
-function seatLine(plan: PlanKey): string {
+function seatLine(plan: PlanKey, locale: Locale): string {
   const seats = PLAN_LIMITS[plan].seats;
+  if (locale === "en") {
+    if (seats === -1) return "Unlimited users";
+    return seats === 1 ? "1 dashboard user" : `${seats} dashboard users`;
+  }
   if (seats === -1) return "Utilisateurs illimités";
   return seats === 1 ? "1 utilisateur du tableau de bord" : `${seats} utilisateurs du tableau de bord`;
 }
 
 /** The counted quotas, each enforced by EntitlementsService.assertCountWithinLimit. */
-function quotaLines(plan: PlanKey): string[] {
+function quotaLines(plan: PlanKey, locale: Locale): string[] {
   const { offers, bookable_staff: staff, workflows } = PLAN_LIMITS[plan];
+  if (locale === "en") {
+    return [
+      offers === -1 ? "Unlimited catalogue" : `${offers} catalogue items`,
+      staff === -1
+        ? "Unlimited bookable team, no paid account needed"
+        : `${staff} bookable team members, no paid account needed`,
+      workflows === -1
+        ? "Unlimited automations"
+        : workflows === 1
+          ? "Your trade's automation"
+          : `${workflows} automations`,
+    ];
+  }
   return [
     offers === -1 ? "Catalogue illimité" : `${offers} offres au catalogue`,
     staff === -1
@@ -76,17 +96,30 @@ function quotaLines(plan: PlanKey): string[] {
   ];
 }
 
-function aiLine(plan: PlanKey): string | null {
+function aiLine(plan: PlanKey, locale: Locale): string | null {
   const quota = PLAN_LIMITS[plan].ai_messages_per_month;
   if (!quota || quota === 0) return null;
+  if (locale === "en") {
+    return quota === -1 ? "Unlimited KORVA AI" : `KORVA AI: ${quota.toLocaleString("en-GB")} messages a month`;
+  }
   if (quota === -1) return "KORVA IA sans limite";
   return `KORVA IA : ${quota.toLocaleString("fr-FR")} messages par mois`;
 }
 
 /** Le Solde KORVA: the commission on online sales and how withdrawals work, from the same
  *  tables WalletService applies (PLAN_COMMISSION_BASIS_POINTS, PLAN_PAYOUT_RULES). */
-function paymentLines(plan: PlanKey): string[] {
+function paymentLines(plan: PlanKey, locale: Locale): string[] {
   const rules = PLAN_PAYOUT_RULES[plan];
+  if (locale === "en") {
+    return [
+      `Online payment (Wave, Orange Money, MTN, Moov, card): ${commissionPercentLabel(plan).replace(",", ".")} commission + GeniusPay fees`,
+      [
+        rules.manualPerWeek === null ? "Withdrawals on demand" : `${rules.manualPerWeek} withdrawal on demand a week`,
+        rules.dailyAutoPayout ? "daily automatic withdrawal" : "weekly automatic withdrawal",
+        ...(rules.payoutFeeIncluded ? ["withdrawal fees included"] : []),
+      ].join(", "),
+    ];
+  }
   return [
     `Paiement en ligne (Wave, Orange Money, MTN, Moov, carte) : commission ${commissionPercentLabel(plan)} + frais GeniusPay`,
     [
@@ -116,7 +149,43 @@ const getDetectedCountry = () =>
   countryFromTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone) ?? "FR";
 const getServerCountry = () => "FR";
 
-export function PlanLadder() {
+/** Country names in the page's language, from the browser's own data (no table to maintain). */
+function countryName(code: string, fallback: string, locale: Locale): string {
+  try {
+    return new Intl.DisplayNames([locale], { type: "region" }).of(code) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+const TEXT = {
+  fr: {
+    pricesFor: "Vos prix pour",
+    billed: (currency: string) => `Facturé en ${currency}, par mois, sans engagement.`,
+    shownPlan: "Formule affichée",
+    trial: (days: number) => `${days} jours offerts`,
+    everything: (name: string) => `Tout ce que contient la formule ${name}`,
+    extraSeat: (price: string, soon: boolean) => ` · utilisateur supplémentaire ${price}/mois${soon ? " (bientôt)" : ""}`,
+    cta: "Commencer gratuitement",
+    ctaNote: (days: number, name: string) =>
+      `${days} jours de formule ${name} offerts à l'inscription, sans carte bancaire. Vous changez de formule quand vous voulez, et vos données restent les vôtres.`,
+  },
+  en: {
+    pricesFor: "Your prices for",
+    billed: (currency: string) => `Billed in ${currency}, monthly, no commitment.`,
+    shownPlan: "Plan shown",
+    trial: (days: number) => `${days} days free`,
+    everything: (name: string) => `Everything in the ${name} plan`,
+    extraSeat: (price: string, soon: boolean) => ` · extra user ${price}/month${soon ? " (soon)" : ""}`,
+    cta: "Start for free",
+    ctaNote: (days: number, name: string) =>
+      `${days} days of the ${name} plan free when you sign up, no credit card. Change plans whenever you like; your data stays yours.`,
+  },
+} satisfies Record<Locale, unknown>;
+
+export function PlanLadder({ locale = "fr" }: { locale?: Locale }) {
+  const t = TEXT[locale];
+  const content = landingText(locale);
   const selectId = useId();
   const detectedCountry = useSyncExternalStore(
     NO_SUBSCRIBE,
@@ -138,7 +207,7 @@ export function PlanLadder() {
     <div>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
         <label htmlFor={selectId} className="text-sm text-ink-soft">
-          Vos prix pour
+          {t.pricesFor}
         </label>
         <select
           id={selectId}
@@ -148,16 +217,16 @@ export function PlanLadder() {
         >
           {BILLABLE_COUNTRIES.map((country) => (
             <option key={country.code} value={country.code}>
-              {country.label}
+              {countryName(country.code, country.label, locale)}
             </option>
           ))}
         </select>
         <p className="text-sm text-ink-soft">
-          Facturé en {currency}, par mois, sans engagement.
+          {t.billed(currency)}
         </p>
       </div>
 
-      <div role="group" aria-label="Formule affichée" className="mt-6 grid grid-cols-4 gap-1 rounded-xl bg-paper-shade p-1 sm:hidden">
+      <div role="group" aria-label={t.shownPlan} className="mt-6 grid grid-cols-4 gap-1 rounded-xl bg-paper-shade p-1 sm:hidden">
         {PLAN_KEYS.map((plan) => (
           <button
             key={plan}
@@ -177,9 +246,9 @@ export function PlanLadder() {
         {PLAN_KEYS.map((plan) => {
           const price = PLAN_PRICES[currency][plan];
           const gained = modulesGainedAt(plan);
-          const ai = aiLine(plan);
+          const ai = aiLine(plan, locale);
           const isEntry = plan === "free";
-          const quotas = quotaLines(plan);
+          const quotas = quotaLines(plan, locale);
 
           return (
             <div
@@ -193,7 +262,7 @@ export function PlanLadder() {
                   {PLAN_NAMES[plan]}
                   {plan === SIGNUP_TRIAL.plan && (
                     <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-on-primary">
-                      {SIGNUP_TRIAL.days} jours offerts
+                      {t.trial(SIGNUP_TRIAL.days)}
                     </span>
                   )}
                 </h3>
@@ -204,7 +273,7 @@ export function PlanLadder() {
                   {isEntry && <span className="ml-1.5 font-sans text-base">{currency}</span>}
                 </p>
                 <p className="mt-1.5 text-sm leading-snug text-ink-soft">
-                  {PLAN_AUDIENCE[plan]}
+                  {content.planAudience[plan]}
                 </p>
               </div>
 
@@ -214,8 +283,7 @@ export function PlanLadder() {
                     <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                       ✓
                     </span>
-                    Tout ce que contient la formule{" "}
-                    {PLAN_NAMES[PLAN_KEYS[PLAN_KEYS.indexOf(plan) - 1]!]}
+                    {t.everything(PLAN_NAMES[PLAN_KEYS[PLAN_KEYS.indexOf(plan) - 1]!])}
                   </li>
                 )}
                 {gained.map((module) => (
@@ -223,10 +291,10 @@ export function PlanLadder() {
                     <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                       ✓
                     </span>
-                    {MODULE_PROMISES[module]}
+                    {content.modulePromises[module]}
                   </li>
                 ))}
-                {[...featuresGainedAt(plan), ...(PLAN_PERKS[plan] ?? [])].map((perk) => (
+                {[...featuresGainedAt(plan, locale), ...(content.planPerks[plan] ?? [])].map((perk) => (
                   <li key={perk} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
                     <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                       ✓
@@ -241,12 +309,10 @@ export function PlanLadder() {
                   {/* One span: as direct flex children, the seat count and the extra-seat price
                       became two columns squeezed side by side. */}
                   <span>
-                    {seatLine(plan)}
+                    {seatLine(plan, locale)}
                     {!isEntry && (
                       <span className="text-ink-soft">
-                        {" "}
-                        · utilisateur supplémentaire {format.display(EXTRA_SEAT_PRICES[currency])}
-                        /mois{EXTRA_SEAT_PURCHASABLE ? "" : " (bientôt)"}
+                        {t.extraSeat(format.display(EXTRA_SEAT_PRICES[currency]), !EXTRA_SEAT_PURCHASABLE)}
                       </span>
                     )}
                   </span>
@@ -259,7 +325,7 @@ export function PlanLadder() {
                     {line}
                   </li>
                 ))}
-                {paymentLines(plan).map((line) => (
+                {paymentLines(plan, locale).map((line) => (
                   <li key={line} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
                     <span aria-hidden="true" className="mt-px select-none text-ink-soft">
                       ✓
@@ -283,16 +349,12 @@ export function PlanLadder() {
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
         <Link
-          href="/register"
+          href={locale === "en" ? "/register?lang=en" : "/register"}
           className="inline-flex shrink-0 items-center justify-center rounded-lg bg-primary px-5 py-2.5 font-semibold text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2"
         >
-          Commencer gratuitement
+          {t.cta}
         </Link>
-        <p className="text-sm text-ink-soft">
-          {SIGNUP_TRIAL.days} jours de formule {PLAN_NAMES[SIGNUP_TRIAL.plan]} offerts à
-          l&apos;inscription, sans carte bancaire. Vous changez de formule quand vous voulez, et vos
-          données restent les vôtres.
-        </p>
+        <p className="text-sm text-ink-soft">{t.ctaNote(SIGNUP_TRIAL.days, PLAN_NAMES[SIGNUP_TRIAL.plan])}</p>
       </div>
     </div>
   );

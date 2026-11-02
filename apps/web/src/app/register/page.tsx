@@ -10,6 +10,8 @@ import { Button, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { AuthShell, RegisterAside } from "@/components/landing/auth-shell";
+import { AUTH_TEXT } from "@/lib/auth-text";
+import { useLocale, withLang } from "@/lib/locale";
 
 interface RegisterResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
@@ -17,6 +19,8 @@ interface RegisterResponse {
 }
 
 export default function RegisterPage() {
+  const locale = useLocale();
+  const t = AUTH_TEXT[locale];
   const router = useRouter();
   const setSession = useAuthStore((state) => state.setSession);
 
@@ -37,14 +41,15 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
-      title="Créer votre compte"
-      intro="Deux minutes, et votre espace est configuré pour votre métier."
-      aside={<RegisterAside />}
+      locale={locale}
+      title={t.registerTitle}
+      intro={t.registerIntro}
+      aside={<RegisterAside locale={locale} />}
       footer={
         <>
-          Déjà un compte ?{" "}
-          <Link href="/login" className="font-medium text-text underline">
-            Se connecter
+          {t.haveAccount}{" "}
+          <Link href={withLang("/login", locale)} className="font-medium text-text underline">
+            {t.signIn}
           </Link>
         </>
       }
@@ -53,7 +58,7 @@ export default function RegisterPage() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium" htmlFor="firstName">
-              Prénom
+              {t.firstName}
             </label>
             <Input
               id="firstName"
@@ -68,7 +73,7 @@ export default function RegisterPage() {
           </div>
           <div>
             <label className="block text-sm font-medium" htmlFor="lastName">
-              Nom
+              {t.lastName}
             </label>
             <Input
               id="lastName"
@@ -85,7 +90,7 @@ export default function RegisterPage() {
 
         <div>
           <label className="block text-sm font-medium" htmlFor="email">
-            Email
+            {t.email}
           </label>
           <Input
             id="email"
@@ -100,7 +105,7 @@ export default function RegisterPage() {
 
         <div>
           <label className="block text-sm font-medium" htmlFor="password">
-            Mot de passe
+            {t.password}
           </label>
           <Input
             id="password"
@@ -117,12 +122,12 @@ export default function RegisterPage() {
 
         {mutation.isError && (
           <p className="text-sm text-destructive">
-            {mutation.error instanceof ApiError ? mutation.error.message : "Une erreur est survenue."}
+            {mutation.error instanceof ApiError ? mutation.error.message : t.genericError}
           </p>
         )}
 
         <Button type="submit" loading={mutation.isPending} size="lg" className="w-full">
-          {mutation.isPending ? "Création..." : "Créer mon compte"}
+          {mutation.isPending ? t.registerPending : t.registerButton}
         </Button>
       </form>
     </AuthShell>
