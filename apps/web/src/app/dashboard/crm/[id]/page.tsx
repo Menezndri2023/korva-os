@@ -39,22 +39,30 @@ import type {
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
-import { formatCurrency, LEAD_STATUS_LABELS, DEAL_STATUS_LABELS } from "@/lib/analytics-format";
+import {
+  DEAL_STATUS_LABELS,
+  DEAL_STATUS_LABELS_EN,
+  formatCurrency,
+  labelIn,
+  LEAD_STATUS_LABELS,
+  LEAD_STATUS_LABELS_EN,
+} from "@/lib/analytics-format";
+import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 import { RelationSection } from "@/components/relation-section";
 import { ContactAccountCard } from "@/components/customer-account-actions";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 
-const TIMELINE_TYPE_LABELS: Record<BusinessGraphTimelineEntry["type"], string> = {
-  lead: "Prospect",
-  deal: "Affaire",
-  quote: "Devis",
-  invoice: "Facture",
-  payment: "Paiement",
-  booking: "Réservation",
-  order: "Commande",
-  conversation: "Conversation",
-  task: "Tâche",
+const TIMELINE_TYPE_LABELS: Record<BusinessGraphTimelineEntry["type"], [string, string]> = {
+  lead: ["Prospect", "Lead"],
+  deal: ["Affaire", "Deal"],
+  quote: ["Devis", "Quote"],
+  invoice: ["Facture", "Invoice"],
+  payment: ["Paiement", "Payment"],
+  booking: ["Réservation", "Booking"],
+  order: ["Commande", "Order"],
+  conversation: ["Conversation", "Conversation"],
+  task: ["Tâche", "Task"],
 };
 
 function contactDisplayName(contact: Contact): string {
@@ -65,14 +73,17 @@ function contactDisplayName(contact: Contact): string {
   );
 }
 
-function deleteErrorMessage(error: unknown): string {
+function deleteErrorMessage(error: unknown, t: Translate): string {
   if (error instanceof ApiError) {
     if (error.code === "CONTACT_IN_USE") {
-      return "Ce contact ne peut pas être supprimé car il est encore utilisé par d'autres éléments de votre organisation.";
+      return t(
+        "Ce contact ne peut pas être supprimé car il est encore utilisé par d'autres éléments de votre organisation.",
+        "This contact cannot be deleted because other records in your organization still use it.",
+      );
     }
     return error.message;
   }
-  return "Impossible de supprimer le contact.";
+  return t("Impossible de supprimer le contact.", "The contact could not be deleted.");
 }
 
 interface DuplicateContactGroup {
@@ -81,14 +92,17 @@ interface DuplicateContactGroup {
   contacts: Contact[];
 }
 
-function mergeErrorMessage(error: unknown): string {
+function mergeErrorMessage(error: unknown, t: Translate): string {
   if (error instanceof ApiError) {
     if (error.code === "CONTACT_MERGE_BOTH_HAVE_CUSTOMER_ACCOUNTS") {
-      return "Fusion impossible : ces deux contacts ont chacun leur propre compte client. Supprimez ou transférez l'un des deux comptes avant de réessayer.";
+      return t(
+        "Fusion impossible : ces deux contacts ont chacun leur propre compte client. Supprimez ou transférez l'un des deux comptes avant de réessayer.",
+        "These contacts cannot be merged: each has its own customer account. Delete or move one of the two accounts and try again.",
+      );
     }
     return error.message;
   }
-  return "Impossible de fusionner ces contacts.";
+  return t("Impossible de fusionner ces contacts.", "These contacts could not be merged.");
 }
 
 export default function ContactDetailPage() {
@@ -96,6 +110,8 @@ export default function ContactDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
+  const locale = useDashboardLocale();
+  const t = useT();
 
   const contactQuery = useQuery({
     queryKey: ["contacts", id],
@@ -330,13 +346,16 @@ export default function ContactDetailPage() {
   });
 
   if (contactQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (contactQuery.isError || !contactQuery.data) {
     const error = contactQuery.error;
     const message =
-      error instanceof ApiError ? error.message : "Impossible de charger ce contact.";
+      error instanceof ApiError ? error.message : t(
+        "Impossible de charger ce contact.",
+        "This contact could not be loaded.",
+      );
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">{message}</p>
@@ -344,7 +363,7 @@ export default function ContactDetailPage() {
           href="/dashboard/crm"
           className="mt-2 inline-block text-sm font-medium text-text underline"
         >
-          Retour aux contacts
+          {t("Retour aux contacts", "Back to contacts")}
         </Link>
       </Card>
     );
@@ -355,14 +374,14 @@ export default function ContactDetailPage() {
   return (
     <div className="space-y-4">
       <Link href="/dashboard/crm" className="text-sm text-text-muted hover:underline">
-        ← Contacts
+        {t("← Contacts", "← Contacts")}
       </Link>
 
       <Card className="p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-semibold">{contactDisplayName(contact)}</h1>
-            {contact.type === "company" && <Badge>Entreprise</Badge>}
+            {contact.type === "company" && <Badge>{t("Entreprise", "Company")}</Badge>}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -371,7 +390,7 @@ export default function ContactDetailPage() {
               disabled={deleteConfirming}
               onClick={() => (isEditing ? cancelEdit() : startEdit(contact))}
             >
-              {isEditing ? "Annuler" : "Modifier"}
+              {isEditing ? t("Annuler", "Cancel") : t("Modifier", "Edit")}
             </Button>
             {deleteConfirming ? (
               <>
@@ -381,7 +400,7 @@ export default function ContactDetailPage() {
                   loading={deleteContactMutation.isPending}
                   onClick={() => deleteContactMutation.mutate()}
                 >
-                  {deleteContactMutation.isPending ? "Suppression..." : "Confirmer ?"}
+                  {deleteContactMutation.isPending ? t("Suppression...", "Deleting...") : t("Confirmer ?", "Confirm?")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -389,7 +408,7 @@ export default function ContactDetailPage() {
                   disabled={deleteContactMutation.isPending}
                   onClick={() => setDeleteConfirming(false)}
                 >
-                  Annuler
+                  {t("Annuler", "Cancel")}
                 </Button>
               </>
             ) : (
@@ -399,7 +418,7 @@ export default function ContactDetailPage() {
                 disabled={isEditing}
                 onClick={() => setDeleteConfirming(true)}
               >
-                Supprimer
+                {t("Supprimer", "Delete")}
               </Button>
             )}
           </div>
@@ -407,28 +426,28 @@ export default function ContactDetailPage() {
 
         {deleteContactMutation.isError && (
           <p className="mt-3 text-sm text-destructive">
-            {deleteErrorMessage(deleteContactMutation.error)}
+            {deleteErrorMessage(deleteContactMutation.error, t)}
           </p>
         )}
 
         {!isEditing ? (
           <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="text-text-muted">Email</dt>
+              <dt className="text-text-muted">{t("Email", "Email")}</dt>
               <dd className="mt-0.5">{contact.email ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Téléphone</dt>
+              <dt className="text-text-muted">{t("Téléphone", "Phone")}</dt>
               <dd className="mt-0.5">{contact.phone ?? "—"}</dd>
             </div>
             <div>
               <dt className="text-text-muted">
-                {contact.type === "company" ? "Nom de l'entreprise" : "Entreprise (employeur)"}
+                {contact.type === "company" ? t("Nom de l'entreprise", "Company name") : t("Entreprise (employeur)", "Company (employer)")}
               </dt>
               <dd className="mt-0.5">{contact.company ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Tags</dt>
+              <dt className="text-text-muted">{t("Tags", "Tags")}</dt>
               <dd className="mt-0.5 flex flex-wrap gap-1">
                 {contact.tags.length === 0
                   ? "—"
@@ -436,7 +455,7 @@ export default function ContactDetailPage() {
               </dd>
             </div>
             <div>
-              <dt className="text-text-muted">Taux horaire par défaut</dt>
+              <dt className="text-text-muted">{t("Taux horaire par défaut", "Default hourly rate")}</dt>
               <dd className="mt-0.5">
                 {contact.defaultHourlyRate != null ? `${contact.defaultHourlyRate}/h` : "—"}
               </dd>
@@ -459,7 +478,7 @@ export default function ContactDetailPage() {
           >
             <div className="col-span-2">
               <label className="mb-1 block text-xs font-medium text-text" htmlFor="type">
-                Type
+                {t("Type", "Type")}
               </label>
               <select
                 id="type"
@@ -468,7 +487,7 @@ export default function ContactDetailPage() {
               >
                 {CONTACT_TYPES.map((type) => (
                   <option key={type} value={type}>
-                    {type === "company" ? "Entreprise" : "Personne"}
+                    {type === "company" ? t("Entreprise", "Company") : t("Personne", "Person")}
                   </option>
                 ))}
               </select>
@@ -479,7 +498,7 @@ export default function ContactDetailPage() {
                   className="mb-1 block text-xs font-medium text-text"
                   htmlFor="company-name"
                 >
-                  Nom de l&apos;entreprise
+                  {t("Nom de l'entreprise", "Company name")}
                 </label>
                 <Input id="company-name" className="w-full" {...registerEdit("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
               </div>
@@ -487,13 +506,13 @@ export default function ContactDetailPage() {
               <>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text" htmlFor="firstName">
-                    Prénom
+                    {t("Prénom", "First name")}
                   </label>
                   <Input id="firstName" {...registerEdit("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-text" htmlFor="lastName">
-                    Nom
+                    {t("Nom", "Name")}
                   </label>
                   <Input id="lastName" {...registerEdit("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                 </div>
@@ -501,7 +520,7 @@ export default function ContactDetailPage() {
             )}
             <div>
               <label className="mb-1 block text-xs font-medium text-text" htmlFor="email">
-                Email
+                {t("Email", "Email")}
               </label>
               <Input
                 id="email"
@@ -515,14 +534,14 @@ export default function ContactDetailPage() {
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-text" htmlFor="phone">
-                Téléphone
+                {t("Téléphone", "Phone")}
               </label>
               <Input id="phone" {...registerEdit("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
             </div>
             {editType !== "company" && (
               <div className="col-span-2">
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="company">
-                  Entreprise
+                  {t("Entreprise", "Company")}
                 </label>
                 <Input id="company" className="w-full" {...registerEdit("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
               </div>
@@ -532,13 +551,13 @@ export default function ContactDetailPage() {
                 className="mb-1 block text-xs font-medium text-text"
                 htmlFor="defaultHourlyRate"
               >
-                Taux horaire par défaut
+                {t("Taux horaire par défaut", "Default hourly rate")}
               </label>
               <Input
                 id="defaultHourlyRate"
                 type="number"
                 step="0.01"
-                placeholder="Ex. 120"
+                placeholder={t("Ex. 120", "E.g. 120")}
                 {...registerEdit("defaultHourlyRate", {
                   setValueAs: (value: string) => (value === "" ? undefined : Number(value)),
                 })}
@@ -546,7 +565,7 @@ export default function ContactDetailPage() {
             </div>
             <div className="col-span-2">
               <label className="mb-1 block text-xs font-medium text-text" htmlFor="tags">
-                Tags (séparés par des virgules)
+                {t("Tags (séparés par des virgules)", "Tags (comma-separated)")}
               </label>
               <Input
                 id="tags"
@@ -567,16 +586,16 @@ export default function ContactDetailPage() {
               <p className="col-span-2 text-sm text-red-600">
                 {updateContactMutation.error instanceof ApiError
                   ? updateContactMutation.error.message
-                  : "Impossible d'enregistrer le contact."}
+                  : t("Impossible d'enregistrer le contact.", "The contact could not be saved.")}
               </p>
             )}
 
             <div className="col-span-2 flex gap-2">
               <Button type="submit" loading={updateContactMutation.isPending}>
-                {updateContactMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+                {updateContactMutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
               </Button>
               <Button type="button" variant="ghost" onClick={cancelEdit}>
-                Annuler
+                {t("Annuler", "Cancel")}
               </Button>
             </div>
           </form>
@@ -585,11 +604,12 @@ export default function ContactDetailPage() {
 
       {duplicatesQuery.data && duplicatesQuery.data.length > 0 && (
         <Card className="p-6">
-          <h2 className="text-sm font-semibold">Doublons potentiels</h2>
+          <h2 className="text-sm font-semibold">{t("Doublons potentiels", "Possible duplicates")}</h2>
           <p className="mt-1 text-sm text-text-muted">
-            Ces contacts partagent le même email ou téléphone. Fusionner conserve ce contact-ci
-            comme fiche principale et reporte l&apos;historique de l&apos;autre dessus ; l&apos;autre
-            fiche est ensuite supprimée. Cette action est irréversible.
+            {t(
+              "Ces contacts partagent le même email ou téléphone. Fusionner conserve ce contact-ci comme fiche principale et reporte l'historique de l'autre dessus ; l'autre fiche est ensuite supprimée. Cette action est irréversible.",
+              "These contacts share the same e-mail or phone. Merging keeps this contact as the main record and moves the other's history onto it; the other record is then deleted. This cannot be undone.",
+            )}
           </p>
           <ul className="mt-4 space-y-3">
             {duplicatesQuery.data.map((candidate) => (
@@ -611,7 +631,7 @@ export default function ContactDetailPage() {
                       loading={mergeContactMutation.isPending}
                       onClick={() => mergeContactMutation.mutate(candidate.id)}
                     >
-                      {mergeContactMutation.isPending ? "Fusion..." : "Confirmer la fusion"}
+                      {mergeContactMutation.isPending ? t("Fusion...", "Merging...") : t("Confirmer la fusion", "Confirm the merge")}
                     </Button>
                     <Button
                       variant="ghost"
@@ -619,7 +639,7 @@ export default function ContactDetailPage() {
                       disabled={mergeContactMutation.isPending}
                       onClick={() => setConfirmMergeId(null)}
                     >
-                      Annuler
+                      {t("Annuler", "Cancel")}
                     </Button>
                   </div>
                 ) : (
@@ -629,7 +649,7 @@ export default function ContactDetailPage() {
                     className="shrink-0"
                     onClick={() => setConfirmMergeId(candidate.id)}
                   >
-                    Fusionner
+                    {t("Fusionner", "Merge")}
                   </Button>
                 )}
               </li>
@@ -637,7 +657,7 @@ export default function ContactDetailPage() {
           </ul>
           {mergeContactMutation.isError && (
             <p className="mt-3 text-sm text-destructive">
-              {mergeErrorMessage(mergeContactMutation.error)}
+              {mergeErrorMessage(mergeContactMutation.error, t)}
             </p>
           )}
         </Card>
@@ -646,20 +666,20 @@ export default function ContactDetailPage() {
       <ContactAccountCard contactId={id} />
 
       <RelationSection<BusinessGraphTimelineEntry>
-        title="Chronologie"
+        title={t("Chronologie", "Timeline")}
         query={timelineQuery}
-        emptyLabel="Aucun événement pour ce contact."
+        emptyLabel={t("Aucun événement pour ce contact.", "No events for this contact.")}
         renderItem={(entry) => (
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Badge>{TIMELINE_TYPE_LABELS[entry.type]}</Badge>
+              <Badge>{t(...TIMELINE_TYPE_LABELS[entry.type])}</Badge>
               <span>{entry.summary}</span>
             </div>
             <div className="flex items-center gap-3 text-text-muted">
               {entry.amount != null && entry.currency && (
-                <span>{formatCurrency(entry.amount, entry.currency)}</span>
+                <span>{formatCurrency(entry.amount, entry.currency, locale)}</span>
               )}
-              <span>{new Date(entry.occurredAt).toLocaleDateString("fr-FR")}</span>
+              <span>{new Date(entry.occurredAt).toLocaleDateString(intlLocale(locale))}</span>
             </div>
           </div>
         )}
@@ -667,95 +687,95 @@ export default function ContactDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <RelationSection<Lead>
-          title="Prospects"
+          title={t("Prospects", "Leads")}
           query={leadsQuery}
-          emptyLabel="Aucun prospect."
+          emptyLabel={t("Aucun prospect.", "No leads.")}
           renderItem={(lead) => (
             <div className="flex items-center justify-between">
               <Link href={`/dashboard/crm/leads/${lead.id}`} className="hover:underline">
-                {lead.source ?? "Prospect"}
+                {lead.source ?? t("Prospect", "Lead")}
               </Link>
-              <Badge>{LEAD_STATUS_LABELS[lead.status] ?? lead.status}</Badge>
+              <Badge>{labelIn(LEAD_STATUS_LABELS, LEAD_STATUS_LABELS_EN, lead.status, locale)}</Badge>
             </div>
           )}
         />
         <RelationSection<Deal>
-          title="Affaires"
+          title={t("Affaires", "Deals")}
           query={dealsQuery}
-          emptyLabel="Aucune affaire."
+          emptyLabel={t("Aucune affaire.", "No deals.")}
           renderItem={(deal) => (
             <div className="flex items-center justify-between">
               <Link href={`/dashboard/crm/deals/${deal.id}`} className="hover:underline">
-                {deal.estimatedValue != null ? deal.estimatedValue : "Affaire"}
+                {deal.estimatedValue != null ? deal.estimatedValue : t("Affaire", "Deal")}
               </Link>
-              <Badge>{DEAL_STATUS_LABELS[deal.status] ?? deal.status}</Badge>
+              <Badge>{labelIn(DEAL_STATUS_LABELS, DEAL_STATUS_LABELS_EN, deal.status, locale)}</Badge>
             </div>
           )}
         />
         <RelationSection<Order>
-          title="Commandes"
+          title={t("Commandes", "Orders")}
           query={ordersQuery}
-          emptyLabel="Aucune commande."
+          emptyLabel={t("Aucune commande.", "No orders.")}
           renderItem={(order) => (
             <div className="flex items-center justify-between">
               <span>{order.number}</span>
               <Badge>{order.status}</Badge>
-              <span>{formatCurrency(order.total, order.currency)}</span>
+              <span>{formatCurrency(order.total, order.currency, locale)}</span>
             </div>
           )}
         />
         <RelationSection<Booking>
-          title="Réservations"
+          title={t("Réservations", "Bookings")}
           query={bookingsQuery}
-          emptyLabel="Aucune réservation."
+          emptyLabel={t("Aucune réservation.", "No bookings.")}
           renderItem={(booking) => (
             <div className="flex items-center justify-between">
-              <span>{new Date(booking.startAt).toLocaleString("fr-FR")}</span>
+              <span>{new Date(booking.startAt).toLocaleString(intlLocale(locale))}</span>
               <Badge>{booking.status}</Badge>
             </div>
           )}
         />
         <RelationSection<CreditBalance>
-          title="Forfaits"
+          title={t("Forfaits", "Packages")}
           query={creditBalancesQuery}
-          emptyLabel="Aucun forfait."
+          emptyLabel={t("Aucun forfait.", "No packages.")}
           renderItem={(balance) => (
             <div className="flex items-center justify-between">
               <span>{packageOfferName(balance.offerId)}</span>
               <span>
-                {balance.remainingCredits} / {balance.totalCredits} séances
+                {balance.remainingCredits} / {balance.totalCredits} {t("séances", "sessions")}
               </span>
             </div>
           )}
         />
         <RelationSection<Invoice>
-          title="Factures"
+          title={t("Factures", "Invoices")}
           query={invoicesQuery}
-          emptyLabel="Aucune facture."
+          emptyLabel={t("Aucune facture.", "No invoices.")}
           renderItem={(invoice) => (
             <div className="flex items-center justify-between">
               <span>{invoice.number}</span>
               <Badge>{invoice.status}</Badge>
-              <span>{formatCurrency(invoice.total, invoice.currency)}</span>
+              <span>{formatCurrency(invoice.total, invoice.currency, locale)}</span>
             </div>
           )}
         />
         <RelationSection<Quote>
-          title="Devis"
+          title={t("Devis", "Quotes")}
           query={quotesQuery}
-          emptyLabel="Aucun devis."
+          emptyLabel={t("Aucun devis.", "No quotes.")}
           renderItem={(quote) => (
             <div className="flex items-center justify-between">
               <span>{quote.number}</span>
               <Badge>{quote.status}</Badge>
-              <span>{formatCurrency(quote.total, quote.currency)}</span>
+              <span>{formatCurrency(quote.total, quote.currency, locale)}</span>
             </div>
           )}
         />
         <RelationSection<Cart>
-          title="Paniers"
+          title={t("Paniers", "Baskets")}
           query={cartsQuery}
-          emptyLabel="Aucun panier."
+          emptyLabel={t("Aucun panier.", "No baskets.")}
           renderItem={(cart) => (
             <div className="flex items-center justify-between">
               <Badge>{cart.status}</Badge>
@@ -766,9 +786,9 @@ export default function ContactDetailPage() {
           )}
         />
         <RelationSection<Conversation>
-          title="Conversations"
+          title={t("Conversations", "Conversations")}
           query={conversationsQuery}
-          emptyLabel="Aucune conversation."
+          emptyLabel={t("Aucune conversation.", "No conversations.")}
           renderItem={(conversation) => (
             <div className="flex items-center justify-between">
               <span>{conversation.subject ?? conversation.channel}</span>
@@ -777,9 +797,9 @@ export default function ContactDetailPage() {
           )}
         />
         <RelationSection<Task>
-          title="Tâches"
+          title={t("Tâches", "Tasks")}
           query={tasksQuery}
-          emptyLabel="Aucune tâche."
+          emptyLabel={t("Aucune tâche.", "No tasks.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
@@ -792,18 +812,18 @@ export default function ContactDetailPage() {
             >
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Nouvelle tâche..."
-                aria-label="Titre de la tâche"
+                placeholder={t("Nouvelle tâche...", "New task...")}
+                aria-label={t("Titre de la tâche", "Task title")}
                 {...registerTask("title")}
               />
               <Input
                 type="datetime-local"
-                aria-label="Échéance"
+                aria-label={t("Échéance", "Due date")}
                 value={taskDueAt}
                 onChange={(e) => setTaskDueAt(e.target.value)}
               />
               <Button type="submit" size="sm" loading={createTaskMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {taskErrors.title && (
                 <p className="w-full text-xs text-destructive">{taskErrors.title.message}</p>
@@ -812,7 +832,7 @@ export default function ContactDetailPage() {
                 <p className="w-full text-xs text-destructive">
                   {createTaskMutation.error instanceof ApiError
                     ? createTaskMutation.error.message
-                    : "Impossible d'ajouter la tâche."}
+                    : t("Impossible d'ajouter la tâche.", "The task could not be added.")}
                 </p>
               )}
             </form>
@@ -832,7 +852,7 @@ export default function ContactDetailPage() {
                     }
                     onClick={() => completeTaskMutation.mutate(task.id)}
                   >
-                    Terminer
+                    {t("Terminer", "Done")}
                   </Button>
                 )}
               </div>
@@ -840,9 +860,9 @@ export default function ContactDetailPage() {
           )}
         />
         <RelationSection<Note>
-          title="Notes"
+          title={t("Notes", "Notes")}
           query={notesQuery}
-          emptyLabel="Aucune note."
+          emptyLabel={t("Aucune note.", "No notes.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
@@ -850,12 +870,12 @@ export default function ContactDetailPage() {
             >
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Ajouter une note..."
-                aria-label="Contenu de la note"
+                placeholder={t("Ajouter une note...", "Add a note...")}
+                aria-label={t("Contenu de la note", "Note content")}
                 {...registerNote("content")}
               />
               <Button type="submit" size="sm" loading={createNoteMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {noteErrors.content && (
                 <p className="w-full text-xs text-destructive">{noteErrors.content.message}</p>
@@ -864,7 +884,7 @@ export default function ContactDetailPage() {
                 <p className="w-full text-xs text-destructive">
                   {createNoteMutation.error instanceof ApiError
                     ? createNoteMutation.error.message
-                    : "Impossible d'ajouter la note."}
+                    : t("Impossible d'ajouter la note.", "The note could not be added.")}
                 </p>
               )}
             </form>
@@ -872,16 +892,16 @@ export default function ContactDetailPage() {
           renderItem={(note) => <p className="text-text">{note.content}</p>}
         />
         <RelationSection<Activity>
-          title="Activité"
+          title={t("Activité", "Activity")}
           query={activitiesQuery}
-          emptyLabel="Aucune activité récente."
+          emptyLabel={t("Aucune activité récente.", "No recent activity.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
               onSubmit={handleActivitySubmit((values) => createActivityMutation.mutate(values))}
             >
               <select
-                aria-label="Type d'activité"
+                aria-label={t("Type d'activité", "Activity type")}
                 className="rounded-md border border-border-input px-2 py-2 text-sm"
                 {...registerActivity("type")}
               >
@@ -893,18 +913,18 @@ export default function ContactDetailPage() {
               </select>
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Détails (optionnel)"
-                aria-label="Détails de l'activité"
+                placeholder={t("Détails (optionnel)", "Details (optional)")}
+                aria-label={t("Détails de l'activité", "Activity details")}
                 {...registerActivity("content")}
               />
               <Button type="submit" size="sm" loading={createActivityMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {createActivityMutation.isError && (
                 <p className="w-full text-xs text-destructive">
                   {createActivityMutation.error instanceof ApiError
                     ? createActivityMutation.error.message
-                    : "Impossible d'ajouter l'activité."}
+                    : t("Impossible d'ajouter l'activité.", "The activity could not be added.")}
                 </p>
               )}
             </form>
@@ -916,7 +936,7 @@ export default function ContactDetailPage() {
                 {activity.content ? ` — ${activity.content}` : ""}
               </span>
               <span className="text-text-muted">
-                {new Date(activity.createdAt).toLocaleString("fr-FR")}
+                {new Date(activity.createdAt).toLocaleString(intlLocale(locale))}
               </span>
             </div>
           )}

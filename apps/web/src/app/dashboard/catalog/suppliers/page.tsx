@@ -182,10 +182,7 @@ export default function SuppliersPage() {
         </div>
       </Card>
 
-      <Dialog open={isCreateOpen} onClose={closeCreateDialog} title={t(
-        "Nouveau fournisseur",
-        "New supplier",
-      )}>
+      <Dialog open={isCreateOpen} onClose={closeCreateDialog} title={t("Nouveau fournisseur", "New supplier")}>
         <form
           onSubmit={createForm.handleSubmit((values) => createMutation.mutate(values))}
           className="space-y-3"

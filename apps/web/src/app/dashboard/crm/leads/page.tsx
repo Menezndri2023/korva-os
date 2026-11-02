@@ -16,10 +16,17 @@ import type { Contact, CustomFieldValues, Deal, Lead, Pipeline } from "@korva/ty
 import { Badge, Button, Card, Input, Pagination, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
-import { LEAD_STATUS_LABELS } from "@/lib/analytics-format";
+import {
+  labelIn,
+  LEAD_STATUS_LABELS,
+  LEAD_STATUS_LABELS_EN,
+} from "@/lib/analytics-format";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 export default function LeadsPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -105,15 +112,15 @@ export default function LeadsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-56">
-          <option value="">Tous les statuts</option>
+          <option value="">{t("Tous les statuts", "All statuses")}</option>
           {LEAD_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {LEAD_STATUS_LABELS[status] ?? status}
+              {labelIn(LEAD_STATUS_LABELS, LEAD_STATUS_LABELS_EN, status, locale)}
             </option>
           ))}
         </Select>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouveau prospect"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouveau prospect", "New lead")}
         </Button>
       </div>
 
@@ -126,7 +133,7 @@ export default function LeadsPage() {
         >
           <Select className="col-span-2" defaultValue="" {...register("contactId")}>
             <option value="" disabled>
-              Choisir un contact
+              {t("Choisir un contact", "Choose a contact")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -138,7 +145,7 @@ export default function LeadsPage() {
             <p className="col-span-2 text-xs text-destructive">{errors.contactId.message}</p>
           )}
 
-          <Input className="col-span-2" placeholder="Source (optionnel)" {...register("source")} />
+          <Input className="col-span-2" placeholder={t("Source (optionnel)", "Source (optional)")} {...register("source")} />
 
           <CustomFieldsFieldset
             entity="leads"
@@ -149,18 +156,18 @@ export default function LeadsPage() {
 
           {createLeadMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
-              {createLeadMutation.error instanceof ApiError ? createLeadMutation.error.message : "Erreur"}
+              {createLeadMutation.error instanceof ApiError ? createLeadMutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createLeadMutation.isPending} className="col-span-2">
-            {createLeadMutation.isPending ? "Création..." : "Créer le prospect"}
+            {createLeadMutation.isPending ? t("Création...", "Creating...") : t("Créer le prospect", "Create the lead")}
           </Button>
         </form>
       )}
 
-      {leadsLoading && <p className="text-sm text-text-muted">Chargement...</p>}
+      {leadsLoading && <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
       {!leadsLoading && leads?.length === 0 && (
-        <p className="text-sm text-text-muted">Aucun prospect.</p>
+        <p className="text-sm text-text-muted">{t("Aucun prospect.", "No leads.")}</p>
       )}
 
       {!leadsLoading && leads && leads.length > 0 && (
@@ -169,10 +176,10 @@ export default function LeadsPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Contact</th>
-                  <th className="px-4 py-2">Source</th>
-                  <th className="px-4 py-2">Statut</th>
-                  <th className="px-4 py-2">Date</th>
+                  <th className="px-4 py-2">{t("Contact", "Contact")}</th>
+                  <th className="px-4 py-2">{t("Source", "Source")}</th>
+                  <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                  <th className="px-4 py-2">{t("Date", "Date")}</th>
                   <th className="px-4 py-2" />
                 </tr>
               </thead>
@@ -186,15 +193,15 @@ export default function LeadsPage() {
                     </td>
                     <td className="px-4 py-2 text-text-muted">{lead.source ?? "—"}</td>
                     <td className="px-4 py-2">
-                      <Badge>{LEAD_STATUS_LABELS[lead.status] ?? lead.status}</Badge>
+                      <Badge>{labelIn(LEAD_STATUS_LABELS, LEAD_STATUS_LABELS_EN, lead.status, locale)}</Badge>
                     </td>
                     <td className="px-4 py-2 text-text-muted">
-                      {new Date(lead.createdAt).toLocaleDateString("fr-FR")}
+                      {new Date(lead.createdAt).toLocaleDateString(intlLocale(locale))}
                     </td>
                     <td className="px-4 py-2 text-right">
                       {lead.status !== "converted" && (
                         <Button variant="ghost" size="sm" onClick={() => startConvert(lead.id)}>
-                          Convertir en affaire
+                          {t("Convertir en affaire", "Convert to a deal")}
                         </Button>
                       )}
                     </td>
@@ -232,14 +239,14 @@ export default function LeadsPage() {
           </Select>
           <Input
             type="number"
-            placeholder="Valeur estimée"
+            placeholder={t("Valeur estimée", "Estimated value")}
             {...registerConvert("estimatedValue", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
             })}
           />
           <Input
             type="number"
-            placeholder="Probabilité (%)"
+            placeholder={t("Probabilité (%)", "Probability (%)")}
             {...registerConvert("probability", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
             })}
@@ -251,15 +258,15 @@ export default function LeadsPage() {
             <p className="col-span-2 text-sm text-destructive">
               {convertMutation.error instanceof ApiError
                 ? convertMutation.error.message
-                : "Impossible de convertir ce prospect."}
+                : t("Impossible de convertir ce prospect.", "This lead could not be converted.")}
             </p>
           )}
           <div className="col-span-2 flex gap-2">
             <Button type="submit" loading={convertMutation.isPending}>
-              {convertMutation.isPending ? "Conversion..." : "Convertir"}
+              {convertMutation.isPending ? t("Conversion...", "Converting...") : t("Convertir", "Convert")}
             </Button>
             <Button type="button" variant="secondary" onClick={() => setConvertingId(null)}>
-              Annuler
+              {t("Annuler", "Cancel")}
             </Button>
           </div>
         </form>

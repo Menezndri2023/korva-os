@@ -17,8 +17,10 @@ import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
+import { useT } from "@/lib/dashboard-locale";
 
 export default function ContactsPage() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
@@ -147,11 +149,14 @@ export default function ContactsPage() {
   function deleteErrorMessage(error: unknown): string {
     if (error instanceof ApiError) {
       if (error.code === "CONTACT_IN_USE") {
-        return "Ce contact ne peut pas être supprimé car il est encore utilisé par d'autres éléments de votre organisation.";
+        return t(
+          "Ce contact ne peut pas être supprimé car il est encore utilisé par d'autres éléments de votre organisation.",
+          "This contact cannot be deleted because other records in your organization still use it.",
+        );
       }
       return error.message;
     }
-    return "Impossible de supprimer le contact.";
+    return t("Impossible de supprimer le contact.", "The contact could not be deleted.");
   }
 
   return (
@@ -159,7 +164,7 @@ export default function ContactsPage() {
       <div className="flex items-center justify-between gap-3">
         <Input
           type="search"
-          placeholder="Rechercher un contact..."
+          placeholder={t("Rechercher un contact...", "Search for a contact...")}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -168,7 +173,7 @@ export default function ContactsPage() {
           className="w-64"
         />
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouveau contact"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouveau contact", "New contact")}
         </Button>
       </div>
 
@@ -189,27 +194,27 @@ export default function ContactsPage() {
           >
             {CONTACT_TYPES.map((type) => (
               <option key={type} value={type}>
-                {type === "company" ? "Entreprise" : "Personne"}
+                {type === "company" ? t("Entreprise", "Company") : t("Personne", "Person")}
               </option>
             ))}
           </select>
           {createType === "company" ? (
             <Input
-              placeholder="Nom de l'entreprise"
+              placeholder={t("Nom de l'entreprise", "Company name")}
               className="col-span-2"
               {...register("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
             />
           ) : (
             <>
-              <Input placeholder="Prénom" {...register("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
-              <Input placeholder="Nom" {...register("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
+              <Input placeholder={t("Prénom", "First name")} {...register("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
+              <Input placeholder={t("Nom", "Name")} {...register("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
             </>
           )}
-          <Input placeholder="Email" type="email" error={!!errors.email} {...register("email")} />
+          <Input placeholder={t("Email", "Email")} type="email" error={!!errors.email} {...register("email")} />
           {errors.email && <p className="col-span-2 text-xs text-destructive">{errors.email.message}</p>}
-          <Input placeholder="Téléphone" {...register("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
+          <Input placeholder={t("Téléphone", "Phone")} {...register("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
           {createType !== "company" && (
-            <Input placeholder="Entreprise" className="col-span-2" {...register("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
+            <Input placeholder={t("Entreprise", "Company")} className="col-span-2" {...register("company", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
           )}
           <CustomFieldsFieldset
             entity="contacts"
@@ -219,11 +224,11 @@ export default function ContactsPage() {
           />
           {createMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
-              {createMutation.error instanceof ApiError ? createMutation.error.message : "Erreur"}
+              {createMutation.error instanceof ApiError ? createMutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending} className="col-span-2">
-            {createMutation.isPending ? "Création..." : "Créer le contact"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le contact", "Create the contact")}
           </Button>
         </form>
       )}
@@ -233,25 +238,25 @@ export default function ContactsPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Nom</th>
-                <th className="px-4 py-2">Email</th>
-                <th className="px-4 py-2">Téléphone</th>
-                <th className="px-4 py-2">Tags</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                <th className="px-4 py-2">{t("Email", "Email")}</th>
+                <th className="px-4 py-2">{t("Téléphone", "Phone")}</th>
+                <th className="px-4 py-2">{t("Tags", "Tags")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && data?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-text-muted">
-                    Aucun contact.
+                    {t("Aucun contact.", "No contacts.")}
                   </td>
                 </tr>
               )}
@@ -287,7 +292,7 @@ export default function ContactsPage() {
                               contact.company ||
                               "—"}
                           </Link>
-                          {contact.type === "company" && <Badge>Entreprise</Badge>}
+                          {contact.type === "company" && <Badge>{t("Entreprise", "Company")}</Badge>}
                         </div>
                       </td>
                       <td className="px-4 py-2 text-text-muted">{contact.email ?? "—"}</td>
@@ -307,7 +312,7 @@ export default function ContactsPage() {
                             disabled={isDeleteConfirming}
                             onClick={() => (isEditing ? cancelEdit() : startEdit(contact))}
                           >
-                            {isEditing ? "Annuler" : "Modifier"}
+                            {isEditing ? t("Annuler", "Cancel") : t("Modifier", "Edit")}
                           </Button>
                           {isDeleteConfirming ? (
                             <>
@@ -319,7 +324,7 @@ export default function ContactsPage() {
                                   deleteContactMutation.mutate({ id: contact.id })
                                 }
                               >
-                                {isDeletePending ? "Suppression..." : "Confirmer ?"}
+                                {isDeletePending ? t("Suppression...", "Deleting...") : t("Confirmer ?", "Confirm?")}
                               </Button>
                               <Button
                                 variant="ghost"
@@ -327,7 +332,7 @@ export default function ContactsPage() {
                                 disabled={isDeletePending}
                                 onClick={() => setDeletingConfirmId(null)}
                               >
-                                Annuler
+                                {t("Annuler", "Cancel")}
                               </Button>
                             </>
                           ) : (
@@ -337,7 +342,7 @@ export default function ContactsPage() {
                               disabled={isEditing}
                               onClick={() => setDeletingConfirmId(contact.id)}
                             >
-                              Supprimer
+                              {t("Supprimer", "Delete")}
                             </Button>
                           )}
                         </div>
@@ -372,7 +377,7 @@ export default function ContactsPage() {
                                 className="mb-1 block text-xs font-medium text-text"
                                 htmlFor={`edit-type-${contact.id}`}
                               >
-                                Type
+                                {t("Type", "Type")}
                               </label>
                               <select
                                 id={`edit-type-${contact.id}`}
@@ -381,7 +386,7 @@ export default function ContactsPage() {
                               >
                                 {CONTACT_TYPES.map((type) => (
                                   <option key={type} value={type}>
-                                    {type === "company" ? "Entreprise" : "Personne"}
+                                    {type === "company" ? t("Entreprise", "Company") : t("Personne", "Person")}
                                   </option>
                                 ))}
                               </select>
@@ -392,7 +397,7 @@ export default function ContactsPage() {
                                   className="mb-1 block text-xs font-medium text-text"
                                   htmlFor={`edit-company-name-${contact.id}`}
                                 >
-                                  Nom de l&apos;entreprise
+                                  {t("Nom de l'entreprise", "Company name")}
                                 </label>
                                 <Input
                                   id={`edit-company-name-${contact.id}`}
@@ -407,7 +412,7 @@ export default function ContactsPage() {
                                     className="mb-1 block text-xs font-medium text-text"
                                     htmlFor={`edit-firstName-${contact.id}`}
                                   >
-                                    Prénom
+                                    {t("Prénom", "First name")}
                                   </label>
                                   <Input id={`edit-firstName-${contact.id}`} {...registerEdit("firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                                 </div>
@@ -416,7 +421,7 @@ export default function ContactsPage() {
                                     className="mb-1 block text-xs font-medium text-text"
                                     htmlFor={`edit-lastName-${contact.id}`}
                                   >
-                                    Nom
+                                    {t("Nom", "Name")}
                                   </label>
                                   <Input id={`edit-lastName-${contact.id}`} {...registerEdit("lastName", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                                 </div>
@@ -427,7 +432,7 @@ export default function ContactsPage() {
                                 className="mb-1 block text-xs font-medium text-text"
                                 htmlFor={`edit-email-${contact.id}`}
                               >
-                                Email
+                                {t("Email", "Email")}
                               </label>
                               <Input
                                 id={`edit-email-${contact.id}`}
@@ -444,7 +449,7 @@ export default function ContactsPage() {
                                 className="mb-1 block text-xs font-medium text-text"
                                 htmlFor={`edit-phone-${contact.id}`}
                               >
-                                Téléphone
+                                {t("Téléphone", "Phone")}
                               </label>
                               <Input id={`edit-phone-${contact.id}`} {...registerEdit("phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })} />
                             </div>
@@ -454,7 +459,7 @@ export default function ContactsPage() {
                                   className="mb-1 block text-xs font-medium text-text"
                                   htmlFor={`edit-company-${contact.id}`}
                                 >
-                                  Entreprise
+                                  {t("Entreprise", "Company")}
                                 </label>
                                 <Input
                                   id={`edit-company-${contact.id}`}
@@ -468,7 +473,7 @@ export default function ContactsPage() {
                                 className="mb-1 block text-xs font-medium text-text"
                                 htmlFor={`edit-tags-${contact.id}`}
                               >
-                                Tags (séparés par des virgules)
+                                {t("Tags (séparés par des virgules)", "Tags (comma-separated)")}
                               </label>
                               <Input
                                 id={`edit-tags-${contact.id}`}
@@ -489,16 +494,19 @@ export default function ContactsPage() {
                               <p className="col-span-2 text-sm text-destructive">
                                 {editError instanceof ApiError
                                   ? editError.message
-                                  : "Impossible d'enregistrer le contact."}
+                                  : t(
+                                    "Impossible d'enregistrer le contact.",
+                                    "The contact could not be saved.",
+                                  )}
                               </p>
                             )}
 
                             <div className="col-span-2 flex gap-2">
                               <Button type="submit" loading={isThisPending}>
-                                {isThisPending ? "Enregistrement..." : "Enregistrer"}
+                                {isThisPending ? t("Enregistrement...", "Saving...") : t("Enregistrer", "Save")}
                               </Button>
                               <Button type="button" variant="ghost" onClick={cancelEdit}>
-                                Annuler
+                                {t("Annuler", "Cancel")}
                               </Button>
                             </div>
                           </form>

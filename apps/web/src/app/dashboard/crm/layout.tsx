@@ -2,26 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { tradeVocabulary } from "@korva/types";
+import { tradeVocabularyIn } from "@korva/types";
 import { useActiveOrganization } from "@/lib/use-active-organization";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const TABS = [
-  { href: "/dashboard/crm", label: "Clients" },
-  { href: "/dashboard/crm/leads", label: "Prospects" },
-  { href: "/dashboard/crm/deals", label: "Affaires" },
-  { href: "/dashboard/crm/activities", label: "Activités" },
-  { href: "/dashboard/crm/tickets", label: "Tickets" },
-  { href: "/dashboard/crm/comptes", label: "Espaces clients" },
+const TABS: { href: string; label: [string, string] }[] = [
+  { href: "/dashboard/crm", label: ["Clients", "Customers"] },
+  { href: "/dashboard/crm/leads", label: ["Prospects", "Leads"] },
+  { href: "/dashboard/crm/deals", label: ["Affaires", "Deals"] },
+  { href: "/dashboard/crm/activities", label: ["Activités", "Activities"] },
+  { href: "/dashboard/crm/tickets", label: ["Tickets", "Tickets"] },
+  { href: "/dashboard/crm/comptes", label: ["Espaces clients", "Customer accounts"] },
 ];
 
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: organization } = useActiveOrganization();
+  const locale = useDashboardLocale();
+  const t = useT();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{tradeVocabulary(organization?.businessModel).crm}</h1>
+        <h1 className="text-2xl font-semibold">{tradeVocabularyIn(organization?.businessModel, locale).crm}</h1>
         <nav className="mt-3 flex gap-1 overflow-x-auto border-b border-border">
           {TABS.map((tab) => (
             <Link
@@ -33,7 +36,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
                   : "text-text-muted hover:text-text"
               }`}
             >
-              {tab.label}
+              {t(...tab.label)}
             </Link>
           ))}
         </nav>

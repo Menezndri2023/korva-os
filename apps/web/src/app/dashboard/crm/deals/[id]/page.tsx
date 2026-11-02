@@ -21,11 +21,18 @@ import type { Activity, Contact, Deal, Lead, Note, Pipeline, Task } from "@korva
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
-import { DEAL_STATUS_LABELS } from "@/lib/analytics-format";
+import {
+  DEAL_STATUS_LABELS,
+  DEAL_STATUS_LABELS_EN,
+  labelIn,
+} from "@/lib/analytics-format";
 import { RelationSection } from "@/components/relation-section";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 export default function DealDetailPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
@@ -175,13 +182,16 @@ export default function DealDetailPage() {
   }
 
   if (dealQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (dealQuery.isError || !dealQuery.data) {
     const error = dealQuery.error;
     const message =
-      error instanceof ApiError ? error.message : "Impossible de charger cette affaire.";
+      error instanceof ApiError ? error.message : t(
+        "Impossible de charger cette affaire.",
+        "This deal could not be loaded.",
+      );
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">{message}</p>
@@ -189,7 +199,7 @@ export default function DealDetailPage() {
           href="/dashboard/crm/deals"
           className="mt-2 inline-block text-sm font-medium text-text underline"
         >
-          Retour aux affaires
+          {t("Retour aux affaires", "Back to deals")}
         </Link>
       </Card>
     );
@@ -203,7 +213,7 @@ export default function DealDetailPage() {
   return (
     <div className="space-y-4">
       <Link href="/dashboard/crm/deals" className="text-sm text-text-muted hover:underline">
-        ← Affaires
+        {t("← Affaires", "← Deals")}
       </Link>
 
       <Card className="p-6">
@@ -219,7 +229,7 @@ export default function DealDetailPage() {
             </h1>
             <div className="mt-1 flex items-center gap-2">
               <p className="text-sm text-text-muted">{pipeline?.name ?? "—"}</p>
-              <Badge>{DEAL_STATUS_LABELS[deal.status] ?? deal.status}</Badge>
+              <Badge>{labelIn(DEAL_STATUS_LABELS, DEAL_STATUS_LABELS_EN, deal.status, locale)}</Badge>
             </div>
             {deal.leadId && (
               <Link
@@ -234,7 +244,7 @@ export default function DealDetailPage() {
             {deal.status === "open" && (
               <>
                 <select
-                  aria-label="Étape"
+                  aria-label={t("Étape", "Stage")}
                   value={deal.stageId}
                   disabled={isTransitioning || !pipeline}
                   onChange={(e) => moveStageMutation.mutate(e.target.value)}
@@ -252,18 +262,21 @@ export default function DealDetailPage() {
                   disabled={isTransitioning}
                   onClick={() => winMutation.mutate()}
                 >
-                  Gagner
+                  {t("Gagner", "Win")}
                 </Button>
                 <Button
                   variant="secondary"
                   loading={loseMutation.isPending}
                   disabled={isTransitioning}
                   onClick={() => {
-                    const lossReason = window.prompt("Raison de la perte (optionnel)") ?? undefined;
+                    const lossReason = window.prompt(t(
+                      "Raison de la perte (optionnel)",
+                      "Reason lost (optional)",
+                    )) ?? undefined;
                     loseMutation.mutate(lossReason);
                   }}
                 >
-                  Perdre
+                  {t("Perdre", "Lose")}
                 </Button>
               </>
             )}
@@ -274,7 +287,7 @@ export default function DealDetailPage() {
                 disabled={isTransitioning}
                 onClick={() => reopenMutation.mutate()}
               >
-                Rouvrir
+                {t("Rouvrir", "Reopen")}
               </Button>
             )}
           </div>
@@ -284,36 +297,39 @@ export default function DealDetailPage() {
           winMutation.isError ||
           loseMutation.isError ||
           reopenMutation.isError) && (
-          <p className="mt-3 text-sm text-destructive">Impossible de mettre à jour l&apos;affaire.</p>
+          <p className="mt-3 text-sm text-destructive">{t(
+            "Impossible de mettre à jour l'affaire.",
+            "The deal could not be updated.",
+          )}</p>
         )}
 
         <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-          <p className="text-sm font-medium text-text">Détails</p>
+          <p className="text-sm font-medium text-text">{t("Détails", "Details")}</p>
           <button
             onClick={() => setEditing((v) => !v)}
             className="text-xs font-medium text-text underline"
           >
-            {editing ? "Annuler" : "Modifier"}
+            {editing ? t("Annuler", "Cancel") : t("Modifier", "Edit")}
           </button>
         </div>
 
         {!editing ? (
           <dl className="mt-3 grid grid-cols-2 gap-4 text-sm md:grid-cols-3">
             <div>
-              <dt className="text-text-muted">Responsable</dt>
+              <dt className="text-text-muted">{t("Responsable", "Owner")}</dt>
               <dd className="mt-0.5">{deal.ownerId ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Valeur estimée</dt>
+              <dt className="text-text-muted">{t("Valeur estimée", "Estimated value")}</dt>
               <dd className="mt-0.5">{deal.estimatedValue ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Probabilité</dt>
+              <dt className="text-text-muted">{t("Probabilité", "Probability")}</dt>
               <dd className="mt-0.5">{deal.probability != null ? `${deal.probability}%` : "—"}</dd>
             </div>
             {deal.lossReason && (
               <div>
-                <dt className="text-text-muted">Raison de la perte</dt>
+                <dt className="text-text-muted">{t("Raison de la perte", "Reason lost")}</dt>
                 <dd className="mt-0.5">{deal.lossReason}</dd>
               </div>
             )}
@@ -326,14 +342,14 @@ export default function DealDetailPage() {
           >
             <Input
               type="number"
-              placeholder="Valeur estimée"
+              placeholder={t("Valeur estimée", "Estimated value")}
               {...register("estimatedValue", {
                 setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
               })}
             />
             <Input
               type="number"
-              placeholder="Probabilité (%)"
+              placeholder={t("Probabilité (%)", "Probability (%)")}
               {...register("probability", {
                 setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
               })}
@@ -345,11 +361,11 @@ export default function DealDetailPage() {
               <p className="col-span-2 text-sm text-destructive">
                 {updateMutation.error instanceof ApiError
                   ? updateMutation.error.message
-                  : "Impossible de mettre à jour cette affaire."}
+                  : t("Impossible de mettre à jour cette affaire.", "This deal could not be updated.")}
               </p>
             )}
             <Button type="submit" loading={updateMutation.isPending} className="col-span-2">
-              Enregistrer
+              {t("Enregistrer", "Save")}
             </Button>
           </form>
         )}
@@ -357,9 +373,9 @@ export default function DealDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <RelationSection<Task>
-          title="Tâches"
+          title={t("Tâches", "Tasks")}
           query={tasksQuery}
-          emptyLabel="Aucune tâche."
+          emptyLabel={t("Aucune tâche.", "No tasks.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
@@ -372,18 +388,18 @@ export default function DealDetailPage() {
             >
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Nouvelle tâche..."
-                aria-label="Titre de la tâche"
+                placeholder={t("Nouvelle tâche...", "New task...")}
+                aria-label={t("Titre de la tâche", "Task title")}
                 {...registerTask("title")}
               />
               <Input
                 type="datetime-local"
-                aria-label="Échéance"
+                aria-label={t("Échéance", "Due date")}
                 value={taskDueAt}
                 onChange={(e) => setTaskDueAt(e.target.value)}
               />
               <Button type="submit" size="sm" loading={createTaskMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {taskErrors.title && (
                 <p className="w-full text-xs text-destructive">{taskErrors.title.message}</p>
@@ -392,7 +408,7 @@ export default function DealDetailPage() {
                 <p className="w-full text-xs text-destructive">
                   {createTaskMutation.error instanceof ApiError
                     ? createTaskMutation.error.message
-                    : "Impossible d'ajouter la tâche."}
+                    : t("Impossible d'ajouter la tâche.", "The task could not be added.")}
                 </p>
               )}
             </form>
@@ -412,7 +428,7 @@ export default function DealDetailPage() {
                     }
                     onClick={() => completeTaskMutation.mutate(task.id)}
                   >
-                    Terminer
+                    {t("Terminer", "Done")}
                   </Button>
                 )}
               </div>
@@ -420,9 +436,9 @@ export default function DealDetailPage() {
           )}
         />
         <RelationSection<Note>
-          title="Notes"
+          title={t("Notes", "Notes")}
           query={notesQuery}
-          emptyLabel="Aucune note."
+          emptyLabel={t("Aucune note.", "No notes.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
@@ -430,12 +446,12 @@ export default function DealDetailPage() {
             >
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Ajouter une note..."
-                aria-label="Contenu de la note"
+                placeholder={t("Ajouter une note...", "Add a note...")}
+                aria-label={t("Contenu de la note", "Note content")}
                 {...registerNote("content")}
               />
               <Button type="submit" size="sm" loading={createNoteMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {noteErrors.content && (
                 <p className="w-full text-xs text-destructive">{noteErrors.content.message}</p>
@@ -444,7 +460,7 @@ export default function DealDetailPage() {
                 <p className="w-full text-xs text-destructive">
                   {createNoteMutation.error instanceof ApiError
                     ? createNoteMutation.error.message
-                    : "Impossible d'ajouter la note."}
+                    : t("Impossible d'ajouter la note.", "The note could not be added.")}
                 </p>
               )}
             </form>
@@ -452,16 +468,16 @@ export default function DealDetailPage() {
           renderItem={(note) => <p className="text-text">{note.content}</p>}
         />
         <RelationSection<Activity>
-          title="Activité"
+          title={t("Activité", "Activity")}
           query={activitiesQuery}
-          emptyLabel="Aucune activité récente."
+          emptyLabel={t("Aucune activité récente.", "No recent activity.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
               onSubmit={handleActivitySubmit((values) => createActivityMutation.mutate(values))}
             >
               <select
-                aria-label="Type d'activité"
+                aria-label={t("Type d'activité", "Activity type")}
                 className="rounded-md border border-border-input px-2 py-2 text-sm"
                 {...registerActivity("type")}
               >
@@ -473,18 +489,18 @@ export default function DealDetailPage() {
               </select>
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Détails (optionnel)"
-                aria-label="Détails de l'activité"
+                placeholder={t("Détails (optionnel)", "Details (optional)")}
+                aria-label={t("Détails de l'activité", "Activity details")}
                 {...registerActivity("content")}
               />
               <Button type="submit" size="sm" loading={createActivityMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {createActivityMutation.isError && (
                 <p className="w-full text-xs text-destructive">
                   {createActivityMutation.error instanceof ApiError
                     ? createActivityMutation.error.message
-                    : "Impossible d'ajouter l'activité."}
+                    : t("Impossible d'ajouter l'activité.", "The activity could not be added.")}
                 </p>
               )}
             </form>
@@ -496,7 +512,7 @@ export default function DealDetailPage() {
                 {activity.content ? ` — ${activity.content}` : ""}
               </span>
               <span className="text-text-muted">
-                {new Date(activity.createdAt).toLocaleString("fr-FR")}
+                {new Date(activity.createdAt).toLocaleString(intlLocale(locale))}
               </span>
             </div>
           )}

@@ -22,11 +22,18 @@ import type { Activity, Contact, Deal, Lead, Note, Pipeline, Task } from "@korva
 import { Badge, Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
-import { LEAD_STATUS_LABELS } from "@/lib/analytics-format";
+import {
+  labelIn,
+  LEAD_STATUS_LABELS,
+  LEAD_STATUS_LABELS_EN,
+} from "@/lib/analytics-format";
 import { RelationSection } from "@/components/relation-section";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 export default function LeadDetailPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -173,13 +180,16 @@ export default function LeadDetailPage() {
   }
 
   if (leadQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   if (leadQuery.isError || !leadQuery.data) {
     const error = leadQuery.error;
     const message =
-      error instanceof ApiError ? error.message : "Impossible de charger ce prospect.";
+      error instanceof ApiError ? error.message : t(
+        "Impossible de charger ce prospect.",
+        "This lead could not be loaded.",
+      );
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">{message}</p>
@@ -187,7 +197,7 @@ export default function LeadDetailPage() {
           href="/dashboard/crm/leads"
           className="mt-2 inline-block text-sm font-medium text-text underline"
         >
-          Retour aux prospects
+          {t("Retour aux prospects", "Back to leads")}
         </Link>
       </Card>
     );
@@ -199,7 +209,7 @@ export default function LeadDetailPage() {
   return (
     <div className="space-y-4">
       <Link href="/dashboard/crm/leads" className="text-sm text-text-muted hover:underline">
-        ← Prospects
+        {t("← Prospects", "← Leads")}
       </Link>
 
       <Card className="p-6">
@@ -217,12 +227,15 @@ export default function LeadDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {scoreQuery.data && (
-              <Badge title="Score basé sur la complétude du contact, l'engagement et la fraîcheur du prospect">
+              <Badge title={t(
+                "Score basé sur la complétude du contact, l'engagement et la fraîcheur du prospect",
+                "Score based on how complete the contact is, engagement and how recent the lead is",
+              )}>
                 Score : {scoreQuery.data.score}/100
               </Badge>
             )}
             <select
-              aria-label="Statut"
+              aria-label={t("Statut", "Status")}
               value={lead.status}
               disabled={isUpdating}
               onChange={(e) =>
@@ -232,13 +245,13 @@ export default function LeadDetailPage() {
             >
               {LEAD_STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {LEAD_STATUS_LABELS[status] ?? status}
+                  {labelIn(LEAD_STATUS_LABELS, LEAD_STATUS_LABELS_EN, status, locale)}
                 </option>
               ))}
             </select>
             {lead.status !== "converted" && (
               <Button onClick={() => setShowConvertForm((v) => !v)}>
-                {showConvertForm ? "Annuler" : "Convertir en affaire"}
+                {showConvertForm ? t("Annuler", "Cancel") : t("Convertir en affaire", "Convert to a deal")}
               </Button>
             )}
           </div>
@@ -248,7 +261,7 @@ export default function LeadDetailPage() {
           <p className="mt-3 text-sm text-destructive">
             {updateLeadMutation.error instanceof ApiError
               ? updateLeadMutation.error.message
-              : "Impossible de mettre à jour le prospect."}
+              : t("Impossible de mettre à jour le prospect.", "The lead could not be updated.")}
           </p>
         )}
 
@@ -273,14 +286,14 @@ export default function LeadDetailPage() {
             </Select>
             <Input
               type="number"
-              placeholder="Valeur estimée"
+              placeholder={t("Valeur estimée", "Estimated value")}
               {...registerConvert("estimatedValue", {
                 setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
               })}
             />
             <Input
               type="number"
-              placeholder="Probabilité (%)"
+              placeholder={t("Probabilité (%)", "Probability (%)")}
               {...registerConvert("probability", {
                 setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
               })}
@@ -292,22 +305,22 @@ export default function LeadDetailPage() {
               <p className="col-span-2 text-sm text-destructive">
                 {convertMutation.error instanceof ApiError
                   ? convertMutation.error.message
-                  : "Impossible de convertir ce prospect."}
+                  : t("Impossible de convertir ce prospect.", "This lead could not be converted.")}
               </p>
             )}
             <Button type="submit" loading={convertMutation.isPending} className="col-span-2">
-              {convertMutation.isPending ? "Conversion..." : "Convertir"}
+              {convertMutation.isPending ? t("Conversion...", "Converting...") : t("Convertir", "Convert")}
             </Button>
           </form>
         )}
 
         <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
           <div>
-            <dt className="text-text-muted">Source</dt>
+            <dt className="text-text-muted">{t("Source", "Source")}</dt>
             <dd className="mt-0.5">{lead.source ?? "—"}</dd>
           </div>
           <div>
-            <dt className="text-text-muted">Responsable</dt>
+            <dt className="text-text-muted">{t("Responsable", "Owner")}</dt>
             <dd className="mt-0.5">{lead.ownerId ?? "—"}</dd>
           </div>
           <CustomFieldsDisplay entity="leads" values={lead.customFields} />
@@ -315,12 +328,12 @@ export default function LeadDetailPage() {
 
         {dealsQuery.data && dealsQuery.data.length > 0 && (
           <div className="mt-4 border-t border-border pt-3">
-            <p className="text-sm font-medium text-text">Affaires liées</p>
+            <p className="text-sm font-medium text-text">{t("Affaires liées", "Related deals")}</p>
             <ul className="mt-2 space-y-1">
               {dealsQuery.data.map((deal) => (
                 <li key={deal.id} className="flex items-center justify-between text-sm">
                   <Link href={`/dashboard/crm/deals/${deal.id}`} className="hover:underline">
-                    {deal.estimatedValue ?? "Affaire"}
+                    {deal.estimatedValue ?? t("Affaire", "Deal")}
                   </Link>
                   <Badge>{deal.status}</Badge>
                 </li>
@@ -332,9 +345,9 @@ export default function LeadDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <RelationSection<Task>
-          title="Tâches"
+          title={t("Tâches", "Tasks")}
           query={tasksQuery}
-          emptyLabel="Aucune tâche."
+          emptyLabel={t("Aucune tâche.", "No tasks.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
@@ -347,18 +360,18 @@ export default function LeadDetailPage() {
             >
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Nouvelle tâche..."
-                aria-label="Titre de la tâche"
+                placeholder={t("Nouvelle tâche...", "New task...")}
+                aria-label={t("Titre de la tâche", "Task title")}
                 {...registerTask("title")}
               />
               <Input
                 type="datetime-local"
-                aria-label="Échéance"
+                aria-label={t("Échéance", "Due date")}
                 value={taskDueAt}
                 onChange={(e) => setTaskDueAt(e.target.value)}
               />
               <Button type="submit" size="sm" loading={createTaskMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {taskErrors.title && (
                 <p className="w-full text-xs text-destructive">{taskErrors.title.message}</p>
@@ -367,7 +380,7 @@ export default function LeadDetailPage() {
                 <p className="w-full text-xs text-destructive">
                   {createTaskMutation.error instanceof ApiError
                     ? createTaskMutation.error.message
-                    : "Impossible d'ajouter la tâche."}
+                    : t("Impossible d'ajouter la tâche.", "The task could not be added.")}
                 </p>
               )}
             </form>
@@ -387,7 +400,7 @@ export default function LeadDetailPage() {
                     }
                     onClick={() => completeTaskMutation.mutate(task.id)}
                   >
-                    Terminer
+                    {t("Terminer", "Done")}
                   </Button>
                 )}
               </div>
@@ -395,9 +408,9 @@ export default function LeadDetailPage() {
           )}
         />
         <RelationSection<Note>
-          title="Notes"
+          title={t("Notes", "Notes")}
           query={notesQuery}
-          emptyLabel="Aucune note."
+          emptyLabel={t("Aucune note.", "No notes.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
@@ -405,12 +418,12 @@ export default function LeadDetailPage() {
             >
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Ajouter une note..."
-                aria-label="Contenu de la note"
+                placeholder={t("Ajouter une note...", "Add a note...")}
+                aria-label={t("Contenu de la note", "Note content")}
                 {...registerNote("content")}
               />
               <Button type="submit" size="sm" loading={createNoteMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {noteErrors.content && (
                 <p className="w-full text-xs text-destructive">{noteErrors.content.message}</p>
@@ -419,7 +432,7 @@ export default function LeadDetailPage() {
                 <p className="w-full text-xs text-destructive">
                   {createNoteMutation.error instanceof ApiError
                     ? createNoteMutation.error.message
-                    : "Impossible d'ajouter la note."}
+                    : t("Impossible d'ajouter la note.", "The note could not be added.")}
                 </p>
               )}
             </form>
@@ -427,16 +440,16 @@ export default function LeadDetailPage() {
           renderItem={(note) => <p className="text-text">{note.content}</p>}
         />
         <RelationSection<Activity>
-          title="Activité"
+          title={t("Activité", "Activity")}
           query={activitiesQuery}
-          emptyLabel="Aucune activité récente."
+          emptyLabel={t("Aucune activité récente.", "No recent activity.")}
           header={
             <form
               className="flex flex-wrap items-start gap-2"
               onSubmit={handleActivitySubmit((values) => createActivityMutation.mutate(values))}
             >
               <select
-                aria-label="Type d'activité"
+                aria-label={t("Type d'activité", "Activity type")}
                 className="rounded-md border border-border-input px-2 py-2 text-sm"
                 {...registerActivity("type")}
               >
@@ -448,18 +461,18 @@ export default function LeadDetailPage() {
               </select>
               <Input
                 className="min-w-0 flex-1"
-                placeholder="Détails (optionnel)"
-                aria-label="Détails de l'activité"
+                placeholder={t("Détails (optionnel)", "Details (optional)")}
+                aria-label={t("Détails de l'activité", "Activity details")}
                 {...registerActivity("content")}
               />
               <Button type="submit" size="sm" loading={createActivityMutation.isPending}>
-                Ajouter
+                {t("Ajouter", "Add")}
               </Button>
               {createActivityMutation.isError && (
                 <p className="w-full text-xs text-destructive">
                   {createActivityMutation.error instanceof ApiError
                     ? createActivityMutation.error.message
-                    : "Impossible d'ajouter l'activité."}
+                    : t("Impossible d'ajouter l'activité.", "The activity could not be added.")}
                 </p>
               )}
             </form>
@@ -471,7 +484,7 @@ export default function LeadDetailPage() {
                 {activity.content ? ` — ${activity.content}` : ""}
               </span>
               <span className="text-text-muted">
-                {new Date(activity.createdAt).toLocaleString("fr-FR")}
+                {new Date(activity.createdAt).toLocaleString(intlLocale(locale))}
               </span>
             </div>
           )}

@@ -18,17 +18,18 @@ import { Badge, Button, Card, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
+import { useT } from "@/lib/dashboard-locale";
 
 interface MemberRow {
   id: string;
   userId: { id: string; email: string; firstName?: string; lastName?: string };
 }
 
-const STATUS_LABELS: Record<TicketStatus, string> = {
-  open: "Ouvert",
-  in_progress: "En cours",
-  resolved: "Résolu",
-  closed: "Fermé",
+const STATUS_LABELS: Record<TicketStatus, [string, string]> = {
+  open: ["Ouvert", "Open"],
+  in_progress: ["En cours", "In progress"],
+  resolved: ["Résolu", "Resolved"],
+  closed: ["Fermé", "Closed"],
 };
 
 const STATUS_VARIANTS: Record<TicketStatus, "default" | "success" | "warning"> = {
@@ -38,11 +39,11 @@ const STATUS_VARIANTS: Record<TicketStatus, "default" | "success" | "warning"> =
   closed: "default",
 };
 
-const PRIORITY_LABELS: Record<TicketPriority, string> = {
-  low: "Basse",
-  medium: "Normale",
-  high: "Haute",
-  urgent: "Urgente",
+const PRIORITY_LABELS: Record<TicketPriority, [string, string]> = {
+  low: ["Basse", "Low"],
+  medium: ["Normale", "Normal"],
+  high: ["Haute", "High"],
+  urgent: ["Urgente", "Urgent"],
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -57,6 +58,7 @@ function memberName(member: MemberRow): string {
 }
 
 export default function TicketDetailPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const [editing, setEditing] = useState(false);
   const [assigneeId, setAssigneeId] = useState("");
@@ -116,7 +118,7 @@ export default function TicketDetailPage() {
   });
 
   if (isLoading || !ticket) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
 
   const assignee = members?.find((m) => m.id === ticket.assigneeMembershipId);
@@ -127,8 +129,8 @@ export default function TicketDetailPage() {
         <div>
           <h1 className="text-xl font-semibold">{ticket.subject}</h1>
           <div className="mt-1 flex items-center gap-2">
-            <Badge variant={STATUS_VARIANTS[ticket.status]}>{STATUS_LABELS[ticket.status]}</Badge>
-            <Badge>{PRIORITY_LABELS[ticket.priority]}</Badge>
+            <Badge variant={STATUS_VARIANTS[ticket.status]}>{t(...STATUS_LABELS[ticket.status])}</Badge>
+            <Badge>{t(...PRIORITY_LABELS[ticket.priority])}</Badge>
           </div>
         </div>
         <div className="flex gap-2">
@@ -138,7 +140,7 @@ export default function TicketDetailPage() {
               loading={transitionMutation.isPending}
               onClick={() => transitionMutation.mutate("resolve")}
             >
-              Résoudre
+              {t("Résoudre", "Resolve")}
             </Button>
           )}
           {ticket.status !== "closed" && (
@@ -147,7 +149,7 @@ export default function TicketDetailPage() {
               loading={transitionMutation.isPending}
               onClick={() => transitionMutation.mutate("close")}
             >
-              Fermer
+              {t("Fermer", "Close")}
             </Button>
           )}
           {ticket.status === "closed" && (
@@ -156,7 +158,7 @@ export default function TicketDetailPage() {
               loading={transitionMutation.isPending}
               onClick={() => transitionMutation.mutate("reopen")}
             >
-              Réouvrir
+              {t("Réouvrir", "Reopen")}
             </Button>
           )}
         </div>
@@ -164,52 +166,55 @@ export default function TicketDetailPage() {
 
       {transitionMutation.isError && (
         <p className="text-sm text-destructive">
-          {errorMessage(transitionMutation.error, "Action impossible.")}
+          {errorMessage(transitionMutation.error, t("Action impossible.", "That action is not possible."))}
         </p>
       )}
 
       <Card className="p-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-text">Détails</p>
+          <p className="text-sm font-medium text-text">{t("Détails", "Details")}</p>
           <button
             onClick={() => setEditing((v) => !v)}
             className="text-xs font-medium text-text underline"
           >
-            {editing ? "Annuler" : "Modifier"}
+            {editing ? t("Annuler", "Cancel") : t("Modifier", "Edit")}
           </button>
         </div>
 
         {!editing ? (
           <div className="mt-3 space-y-2 text-sm">
-            <p className="text-text-muted">{ticket.description || "Aucune description."}</p>
+            <p className="text-text-muted">{ticket.description || t("Aucune description.", "No description.")}</p>
           </div>
         ) : (
           <form
             onSubmit={handleSubmit((values) => updateMutation.mutate(values))}
             className="mt-3 space-y-3"
           >
-            <Input placeholder="Sujet" {...register("subject")} />
+            <Input placeholder={t("Sujet", "Subject")} {...register("subject")} />
             {errors.subject && <p className="text-xs text-destructive">{errors.subject.message}</p>}
             <Select {...register("priority")}>
               {TICKET_PRIORITIES.map((priority) => (
                 <option key={priority} value={priority}>
-                  {PRIORITY_LABELS[priority]}
+                  {t(...PRIORITY_LABELS[priority])}
                 </option>
               ))}
             </Select>
             <textarea
-              placeholder="Description"
+              placeholder={t("Description", "Description")}
               className="w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               rows={3}
               {...register("description")}
             />
             {updateMutation.isError && (
               <p className="text-sm text-destructive">
-                {errorMessage(updateMutation.error, "Impossible de mettre à jour ce ticket.")}
+                {errorMessage(updateMutation.error, t(
+                  "Impossible de mettre à jour ce ticket.",
+                  "This ticket could not be updated.",
+                ))}
               </p>
             )}
             <Button type="submit" loading={updateMutation.isPending}>
-              Enregistrer
+              {t("Enregistrer", "Save")}
             </Button>
           </form>
         )}
@@ -220,7 +225,7 @@ export default function TicketDetailPage() {
       </Card>
 
       <Card className="p-4">
-        <p className="text-sm font-medium text-text">Contact</p>
+        <p className="text-sm font-medium text-text">{t("Contact", "Contact")}</p>
         {contact && (
           <Link
             href={`/dashboard/crm/${contact.id}`}
@@ -234,17 +239,17 @@ export default function TicketDetailPage() {
       </Card>
 
       <Card className="p-4">
-        <p className="text-sm font-medium text-text">Assigné à</p>
+        <p className="text-sm font-medium text-text">{t("Assigné à", "Assigned to")}</p>
         <div className="mt-2 flex items-center gap-2">
           <p className="text-sm text-text-muted">
-            {assignee ? memberName(assignee) : "Non assigné"}
+            {assignee ? memberName(assignee) : t("Non assigné", "Unassigned")}
           </p>
           <Select
             value={assigneeId}
             onChange={(e) => setAssigneeId(e.target.value)}
             className="ml-auto"
           >
-            <option value="">Sélectionner un membre</option>
+            <option value="">{t("Sélectionner un membre", "Select a member")}</option>
             {members?.map((member) => (
               <option key={member.id} value={member.id}>
                 {memberName(member)}
@@ -258,12 +263,15 @@ export default function TicketDetailPage() {
             loading={assignMutation.isPending}
             onClick={() => assignMutation.mutate(assigneeId)}
           >
-            Assigner
+            {t("Assigner", "Assign")}
           </Button>
         </div>
         {assignMutation.isError && (
           <p className="mt-2 text-xs text-destructive">
-            {errorMessage(assignMutation.error, "Impossible d'assigner ce ticket.")}
+            {errorMessage(assignMutation.error, t(
+              "Impossible d'assigner ce ticket.",
+              "This ticket could not be assigned.",
+            ))}
           </p>
         )}
       </Card>

@@ -153,10 +153,7 @@ export default function WarehousesPage() {
                 <tr key={warehouse.id}>
                   <td className="px-4 py-2 font-medium">{warehouse.name}</td>
                   <td className="px-4 py-2 text-text-muted">{warehouse.address ?? "—"}</td>
-                  <td className="px-4 py-2">{warehouse.isDefault && <Badge>{t(
-                    "Par défaut",
-                    "Default",
-                  )}</Badge>}</td>
+                  <td className="px-4 py-2">{warehouse.isDefault && <Badge>{t("Par défaut", "Default")}</Badge>}</td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-2">
                       <Button variant="secondary" size="sm" onClick={() => startEdit(warehouse)}>

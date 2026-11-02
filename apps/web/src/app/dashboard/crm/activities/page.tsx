@@ -7,16 +7,19 @@ import type { Activity, Contact, Deal, Lead } from "@korva/types";
 import { Badge, Card, Pagination } from "@korva/ui";
 import { apiClient } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const ENTITY_LABELS: Record<Activity["entity"], string> = {
-  contact: "Client",
-  lead: "Prospect",
-  deal: "Affaire",
+const ENTITY_LABELS: Record<Activity["entity"], [string, string]> = {
+  contact: ["Client", "Customer"],
+  lead: ["Prospect", "Lead"],
+  deal: ["Affaire", "Deal"],
 };
 
 export default function ActivitiesPage() {
   const [page, setPage] = useState(1);
   const authReady = useAuthReady();
+  const locale = useDashboardLocale();
+  const t = useT();
 
   const { data: activitiesPage, isLoading, isError, refetch } = useQuery({
     queryKey: ["activities", "recent", page],
@@ -77,17 +80,23 @@ export default function ActivitiesPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Activités</h1>
+        <h1 className="text-2xl font-semibold">{t("Activités", "Activities")}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Appels, e-mails, rendez-vous et notes enregistrés sur vos clients et prospects.
+          {t(
+            "Appels, e-mails, rendez-vous et notes enregistrés sur vos clients et prospects.",
+            "Calls, e-mails, meetings and notes recorded on your customers and leads.",
+          )}
         </p>
       </div>
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les activités.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les activités.",
+            "Activities could not be loaded.",
+          )}</p>
           <button onClick={() => refetch()} className="mt-2 text-sm font-medium text-text underline">
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -98,24 +107,24 @@ export default function ActivitiesPage() {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Contact</th>
-                  <th className="px-4 py-2">Détails</th>
-                  <th className="px-4 py-2">Date</th>
+                  <th className="px-4 py-2">{t("Type", "Type")}</th>
+                  <th className="px-4 py-2">{t("Contact", "Contact")}</th>
+                  <th className="px-4 py-2">{t("Détails", "Details")}</th>
+                  <th className="px-4 py-2">{t("Date", "Date")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {isLoading && (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                      Chargement...
+                      {t("Chargement...", "Loading...")}
                     </td>
                   </tr>
                 )}
                 {!isLoading && activities?.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                      Aucune activité enregistrée pour le moment.
+                      {t("Aucune activité enregistrée pour le moment.", "No activities recorded yet.")}
                     </td>
                   </tr>
                 )}
@@ -127,7 +136,7 @@ export default function ActivitiesPage() {
                         <div className="flex items-center gap-2">
                           <Badge>{activity.type}</Badge>
                           <span className="text-xs text-text-muted">
-                            {ENTITY_LABELS[activity.entity]}
+                            {t(...ENTITY_LABELS[activity.entity])}
                           </span>
                         </div>
                       </td>
@@ -141,7 +150,7 @@ export default function ActivitiesPage() {
                       </td>
                       <td className="px-4 py-2 text-text-muted">{activity.content ?? "—"}</td>
                       <td className="px-4 py-2 text-text-muted">
-                        {new Date(activity.createdAt).toLocaleString("fr-FR")}
+                        {new Date(activity.createdAt).toLocaleString(intlLocale(locale))}
                       </td>
                     </tr>
                   );

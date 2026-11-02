@@ -18,6 +18,7 @@ import { Button, Card, Input, Pagination, Select, cn } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 function usePipelines(enabled: boolean) {
   return useQuery({
@@ -28,6 +29,8 @@ function usePipelines(enabled: boolean) {
 }
 
 export default function DealsPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
@@ -59,11 +62,11 @@ export default function DealsPage() {
       apiClient.post<Pipeline>(
         "/pipelines",
         createPipelineSchema.parse({
-          name: "Ventes",
+          name: t("Ventes", "Sales"),
           isDefault: true,
           stages: [
-            { name: "Nouveau", order: 0 },
-            { name: "Gagné", order: 1 },
+            { name: t("Nouveau", "New"), order: 0 },
+            { name: t("Gagné", "Won"), order: 1 },
           ],
         }),
       ),
@@ -145,9 +148,12 @@ export default function DealsPage() {
   if (!pipelinesLoading && pipelines?.length === 0) {
     return (
       <Card className="p-6 text-sm text-text-muted">
-        <p className="mb-3">Aucun pipeline n&apos;a encore été créé pour gérer vos affaires.</p>
+        <p className="mb-3">{t(
+          "Aucun pipeline n'a encore été créé pour gérer vos affaires.",
+          "No pipeline has been created to manage your deals yet.",
+        )}</p>
         <Button onClick={() => seedPipelineMutation.mutate()} loading={seedPipelineMutation.isPending}>
-          {seedPipelineMutation.isPending ? "Création..." : "Créer un pipeline par défaut"}
+          {seedPipelineMutation.isPending ? t("Création...", "Creating...") : t("Créer un pipeline par défaut", "Create a default pipeline")}
         </Button>
       </Card>
     );
@@ -157,7 +163,7 @@ export default function DealsPage() {
     <div className="space-y-4">
       <div className="flex justify-end">
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouvelle affaire"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouvelle affaire", "New deal")}
         </Button>
       </div>
 
@@ -170,7 +176,7 @@ export default function DealsPage() {
         >
           <Select className="col-span-2" defaultValue="" {...register("contactId")}>
             <option value="" disabled>
-              Choisir un contact
+              {t("Choisir un contact", "Choose a contact")}
             </option>
             {contacts?.map((c) => (
               <option key={c.id} value={c.id}>
@@ -194,14 +200,14 @@ export default function DealsPage() {
           </Select>
           <Input
             type="number"
-            placeholder="Valeur estimée"
+            placeholder={t("Valeur estimée", "Estimated value")}
             {...register("estimatedValue", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
             })}
           />
           <Input
             type="number"
-            placeholder="Probabilité (%)"
+            placeholder={t("Probabilité (%)", "Probability (%)")}
             {...register("probability", {
               setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
             })}
@@ -216,18 +222,18 @@ export default function DealsPage() {
 
           {createDealMutation.isError && (
             <p className="col-span-2 text-sm text-destructive">
-              {createDealMutation.error instanceof ApiError ? createDealMutation.error.message : "Erreur"}
+              {createDealMutation.error instanceof ApiError ? createDealMutation.error.message : t("Erreur", "Error")}
             </p>
           )}
           <Button type="submit" loading={createDealMutation.isPending} className="col-span-2">
-            {createDealMutation.isPending ? "Création..." : "Créer l'affaire"}
+            {createDealMutation.isPending ? t("Création...", "Creating...") : t("Créer l'affaire", "Create the deal")}
           </Button>
         </form>
       )}
 
       {pipelines && pipelines.length > 1 && (
         <label className="flex items-center gap-2 text-sm text-text-muted">
-          Pipeline
+          {t("Pipeline", "Pipeline")}
           <Select
             value={selectedPipeline?.id ?? ""}
             onChange={(e) => setSelectedPipelineId(e.target.value)}
@@ -242,9 +248,9 @@ export default function DealsPage() {
         </label>
       )}
 
-      {dealsLoading && <p className="text-sm text-text-muted">Chargement...</p>}
+      {dealsLoading && <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
       {!dealsLoading && deals?.length === 0 && (
-        <p className="text-sm text-text-muted">Aucune affaire.</p>
+        <p className="text-sm text-text-muted">{t("Aucune affaire.", "No deals.")}</p>
       )}
 
       {/* Kanban board: one column per stage of the currently-selected pipeline. Cards are
@@ -303,7 +309,7 @@ export default function DealsPage() {
                           {deal.status === "open" && (
                             <>
                               <select
-                                aria-label={`Étape de ${contactName(deal)}`}
+                                aria-label={t(`Étape de ${contactName(deal)}`, `Stage for ${contactName(deal)}`)}
                                 value={deal.stageId}
                                 disabled={isRowPending || !pipeline}
                                 onChange={(e) =>
@@ -325,7 +331,7 @@ export default function DealsPage() {
                                   disabled={isRowPending}
                                   onClick={() => winMutation.mutate(deal.id)}
                                 >
-                                  Gagner
+                                  {t("Gagner", "Win")}
                                 </Button>
                                 <Button
                                   variant="secondary"
@@ -333,11 +339,14 @@ export default function DealsPage() {
                                   className="flex-1"
                                   disabled={isRowPending}
                                   onClick={() => {
-                                    const lossReason = window.prompt("Raison de la perte (optionnel)") ?? undefined;
+                                    const lossReason = window.prompt(t(
+                                      "Raison de la perte (optionnel)",
+                                      "Reason lost (optional)",
+                                    )) ?? undefined;
                                     loseMutation.mutate({ id: deal.id, lossReason });
                                   }}
                                 >
-                                  Perdre
+                                  {t("Perdre", "Lose")}
                                 </Button>
                               </div>
                             </>
@@ -350,7 +359,7 @@ export default function DealsPage() {
                               disabled={isRowPending}
                               onClick={() => reopenMutation.mutate(deal.id)}
                             >
-                              Rouvrir
+                              {t("Rouvrir", "Reopen")}
                             </Button>
                           )}
                           {((loseMutation.isError && loseMutation.variables?.id === deal.id) ||
@@ -358,7 +367,7 @@ export default function DealsPage() {
                             (moveStageMutation.isError && moveStageMutation.variables?.id === deal.id) ||
                             (reopenMutation.isError && reopenMutation.variables === deal.id)) && (
                             <p className="text-xs text-destructive">
-                              Impossible de mettre à jour l&apos;affaire.
+                              {t("Impossible de mettre à jour l'affaire.", "The deal could not be updated.")}
                             </p>
                           )}
                         </div>

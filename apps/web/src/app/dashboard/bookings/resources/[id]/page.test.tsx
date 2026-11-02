@@ -61,7 +61,10 @@ describe("ResourceDetailPage", () => {
     renderWithProviders(<ResourceDetailPage />);
 
     expect(await screen.findByRole("heading", { name: "Salle 1" })).toBeInTheDocument();
-    expect(screen.getByText("room · capacité 10")).toBeInTheDocument();
+    // The kind reads as words now, not the API key "room".
+    expect(screen.getByText("Salle 1").nextElementSibling).toHaveTextContent(
+      "Lieu (salle, cabine, table, chambre) · capacité 10",
+    );
     expect(screen.getByText("Active")).toBeInTheDocument();
   });
 
