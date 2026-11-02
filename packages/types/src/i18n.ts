@@ -7,6 +7,7 @@ import {
 } from "./business-models.ts";
 import type { PlanFeature } from "./plan-tiers.ts";
 import type { ResourceKind } from "./booking.ts";
+import type { PayoutStatus, WalletEntryKind } from "./wallet.ts";
 import type { VerticalTemplate } from "./verticals.ts";
 
 /**
@@ -274,6 +275,26 @@ export const TRADE_TOOL_LABELS_EN: Record<TradeTool, string> = {
   orders: "Orders",
   returns: "Returns",
   bookings: "Bookings",
+};
+
+export const WALLET_ENTRY_LABELS_EN: Record<WalletEntryKind, string> = {
+  sale: "Sale paid online",
+  provider_fee: "Payment fee (GeniusPay)",
+  commission: "KORVA commission",
+  payout: "Withdrawal",
+  payout_fee: "Withdrawal fee",
+  payout_reversal: "Withdrawal cancelled — amount returned",
+  subscription: "KORVA plan paid from the balance",
+  subscription_reversal: "KORVA plan — amount returned",
+  adjustment: "Correction by KORVA",
+};
+
+export const PAYOUT_STATUS_LABELS_EN: Record<PayoutStatus, string> = {
+  requested: "Requested",
+  processing: "Being sent",
+  completed: "Paid out",
+  failed: "Failed — amount returned",
+  rejected: "Rejected — amount returned",
 };
 
 export const RESOURCE_KIND_LABELS_EN: Record<ResourceKind, string> = {

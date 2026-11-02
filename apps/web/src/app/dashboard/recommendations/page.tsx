@@ -6,18 +6,19 @@ import type { ActionCenterSeverity, Recommendation, RecommendationStatus } from 
 import { Badge, Button, Card, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<RecommendationStatus, string> = {
-  open: "À traiter",
-  dismissed: "Ignorée",
-  resolved: "Résolue",
+const STATUS_LABELS: Record<RecommendationStatus, [string, string]> = {
+  open: ["À traiter", "To handle"],
+  dismissed: ["Ignorée", "Dismissed"],
+  resolved: ["Résolue", "Resolved"],
 };
 
-const SEVERITY_LABELS: Record<ActionCenterSeverity, string> = {
-  urgent: "Urgent",
-  attention: "À surveiller",
-  opportunity: "Opportunité",
-  recommendation: "Recommandation",
+const SEVERITY_LABELS: Record<ActionCenterSeverity, [string, string]> = {
+  urgent: ["Urgent", "Urgent"],
+  attention: ["À surveiller", "To watch"],
+  opportunity: ["Opportunité", "Opportunity"],
+  recommendation: ["Recommandation", "Recommendation"],
 };
 
 const SEVERITY_BADGE_VARIANTS: Record<
@@ -30,14 +31,16 @@ const SEVERITY_BADGE_VARIANTS: Record<
   recommendation: "default",
 };
 
-const STATUS_FILTERS: { value: RecommendationStatus | "all"; label: string }[] = [
-  { value: "open", label: "À traiter" },
-  { value: "resolved", label: "Résolues" },
-  { value: "dismissed", label: "Ignorées" },
-  { value: "all", label: "Toutes" },
+const STATUS_FILTERS: { value: RecommendationStatus | "all"; label: [string, string] }[] = [
+  { value: "open", label: ["À traiter", "To handle"] },
+  { value: "resolved", label: ["Résolues", "Resolved"] },
+  { value: "dismissed", label: ["Ignorées", "Dismissed"] },
+  { value: "all", label: ["Toutes", "All"] },
 ];
 
 export default function RecommendationsPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
   const [page, setPage] = useState(1);
@@ -77,9 +80,12 @@ export default function RecommendationsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Recommandations</h1>
+        <h1 className="text-2xl font-semibold">{t("Recommandations", "Recommendations")}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Ce que KORVA a remarqué dans votre activité et recommande de traiter.
+          {t(
+            "Ce que KORVA a remarqué dans votre activité et recommande de traiter.",
+            "What KORVA has noticed in your business and recommends you deal with.",
+          )}
         </p>
       </div>
 
@@ -97,7 +103,7 @@ export default function RecommendationsPage() {
                 : "text-text-muted hover:bg-surface-muted"
             }`}
           >
-            {filter.label}
+            {t(...filter.label)}
           </button>
         ))}
       </div>
@@ -107,13 +113,13 @@ export default function RecommendationsPage() {
           <p className="text-sm text-destructive">
             {error instanceof ApiError
               ? error.message
-              : "Impossible de charger les recommandations."}
+              : t("Impossible de charger les recommandations.", "Recommendations could not be loaded.")}
           </p>
           <button
             onClick={() => void refetch()}
             className="mt-2 text-sm font-medium text-text underline"
           >
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
@@ -121,11 +127,11 @@ export default function RecommendationsPage() {
       {!isError && (
         <Card className="divide-y divide-border overflow-hidden">
           {isLoading && (
-            <p className="px-4 py-6 text-center text-sm text-text-muted">Chargement...</p>
+            <p className="px-4 py-6 text-center text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>
           )}
           {!isLoading && recommendations?.length === 0 && (
             <p className="px-4 py-6 text-center text-sm text-text-muted">
-              Aucune recommandation pour le moment.
+              {t("Aucune recommandation pour le moment.", "No recommendations yet.")}
             </p>
           )}
           {recommendations?.map((recommendation) => (
@@ -135,14 +141,14 @@ export default function RecommendationsPage() {
                   <p className="text-sm font-medium text-text">{recommendation.title}</p>
                   {recommendation.severity && (
                     <Badge variant={SEVERITY_BADGE_VARIANTS[recommendation.severity]}>
-                      {SEVERITY_LABELS[recommendation.severity]}
+                      {t(...SEVERITY_LABELS[recommendation.severity])}
                     </Badge>
                   )}
-                  <Badge>{STATUS_LABELS[recommendation.status]}</Badge>
+                  <Badge>{t(...STATUS_LABELS[recommendation.status])}</Badge>
                 </div>
                 <p className="mt-0.5 text-sm text-text-muted">{recommendation.description}</p>
                 <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
-                  <span>{new Date(recommendation.createdAt).toLocaleString("fr-FR")}</span>
+                  <span>{new Date(recommendation.createdAt).toLocaleString(intlLocale(locale))}</span>
                   {recommendation.impact && <span>· {recommendation.impact}</span>}
                 </div>
               </div>
@@ -154,7 +160,7 @@ export default function RecommendationsPage() {
                     onClick={() => resolveMutation.mutate(recommendation.id)}
                     loading={resolveMutation.isPending}
                   >
-                    Résolue
+                    {t("Résolue", "Resolved")}
                   </Button>
                   <Button
                     variant="ghost"
@@ -162,7 +168,7 @@ export default function RecommendationsPage() {
                     onClick={() => dismissMutation.mutate(recommendation.id)}
                     loading={dismissMutation.isPending}
                   >
-                    Ignorer
+                    {t("Ignorer", "Dismiss")}
                   </Button>
                 </div>
               )}

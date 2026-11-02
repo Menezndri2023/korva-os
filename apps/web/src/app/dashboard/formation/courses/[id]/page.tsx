@@ -27,6 +27,7 @@ import { COHORT_STATUSES } from "@korva/types";
 import { Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 interface MemberOption {
   id: string;
@@ -39,16 +40,16 @@ function memberName(member: MemberOption): string {
   );
 }
 
-const COURSE_STATUS_LABELS: Record<CourseStatus, string> = {
-  draft: "Brouillon",
-  published: "Publié",
-  archived: "Archivé",
+const COURSE_STATUS_LABELS: Record<CourseStatus, [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  published: ["Publié", "Published"],
+  archived: ["Archivé", "Archived"],
 };
-const COHORT_STATUS_LABELS: Record<CohortStatus, string> = {
-  upcoming: "À venir",
-  active: "En cours",
-  completed: "Terminée",
-  cancelled: "Annulée",
+const COHORT_STATUS_LABELS: Record<CohortStatus, [string, string]> = {
+  upcoming: ["À venir", "Upcoming"],
+  active: ["En cours", "In progress"],
+  completed: ["Terminée", "Completed"],
+  cancelled: ["Annulée", "Cancelled"],
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -56,6 +57,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function CourseDetailPage() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
@@ -176,13 +178,16 @@ export default function CourseDetailPage() {
   });
 
   if (courseQuery.isLoading) {
-    return <p className="text-sm text-text-muted">Chargement...</p>;
+    return <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>;
   }
   if (courseQuery.isError || !courseQuery.data) {
     return (
       <Card className="p-6">
         <p className="text-sm text-destructive">
-          {errorMessage(courseQuery.error, "Impossible de charger ce programme.")}
+          {errorMessage(courseQuery.error, t(
+            "Impossible de charger ce programme.",
+            "This programme could not be loaded.",
+          ))}
         </p>
       </Card>
     );
@@ -206,14 +211,14 @@ export default function CourseDetailPage() {
           >
             {(["draft", "published", "archived"] as const).map((status) => (
               <option key={status} value={status}>
-                {COURSE_STATUS_LABELS[status]}
+                {t(...COURSE_STATUS_LABELS[status])}
               </option>
             ))}
           </select>
         </div>
 
         <div className="mt-4">
-          <p className="text-sm font-medium text-text">Modules</p>
+          <p className="text-sm font-medium text-text">{t("Modules", "Modules")}</p>
           <ol className="mt-2 space-y-1 text-sm text-text-muted">
             {course.modules.map((m, index) => (
               <li key={index}>
@@ -229,9 +234,9 @@ export default function CourseDetailPage() {
 
       <div>
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Promotions</h2>
+          <h2 className="text-lg font-semibold">{t("Promotions", "Cohorts")}</h2>
           <Button size="sm" onClick={() => setShowCohortForm((v) => !v)}>
-            {showCohortForm ? "Annuler" : "Nouvelle promotion"}
+            {showCohortForm ? t("Annuler", "Cancel") : t("Nouvelle promotion", "New cohort")}
           </Button>
         </div>
 
@@ -245,16 +250,16 @@ export default function CourseDetailPage() {
             )}
             className="mt-3 space-y-3 rounded-lg border border-border bg-surface p-4"
           >
-            <Input placeholder="Nom de la promotion" {...registerCohort("name")} />
+            <Input placeholder={t("Nom de la promotion", "Cohort name")} {...registerCohort("name")} />
             {cohortErrors.name && (
               <p className="text-xs text-destructive">{cohortErrors.name.message}</p>
             )}
-            <Input type="date" aria-label="Date de début" {...registerCohort("startDate", {
+            <Input type="date" aria-label={t("Date de début", "Start date")} {...registerCohort("startDate", {
               setValueAs: (value: string) => (value ? new Date(value).toISOString() : value),
             })} />
 
             <div>
-              <p className="text-sm font-medium text-text">Apprenants inscrits</p>
+              <p className="text-sm font-medium text-text">{t("Apprenants inscrits", "Enrolled learners")}</p>
               <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
                 {contacts?.map((c) => (
                   <label key={c.id} className="flex items-center gap-2 text-sm">
@@ -271,18 +276,21 @@ export default function CourseDetailPage() {
 
             {createCohortMutation.isError && (
               <p className="text-sm text-destructive">
-                {errorMessage(createCohortMutation.error, "Impossible de créer cette promotion.")}
+                {errorMessage(createCohortMutation.error, t(
+                  "Impossible de créer cette promotion.",
+                  "This cohort could not be created.",
+                ))}
               </p>
             )}
             <Button type="submit" loading={createCohortMutation.isPending}>
-              Créer la promotion
+              {t("Créer la promotion", "Create the cohort")}
             </Button>
           </form>
         )}
 
         <div className="mt-3 space-y-3">
           {cohortsQuery.data?.data.length === 0 && (
-            <Card className="p-4 text-center text-sm text-text-muted">Aucune promotion.</Card>
+            <Card className="p-4 text-center text-sm text-text-muted">{t("Aucune promotion.", "No cohorts.")}</Card>
           )}
           {cohortsQuery.data?.data.map((cohort) => (
             <CohortCard
@@ -303,9 +311,9 @@ export default function CourseDetailPage() {
 
       <div>
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Quiz</h2>
+          <h2 className="text-lg font-semibold">{t("Quiz", "Quiz")}</h2>
           <Button size="sm" onClick={() => setShowQuizForm((v) => !v)}>
-            {showQuizForm ? "Annuler" : "Nouveau quiz"}
+            {showQuizForm ? t("Annuler", "Cancel") : t("Nouveau quiz", "New quiz")}
           </Button>
         </div>
 
@@ -314,7 +322,7 @@ export default function CourseDetailPage() {
             onSubmit={handleQuizSubmit((values) => createQuizMutation.mutate(values))}
             className="mt-3 space-y-3 rounded-lg border border-border bg-surface p-4"
           >
-            <Input placeholder="Titre du quiz" {...registerQuiz("title")} />
+            <Input placeholder={t("Titre du quiz", "Quiz title")} {...registerQuiz("title")} />
             {quizErrors.title && (
               <p className="text-xs text-destructive">{quizErrors.title.message}</p>
             )}
@@ -326,7 +334,10 @@ export default function CourseDetailPage() {
                 setValueAs: (v: string) => (v === "" ? undefined : Number(v)),
               })}
             >
-              <option value="">Évaluation finale (tout le programme)</option>
+              <option value="">{t(
+                "Évaluation finale (tout le programme)",
+                "Final assessment (whole programme)",
+              )}</option>
               {course.modules.map((m, index) => (
                 <option key={index} value={index}>
                   Module {index} — {m.title}
@@ -338,7 +349,7 @@ export default function CourseDetailPage() {
               type="number"
               min={0}
               max={100}
-              aria-label="Score de réussite (%)"
+              aria-label={t("Score de réussite (%)", "Pass mark (%)")}
               {...registerQuiz("passingScorePercent", { valueAsNumber: true })}
             />
 
@@ -346,7 +357,7 @@ export default function CourseDetailPage() {
               {questionFields.map((field, qIndex) => (
                 <div key={field.id} className="space-y-2 rounded-md border border-border p-3">
                   <Input
-                    placeholder="Question"
+                    placeholder={t("Question", "Question")}
                     {...registerQuiz(`questions.${qIndex}.text`)}
                   />
                   {[0, 1].map((optIndex) => (
@@ -357,7 +368,7 @@ export default function CourseDetailPage() {
                     />
                   ))}
                   <label className="flex items-center gap-2 text-xs text-text-muted">
-                    Bonne réponse (index) :
+                    {t("Bonne réponse (index) :", "Correct answer (index):")}
                     <input
                       type="number"
                       min={0}
@@ -373,7 +384,7 @@ export default function CourseDetailPage() {
                       onClick={() => removeQuestion(qIndex)}
                       className="text-xs text-destructive hover:underline"
                     >
-                      Retirer cette question
+                      {t("Retirer cette question", "Remove this question")}
                     </button>
                   )}
                 </div>
@@ -385,31 +396,36 @@ export default function CourseDetailPage() {
                 }
                 className="text-sm text-text underline"
               >
-                + Ajouter une question
+                {t("+ Ajouter une question", "+ Add a question")}
               </button>
             </div>
 
             {createQuizMutation.isError && (
               <p className="text-sm text-destructive">
-                {errorMessage(createQuizMutation.error, "Impossible de créer ce quiz.")}
+                {errorMessage(createQuizMutation.error, t(
+                  "Impossible de créer ce quiz.",
+                  "This quiz could not be created.",
+                ))}
               </p>
             )}
             <Button type="submit" loading={createQuizMutation.isPending}>
-              Créer le quiz
+              {t("Créer le quiz", "Create the quiz")}
             </Button>
           </form>
         )}
 
         <div className="mt-3 space-y-2">
           {quizzesQuery.data?.length === 0 && (
-            <Card className="p-4 text-center text-sm text-text-muted">Aucun quiz.</Card>
+            <Card className="p-4 text-center text-sm text-text-muted">{t("Aucun quiz.", "No quizzes.")}</Card>
           )}
           {quizzesQuery.data?.map((quiz) => (
             <Card key={quiz.id} className="p-3 text-sm">
               <p className="font-medium text-text">{quiz.title}</p>
               <p className="text-xs text-text-muted">
-                {quiz.questions.length} question(s) — seuil de réussite{" "}
-                {quiz.passingScorePercent}%
+                {t(
+                  `${quiz.questions.length} question(s) — seuil de réussite ${quiz.passingScorePercent}%`,
+                  `${quiz.questions.length} question(s) — pass mark ${quiz.passingScorePercent}%`,
+                )}
               </p>
             </Card>
           ))}
@@ -436,6 +452,8 @@ function CohortCard({
   scheduling: boolean;
   onToggleScheduling: () => void;
 }) {
+  const locale = useDashboardLocale();
+  const t = useT();
   const queryClient = useQueryClient();
   const authReady = useAuthReady();
 
@@ -481,8 +499,8 @@ function CohortCard({
         <div>
           <p className="font-medium text-text">{cohort.name}</p>
           <p className="text-xs text-text-muted">
-            {cohort.enrolledContactIds.length} apprenant(s) —{" "}
-            {new Date(cohort.startDate).toLocaleDateString("fr-FR")}
+            {t(`${cohort.enrolledContactIds.length} apprenant(s)`, `${cohort.enrolledContactIds.length} learner(s)`)} —{" "}
+            {new Date(cohort.startDate).toLocaleDateString(intlLocale(locale))}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -493,27 +511,27 @@ function CohortCard({
           >
             {COHORT_STATUSES.map((status) => (
               <option key={status} value={status}>
-                {COHORT_STATUS_LABELS[status]}
+                {t(...COHORT_STATUS_LABELS[status])}
               </option>
             ))}
           </select>
           <Button size="sm" variant="secondary" onClick={onToggleScheduling}>
-            {scheduling ? "Fermer" : "Planifier une session"}
+            {scheduling ? t("Fermer", "Close") : t("Planifier une session", "Schedule a session")}
           </Button>
         </div>
       </div>
 
       <p className="mt-2 text-xs text-text-muted">
-        {cohort.enrolledContactIds.map(contactName).join(", ") || "Aucun apprenant"}
+        {cohort.enrolledContactIds.map(contactName).join(", ") || t("Aucun apprenant", "No learners")}
       </p>
 
       {sessionsQuery.data && sessionsQuery.data.length > 0 && (
         <ul className="mt-2 space-y-1 text-xs text-text-muted">
           {sessionsQuery.data.map((session) => (
             <li key={session.id}>
-              Module {session.moduleIndex} —{" "}
-              {new Date(session.startAt).toLocaleString("fr-FR")} (
-              {session.bookingIds.length} inscrit(s))
+              {t("Module", "Module")} {session.moduleIndex} —{" "}
+              {new Date(session.startAt).toLocaleString(intlLocale(locale))} (
+              {t(`${session.bookingIds.length} inscrit(s)`, `${session.bookingIds.length} enrolled`)})
               {instructorName(session.instructorMembershipId) &&
                 ` — ${instructorName(session.instructorMembershipId)}`}
             </li>
@@ -533,7 +551,7 @@ function CohortCard({
             {course.modules.map((m, index) => (
               <option key={index} value={index} disabled={scheduledModuleIndexes.has(index)}>
                 Module {index} — {m.title}
-                {scheduledModuleIndexes.has(index) ? " (déjà planifié)" : ""}
+                {scheduledModuleIndexes.has(index) ? t("(déjà planifié)", "(already scheduled)") : ""}
               </option>
             ))}
           </select>
@@ -544,7 +562,7 @@ function CohortCard({
             {...register("resourceId")}
           >
             <option value="" disabled>
-              Salle...
+              {t("Salle...", "Room...")}
             </option>
             {resources?.map((r) => (
               <option key={r.id} value={r.id}>
@@ -558,14 +576,14 @@ function CohortCard({
 
           <Input
             type="datetime-local"
-            aria-label="Début"
+            aria-label={t("Début", "Start")}
             {...register("startAt", {
               setValueAs: (v: string) => (v ? new Date(v).toISOString() : v),
             })}
           />
           <Input
             type="datetime-local"
-            aria-label="Fin"
+            aria-label={t("Fin", "End")}
             {...register("endAt", {
               setValueAs: (v: string) => (v ? new Date(v).toISOString() : v),
             })}
@@ -573,11 +591,14 @@ function CohortCard({
 
           {scheduleMutation.isError && (
             <p className="col-span-2 text-xs text-destructive">
-              {errorMessage(scheduleMutation.error, "Impossible de planifier cette session.")}
+              {errorMessage(scheduleMutation.error, t(
+                "Impossible de planifier cette session.",
+                "This session could not be scheduled.",
+              ))}
             </p>
           )}
           <Button type="submit" size="sm" loading={scheduleMutation.isPending} className="col-span-2">
-            Planifier
+            {t("Planifier", "Schedule")}
           </Button>
         </form>
       )}

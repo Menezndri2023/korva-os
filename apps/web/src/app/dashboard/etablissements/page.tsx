@@ -9,12 +9,15 @@ import { formatCurrency } from "@/lib/analytics-format";
 import { useAuthStore } from "@/lib/auth-store";
 import { usePlanFeatures } from "@/lib/use-plan-features";
 import { UpgradeCard } from "@/components/pro/upgrade-card";
+import { useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
 /**
  * Business: every establishment the owner runs, side by side over 30 days, and one click to open
  * any of them. Figures stay in each establishment's own currency.
  */
 export default function EstablishmentsPage() {
+  const locale = useDashboardLocale();
+  const t = useT();
   const planFeatures = usePlanFeatures();
   const included = planFeatures.has("network_overview");
   const queryClient = useQueryClient();
@@ -36,14 +39,17 @@ export default function EstablishmentsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Mes établissements"
-        description="Tous vos points de vente et sites sur les 30 derniers jours. Chaque établissement a sa propre formule."
+        title={t("Mes établissements", "My locations")}
+        description={t(
+          "Tous vos points de vente et sites sur les 30 derniers jours. Chaque établissement a sa propre formule.",
+          "All your outlets and sites over the last 30 days. Each location has its own plan.",
+        )}
         actions={
           <Link
             href="/onboarding"
             className="inline-flex min-h-11 items-center rounded-lg border border-border-input bg-surface px-4 text-sm font-semibold text-text hover:bg-surface-muted"
           >
-            Ajouter un établissement
+            {t("Ajouter un établissement", "Add a location")}
           </Link>
         }
       />
@@ -51,25 +57,31 @@ export default function EstablishmentsPage() {
       {!included && (
         <UpgradeCard
           feature="network_overview"
-          description="Suivez tous vos établissements sur un seul écran : ventes, réservations et encaissements de chacun."
+          description={t(
+            "Suivez tous vos établissements sur un seul écran : ventes, réservations et encaissements de chacun.",
+            "Follow all your locations on one screen: each one's sales, bookings and takings.",
+          )}
         />
       )}
       {isLoading && <SkeletonList rows={3} />}
-      {isError && <p className="text-sm text-destructive">Impossible de charger vos établissements.</p>}
+      {isError && <p className="text-sm text-destructive">{t(
+        "Impossible de charger vos établissements.",
+        "Your locations could not be loaded.",
+      )}</p>}
 
       {data && (
         <Card className="overflow-hidden">
-          <Table caption="Vos établissements sur 30 jours">
+          <Table caption={t("Vos établissements sur 30 jours", "Your locations over 30 days")}>
             <thead>
               <tr>
-                <Th>Établissement</Th>
-                <Th align="right">Ventes</Th>
-                <Th align="right">Commandes</Th>
-                <Th align="right">Réservations</Th>
-                <Th align="right">Encaissé</Th>
-                <Th align="right">Nouveaux clients</Th>
+                <Th>{t("Établissement", "Location")}</Th>
+                <Th align="right">{t("Ventes", "Sales")}</Th>
+                <Th align="right">{t("Commandes", "Orders")}</Th>
+                <Th align="right">{t("Réservations", "Bookings")}</Th>
+                <Th align="right">{t("Encaissé", "Taken")}</Th>
+                <Th align="right">{t("Nouveaux clients", "New customers")}</Th>
                 <Th>
-                  <span className="sr-only">Ouvrir</span>
+                  <span className="sr-only">{t("Ouvrir", "Open")}</span>
                 </Th>
               </tr>
             </thead>
@@ -84,14 +96,14 @@ export default function EstablishmentsPage() {
                       </span>
                     )}
                   </Td>
-                  <Td numeric>{formatCurrency(place.sales, place.currency)}</Td>
+                  <Td numeric>{formatCurrency(place.sales, place.currency, locale)}</Td>
                   <Td numeric>{place.orders}</Td>
                   <Td numeric>{place.bookings}</Td>
-                  <Td numeric>{formatCurrency(place.collected, place.currency)}</Td>
+                  <Td numeric>{formatCurrency(place.collected, place.currency, locale)}</Td>
                   <Td numeric>{place.newContacts}</Td>
                   <Td align="right">
                     {place.organizationId === activeOrganizationId ? (
-                      <span className="text-xs text-text-muted">Ouvert</span>
+                      <span className="text-xs text-text-muted">{t("Ouvert", "Open")}</span>
                     ) : (
                       <Button
                         size="sm"
@@ -99,7 +111,7 @@ export default function EstablishmentsPage() {
                         aria-label={`Ouvrir ${place.name}`}
                         onClick={() => open(place.organizationId)}
                       >
-                        Ouvrir
+                        {t("Ouvrir", "Open")}
                       </Button>
                     )}
                   </Td>
@@ -111,7 +123,10 @@ export default function EstablishmentsPage() {
       )}
       {data && data.establishments.length === 1 && (
         <p className="text-sm text-text-muted">
-          Vous n&apos;avez qu&apos;un établissement pour l&apos;instant. Ajoutez-en un pour les comparer ici.
+          {t(
+            "Vous n'avez qu'un établissement pour l'instant. Ajoutez-en un pour les comparer ici.",
+            "You only have one location for now. Add another to compare them here.",
+          )}
         </p>
       )}
     </div>

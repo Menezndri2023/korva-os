@@ -21,20 +21,21 @@ import {
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
-const OPERATOR_LABELS: Record<WorkflowConditionOperator, string> = {
-  equals: "égal à",
-  not_equals: "différent de",
-  greater_than: "supérieur à",
-  less_than: "inférieur à",
-  contains: "contient",
+const OPERATOR_LABELS: Record<WorkflowConditionOperator, [string, string]> = {
+  equals: ["égal à", "equals"],
+  not_equals: ["différent de", "is not"],
+  greater_than: ["supérieur à", "greater than"],
+  less_than: ["inférieur à", "less than"],
+  contains: ["contient", "contains"],
 };
 
-const ACTION_TYPE_LABELS: Record<WorkflowActionType, string> = {
-  create_task: "Créer une tâche",
-  send_email: "Envoyer un e-mail",
-  webhook: "Appeler un webhook",
-  internal_notification: "Notifier l'équipe",
+const ACTION_TYPE_LABELS: Record<WorkflowActionType, [string, string]> = {
+  create_task: ["Créer une tâche", "Create a task"],
+  send_email: ["Envoyer un e-mail", "Send an e-mail"],
+  webhook: ["Appeler un webhook", "Call a webhook"],
+  internal_notification: ["Notifier l'équipe", "Notify the team"],
 };
 
 interface ConditionFormValue {
@@ -88,6 +89,7 @@ function buildActionPayload(action: ActionFormValue) {
 }
 
 export default function WorkflowsPage() {
+  const t = useT();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -121,7 +123,7 @@ export default function WorkflowsPage() {
       setShowForm(false);
       setFormError(null);
     },
-    onError: (error) => setFormError(error instanceof ApiError ? error.message : "Erreur"),
+    onError: (error) => setFormError(error instanceof ApiError ? error.message : t("Erreur", "Error")),
   });
 
   const toggleActiveMutation = useMutation({
@@ -149,7 +151,7 @@ export default function WorkflowsPage() {
       actions: values.actions.map(buildActionPayload),
     });
     if (!result.success) {
-      setFormError(result.error.issues[0]?.message ?? "Formulaire invalide");
+      setFormError(result.error.issues[0]?.message ?? t("Formulaire invalide", "The form is not valid"));
       return;
     }
     createMutation.mutate(result.data);
@@ -158,15 +160,17 @@ export default function WorkflowsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Workflows</h1>
+        <h1 className="text-2xl font-semibold">{t("Workflows", "Workflows")}</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Automatisez des actions (créer une tâche, envoyer un e-mail, appeler un webhook) en réaction aux
-          événements de KORVA.
+          {t(
+            "Automatisez des actions (créer une tâche, envoyer un e-mail, appeler un webhook) en réaction aux événements de KORVA.",
+            "Automate actions (create a task, send an e-mail, call a webhook) in response to KORVA events.",
+          )}
         </p>
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Annuler" : "Nouveau workflow"}</Button>
+        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? t("Annuler", "Cancel") : t("Nouveau workflow", "New workflow")}</Button>
       </div>
 
       {showForm && (
@@ -178,7 +182,7 @@ export default function WorkflowsPage() {
           className="space-y-4 rounded-lg border border-border bg-surface p-4"
         >
           <div className="grid grid-cols-2 gap-3">
-            <Input placeholder="Nom du workflow" {...register("name", { required: true })} />
+            <Input placeholder={t("Nom du workflow", "Workflow name")} {...register("name", { required: true })} />
             <select
               className="rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
               {...register("trigger", { required: true })}
@@ -192,11 +196,14 @@ export default function WorkflowsPage() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-text">Conditions (toutes doivent être vraies)</p>
+            <p className="text-sm font-medium text-text">{t(
+              "Conditions (toutes doivent être vraies)",
+              "Conditions (all must be true)",
+            )}</p>
             {conditionFields.fields.map((field, index) => (
               <div key={field.id} className="grid grid-cols-12 gap-2">
                 <Input
-                  placeholder="Champ (ex: estimatedValue)"
+                  placeholder={t("Champ (ex: estimatedValue)", "Field (e.g. estimatedValue)")}
                   className="col-span-4"
                   {...register(`conditions.${index}.field`, { required: true })}
                 />
@@ -206,7 +213,7 @@ export default function WorkflowsPage() {
                 >
                   {WORKFLOW_CONDITION_OPERATORS.map((operator) => (
                     <option key={operator} value={operator}>
-                      {OPERATOR_LABELS[operator]}
+                      {t(...OPERATOR_LABELS[operator])}
                     </option>
                   ))}
                 </select>
@@ -214,12 +221,12 @@ export default function WorkflowsPage() {
                   className="col-span-2 rounded-md border border-border-input px-2 py-1.5 text-sm focus:border-focus focus:outline-none"
                   {...register(`conditions.${index}.valueType`)}
                 >
-                  <option value="string">Texte</option>
-                  <option value="number">Nombre</option>
-                  <option value="boolean">Booléen</option>
+                  <option value="string">{t("Texte", "Text")}</option>
+                  <option value="number">{t("Nombre", "Number")}</option>
+                  <option value="boolean">{t("Booléen", "Boolean")}</option>
                 </select>
                 <Input
-                  placeholder="Valeur"
+                  placeholder={t("Valeur", "Value")}
                   className="col-span-2"
                   {...register(`conditions.${index}.value`, { required: true })}
                 />
@@ -239,12 +246,12 @@ export default function WorkflowsPage() {
               }
               className="text-sm text-text-muted hover:underline"
             >
-              + Ajouter une condition
+              {t("+ Ajouter une condition", "+ Add a condition")}
             </button>
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-text">Actions (au moins une)</p>
+            <p className="text-sm font-medium text-text">{t("Actions (au moins une)", "Actions (at least one)")}</p>
             {actionFields.fields.map((field, index) => (
               <ActionRow
                 key={field.id}
@@ -269,13 +276,13 @@ export default function WorkflowsPage() {
               }
               className="text-sm text-text-muted hover:underline"
             >
-              + Ajouter une action
+              {t("+ Ajouter une action", "+ Add an action")}
             </button>
           </div>
 
           {formError && <p className="text-sm text-destructive">{formError}</p>}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer le workflow"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le workflow", "Create the workflow")}
           </Button>
         </form>
       )}
@@ -285,24 +292,24 @@ export default function WorkflowsPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
               <tr>
-                <th className="px-4 py-2">Nom</th>
-                <th className="px-4 py-2">Déclencheur</th>
-                <th className="px-4 py-2">Statut</th>
-                <th className="px-4 py-2">Actions</th>
+                <th className="px-4 py-2">{t("Nom", "Name")}</th>
+                <th className="px-4 py-2">{t("Déclencheur", "Trigger")}</th>
+                <th className="px-4 py-2">{t("Statut", "Status")}</th>
+                <th className="px-4 py-2">{t("Actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {isLoading && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Chargement...
+                    {t("Chargement...", "Loading...")}
                   </td>
                 </tr>
               )}
               {!isLoading && workflows?.length === 0 && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-text-muted">
-                    Aucun workflow.
+                    {t("Aucun workflow.", "No workflows.")}
                   </td>
                 </tr>
               )}
@@ -339,6 +346,7 @@ function ActionRow({
   register: ReturnType<typeof useForm<WorkflowFormValues>>["register"];
   onRemove?: () => void;
 }) {
+  const t = useT();
   const type = useWatch({ control, name: `actions.${index}.type` });
 
   return (
@@ -350,43 +358,46 @@ function ActionRow({
         >
           {WORKFLOW_ACTION_TYPES.map((actionType) => (
             <option key={actionType} value={actionType}>
-              {ACTION_TYPE_LABELS[actionType]}
+              {t(...ACTION_TYPE_LABELS[actionType])}
             </option>
           ))}
         </select>
         {onRemove && (
           <button type="button" onClick={onRemove} className="text-sm text-destructive hover:underline">
-            Retirer cette action
+            {t("Retirer cette action", "Remove this action")}
           </button>
         )}
       </div>
 
       {type === "create_task" && (
         <div className="grid grid-cols-2 gap-2">
-          <Input placeholder="Titre (ex: Suivre {{leadId}})" {...register(`actions.${index}.title`, { required: true })} />
-          <Input placeholder="Description (optionnel)" {...register(`actions.${index}.description`)} />
+          <Input placeholder={t(
+            "Titre (ex: Suivre {{leadId}})",
+            "Title (e.g. Follow up {{leadId}})",
+          )} {...register(`actions.${index}.title`, { required: true })} />
+          <Input placeholder={t("Description (optionnel)", "Description (optional)")} {...register(`actions.${index}.description`)} />
         </div>
       )}
       {type === "send_email" && (
         <div className="grid grid-cols-3 gap-2">
           <Input
-            placeholder="Destinataire ({{contact.email}})"
+            placeholder={t("Destinataire ({{contact.email}})", "Recipient ({{contact.email}})")}
             {...register(`actions.${index}.to`, { required: true })}
           />
-          <Input placeholder="Sujet" {...register(`actions.${index}.subject`, { required: true })} />
-          <Input placeholder="Corps du message" {...register(`actions.${index}.body`, { required: true })} />
+          <Input placeholder={t("Sujet", "Subject")} {...register(`actions.${index}.subject`, { required: true })} />
+          <Input placeholder={t("Corps du message", "Message body")} {...register(`actions.${index}.body`, { required: true })} />
         </div>
       )}
       {type === "webhook" && (
-        <Input placeholder="URL du webhook" className="w-full" {...register(`actions.${index}.url`, { required: true })} />
+        <Input placeholder={t("URL du webhook", "Webhook URL")} className="w-full" {...register(`actions.${index}.url`, { required: true })} />
       )}
       {type === "internal_notification" && (
         <div className="grid grid-cols-2 gap-2">
           <Input
-            placeholder="Titre (ex: Nouveau lead {{leadId}})"
+            placeholder={t("Titre (ex: Nouveau lead {{leadId}})", "Title (e.g. New lead {{leadId}})")}
             {...register(`actions.${index}.title`, { required: true })}
           />
-          <Input placeholder="Message (optionnel)" {...register(`actions.${index}.body`)} />
+          <Input placeholder={t("Message (optionnel)", "Message (optional)")} {...register(`actions.${index}.body`)} />
         </div>
       )}
     </div>
@@ -406,6 +417,8 @@ function WorkflowRow({
   isDeleting: boolean;
   deleteError: unknown;
 }) {
+  const locale = useDashboardLocale();
+  const t = useT();
   const [showTest, setShowTest] = useState(false);
   const [showExecutions, setShowExecutions] = useState(false);
   const [payload, setPayload] = useState("{}");
@@ -428,7 +441,7 @@ function WorkflowRow({
       setTestError(null);
     },
     onError: (error) => {
-      setTestError(error instanceof ApiError ? error.message : "Erreur");
+      setTestError(error instanceof ApiError ? error.message : t("Erreur", "Error"));
       setTestResult(null);
     },
   });
@@ -443,7 +456,7 @@ function WorkflowRow({
     }
     const result = testWorkflowSchema.safeParse({ payload: parsedPayload });
     if (!result.success) {
-      setTestError(result.error.issues[0]?.message ?? "Payload invalide");
+      setTestError(result.error.issues[0]?.message ?? t("Payload invalide", "Invalid payload"));
       return;
     }
     testMutation.mutate(result.data);
@@ -457,16 +470,16 @@ function WorkflowRow({
         <td className="px-4 py-2">
           <button type="button" onClick={() => onToggleActive(!workflow.active)} className="border-0 bg-transparent p-0">
             <Badge variant={workflow.active ? "success" : "default"}>
-              {workflow.active ? "Actif" : "Inactif"}
+              {workflow.active ? t("Actif", "Active") : t("Inactif", "Inactive")}
             </Badge>
           </button>
         </td>
         <td className="space-x-2 px-4 py-2">
           <button onClick={() => setShowTest((v) => !v)} className="text-xs text-text-muted hover:underline">
-            Tester
+            {t("Tester", "Test")}
           </button>
           <button onClick={() => setShowExecutions((v) => !v)} className="text-xs text-text-muted hover:underline">
-            Exécutions
+            {t("Exécutions", "Runs")}
           </button>
           {isConfirmingDelete ? (
             <>
@@ -475,14 +488,14 @@ function WorkflowRow({
                 disabled={isDeleting}
                 className="text-xs text-destructive hover:underline disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isDeleting ? "Suppression..." : "Confirmer ?"}
+                {isDeleting ? t("Suppression...", "Deleting...") : t("Confirmer ?", "Confirm?")}
               </button>
               <button
                 onClick={() => setIsConfirmingDelete(false)}
                 disabled={isDeleting}
                 className="text-xs text-text-muted hover:underline disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Annuler
+                {t("Annuler", "Cancel")}
               </button>
             </>
           ) : (
@@ -490,7 +503,7 @@ function WorkflowRow({
               onClick={() => setIsConfirmingDelete(true)}
               className="text-xs text-destructive hover:underline"
             >
-              Supprimer
+              {t("Supprimer", "Delete")}
             </button>
           )}
         </td>
@@ -500,7 +513,7 @@ function WorkflowRow({
           <td colSpan={4} className="px-4 pb-2 text-xs text-destructive">
             {deleteError instanceof ApiError
               ? deleteError.message
-              : "Impossible de supprimer le workflow."}
+              : t("Impossible de supprimer le workflow.", "The workflow could not be deleted.")}
           </td>
         </tr>
       )}
@@ -509,7 +522,10 @@ function WorkflowRow({
           <td colSpan={4} className="bg-surface-muted px-4 py-3">
             <div className="space-y-2">
               <p className="text-xs text-text-muted">
-                Test à blanc : évalue les conditions sur ce payload JSON sans exécuter les actions.
+                {t(
+                  "Test à blanc : évalue les conditions sur ce payload JSON sans exécuter les actions.",
+                  "Dry run: checks the conditions against this JSON payload without running the actions.",
+                )}
               </p>
               <textarea
                 value={payload}
@@ -519,11 +535,11 @@ function WorkflowRow({
               />
               <div className="flex items-center gap-3">
                 <Button size="sm" onClick={runTest} loading={testMutation.isPending}>
-                  {testMutation.isPending ? "Test..." : "Lancer le test"}
+                  {testMutation.isPending ? t("Test...", "Testing...") : t("Lancer le test", "Run the test")}
                 </Button>
                 {testResult && (
                   <span className={testResult.matched ? "text-xs text-success" : "text-xs text-text-muted"}>
-                    {testResult.matched ? "✓ Conditions satisfaites" : "✕ Conditions non satisfaites"}
+                    {testResult.matched ? t("✓ Conditions satisfaites", "✓ Conditions met") : t("✕ Conditions non satisfaites", "✕ Conditions not met")}
                   </span>
                 )}
                 {testError && <span className="text-xs text-destructive">{testError}</span>}
@@ -536,10 +552,10 @@ function WorkflowRow({
         <tr>
           <td colSpan={4} className="bg-surface-muted px-4 py-3">
             {executionsQuery.isLoading && (
-              <p className="text-xs text-text-muted">Chargement...</p>
+              <p className="text-xs text-text-muted">{t("Chargement...", "Loading...")}</p>
             )}
             {executionsQuery.data?.length === 0 && (
-              <p className="text-xs text-text-muted">Aucune exécution pour l&apos;instant.</p>
+              <p className="text-xs text-text-muted">{t("Aucune exécution pour l'instant.", "No runs yet.")}</p>
             )}
             <ul className="space-y-1">
               {executionsQuery.data?.map((execution) => (
@@ -547,7 +563,7 @@ function WorkflowRow({
                   <span className={execution.status === "success" ? "text-success" : "text-destructive"}>
                     {execution.status}
                   </span>{" "}
-                  — {execution.eventName} — {new Date(execution.createdAt).toLocaleString("fr-FR")}
+                  — {execution.eventName} — {new Date(execution.createdAt).toLocaleString(intlLocale(locale))}
                   {execution.error && <span className="text-destructive"> ({execution.error})</span>}
                 </li>
               ))}

@@ -10,11 +10,12 @@ import type { Course, CourseStatus, Offer } from "@korva/types";
 import { Badge, Button, Card, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
+import { useT } from "@/lib/dashboard-locale";
 
-const STATUS_LABELS: Record<CourseStatus, string> = {
-  draft: "Brouillon",
-  published: "Publié",
-  archived: "Archivé",
+const STATUS_LABELS: Record<CourseStatus, [string, string]> = {
+  draft: ["Brouillon", "Draft"],
+  published: ["Publié", "Published"],
+  archived: ["Archivé", "Archived"],
 };
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -22,6 +23,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export default function CoursesPage() {
+  const t = useT();
   const [showForm, setShowForm] = useState(false);
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
@@ -71,13 +73,16 @@ export default function CoursesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Formations</h1>
+          <h1 className="text-2xl font-semibold">{t("Formations", "Courses")}</h1>
           <p className="mt-1 text-sm text-text-muted">
-            Programmes de formation — modules, promotions et sessions planifiées.
+            {t(
+              "Programmes de formation — modules, promotions et sessions planifiées.",
+              "Training programmes — modules, cohorts and scheduled sessions.",
+            )}
           </p>
         </div>
         <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Annuler" : "Nouveau programme"}
+          {showForm ? t("Annuler", "Cancel") : t("Nouveau programme", "New programme")}
         </Button>
       </div>
 
@@ -86,7 +91,7 @@ export default function CoursesPage() {
           onSubmit={handleSubmit((values) => createMutation.mutate(values))}
           className="space-y-3 rounded-lg border border-border bg-surface p-4"
         >
-          <Input placeholder="Nom du programme" {...register("name")} />
+          <Input placeholder={t("Nom du programme", "Programme name")} {...register("name")} />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
 
           <select
@@ -95,7 +100,7 @@ export default function CoursesPage() {
             {...register("offerId")}
           >
             <option value="" disabled>
-              Offre associée (session facturable)...
+              {t("Offre associée (session facturable)...", "Linked offer (billable session)...")}
             </option>
             {offers?.map((o) => (
               <option key={o.id} value={o.id}>
@@ -108,7 +113,7 @@ export default function CoursesPage() {
           )}
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-text">Modules</p>
+            <p className="text-sm font-medium text-text">{t("Modules", "Modules")}</p>
             {fields.map((field, index) => (
               <div key={field.id} className="flex gap-2">
                 <Input
@@ -121,7 +126,7 @@ export default function CoursesPage() {
                   onClick={() => remove(index)}
                   className="text-xs text-destructive hover:underline"
                 >
-                  Retirer
+                  {t("Retirer", "Remove")}
                 </button>
               </div>
             ))}
@@ -130,36 +135,42 @@ export default function CoursesPage() {
               onClick={() => append({ title: "" })}
               className="text-sm text-text underline"
             >
-              + Ajouter un module
+              {t("+ Ajouter un module", "+ Add a module")}
             </button>
           </div>
 
           {createMutation.isError && (
             <p className="text-sm text-destructive">
-              {errorMessage(createMutation.error, "Impossible de créer ce programme.")}
+              {errorMessage(createMutation.error, t(
+                "Impossible de créer ce programme.",
+                "This programme could not be created.",
+              ))}
             </p>
           )}
           <Button type="submit" loading={createMutation.isPending}>
-            {createMutation.isPending ? "Création..." : "Créer le programme"}
+            {createMutation.isPending ? t("Création...", "Creating...") : t("Créer le programme", "Create the programme")}
           </Button>
         </form>
       )}
 
       {isError && (
         <Card className="p-6">
-          <p className="text-sm text-destructive">Impossible de charger les programmes.</p>
+          <p className="text-sm text-destructive">{t(
+            "Impossible de charger les programmes.",
+            "Programmes could not be loaded.",
+          )}</p>
           <button onClick={() => refetch()} className="mt-2 text-sm font-medium text-text underline">
-            Réessayer
+            {t("Réessayer", "Try again")}
           </button>
         </Card>
       )}
 
       {!isError && (
         <div className="grid gap-3 sm:grid-cols-2">
-          {isLoading && <p className="text-sm text-text-muted">Chargement...</p>}
+          {isLoading && <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
           {!isLoading && courses?.length === 0 && (
             <Card className="p-6 text-center text-sm text-text-muted sm:col-span-2">
-              Aucun programme.
+              {t("Aucun programme.", "No programmes.")}
             </Card>
           )}
           {courses?.map((course) => (
@@ -168,7 +179,7 @@ export default function CoursesPage() {
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium text-text">{course.name}</p>
                   <Badge variant={course.status === "published" ? "success" : "default"}>
-                    {STATUS_LABELS[course.status]}
+                    {t(...STATUS_LABELS[course.status])}
                   </Badge>
                 </div>
                 <p className="mt-1 text-xs text-text-muted">
