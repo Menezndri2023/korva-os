@@ -194,3 +194,20 @@ export const domainAllowedQuerySchema = z.object({
   domain: z.string().min(1).max(253),
 });
 export type DomainAllowedQuery = z.infer<typeof domainAllowedQuerySchema>;
+
+/** One basket line as the storefront keeps it (use-cart.ts) — prices are re-read at order time. */
+const customerBasketLineSchema = z.object({
+  offerId: z.string().min(1).max(64),
+  variantId: z.string().max(64).optional(),
+  optionIds: z.array(z.string().max(64)).max(20).optional(),
+  name: z.string().max(300),
+  unitPrice: z.number().min(0),
+  quantity: z.number().int().min(1).max(99),
+});
+
+/** PUT /public/:slug/account/basket — the whole basket and the lines put aside. */
+export const customerBasketSchema = z.object({
+  cart: z.array(customerBasketLineSchema).max(50),
+  saved: z.array(customerBasketLineSchema).max(50),
+});
+export type CustomerBasketInput = z.infer<typeof customerBasketSchema>;

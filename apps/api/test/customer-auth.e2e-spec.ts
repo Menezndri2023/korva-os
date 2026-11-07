@@ -229,6 +229,42 @@ describe('Customer portal auth (e2e)', () => {
         .expect(401);
     });
 
+    it('keeps the basket with the account, for this shop only', async () => {
+      const empty = await request(server)
+        .get(`/api/v1/public/${slugA}/account/basket`)
+        .set('Authorization', `Bearer ${customerTokenOrgA}`)
+        .expect(200);
+      expect(asSuccess<{ cart: unknown[] }>(empty.body).cart).toEqual([]);
+      const basket = {
+        cart: [
+          { offerId: 'o-1', name: 'Pagne', unitPrice: 15000, quantity: 2 },
+        ],
+        saved: [{ offerId: 'o-2', name: 'Sac', unitPrice: 8000, quantity: 1 }],
+      };
+      await request(server)
+        .put(`/api/v1/public/${slugA}/account/basket`)
+        .set('Authorization', `Bearer ${customerTokenOrgA}`)
+        .send(basket)
+        .expect(200);
+      const back = await request(server)
+        .get(`/api/v1/public/${slugA}/account/basket`)
+        .set('Authorization', `Bearer ${customerTokenOrgA}`)
+        .expect(200);
+      expect(asSuccess(back.body)).toEqual(basket);
+      await request(server)
+        .put(`/api/v1/public/${slugA}/account/basket`)
+        .set('Authorization', `Bearer ${customerTokenOrgA}`)
+        .send({
+          cart: [{ offerId: 'o-1', name: 'x', unitPrice: 1, quantity: 500 }],
+          saved: [],
+        })
+        .expect(400);
+      await request(server)
+        .get(`/api/v1/public/${slugB}/account/basket`)
+        .set('Authorization', `Bearer ${customerTokenOrgA}`)
+        .expect(401);
+    });
+
     it('returns the profile for the correct org+slug combination', async () => {
       const res = await request(server)
         .get(`/api/v1/public/${slugA}/account/me`)

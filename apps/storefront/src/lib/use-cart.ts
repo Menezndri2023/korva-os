@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CartLine } from "./public-types";
+import { publicApiClient } from "./public-api-client";
 
 /** The options chosen for one cart line, as the offer page resolved them. */
 export interface ChosenOptions {
@@ -71,10 +72,18 @@ export const MAX_LINE_QUANTITY = 99;
  * not a substitute for the server-backed order/booking history explicitly scoped out in this
  * wave's report (BACKEND CONTRACT REQUIRED).
  */
-export function useCart(slug: string) {
+/** The signed-in customer, when there is one: the basket then follows their account. */
+export interface CartAccount {
+  isAuthenticated: boolean;
+  authFetch: <T>(fn: (accessToken: string) => Promise<T>) => Promise<T>;
+}
+
+export function useCart(slug: string, account?: CartAccount) {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [saved, setSaved] = useState<CartLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  // Set once the account's basket has been merged in; from then on changes are saved to it.
+  const [accountSynced, setAccountSynced] = useState(false);
 
   // Reads localStorage (unavailable during SSR/first paint) to hydrate the cart post-mount —
   // the standard React pattern for syncing from a browser-only external source
@@ -97,6 +106,42 @@ export function useCart(slug: string) {
   useEffect(() => {
     if (hydrated) writeLines(savedStorageKey(slug), saved);
   }, [slug, saved, hydrated]);
+
+  // Signed in: what the account kept (from another phone, another day) joins what is in this
+  // browser — never replacing it — and the result is saved back to the account.
+  const signedIn = account?.isAuthenticated ?? false;
+  const authFetch = account?.authFetch;
+  useEffect(() => {
+    if (!hydrated || !signedIn || !authFetch || accountSynced) return;
+    let cancelled = false;
+    authFetch((token) =>
+      publicApiClient.get<{ cart: CartLine[]; saved: CartLine[] }>(`/public/${slug}/account/basket`, token),
+    )
+      .then((remote) => {
+        if (cancelled) return;
+        setCart((local) => remote.cart.reduce(mergeLine, local));
+        setSaved((local) => remote.saved.reduce(mergeLine, local));
+        setAccountSynced(true);
+      })
+      .catch(() => {
+        // Account unreachable: the basket keeps working in this browser.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, signedIn, authFetch, accountSynced, slug]);
+  useEffect(() => {
+    // Signed out: nothing more goes to the account; the basket stays in this browser.
+    if (!accountSynced || !signedIn || !authFetch) return;
+    const timer = setTimeout(() => {
+      void authFetch((token) =>
+        publicApiClient.put(`/public/${slug}/account/basket`, { cart, saved }, token),
+      ).catch(() => {
+        // Retried with the next change.
+      });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [accountSynced, signedIn, authFetch, slug, cart, saved]);
 
   const addToCart = useCallback(
     (

@@ -15,6 +15,7 @@ import type {
   CustomerRegisterInput,
   CustomerLoginInput,
   CustomerUpdateProfileInput,
+  CustomerBasketInput,
   ListCustomerHistoryQuery,
   CreateReviewInput,
   SignQuoteInput,
@@ -376,6 +377,34 @@ export class CustomerAuthService {
       customer.contactId,
     );
     return toPublicCustomer(account, contact);
+  }
+
+  /** The customer's basket and saved lines, kept with the account (empty until first saved). */
+  async getBasket(slug: string, customer: AuthenticatedCustomer) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+    return (
+      (await this.customerAccountRepository.getBasket(
+        customer.customerAccountId,
+      )) ?? {
+        cart: [],
+        saved: [],
+      }
+    );
+  }
+
+  async saveBasket(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    input: CustomerBasketInput,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+    await this.customerAccountRepository.setBasket(
+      customer.customerAccountId,
+      input,
+    );
+    return input;
   }
 
   async updateProfile(

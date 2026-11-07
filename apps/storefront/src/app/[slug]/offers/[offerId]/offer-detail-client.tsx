@@ -57,9 +57,9 @@ export default function OfferDetailClient({
     retry: false,
   });
 
-  const basket = useCart(slug);
+  const { hydrated: authHydrated, isAuthenticated, customer, authFetch } = useCustomerAuth(slug);
+  const basket = useCart(slug, { isAuthenticated, authFetch });
   const { cart, addToCart, clearCart } = basket;
-  const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
   const [showBooking, setShowBooking] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showRequest, setShowRequest] = useState(false);

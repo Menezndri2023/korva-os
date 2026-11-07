@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Patch,
+  Put,
   Post,
   Query,
   Req,
@@ -19,6 +20,8 @@ import {
   customerLoginSchema,
   customerRefreshSchema,
   customerUpdateProfileSchema,
+  customerBasketSchema,
+  type CustomerBasketInput,
   customerForgotPasswordSchema,
   customerResetPasswordSchema,
   listCustomerHistoryQuerySchema,
@@ -155,6 +158,27 @@ export class CustomerAuthController {
     body: CustomerUpdateProfileInput,
   ) {
     return this.customerAuthService.updateProfile(slug, req.user!, body);
+  }
+
+  /** The basket and the lines put aside, for this customer on every device. */
+  @UseGuards(CustomerAuthGuard)
+  @Get('basket')
+  getBasket(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getBasket(slug, req.user!);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Put('basket')
+  saveBasket(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+    @Body(new ZodValidationPipe(customerBasketSchema))
+    body: CustomerBasketInput,
+  ) {
+    return this.customerAuthService.saveBasket(slug, req.user!, body);
   }
 
   @UseGuards(CustomerAuthGuard)

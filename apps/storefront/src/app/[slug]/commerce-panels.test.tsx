@@ -567,3 +567,47 @@ describe("RequestPanel", () => {
     expect(onSuccess).toHaveBeenCalled();
   });
 });
+
+describe("useCart — signed-in customer", () => {
+  it("joins the account's basket to this browser's, and saves the result to the account", async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+      clear: () => store.clear(),
+    });
+    store.set("korva-storefront-cart:maquis", JSON.stringify([{ offerId: "garba", name: "Garba", unitPrice: 2500, quantity: 1 }]));
+    getMock.mockReset();
+    getMock.mockResolvedValue({
+      cart: [{ offerId: "alloco", name: "Alloco", unitPrice: 1000, quantity: 2 }],
+      saved: [{ offerId: "jus", name: "Jus de bissap", unitPrice: 500, quantity: 1 }],
+    });
+    const putMock = vi.fn().mockResolvedValue({});
+    (publicApiClient as unknown as { put: typeof putMock }).put = putMock;
+    const authFetch = <T,>(fn: (token: string) => Promise<T>) => fn("tok");
+
+    function Probe() {
+      const basket = useCart("maquis", { isAuthenticated: true, authFetch });
+      return (
+        <p>
+          {basket.cart.map((line) => `${line.name}×${line.quantity}`).join(",")}|
+          {basket.saved.map((line) => line.name).join(",")}
+        </p>
+      );
+    }
+    render(<Probe />);
+    expect(await screen.findByText("Garba×1,Alloco×2|Jus de bissap")).toBeInTheDocument();
+    expect(getMock).toHaveBeenCalledWith("/public/maquis/account/basket", "tok");
+    await waitFor(
+      () =>
+        expect(putMock).toHaveBeenCalledWith(
+          "/public/maquis/account/basket",
+          expect.objectContaining({ cart: expect.arrayContaining([expect.objectContaining({ offerId: "alloco" })]) }),
+          "tok",
+        ),
+      { timeout: 3000 },
+    );
+    vi.unstubAllGlobals();
+  });
+});

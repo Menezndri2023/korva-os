@@ -58,6 +58,12 @@ export class CustomerAccount {
   /** Last successful sign-in, shown to the business. */
   @Prop({ type: Date, default: null })
   lastLoginAt!: Date | null;
+
+  /** The shop basket and the lines put aside, kept with the account so they follow the customer
+   *  from one phone or computer to another. Prices are only a reminder: the order always
+   *  re-reads them from the offers. */
+  @Prop({ type: Object, default: undefined })
+  basket?: { cart: unknown[]; saved: unknown[]; updatedAt: Date };
 }
 
 export const CustomerAccountSchema =

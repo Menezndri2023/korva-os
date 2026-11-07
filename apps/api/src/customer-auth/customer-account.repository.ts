@@ -112,4 +112,25 @@ export class CustomerAccountRepository {
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     await this.model.updateOne({ _id: id }, { passwordHash }).exec();
   }
+
+  async getBasket(
+    id: string,
+  ): Promise<{ cart: unknown[]; saved: unknown[] } | null> {
+    const account = await this.model.findById(id, { basket: 1 }).lean().exec();
+    return account?.basket
+      ? { cart: account.basket.cart, saved: account.basket.saved }
+      : null;
+  }
+
+  async setBasket(
+    id: string,
+    basket: { cart: unknown[]; saved: unknown[] },
+  ): Promise<void> {
+    await this.model
+      .updateOne(
+        { _id: id },
+        { $set: { basket: { ...basket, updatedAt: new Date() } } },
+      )
+      .exec();
+  }
 }

@@ -113,11 +113,11 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
     enabled: !!orgQuery.data?.visibleSections.includes("catalog"),
   });
 
-  const basket = useCart(slug);
-  const { cart, addToCart, clearCart } = basket;
 
   const router = useRouter();
-  const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
+  const { hydrated: authHydrated, isAuthenticated, customer, authFetch } = useCustomerAuth(slug);
+  const basket = useCart(slug, { isAuthenticated, authFetch });
+  const { cart, addToCart, clearCart } = basket;
   const [bookingOffer, setBookingOffer] = useState<PublicOffer | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
