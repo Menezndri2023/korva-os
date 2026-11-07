@@ -74,6 +74,8 @@ export const metadata: Metadata = {
     "Clients, réservations, commandes, stock, factures et site public dans un seul compte, " +
     "configuré pour votre métier. Gratuit pour commencer, sans carte bancaire.",
   applicationName: "KORVA OS",
+  // Google Search Console ownership of https://app.korvasuite.com (public, not a secret).
+  verification: { google: "gcyX2n6EYn4ip0teMka5Xc27liad23u4i11hOGj5vQ8" },
   openGraph: {
     type: "website",
     siteName: "KORVA OS",
