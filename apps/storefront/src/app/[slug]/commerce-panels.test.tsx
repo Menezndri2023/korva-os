@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BookingPanel, CheckoutPanel } from "./commerce-panels";
 import { publicApiClient } from "@/lib/public-api-client";
+import { useCart } from "@/lib/use-cart";
 import type { PublicOffer } from "@/lib/public-types";
 
 vi.mock("@/lib/public-api-client", async (importOriginal) => {
@@ -332,5 +333,116 @@ describe("CheckoutPanel — fulfillment", () => {
         expect.objectContaining({ requestedFor: { date: date.value, time: "12:30" } }),
       ),
     );
+  });
+});
+
+describe("CheckoutPanel — editing the basket", () => {
+  /** The real basket hook behind the real dialog, as the shop pages wire them. */
+  function Shop() {
+    const basket = useCart("maquis");
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => basket.addToCart({ id: "garba", name: "Garba", pricing: { amount: 2500 } })}
+        >
+          add garba
+        </button>
+        <button
+          type="button"
+          onClick={() => basket.addToCart({ id: "alloco", name: "Alloco", pricing: { amount: 1000 } })}
+        >
+          add alloco
+        </button>
+        <CheckoutPanel
+          slug="maquis"
+          cart={basket.cart}
+          actions={basket}
+          currency="XOF"
+          acceptedPaymentMethods={["cash"]}
+          onClose={() => {}}
+          onSuccess={() => {}}
+        />
+      </>
+    );
+  }
+
+  function renderShop() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <Shop />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    // This test environment has no Web Storage of its own: an in-memory one, shared across the
+    // "reload" below exactly as a browser's would be.
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+      clear: () => store.clear(),
+    });
+    postMock.mockReset();
+    postMock.mockResolvedValue({ id: "order-1", number: "CMD-1" });
+  });
+
+  it("changes quantities and removes a line, and orders what is shown", async () => {
+    const user = userEvent.setup();
+    renderShop();
+    await user.click(screen.getByRole("button", { name: "add garba" }));
+    await user.click(screen.getByRole("button", { name: "add alloco" }));
+
+    await user.click(screen.getByRole("button", { name: "Ajouter un Garba" }));
+    expect(screen.getByText(/Total : 6000.00 XOF/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retirer un Garba" }));
+    expect(screen.getByText(/Total : 3500.00 XOF/)).toBeInTheDocument();
+
+    const alloco = screen.getByText("Alloco").closest("li")!;
+    await user.click(within(alloco).getByRole("button", { name: "Supprimer" }));
+    expect(screen.queryByText("Alloco")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Adresse e-mail"), "kofi@client.ci");
+    await user.click(screen.getByRole("button", { name: "Confirmer la commande" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/public/maquis/orders",
+        expect.objectContaining({ items: [expect.objectContaining({ offerId: "garba", quantity: 1 })] }),
+      ),
+    );
+  });
+
+  it("puts lines aside, keeps them across a reload, and brings them back", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderShop();
+    await user.click(screen.getByRole("button", { name: "add garba" }));
+    await user.click(screen.getByRole("button", { name: "add alloco" }));
+
+    await user.click(screen.getByRole("button", { name: "Tout mettre de côté" }));
+    expect(screen.getByText("Votre panier est vide. Vos articles mis de côté sont ci-dessous.")).toBeInTheDocument();
+    expect(screen.getByText("Mis de côté (2)")).toBeInTheDocument();
+    // Nothing put aside can be ordered.
+    expect(screen.queryByRole("button", { name: "Confirmer la commande" })).not.toBeInTheDocument();
+
+    unmount();
+    renderShop();
+    const garba = (await screen.findByText("Garba × 1")).closest("li")!;
+    await user.click(within(garba).getByRole("button", { name: "Remettre dans le panier" }));
+    expect(screen.getByText("Mis de côté (1)")).toBeInTheDocument();
+    expect(screen.getByText(/Total : 2500.00 XOF/)).toBeInTheDocument();
+  });
+
+  it("asks before emptying the basket", async () => {
+    const user = userEvent.setup();
+    renderShop();
+    await user.click(screen.getByRole("button", { name: "add garba" }));
+
+    await user.click(screen.getByRole("button", { name: "Vider le panier" }));
+    expect(screen.getByText("Garba")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Oui, vider le panier" }));
+    expect(screen.getByText("Votre panier est vide.")).toBeInTheDocument();
   });
 });

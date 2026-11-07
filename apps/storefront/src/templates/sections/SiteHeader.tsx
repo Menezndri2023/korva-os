@@ -86,8 +86,15 @@ export function SiteHeader({
           <button
             type="button"
             onClick={onOpenCheckout}
-            disabled={cartCount === 0}
-            aria-label={cartCount === 0 ? t("Panier vide", "Empty basket") : `Voir le panier, ${cartCount} article${cartCount > 1 ? "s" : ""}`}
+            // Never disabled: an empty basket still opens, to show what was put aside for later.
+            aria-label={
+              cartCount === 0
+                ? t("Panier vide", "Empty basket")
+                : t(
+                    `Voir le panier, ${cartCount} article${cartCount > 1 ? "s" : ""}`,
+                    `View the basket, ${cartCount} item${cartCount > 1 ? "s" : ""}`,
+                  )
+            }
             className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-50 ${
               accent ? "bg-white/15 hover:bg-white/25" : `${KT.accentSoftBg} hover:opacity-90`
             }`}

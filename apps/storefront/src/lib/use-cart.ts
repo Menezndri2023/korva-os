@@ -19,6 +19,49 @@ function cartStorageKey(slug: string): string {
   return `korva-storefront-cart:${slug}`;
 }
 
+/** Lines the shopper put aside ("Mettre de côté"): kept apart from the basket, so they are never
+ *  ordered by accident, and brought back with one tap. Same per-shop, browser-only storage. */
+function savedStorageKey(slug: string): string {
+  return `korva-storefront-saved:${slug}`;
+}
+
+/** Two lines are the same product when offer, variant and options all match. */
+export function lineKey(line: Pick<CartLine, "offerId" | "variantId" | "optionIds">): string {
+  return `${line.offerId}:${line.variantId ?? ""}:${optionKey(line.optionIds)}`;
+}
+
+/** Adds `line` to `lines`, merging its quantity into an identical line already there. */
+function mergeLine(lines: CartLine[], line: CartLine): CartLine[] {
+  const key = lineKey(line);
+  return lines.some((candidate) => lineKey(candidate) === key)
+    ? lines.map((candidate) =>
+        lineKey(candidate) === key ? { ...candidate, quantity: candidate.quantity + line.quantity } : candidate,
+      )
+    : [...lines, line];
+}
+
+function readLines(key: string): CartLine[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as CartLine[]) : [];
+  } catch {
+    // Corrupt entry or storage unavailable (private mode, disabled storage) — start empty.
+    return [];
+  }
+}
+
+function writeLines(key: string, lines: CartLine[]): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(lines));
+  } catch {
+    // Storage unavailable/full — the lines just won't survive a reload; still work in-memory.
+  }
+}
+
+/** The most of one line a basket takes — a typo of 1000 never reaches the order form. */
+export const MAX_LINE_QUANTITY = 99;
+
 /**
  * A commerce cart that survives navigation between the catalog page and an offer's own detail
  * page (both real routes now — see the [slug]/offers/[offerId] route added in Wave 2 Agent F).
@@ -30,6 +73,7 @@ function cartStorageKey(slug: string): string {
  */
 export function useCart(slug: string) {
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [saved, setSaved] = useState<CartLine[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
   // Reads localStorage (unavailable during SSR/first paint) to hydrate the cart post-mount —
@@ -41,26 +85,18 @@ export function useCart(slug: string) {
   // very "Panier (N)" button this cart drives.
   /* eslint-disable react-hooks/set-state-in-effect -- see comment above */
   useEffect(() => {
-    let nextCart: CartLine[] = [];
-    try {
-      const raw = window.localStorage.getItem(cartStorageKey(slug));
-      nextCart = raw ? (JSON.parse(raw) as CartLine[]) : [];
-    } catch {
-      // Corrupt entry or storage unavailable (private mode, disabled storage) — start empty.
-    }
-    setCart(nextCart);
+    setCart(readLines(cartStorageKey(slug)));
+    setSaved(readLines(savedStorageKey(slug)));
     setHydrated(true);
   }, [slug]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (!hydrated) return;
-    try {
-      window.localStorage.setItem(cartStorageKey(slug), JSON.stringify(cart));
-    } catch {
-      // Storage unavailable/full — the cart just won't survive a reload; still works in-memory.
-    }
+    if (hydrated) writeLines(cartStorageKey(slug), cart);
   }, [slug, cart, hydrated]);
+  useEffect(() => {
+    if (hydrated) writeLines(savedStorageKey(slug), saved);
+  }, [slug, saved, hydrated]);
 
   const addToCart = useCallback(
     (
@@ -98,5 +134,65 @@ export function useCart(slug: string) {
 
   const clearCart = useCallback(() => setCart([]), []);
 
-  return { cart, addToCart, clearCart };
+  /** 0 removes the line; anything above MAX_LINE_QUANTITY is capped. */
+  const setQuantity = useCallback((key: string, quantity: number) => {
+    const next = Math.min(MAX_LINE_QUANTITY, Math.max(0, Math.floor(quantity)));
+    setCart((prev) =>
+      next === 0
+        ? prev.filter((line) => lineKey(line) !== key)
+        : prev.map((line) => (lineKey(line) === key ? { ...line, quantity: next } : line)),
+    );
+  }, []);
+
+  const removeLine = useCallback((key: string) => {
+    setCart((prev) => prev.filter((line) => lineKey(line) !== key));
+  }, []);
+
+  /** Moves one line out of the basket into "Mis de côté". */
+  const saveForLater = useCallback(
+    (key: string) => {
+      const line = cart.find((candidate) => lineKey(candidate) === key);
+      if (!line) return;
+      setCart((prev) => prev.filter((candidate) => lineKey(candidate) !== key));
+      setSaved((prev) => mergeLine(prev, line));
+    },
+    [cart],
+  );
+
+  /** Puts the whole basket aside — the "brouillon" of an order the shopper will finish later. */
+  const saveAllForLater = useCallback(() => {
+    setSaved((prev) => cart.reduce(mergeLine, prev));
+    setCart([]);
+  }, [cart]);
+
+  /** Brings a line put aside back into the basket. */
+  const restoreSaved = useCallback(
+    (key: string) => {
+      const line = saved.find((candidate) => lineKey(candidate) === key);
+      if (!line) return;
+      setSaved((prev) => prev.filter((candidate) => lineKey(candidate) !== key));
+      setCart((prev) => mergeLine(prev, line));
+    },
+    [saved],
+  );
+
+  const removeSaved = useCallback((key: string) => {
+    setSaved((prev) => prev.filter((line) => lineKey(line) !== key));
+  }, []);
+
+  return {
+    cart,
+    saved,
+    addToCart,
+    clearCart,
+    setQuantity,
+    removeLine,
+    saveForLater,
+    saveAllForLater,
+    restoreSaved,
+    removeSaved,
+  };
 }
+
+/** What the basket dialog can do to the basket — everything useCart offers but adding. */
+export type CartActions = Omit<ReturnType<typeof useCart>, "cart" | "addToCart">;

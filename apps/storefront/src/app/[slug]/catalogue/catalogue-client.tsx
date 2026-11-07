@@ -113,7 +113,8 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
     enabled: !!orgQuery.data?.visibleSections.includes("catalog"),
   });
 
-  const { cart, addToCart, clearCart } = useCart(slug);
+  const basket = useCart(slug);
+  const { cart, addToCart, clearCart } = basket;
 
   const router = useRouter();
   const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
@@ -286,6 +287,7 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
         <CheckoutPanel
           slug={slug}
           cart={cart}
+          actions={basket}
           currency={organization.currency}
           shippingFlatRate={organization.shippingFlatRate}
           reception={organization}

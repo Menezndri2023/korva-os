@@ -31,7 +31,7 @@ export function MobileCartBar({
         >
           <span className="inline-flex items-center gap-2">
             <ShoppingBag aria-hidden className="h-5 w-5" />
-            {cartCount} article{cartCount > 1 ? "s" : ""}
+            {t(`${cartCount} article${cartCount > 1 ? "s" : ""}`, `${cartCount} item${cartCount > 1 ? "s" : ""}`)}
           </span>
           <span>{t("Voir le panier", "View the basket")}</span>
         </button>

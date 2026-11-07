@@ -19,7 +19,7 @@ import {
 } from "@korva/types";
 import { Button, Dialog, Input, Select } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
-import { optionKey } from "@/lib/use-cart";
+import { lineKey, MAX_LINE_QUANTITY, type CartActions } from "@/lib/use-cart";
 import type {
   CartLine,
   PublicOffer,
@@ -469,11 +469,14 @@ export function CheckoutPanel({
   reception,
   acceptedPaymentMethods,
   customer,
+  actions,
   onClose,
   onSuccess,
 }: {
   slug: string;
   cart: CartLine[];
+  /** Change, remove, clear or put aside what is in the basket. Absent: a read-only summary. */
+  actions?: CartActions;
   currency: string;
   shippingFlatRate?: number;
   /** The shop's fulfillment settings — usually the PublicOrganization itself. No modes means the
@@ -525,6 +528,7 @@ export function CheckoutPanel({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<CreatePublicOrderInput>({
     resolver: zodResolver(createPublicOrderSchema),
@@ -545,6 +549,20 @@ export function CheckoutPanel({
       shippingAddress: { line1: "", line2: "", city: "", postalCode: "", country: "" },
     },
   });
+
+  // The basket can change while this dialog is open (quantity, removal, a line brought back):
+  // the order always carries what the shopper sees, never the basket as it was on opening.
+  useEffect(() => {
+    setValue(
+      "items",
+      cart.map((line) => ({
+        offerId: line.offerId,
+        variantId: line.variantId,
+        optionIds: line.optionIds,
+        quantity: line.quantity,
+      })),
+    );
+  }, [cart, setValue]);
 
   // Only ever called when paymentMethod === "online" — redirects the browser to the PSP's
   // hosted checkout page; there is nothing more for this dialog to render once that happens.
@@ -605,257 +623,387 @@ export function CheckoutPanel({
   return (
     <Dialog open onClose={onClose} title={t("Finaliser la commande", "Complete the order")}>
       <DialogCloseButton onClose={onClose} />
-      <form onSubmit={handleSubmit((values) => orderMutation.mutate(values))} className="space-y-3 text-sm">
-        <ul className="divide-y divide-border rounded-md border border-border">
-          {cart.map((line) => (
-            <li key={`${line.offerId}:${line.variantId ?? ""}:${optionKey(line.optionIds)}`} className="flex justify-between px-3 py-2">
-              <span>
-                {line.name} × {line.quantity}
-              </span>
-              <span>
-                {(line.unitPrice * line.quantity).toFixed(2)} {currency}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <div className="space-y-1 text-right text-sm">
-          {shippingCost > 0 && (
-            <p className="text-text-muted">
-              Livraison : {shippingCost.toFixed(2)} {currency}
+      <BasketEditor cart={cart} currency={currency} actions={actions} />
+      {cart.length > 0 && (
+        <form onSubmit={handleSubmit((values) => orderMutation.mutate(values))} className="mt-3 space-y-3 text-sm">
+          <div className="space-y-1 text-right text-sm">
+            {shippingCost > 0 && (
+              <p className="text-text-muted">
+                {t("Livraison", "Delivery")} : {shippingCost.toFixed(2)} {currency}
+              </p>
+            )}
+            <p className="font-medium text-text">
+              {t("Total", "Total")} : {total.toFixed(2)} {currency}
             </p>
-          )}
-          <p className="font-medium text-text">
-            Total : {total.toFixed(2)} {currency}
-          </p>
-        </div>
+          </div>
 
-        <Input
-          placeholder={t("Code promo (optionnel)", "Discount code (optional)")}
-          aria-label={t("Code promo", "Discount code")}
-          {...register("discountCode")}
-        />
-
-        <Input
-          placeholder={t("Prénom", "First name")}
-          aria-label={t("Prénom", "First name")}
-          {...register("contact.firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-          error={!!errors.contact?.firstName}
-        />
-        <div>
           <Input
-            type="email"
-            placeholder={t("E-mail", "E-mail")}
-            aria-label={t("Adresse e-mail", "Email address")}
-            {...emailField}
-            onBlur={(event) => {
-              void emailField.onBlur(event);
-              const email = event.target.value.trim();
-              if (!email || !email.includes("@")) return;
-              trackCheckoutMutation.mutate({
-                contact: { email },
-                items: cart.map((line) => ({ offerId: line.offerId, quantity: line.quantity })),
-              });
-            }}
-            error={!!errors.contact?.email}
+            placeholder={t("Code promo (optionnel)", "Discount code (optional)")}
+            aria-label={t("Code promo", "Discount code")}
+            {...register("discountCode")}
           />
-          {errors.contact?.email && (
-            <p className="mt-1 text-xs text-destructive">{errors.contact.email.message}</p>
-          )}
-        </div>
-        <Input
-          placeholder={t("Téléphone (optionnel)", "Phone (optional)")}
-          aria-label={t("Téléphone", "Phone")}
-          {...register("contact.phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-          error={!!errors.contact?.phone}
-        />
 
-        {configured && (
-          <div className="space-y-2 border-t border-border pt-3">
-            <p className="text-xs font-medium text-text-muted">{t("Réception", "Receiving")}</p>
-            <div role="radiogroup" aria-label={t("Mode de réception", "How you receive it")} className="flex flex-wrap gap-3">
-              {modes.map((candidate) => (
-                <label key={candidate} className="flex items-center gap-2 text-sm text-text">
+          <Input
+            placeholder={t("Prénom", "First name")}
+            aria-label={t("Prénom", "First name")}
+            {...register("contact.firstName", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+            error={!!errors.contact?.firstName}
+          />
+          <div>
+            <Input
+              type="email"
+              placeholder={t("E-mail", "E-mail")}
+              aria-label={t("Adresse e-mail", "Email address")}
+              {...emailField}
+              onBlur={(event) => {
+                void emailField.onBlur(event);
+                const email = event.target.value.trim();
+                if (!email || !email.includes("@")) return;
+                trackCheckoutMutation.mutate({
+                  contact: { email },
+                  items: cart.map((line) => ({ offerId: line.offerId, quantity: line.quantity })),
+                });
+              }}
+              error={!!errors.contact?.email}
+            />
+            {errors.contact?.email && (
+              <p className="mt-1 text-xs text-destructive">{errors.contact.email.message}</p>
+            )}
+          </div>
+          <Input
+            placeholder={t("Téléphone (optionnel)", "Phone (optional)")}
+            aria-label={t("Téléphone", "Phone")}
+            {...register("contact.phone", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
+            error={!!errors.contact?.phone}
+          />
+
+          {configured && (
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-xs font-medium text-text-muted">{t("Réception", "Receiving")}</p>
+              <div role="radiogroup" aria-label={t("Mode de réception", "How you receive it")} className="flex flex-wrap gap-3">
+                {modes.map((candidate) => (
+                  <label key={candidate} className="flex items-center gap-2 text-sm text-text">
+                    <input
+                      type="radio"
+                      name="fulfillmentMode"
+                      value={candidate}
+                      checked={mode === candidate}
+                      onChange={() => setMode(candidate)}
+                    />
+                    {(locale === "en" ? FULFILLMENT_MODE_LABELS_EN : FULFILLMENT_MODE_LABELS)[candidate]}
+                  </label>
+                ))}
+              </div>
+
+              {mode === "delivery" && zones.length > 0 && (
+                <Select
+                  aria-label={t("Zone de livraison", "Delivery zone")}
+                  value={zoneId}
+                  onChange={(e) => setZoneId(e.target.value)}
+                  className="w-full"
+                >
+                  <option value="">{t("Choisir votre zone", "Choose your zone")}</option>
+                  {zones.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name} — {candidate.fee.toFixed(2)} {currency}
+                      {candidate.minimumOrder != null
+                        ? ` (minimum ${candidate.minimumOrder.toFixed(2)} ${currency})`
+                        : ""}
+                    </option>
+                  ))}
+                </Select>
+              )}
+              {belowMinimum && zone?.minimumOrder != null && (
+                <p className="text-xs text-destructive">
+                  {t(
+                    `Commande minimum pour ${zone.name} : ${zone.minimumOrder.toFixed(2)} ${currency}.`,
+                    `Minimum order for ${zone.name}: ${zone.minimumOrder.toFixed(2)} ${currency}.`,
+                  )}
+                </p>
+              )}
+
+              {mode === "pickup" && reception?.pickupInstructions && (
+                <p className="text-xs text-text-muted">{reception.pickupInstructions}</p>
+              )}
+
+              {mode === "dine_in" && (
+                <Input
+                  placeholder={t("Table (optionnel)", "Table (optional)")}
+                  aria-label={t("Table", "Table")}
+                  value={tableLabel}
+                  onChange={(e) => setTableLabel(e.target.value)}
+                />
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-text">
                   <input
                     type="radio"
-                    name="fulfillmentMode"
-                    value={candidate}
-                    checked={mode === candidate}
-                    onChange={() => setMode(candidate)}
+                    name="when"
+                    checked={when === "asap"}
+                    onChange={() => setWhen("asap")}
                   />
-                  {(locale === "en" ? FULFILLMENT_MODE_LABELS_EN : FULFILLMENT_MODE_LABELS)[candidate]}
+                  {t("Dès que possible", "As soon as possible")}
+                </label>
+                <label className="flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="radio"
+                    name="when"
+                    checked={when === "later"}
+                    onChange={() => setWhen("later")}
+                  />
+                  {t("Choisir une heure", "Choose a time")}
+                </label>
+              </div>
+              {when === "later" && (
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    aria-label={t("Date souhaitée", "Preferred date")}
+                    value={requestedDate}
+                    min={localToday()}
+                    onChange={(e) => setRequestedDate(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="time"
+                    aria-label={t("Heure souhaitée", "Preferred time")}
+                    value={requestedTime}
+                    onChange={(e) => setRequestedTime(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {showAddress && (
+          <div className="space-y-2 border-t border-border pt-3">
+            <p className="text-xs font-medium text-text-muted">
+              {configured ? t("Adresse de livraison", "Delivery address") : t("Adresse de livraison (optionnel)", "Delivery address (optional)")}
+            </p>
+            <Input
+              placeholder={t("Adresse", "Address")}
+              aria-label={t("Adresse", "Address")}
+              {...register("shippingAddress.line1")}
+            />
+            <Input
+              placeholder={t("Complément d'adresse", "Address line 2")}
+              aria-label={t("Complément d'adresse", "Address line 2")}
+              {...register("shippingAddress.line2")}
+            />
+            <div className="flex gap-2">
+              <Input
+                placeholder={t("Ville", "Town")}
+                aria-label={t("Ville", "Town")}
+                className="flex-1"
+                {...register("shippingAddress.city")}
+              />
+              <Input
+                placeholder={t("Code postal", "Postcode")}
+                aria-label={t("Code postal", "Postcode")}
+                className="w-28"
+                {...register("shippingAddress.postalCode")}
+              />
+            </div>
+            <Input
+              placeholder={t("Pays", "Country")}
+              aria-label={t("Pays", "Country")}
+              {...register("shippingAddress.country")}
+            />
+          </div>
+          )}
+
+          {acceptedPaymentMethods.length > 1 && (
+            <div className="space-y-1 border-t border-border pt-3">
+              <p className="text-xs font-medium text-text-muted">{t("Mode de paiement", "Payment method")}</p>
+              {acceptedPaymentMethods.map((method) => (
+                <label key={method} className="flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value={method}
+                    checked={paymentMethod === method}
+                    onChange={() => setPaymentMethod(method)}
+                  />
+                  {t(...PAYMENT_METHOD_LABELS[method])}
                 </label>
               ))}
             </div>
+          )}
 
-            {mode === "delivery" && zones.length > 0 && (
-              <Select
-                aria-label={t("Zone de livraison", "Delivery zone")}
-                value={zoneId}
-                onChange={(e) => setZoneId(e.target.value)}
-                className="w-full"
-              >
-                <option value="">{t("Choisir votre zone", "Choose your zone")}</option>
-                {zones.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.name} — {candidate.fee.toFixed(2)} {currency}
-                    {candidate.minimumOrder != null
-                      ? ` (minimum ${candidate.minimumOrder.toFixed(2)} ${currency})`
-                      : ""}
-                  </option>
-                ))}
-              </Select>
-            )}
-            {belowMinimum && zone?.minimumOrder != null && (
-              <p className="text-xs text-destructive">
-                {t(
-                  `Commande minimum pour ${zone.name} : ${zone.minimumOrder.toFixed(2)} ${currency}.`,
-                  `Minimum order for ${zone.name}: ${zone.minimumOrder.toFixed(2)} ${currency}.`,
-                )}
-              </p>
-            )}
-
-            {mode === "pickup" && reception?.pickupInstructions && (
-              <p className="text-xs text-text-muted">{reception.pickupInstructions}</p>
-            )}
-
-            {mode === "dine_in" && (
-              <Input
-                placeholder={t("Table (optionnel)", "Table (optional)")}
-                aria-label={t("Table", "Table")}
-                value={tableLabel}
-                onChange={(e) => setTableLabel(e.target.value)}
-              />
-            )}
-
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-text">
-                <input
-                  type="radio"
-                  name="when"
-                  checked={when === "asap"}
-                  onChange={() => setWhen("asap")}
-                />
-                {t("Dès que possible", "As soon as possible")}
-              </label>
-              <label className="flex items-center gap-2 text-sm text-text">
-                <input
-                  type="radio"
-                  name="when"
-                  checked={when === "later"}
-                  onChange={() => setWhen("later")}
-                />
-                {t("Choisir une heure", "Choose a time")}
-              </label>
-            </div>
-            {when === "later" && (
-              <div className="flex gap-2">
-                <Input
-                  type="date"
-                  aria-label={t("Date souhaitée", "Preferred date")}
-                  value={requestedDate}
-                  min={localToday()}
-                  onChange={(e) => setRequestedDate(e.target.value)}
-                  className="flex-1"
-                />
-                <Input
-                  type="time"
-                  aria-label={t("Heure souhaitée", "Preferred time")}
-                  value={requestedTime}
-                  onChange={(e) => setRequestedTime(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {showAddress && (
-        <div className="space-y-2 border-t border-border pt-3">
-          <p className="text-xs font-medium text-text-muted">
-            {configured ? t("Adresse de livraison", "Delivery address") : t("Adresse de livraison (optionnel)", "Delivery address (optional)")}
-          </p>
-          <Input
-            placeholder={t("Adresse", "Address")}
-            aria-label={t("Adresse", "Address")}
-            {...register("shippingAddress.line1")}
-          />
-          <Input
-            placeholder={t("Complément d'adresse", "Address line 2")}
-            aria-label={t("Complément d'adresse", "Address line 2")}
-            {...register("shippingAddress.line2")}
-          />
-          <div className="flex gap-2">
-            <Input
-              placeholder={t("Ville", "Town")}
-              aria-label={t("Ville", "Town")}
-              className="flex-1"
-              {...register("shippingAddress.city")}
-            />
-            <Input
-              placeholder={t("Code postal", "Postcode")}
-              aria-label={t("Code postal", "Postcode")}
-              className="w-28"
-              {...register("shippingAddress.postalCode")}
-            />
-          </div>
-          <Input
-            placeholder={t("Pays", "Country")}
-            aria-label={t("Pays", "Country")}
-            {...register("shippingAddress.country")}
-          />
-        </div>
-        )}
-
-        {acceptedPaymentMethods.length > 1 && (
-          <div className="space-y-1 border-t border-border pt-3">
-            <p className="text-xs font-medium text-text-muted">{t("Mode de paiement", "Payment method")}</p>
-            {acceptedPaymentMethods.map((method) => (
-              <label key={method} className="flex items-center gap-2 text-sm text-text">
-                <input
-                  type="radio"
-                  name="paymentMethod"
-                  value={method}
-                  checked={paymentMethod === method}
-                  onChange={() => setPaymentMethod(method)}
-                />
-                {t(...PAYMENT_METHOD_LABELS[method])}
-              </label>
-            ))}
-          </div>
-        )}
-
-        {errors.items && <p className="text-xs text-destructive">{errors.items.message ?? t("Panier invalide.", "The basket is not valid.")}</p>}
-        {orderMutation.isError && (
-          <p className="text-xs text-destructive">
-            {orderMutation.error instanceof PublicApiError ? orderMutation.error.message : t("Erreur", "Error")}
-          </p>
-        )}
-        {payMutation.isError && (
-          <p className="text-xs text-destructive">
-            {payMutation.error instanceof PublicApiError
-              ? payMutation.error.message
-              : t("Impossible de démarrer le paiement en ligne.", "Online payment could not be started.")}
-          </p>
-        )}
-        <Button
-          type="submit"
-          loading={orderMutation.isPending || payMutation.isPending || redirecting}
-          disabled={
-            cart.length === 0 ||
-            belowMinimum ||
-            needsZone ||
-            (configured && when === "later" && !requestedTime)
-          }
-          className="w-full"
-        >
-          {redirecting
-            ? t("Redirection vers le paiement...", "Taking you to payment...")
-            : orderMutation.isPending || payMutation.isPending
-              ? t("Envoi...", "Sending...")
-              : paymentMethod === "online"
-                ? t("Payer par mobile money ou carte", "Pay by mobile money or card")
-                : t("Confirmer la commande", "Confirm the order")}
-        </Button>
-      </form>
+          {errors.items && <p className="text-xs text-destructive">{errors.items.message ?? t("Panier invalide.", "The basket is not valid.")}</p>}
+          {orderMutation.isError && (
+            <p className="text-xs text-destructive">
+              {orderMutation.error instanceof PublicApiError ? orderMutation.error.message : t("Erreur", "Error")}
+            </p>
+          )}
+          {payMutation.isError && (
+            <p className="text-xs text-destructive">
+              {payMutation.error instanceof PublicApiError
+                ? payMutation.error.message
+                : t("Impossible de démarrer le paiement en ligne.", "Online payment could not be started.")}
+            </p>
+          )}
+          <Button
+            type="submit"
+            loading={orderMutation.isPending || payMutation.isPending || redirecting}
+            disabled={
+              cart.length === 0 ||
+              belowMinimum ||
+              needsZone ||
+              (configured && when === "later" && !requestedTime)
+            }
+            className="w-full"
+          >
+            {redirecting
+              ? t("Redirection vers le paiement...", "Taking you to payment...")
+              : orderMutation.isPending || payMutation.isPending
+                ? t("Envoi...", "Sending...")
+                : paymentMethod === "online"
+                  ? t("Payer par mobile money ou carte", "Pay by mobile money or card")
+                  : t("Confirmer la commande", "Confirm the order")}
+          </Button>
+        </form>
+      )}
     </Dialog>
+  );
+}
+
+/**
+ * The basket itself: change a quantity, remove a line, empty it, or put lines aside for later
+ * (the shopper's "brouillon" — kept in this browser, never ordered until brought back).
+ */
+function BasketEditor({
+  cart,
+  currency,
+  actions,
+}: {
+  cart: CartLine[];
+  currency: string;
+  actions?: CartActions;
+}) {
+  const t = useT();
+  const [confirmClear, setConfirmClear] = useState(false);
+  const saved = actions?.saved ?? [];
+  const smallButton =
+    "inline-flex min-h-9 items-center rounded-md px-2 text-xs font-medium text-text-muted hover:bg-surface-muted hover:text-text";
+
+  return (
+    <div className="space-y-3 text-sm">
+      {cart.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-text-muted">
+          {saved.length > 0
+            ? t("Votre panier est vide. Vos articles mis de côté sont ci-dessous.", "Your basket is empty. The items you put aside are below.")
+            : t("Votre panier est vide.", "Your basket is empty.")}
+        </p>
+      ) : (
+        <ul className="divide-y divide-border rounded-md border border-border" aria-label={t("Panier", "Basket")}>
+          {cart.map((line) => {
+            const key = lineKey(line);
+            return (
+              <li key={key} className="space-y-1.5 px-3 py-2">
+                <div className="flex justify-between gap-3">
+                  <span className="text-text">{line.name}</span>
+                  <span className="shrink-0 font-medium text-text">
+                    {(line.unitPrice * line.quantity).toFixed(2)} {currency}
+                  </span>
+                </div>
+                {actions ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <div className="inline-flex items-center rounded-md border border-border">
+                      <button
+                        type="button"
+                        className="h-9 w-9 text-base text-text hover:bg-surface-muted"
+                        aria-label={t(`Retirer un ${line.name}`, `One less ${line.name}`)}
+                        onClick={() => actions.setQuantity(key, line.quantity - 1)}
+                      >
+                        −
+                      </button>
+                      <span className="min-w-8 text-center tabular-nums" aria-label={t("Quantité", "Quantity")}>
+                        {line.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        className="h-9 w-9 text-base text-text hover:bg-surface-muted disabled:opacity-40"
+                        aria-label={t(`Ajouter un ${line.name}`, `One more ${line.name}`)}
+                        disabled={line.quantity >= MAX_LINE_QUANTITY}
+                        onClick={() => actions.setQuantity(key, line.quantity + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                    <button type="button" className={smallButton} onClick={() => actions.saveForLater(key)}>
+                      {t("Mettre de côté", "Save for later")}
+                    </button>
+                    <button type="button" className={smallButton} onClick={() => actions.removeLine(key)}>
+                      {t("Supprimer", "Remove")}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-text-muted">× {line.quantity}</p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {actions && cart.length > 0 && (
+        <div className="flex flex-wrap justify-end gap-1">
+          <button type="button" className={smallButton} onClick={actions.saveAllForLater}>
+            {t("Tout mettre de côté", "Save everything for later")}
+          </button>
+          {confirmClear ? (
+            <>
+              <button
+                type="button"
+                className={`${smallButton} text-destructive`}
+                onClick={() => {
+                  actions.clearCart();
+                  setConfirmClear(false);
+                }}
+              >
+                {t("Oui, vider le panier", "Yes, empty the basket")}
+              </button>
+              <button type="button" className={smallButton} onClick={() => setConfirmClear(false)}>
+                {t("Annuler", "Cancel")}
+              </button>
+            </>
+          ) : (
+            <button type="button" className={smallButton} onClick={() => setConfirmClear(true)}>
+              {t("Vider le panier", "Empty the basket")}
+            </button>
+          )}
+        </div>
+      )}
+
+      {saved.length > 0 && actions && (
+        <section className="space-y-2 border-t border-border pt-3" aria-label={t("Mis de côté", "Saved for later")}>
+          <p className="text-xs font-medium text-text-muted">
+            {t(`Mis de côté (${saved.length})`, `Saved for later (${saved.length})`)}
+          </p>
+          <ul className="divide-y divide-border rounded-md border border-border">
+            {saved.map((line) => {
+              const key = lineKey(line);
+              return (
+                <li key={key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <span className="text-text">
+                    {line.name} × {line.quantity}
+                  </span>
+                  <span className="flex gap-1">
+                    <button type="button" className={smallButton} onClick={() => actions.restoreSaved(key)}>
+                      {t("Remettre dans le panier", "Move to basket")}
+                    </button>
+                    <button type="button" className={smallButton} onClick={() => actions.removeSaved(key)}>
+                      {t("Supprimer", "Remove")}
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </div>
   );
 }

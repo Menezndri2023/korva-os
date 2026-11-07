@@ -122,7 +122,8 @@ export default function StorefrontClient({
         : undefined,
   });
 
-  const { cart, addToCart, clearCart } = useCart(slug);
+  const basket = useCart(slug);
+  const { cart, addToCart, clearCart } = basket;
 
   const router = useRouter();
   const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
@@ -243,6 +244,7 @@ export default function StorefrontClient({
         <CheckoutPanel
           slug={slug}
           cart={cart}
+          actions={basket}
           currency={organization.currency}
           shippingFlatRate={organization.shippingFlatRate}
           reception={organization}

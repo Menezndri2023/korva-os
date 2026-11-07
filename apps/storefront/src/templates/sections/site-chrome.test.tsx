@@ -45,9 +45,9 @@ describe("SiteHeader", () => {
     expect(onOpenCheckout).toHaveBeenCalledOnce();
   });
 
-  it("disables an empty cart", () => {
+  it("still opens an empty cart, where the lines put aside are", () => {
     renderHeader({ cartCount: 0 });
-    expect(screen.getByRole("button", { name: "Panier vide" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Panier vide" })).toBeEnabled();
   });
 
   it("has no cart at all without online selling", () => {

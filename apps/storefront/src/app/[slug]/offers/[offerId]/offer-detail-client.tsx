@@ -56,7 +56,8 @@ export default function OfferDetailClient({
     retry: false,
   });
 
-  const { cart, addToCart, clearCart } = useCart(slug);
+  const basket = useCart(slug);
+  const { cart, addToCart, clearCart } = basket;
   const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
   const [showBooking, setShowBooking] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -407,6 +408,7 @@ export default function OfferDetailClient({
         <CheckoutPanel
           slug={slug}
           cart={cart}
+          actions={basket}
           currency={organization.currency}
           shippingFlatRate={organization.shippingFlatRate}
           reception={organization}
