@@ -372,4 +372,41 @@ describe('Caisse — QR mobile money (e2e)', () => {
       )?.status,
     ).toBe('completed');
   });
+
+  it('records a cash sale once, however often an offline till sends it', async () => {
+    const sale = {
+      amount: 2500,
+      label: 'Coupe enfant',
+      key: 'till-sale-0001-abcdef',
+      soldAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    };
+    const first = asSuccess<{ invoiceId: string; replayed: boolean }>(
+      (
+        await staff(request(server).post('/api/v1/counter-payments/cash'))
+          .send(sale)
+          .expect(201)
+      ).body,
+    );
+    const again = asSuccess<{ invoiceId: string; replayed: boolean }>(
+      (
+        await staff(request(server).post('/api/v1/counter-payments/cash'))
+          .send(sale)
+          .expect(201)
+      ).body,
+    );
+    expect(first.replayed).toBe(false);
+    expect(again).toMatchObject({ invoiceId: first.invoiceId, replayed: true });
+    const invoice = await connection
+      .collection('invoices')
+      .findOne({ _id: new Types.ObjectId(first.invoiceId) });
+    expect(invoice).toMatchObject({ status: 'paid', total: 2500 });
+    expect(
+      String((invoice!.items as { description: string }[])[0]!.description),
+    ).toContain('hors connexion');
+    expect(
+      await connection.collection('payments').countDocuments({
+        idempotencyKey: 'counter-cash:till-sale-0001-abcdef',
+      }),
+    ).toBe(1);
+  });
 });

@@ -2,9 +2,11 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import {
   closeTillSchema,
+  createCashSaleSchema,
   createCounterPaymentSchema,
   tillReportQuerySchema,
   type CloseTillInput,
+  type CreateCashSaleInput,
   type CreateCounterPaymentInput,
   type TillReportQuery,
 } from '@korva/validation';
@@ -61,6 +63,22 @@ export class CounterPaymentsController {
   @Get()
   list(@CurrentTenant() tenant: TenantContext) {
     return this.counterPaymentsService.listRecent(tenant.organizationId);
+  }
+
+  /** A cash sale typed at the till — sent at once, or later by a till that was offline. */
+  @RequirePermissions('payments.create')
+  @Post('cash')
+  cash(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(createCashSaleSchema))
+    body: CreateCashSaleInput,
+  ) {
+    return this.counterPaymentsService.recordCashSale(
+      tenant.organizationId,
+      user.userId,
+      body,
+    );
   }
 
   @RequirePermissions('payments.create')

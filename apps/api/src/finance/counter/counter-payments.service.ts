@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { intlLocaleOf, translator } from '../../shared/i18n';
 import {
   BadRequestException,
   Injectable,
@@ -232,6 +233,87 @@ export class CounterPaymentsService {
   }
 
   /** Found by tag, created on the first counter sale. */
+  /**
+   * A cash sale typed at the till: a one-line invoice to the walk-in customer, paid in cash at
+   * once. `key` is the till's own id for the sale — a sale typed while the connection was down
+   * is sent later, maybe twice; the same key always answers the same sale, never a second one.
+   * `soldAt` is when it was typed: a sale sent long after says so on its line.
+   */
+  async recordCashSale(
+    organizationId: string,
+    userId: string,
+    input: { amount: number; label?: string; key: string; soldAt?: string },
+  ): Promise<{
+    invoiceId: string;
+    invoiceNumber: string;
+    amount: number;
+    replayed: boolean;
+  }> {
+    const idempotencyKey = `counter-cash:${input.key}`;
+    const existing = await this.paymentsService.findByIdempotencyKey(
+      organizationId,
+      idempotencyKey,
+    );
+    if (existing) {
+      const invoice = await this.invoiceModel
+        .findById(existing.invoiceId)
+        .exec();
+      return {
+        invoiceId: existing.invoiceId.toString(),
+        invoiceNumber: invoice?.number ?? '',
+        amount: existing.amount,
+        replayed: true,
+      };
+    }
+    const organization =
+      await this.organizationsService.getById(organizationId);
+    const soldAt = input.soldAt ? new Date(input.soldAt) : null;
+    const late = soldAt && Date.now() - soldAt.getTime() > 5 * 60_000;
+    const t = translator(organization.language);
+    const label =
+      (input.label || DEFAULT_LABEL) +
+      (late
+        ? t(
+            ` (vendu le ${soldAt.toLocaleString(intlLocaleOf(organization.language), { timeZone: organization.timezone, dateStyle: 'short', timeStyle: 'short' })}, hors connexion)`,
+            ` (sold ${soldAt.toLocaleString(intlLocaleOf(organization.language), { timeZone: organization.timezone, dateStyle: 'short', timeStyle: 'short' })}, offline)`,
+          )
+        : '');
+    const contact = await this.walkInContact(organizationId);
+    const draft = await this.invoicesService.create(organizationId, userId, {
+      contactId: contact.id as string,
+      currency: organization.currency,
+      items: [
+        {
+          description: label.slice(0, 300),
+          quantity: 1,
+          unitPrice: input.amount,
+          taxRate: 0,
+        },
+      ],
+    });
+    const invoice = await this.invoicesService.issue(
+      organizationId,
+      userId,
+      draft.id as string,
+    );
+    await this.paymentsService.create(
+      organizationId,
+      userId,
+      {
+        invoiceId: invoice.id as string,
+        amount: invoice.total,
+        method: 'cash',
+      },
+      idempotencyKey,
+    );
+    return {
+      invoiceId: invoice.id as string,
+      invoiceNumber: invoice.number,
+      amount: invoice.total,
+      replayed: false,
+    };
+  }
+
   private async walkInContact(
     organizationId: string,
   ): Promise<ContactDocument> {

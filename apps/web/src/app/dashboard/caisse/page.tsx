@@ -9,6 +9,8 @@ import { apiClient, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { TillPanel } from "@/components/pro/till-panel";
+import { CashSaleCard } from "@/components/cash-sale-card";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 
 function errorText(error: unknown, t: Translate): string {
@@ -61,6 +63,7 @@ const POLL_EVERY_MS = 3000;
 export default function CounterPage() {
   const authReady = useAuthReady();
   const queryClient = useQueryClient();
+  const { data: organization } = useActiveOrganization();
   const locale = useDashboardLocale();
   const t = useT();
   const [amount, setAmount] = useState("");
@@ -190,6 +193,8 @@ export default function CounterPage() {
           )}
         </Card>
       )}
+
+      <CashSaleCard currency={organization?.currency ?? null} />
 
       <Card className="p-5">
         <h2 className="text-base font-semibold text-text">{t("Dernières ventes à la caisse", "Recent till sales")}</h2>
