@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Button, Card, Input } from "@korva/ui";
 import { PublicApiError } from "@/lib/public-api-client";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
+import { LoyaltyCard } from "./loyalty-card";
 import { usePublicOrganization } from "@/lib/use-public-organization";
 import type { PublicOrganization } from "@/lib/public-types";
 import { AccountShell } from "./account-shell";
@@ -49,7 +50,7 @@ export default function ProfileClient({ slug }: { slug: string }) {
   const locale = useStorefrontLocale();
   const t = useT();
   const router = useRouter();
-  const { hydrated, isAuthenticated, customer, updateProfile, logout } = useCustomerAuth(slug);
+  const { hydrated, isAuthenticated, customer, updateProfile, logout, authFetch } = useCustomerAuth(slug);
   const organizationQuery = usePublicOrganization(slug);
 
   const [firstName, setFirstName] = useState("");
@@ -103,7 +104,10 @@ export default function ProfileClient({ slug }: { slug: string }) {
   return (
     <AccountShell slug={slug} title={t("Mon compte", "My account")}>
       <p className="text-sm text-text-muted">
-        Bonjour{customer.firstName ? ` ${customer.firstName}` : ""}, retrouvez ici tout ce qui vous concerne.
+        {t(
+          `Bonjour${customer.firstName ? ` ${customer.firstName}` : ""}, retrouvez ici tout ce qui vous concerne.`,
+          `Hello${customer.firstName ? ` ${customer.firstName}` : ""}, everything about you is here.`,
+        )}
       </p>
       {/* The sections first, as tiles: what the customer came for. The profile comes after. */}
       <nav aria-label={t("Mon espace client", "My customer area")} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -118,6 +122,8 @@ export default function ProfileClient({ slug }: { slug: string }) {
           </Link>
         ))}
       </nav>
+
+      <LoyaltyCard slug={slug} authFetch={authFetch} />
 
       <h2 className="pt-2 text-sm font-semibold text-text">{t("Mes informations", "My details")}</h2>
       <Card className="p-4">

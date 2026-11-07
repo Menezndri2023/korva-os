@@ -7,6 +7,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { LoyaltyService } from '../crm/loyalty/loyalty.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
@@ -119,6 +120,7 @@ export class CustomerAuthService {
   constructor(
     private readonly organizationsService: OrganizationsService,
     private readonly contactsService: ContactsService,
+    private readonly loyaltyService: LoyaltyService,
     private readonly ordersService: OrdersService,
     private readonly bookingsService: BookingsService,
     private readonly usersService: UsersService,
@@ -377,6 +379,16 @@ export class CustomerAuthService {
       customer.contactId,
     );
     return toPublicCustomer(account, contact);
+  }
+
+  /** The customer's own loyalty card at this shop. */
+  async getLoyalty(slug: string, customer: AuthenticatedCustomer) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+    return this.loyaltyService.forContact(
+      organization.id as string,
+      customer.contactId,
+    );
   }
 
   /** The customer's basket and saved lines, kept with the account (empty until first saved). */

@@ -3,7 +3,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { LoyaltyService } from '../../crm/loyalty/loyalty.service';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
 import type {
@@ -60,6 +62,7 @@ export class BookingsService {
     private readonly creditBalancesService: CreditBalancesService,
     private readonly reviewRequestsService: ReviewRequestsService,
     @InjectConnection() private readonly connection: Connection,
+    @Optional() private readonly loyaltyService?: LoyaltyService,
   ) {}
 
   async create(
@@ -467,6 +470,10 @@ export class BookingsService {
       contactId: updated.contactId.toString(),
       attended: input.attended,
     });
+
+    // A visit the customer came to earns a loyalty stamp (unless invoiced: it stamps when paid).
+    if (input.attended)
+      await this.loyaltyService?.stampForBooking(organizationId, id);
 
     if (input.attended) {
       // Best-effort — a failed confirmation send must never fail the completion that already

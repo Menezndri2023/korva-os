@@ -6,8 +6,10 @@ import {
   Param,
   Patch,
   Post,
+  HttpCode,
   Query,
 } from '@nestjs/common';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { ApiTags } from '@nestjs/swagger';
 import {
   createContactSchema,
@@ -32,7 +34,33 @@ import { RequireModule } from '../../common/decorators/require-module.decorator'
 @RequireModule('crm')
 @Controller('contacts')
 export class ContactsController {
-  constructor(private readonly contactsService: ContactsService) {}
+  constructor(
+    private readonly contactsService: ContactsService,
+    private readonly loyaltyService: LoyaltyService,
+  ) {}
+
+  /** The customer's loyalty card: stamps, rewards available and used. */
+  @RequirePermissions('contacts.read')
+  @Get(':id/loyalty')
+  loyalty(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.loyaltyService.forContact(tenant.organizationId, id);
+  }
+
+  /** A stamp added by hand — a visit paid in cash that KORVA never saw. */
+  @RequirePermissions('contacts.update')
+  @Post(':id/loyalty/stamp')
+  @HttpCode(200)
+  addStamp(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.loyaltyService.stampByHand(tenant.organizationId, id);
+  }
+
+  /** The customer takes their reward. */
+  @RequirePermissions('contacts.update')
+  @Post(':id/loyalty/redeem')
+  @HttpCode(200)
+  redeem(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.loyaltyService.redeem(tenant.organizationId, id);
+  }
 
   @RequirePermissions('contacts.read')
   @Get()

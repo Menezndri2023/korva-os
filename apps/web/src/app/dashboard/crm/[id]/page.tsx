@@ -52,6 +52,7 @@ import { RelationSection } from "@/components/relation-section";
 import { ContactAccountCard } from "@/components/customer-account-actions";
 import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
+import { ContactLoyaltyCard } from "@/components/loyalty";
 
 const TIMELINE_TYPE_LABELS: Record<BusinessGraphTimelineEntry["type"], [string, string]> = {
   lead: ["Prospect", "Lead"],
@@ -601,6 +602,8 @@ export default function ContactDetailPage() {
           </form>
         )}
       </Card>
+
+      <ContactLoyaltyCard contactId={id} />
 
       {duplicatesQuery.data && duplicatesQuery.data.length > 0 && (
         <Card className="p-6">

@@ -149,3 +149,23 @@ export interface Tag {
   name: string;
   color?: string;
 }
+
+/**
+ * La carte de fidélité, set by the business (Organization.loyalty): every `stampsRequired`
+ * stamps — one per paid purchase or completed visit — earn `reward` ("1 coupe offerte").
+ */
+export interface LoyaltySettings {
+  enabled: boolean;
+  stampsRequired: number;
+  reward: string;
+}
+
+/** A customer's card, as the dashboard and the customer area show it. */
+export interface ContactLoyalty {
+  enabled: boolean;
+  stamps: number;
+  stampsRequired: number;
+  reward: string;
+  rewardsAvailable: number;
+  rewardsUsed: number;
+}

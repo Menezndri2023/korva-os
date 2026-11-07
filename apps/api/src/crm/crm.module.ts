@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { LoyaltyService } from './loyalty/loyalty.service';
+import { EmailModule } from '../shared/email/email.module';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { Contact, ContactSchema } from './contacts/schemas/contact.schema';
@@ -121,6 +123,7 @@ import { IdentityModule } from '../identity/identity.module';
 
 @Module({
   imports: [
+    EmailModule,
     MongooseModule.forFeature([
       { name: Contact.name, schema: ContactSchema },
       { name: Lead.name, schema: LeadSchema },
@@ -165,6 +168,7 @@ import { IdentityModule } from '../identity/identity.module';
     ProjectsController,
   ],
   providers: [
+    LoyaltyService,
     ContactsRepository,
     ContactReferencesRepository,
     ContactMergeRepository,
@@ -188,6 +192,7 @@ import { IdentityModule } from '../identity/identity.module';
     ProjectsService,
   ],
   exports: [
+    LoyaltyService,
     ContactsService,
     TasksService,
     LeadsService,

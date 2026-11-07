@@ -162,6 +162,18 @@ export class Organization {
   @Prop({ type: [String], default: undefined })
   acceptedPaymentMethods?: PaymentMethod[];
 
+  /** See Organization.loyalty in @korva/types. */
+  @Prop({
+    type: {
+      enabled: Boolean,
+      stampsRequired: Number,
+      reward: String,
+      _id: false,
+    },
+    default: undefined,
+  })
+  loyalty?: { enabled: boolean; stampsRequired: number; reward: string };
+
   /** See Organization.onlinePaymentTerms in @korva/types. */
   @Prop({
     type: {

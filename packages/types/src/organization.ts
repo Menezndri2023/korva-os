@@ -159,6 +159,8 @@ export interface Organization {
   /** Who accepted the online payment terms, when, and which version (wallet.ts). Online payment
    *  is offered — shop, counter QR — only while the CURRENT version is accepted. */
   onlinePaymentTerms?: { version: string; acceptedAt: string; acceptedByUserId: string };
+  /** La carte de fidélité — see LoyaltySettings. */
+  loyalty?: { enabled: boolean; stampsRequired: number; reward: string };
   /** Long-form "about us" text for the public storefront — Pro plan and above, see
    *  EntitlementsService.assertContentSectionsAllowed. Distinct from the short `tagline`. */
   aboutText?: string;

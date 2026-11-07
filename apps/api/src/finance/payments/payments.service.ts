@@ -15,6 +15,7 @@ import { PaymentsRepository } from './payments.repository';
 import { Payment, PaymentDocument } from './schemas/payment.schema';
 import { Refund, RefundDocument } from './schemas/refund.schema';
 import { WalletService } from '../wallet/wallet.service';
+import { LoyaltyService } from '../../crm/loyalty/loyalty.service';
 import { InvoicesService } from '../invoices/invoices.service';
 import { MembershipsService } from '../../identity/memberships/memberships.service';
 import { AuditService } from '../../audit/audit.service';
@@ -63,6 +64,8 @@ export class PaymentsService {
     // unit tests that build this service by hand keep working; the reconciliation sweep credits
     // anything missed here anyway.
     @Optional() private readonly walletService?: WalletService,
+    // La carte de fidélité: a fully paid invoice stamps its customer's card (never throws).
+    @Optional() private readonly loyaltyService?: LoyaltyService,
   ) {}
 
   /** Best-effort: the payment is already recorded; the sweep retries a credit that failed. */
@@ -395,6 +398,10 @@ export class PaymentsService {
         amount: input.amount,
       });
       await this.creditWallet(organizationId, payment.id as string);
+      await this.loyaltyService?.stampForInvoice(
+        organizationId,
+        input.invoiceId,
+      );
     }
 
     return payment;
@@ -677,6 +684,10 @@ export class PaymentsService {
           amount: payment.amount,
         });
         await this.creditWallet(organizationId, finalizedPayment.id as string);
+        await this.loyaltyService?.stampForInvoice(
+          organizationId,
+          payment.invoiceId.toString(),
+        );
         return finalizedPayment;
       } catch (error) {
         if (error instanceof IdempotencyClaimNoLongerProcessingError) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { OnlinePaymentFees } from "@/components/online-payment-fees";
+import { LoyaltySettings } from "@/components/loyalty";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { KorvaPlanInvoices } from "@/components/korva-plan-invoices";
@@ -1382,6 +1383,8 @@ export default function SettingsPage() {
             </form>
           )}
         </section>
+
+        {organization && <LoyaltySettings organization={organization} />}
       </SettingsTabPanel>
 
       <SettingsTabPanel tab="site" active={activeTab}>

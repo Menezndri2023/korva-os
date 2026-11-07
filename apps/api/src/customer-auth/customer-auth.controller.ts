@@ -160,6 +160,15 @@ export class CustomerAuthController {
     return this.customerAuthService.updateProfile(slug, req.user!, body);
   }
 
+  @UseGuards(CustomerAuthGuard)
+  @Get('loyalty')
+  loyalty(
+    @Param('organizationSlug') slug: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.getLoyalty(slug, req.user!);
+  }
+
   /** The basket and the lines put aside, for this customer on every device. */
   @UseGuards(CustomerAuthGuard)
   @Get('basket')
