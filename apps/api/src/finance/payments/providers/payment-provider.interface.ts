@@ -86,6 +86,8 @@ export interface PayoutResult {
  * and rebinding the token, never touching QuotesService/InvoicesService/PaymentsService.
  */
 export interface PaymentProvider {
+  /** No refund API: a refund is sent back to the customer by hand by KORVA (GeniusPay). */
+  readonly refundsManually?: boolean;
   readonly name: string;
   /** ISO currencies this provider can charge; absent = no known restriction. A storefront whose
    *  currency is not listed does not offer online payment at all (PublicService), rather than

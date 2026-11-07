@@ -47,6 +47,18 @@ export class Refund {
   @Prop()
   idempotencyKey?: string;
 
+  /** Online payment through a provider with no refund API (GeniusPay): the amount is taken off
+   *  the business's Solde at once, and KORVA's administration sends it back to the customer by
+   *  hand, then records `manualReference` — see PaymentsService.completeManualRefund. */
+  @Prop()
+  manual?: boolean;
+
+  @Prop()
+  manualReference?: string;
+
+  @Prop()
+  manualRejectionReason?: string;
+
   /**
    * The provider's own reference for this refund — previously never captured at all (the
    * legacy flow discarded PaymentProvider.refundPayment()'s return value entirely). Persisted

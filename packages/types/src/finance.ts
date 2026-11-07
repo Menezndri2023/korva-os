@@ -92,6 +92,8 @@ export interface Payment {
   method?: string;
   tipAmount?: number;
   tipStaffMembershipId?: string;
+  /** Total already refunded (or being refunded) on this payment. */
+  refundedAmount?: number;
   createdAt: string;
 }
 

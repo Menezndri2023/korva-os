@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import InvoiceDetailPage from "./page";
 import { renderWithProviders } from "@/test/render";
@@ -112,6 +112,42 @@ describe("InvoiceDetailPage", () => {
     renderWithProviders(<InvoiceDetailPage />);
 
     expect(await screen.findByText(/— virement/)).toBeInTheDocument();
+  });
+
+  it("refunds an online payment, sending the Idempotency-Key the API requires", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path.startsWith("/payments")) {
+        return Promise.resolve([
+          {
+            id: "payment-9",
+            invoiceId: "invoice-1",
+            amount: 100,
+            refundedAmount: 40,
+            currency: "EUR",
+            status: "completed",
+            provider: "geniuspay",
+            method: "online",
+            createdAt: "2026-01-02T00:00:00.000Z",
+          },
+        ]);
+      }
+      return mockGetByPath(path);
+    });
+    postMock.mockResolvedValue({ id: "refund-1", status: "processing" });
+    renderWithProviders(<InvoiceDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Rembourser" }));
+    expect(screen.getByLabelText("Montant à rembourser")).toHaveValue(60);
+    expect(screen.getByText(/KORVA le renvoie au client/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Motif du remboursement"), { target: { value: "Article abîmé" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Rembourser 60/ }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/payments/refunds",
+        { paymentId: "payment-9", amount: 60, reason: "Article abîmé" },
+        { headers: { "Idempotency-Key": expect.stringMatching(/^refund:payment-9:/) } },
+      ),
+    );
   });
 
   it("shows the empty payments message when there are none", async () => {

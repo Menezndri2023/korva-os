@@ -12,10 +12,12 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   listPayoutsAdminQuerySchema,
   markPayoutPaidSchema,
+  markRefundSentSchema,
   rejectPayoutSchema,
   walletAdjustmentSchema,
   type ListPayoutsAdminQuery,
   type MarkPayoutPaidInput,
+  type MarkRefundSentInput,
   type RejectPayoutInput,
   type WalletAdjustmentInput,
 } from '@korva/validation';
@@ -23,6 +25,7 @@ import { Public } from '../common/decorators/public.decorator';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { PlatformAdminGuard } from './platform-admin.guard';
 import { WalletService } from '../finance/wallet/wallet.service';
+import { PaymentsService } from '../finance/payments/payments.service';
 
 /** The administration's side of the Solde KORVA: money held, withdrawals to approve. */
 @ApiTags('platform')
@@ -30,7 +33,37 @@ import { WalletService } from '../finance/wallet/wallet.service';
 @UseGuards(PlatformAdminGuard)
 @Controller('platform')
 export class PlatformPayoutsAdminController {
-  constructor(private readonly wallet: WalletService) {}
+  constructor(
+    private readonly wallet: WalletService,
+    private readonly payments: PaymentsService,
+  ) {}
+
+  /** Customer refunds of online payments, which KORVA sends by hand (no refund API at GeniusPay). */
+  @Get('refunds')
+  refunds() {
+    return this.payments.listManualRefunds();
+  }
+
+  @Post('refunds/:id/mark-sent')
+  @HttpCode(200)
+  async markRefundSent(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(markRefundSentSchema))
+    body: MarkRefundSentInput,
+  ) {
+    await this.payments.completeManualRefund(id, body.reference);
+    return { sent: true };
+  }
+
+  @Post('refunds/:id/reject')
+  @HttpCode(200)
+  async rejectRefund(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(rejectPayoutSchema)) body: RejectPayoutInput,
+  ) {
+    await this.payments.rejectManualRefund(id, body.reason);
+    return { rejected: true };
+  }
 
   @Get('wallets/overview')
   overview() {

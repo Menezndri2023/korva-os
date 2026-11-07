@@ -883,6 +883,17 @@ export class PaymentsService {
         organizationId,
         payment.provider,
       );
+      // No refund API (GeniusPay): the refund is the business's money leaving its Solde now, and
+      // KORVA's administration sends it to the customer by hand (completeManualRefund).
+      if (provider.refundsManually) {
+        return await this.requestManualRefund(
+          organizationId,
+          userId,
+          payment,
+          input,
+          claimedRefundId,
+        );
+      }
       refundResult = await provider.refundPayment(
         payment.providerReference ?? (payment.id as string),
         input.amount,
@@ -952,6 +963,177 @@ export class PaymentsService {
     });
 
     return refund;
+  }
+
+  private async requestManualRefund(
+    organizationId: string,
+    userId: string,
+    payment: PaymentDocument,
+    input: CreateRefundInput,
+    claimedRefundId: string,
+  ): Promise<RefundDocument> {
+    const refund = await this.paymentsRepository.finalizeRefund(
+      organizationId,
+      claimedRefundId,
+      { manual: true },
+    );
+    await this.walletService?.debitForRefund(
+      organizationId,
+      claimedRefundId,
+      input.amount,
+      payment.currency,
+      payment._id,
+    );
+    await this.auditService.record({
+      organizationId,
+      userId,
+      action: 'REFUND',
+      entity: 'payment',
+      entityId: input.paymentId,
+      metadata: { amount: input.amount, reason: input.reason, manual: true },
+    });
+    return refund!;
+  }
+
+  /**
+   * Every manual refund, all businesses, newest first — the administration's list, with what it
+   * needs to send the money: the business, the customer and how to reach them, and GeniusPay's
+   * reference of the original payment.
+   */
+  async listManualRefunds(): Promise<ManualRefundView[]> {
+    const refunds = await this.paymentsRepository.findManualRefunds();
+    const db = this.connection.db!;
+    const views: ManualRefundView[] = [];
+    for (const refund of refunds) {
+      const payment = await db.collection('payments').findOne(
+        { _id: refund.paymentId },
+        {
+          projection: {
+            invoiceId: 1,
+            providerReference: 1,
+            currency: 1,
+            amount: 1,
+          },
+        },
+      );
+      const invoice = payment
+        ? await db
+            .collection('invoices')
+            .findOne(
+              { _id: payment.invoiceId as Types.ObjectId },
+              { projection: { number: 1, contactId: 1 } },
+            )
+        : null;
+      const contact = invoice
+        ? await db
+            .collection('contacts')
+            .findOne(
+              { _id: invoice.contactId as Types.ObjectId },
+              { projection: { firstName: 1, lastName: 1, email: 1, phone: 1 } },
+            )
+        : null;
+      const organization = await db
+        .collection('organizations')
+        .findOne({ _id: refund.organizationId }, { projection: { name: 1 } });
+      views.push({
+        id: refund.id as string,
+        organizationId: refund.organizationId.toString(),
+        organizationName: (organization?.name as string | undefined) ?? '',
+        amount: refund.amount,
+        currency: (payment?.currency as string | undefined) ?? 'XOF',
+        paymentAmount: (payment?.amount as number | undefined) ?? 0,
+        reason: refund.reason,
+        status: refund.status ?? 'processing',
+        providerReference: payment?.providerReference as string | undefined,
+        invoiceNumber: invoice?.number as string | undefined,
+        customer: {
+          name: [contact?.firstName, contact?.lastName]
+            .filter(Boolean)
+            .join(' '),
+          email: contact?.email as string | undefined,
+          phone: contact?.phone as string | undefined,
+        },
+        manualReference: refund.manualReference,
+        rejectionReason: refund.manualRejectionReason,
+        createdAt: (refund.get('createdAt') as Date).toISOString(),
+      });
+    }
+    return views;
+  }
+
+  /**
+   * The administration sent the refund to the customer (Wave, GeniusPay's dashboard…): the
+   * payment and its invoice record it like any refund. The Solde was debited when it was asked.
+   */
+  async completeManualRefund(
+    refundId: string,
+    reference: string,
+  ): Promise<RefundDocument> {
+    const refund =
+      await this.paymentsRepository.findRefundByIdAnyOrganization(refundId);
+    if (!refund?.manual || refund.status !== 'processing') {
+      throw new BadRequestException({
+        code: 'REFUND_NOT_PENDING',
+        message: 'Only a refund waiting to be sent can be marked as sent',
+      });
+    }
+    const organizationId = refund.organizationId.toString();
+    const payment = await this.paymentsRepository.findById(
+      organizationId,
+      refund.paymentId.toString(),
+    );
+    if (!payment) {
+      throw new NotFoundException({
+        code: 'PAYMENT_NOT_FOUND',
+        message: 'Payment not found',
+      });
+    }
+    await this.paymentsRepository.finalizeRefund(organizationId, refundId, {
+      manualReference: reference,
+    });
+    return this.refundAtomically(
+      organizationId,
+      payment,
+      {
+        paymentId: payment.id as string,
+        amount: refund.amount,
+        reason: refund.reason,
+      },
+      refundId,
+      'processing',
+    );
+  }
+
+  /** The administration refused it (fraud, a duplicate…): the Solde gets the amount back. */
+  async rejectManualRefund(refundId: string, reason: string): Promise<void> {
+    const refund =
+      await this.paymentsRepository.findRefundByIdAnyOrganization(refundId);
+    if (!refund?.manual || refund.status !== 'processing') {
+      throw new BadRequestException({
+        code: 'REFUND_NOT_PENDING',
+        message: 'Only a refund waiting to be sent can be refused',
+      });
+    }
+    const organizationId = refund.organizationId.toString();
+    const closed = await this.paymentsRepository.finalizeRefund(
+      organizationId,
+      refundId,
+      { status: 'failed', manualRejectionReason: reason },
+      undefined,
+      'processing',
+    );
+    if (!closed) return;
+    const payment = await this.paymentsRepository.findById(
+      organizationId,
+      refund.paymentId.toString(),
+    );
+    await this.walletService?.reverseRefund(
+      organizationId,
+      refundId,
+      refund.amount,
+      payment?.currency ?? 'XOF',
+      reason,
+    );
   }
 
   /**
@@ -1275,4 +1457,22 @@ function recordedBy(userId: string | undefined): Partial<Payment> {
   return userId && Types.ObjectId.isValid(userId)
     ? { recordedBy: new Types.ObjectId(userId) }
     : {};
+}
+
+/** One manual refund as the administration sees it — see PaymentsService.listManualRefunds. */
+export interface ManualRefundView {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  amount: number;
+  currency: string;
+  paymentAmount: number;
+  reason?: string;
+  status: 'processing' | 'completed' | 'failed';
+  providerReference?: string;
+  invoiceNumber?: string;
+  customer: { name: string; email?: string; phone?: string };
+  manualReference?: string;
+  rejectionReason?: string;
+  createdAt: string;
 }

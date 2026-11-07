@@ -375,6 +375,20 @@ export class PaymentsRepository {
    * PaymentsRepository.finalizePayment. `requireStatus` mirrors finalizePayment's — see there
    * for why PaymentReconciliationService needs it and the original refund() flow doesn't.
    */
+  findRefundByIdAnyOrganization(id: string): Promise<RefundDocument | null> {
+    if (!Types.ObjectId.isValid(id)) return Promise.resolve(null);
+    return this.refundModel.findById(id).exec();
+  }
+
+  /** Manual refunds still to send, oldest first — the administration works through them. */
+  findManualRefunds(): Promise<RefundDocument[]> {
+    return this.refundModel
+      .find({ manual: true })
+      .sort({ createdAt: -1 })
+      .limit(300)
+      .exec();
+  }
+
   async finalizeRefund(
     organizationId: string,
     id: string,
@@ -450,7 +464,10 @@ export class PaymentsRepository {
 
   /** Candidate list for PaymentReconciliationService — mirrors findProcessingPayments. */
   findProcessingRefunds(limit = 100): Promise<RefundDocument[]> {
-    return this.refundModel.find({ status: 'processing' }).limit(limit).exec();
+    return this.refundModel
+      .find({ status: 'processing', manual: { $ne: true } })
+      .limit(limit)
+      .exec();
   }
 
   /**

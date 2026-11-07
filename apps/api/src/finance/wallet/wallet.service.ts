@@ -414,6 +414,47 @@ export class WalletService {
     }
   }
 
+  /* ─────────────────────────── customer refunds ─────────────────────────── */
+
+  /** A customer refund KORVA will send by hand: taken off the Solde at once (even below zero —
+   *  the money was the business's sale, and a negative balance only blocks withdrawals). */
+  async debitForRefund(
+    organizationId: string,
+    refundId: string,
+    amount: number,
+    currency: string,
+    paymentId: Types.ObjectId,
+  ): Promise<void> {
+    await this.addEntry({
+      organizationId,
+      kind: 'refund',
+      amount: -amount,
+      currency,
+      availableAt: new Date(),
+      sourceKey: `refund:${refundId}`,
+      paymentId,
+    });
+  }
+
+  /** The administration refused the refund: the amount comes back to the Solde. */
+  async reverseRefund(
+    organizationId: string,
+    refundId: string,
+    amount: number,
+    currency: string,
+    note: string,
+  ): Promise<void> {
+    await this.addEntry({
+      organizationId,
+      kind: 'refund_reversal',
+      amount,
+      currency,
+      availableAt: new Date(),
+      sourceKey: `refund_reversal:${refundId}`,
+      note,
+    });
+  }
+
   /* ─────────────────────────── withdrawal number ─────────────────────────── */
 
   private settings(organizationId: string) {

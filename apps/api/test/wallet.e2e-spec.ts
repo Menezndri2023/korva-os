@@ -339,6 +339,88 @@ describe('Solde KORVA (e2e)', () => {
       .expect(400);
   });
 
+  it('refunds a customer of an online sale: taken off the Solde, sent by KORVA by hand', async () => {
+    const payment = await connection
+      .collection('payments')
+      .findOne({ providerReference: 'MTX-WALLET01' });
+    const before = (await summary()).available;
+    const refund = asSuccess<{ id: string; status: string }>(
+      (
+        await staff(request(server).post('/api/v1/payments/refunds'))
+          .set('Idempotency-Key', 'refund-test-1')
+          .send({
+            paymentId: String(payment!._id),
+            amount: 1000,
+            reason: 'Taille trop petite',
+          })
+          .expect(201)
+      ).body,
+    );
+    expect(refund.status).toBe('processing');
+    expect((await summary()).available).toBe(before - 1000);
+
+    const list = asSuccess<
+      { id: string; customer: { email?: string }; providerReference?: string }[]
+    >(
+      (await admin(request(server).get('/api/v1/platform/refunds')).expect(200))
+        .body,
+    );
+    expect(list[0]).toMatchObject({
+      id: refund.id,
+      providerReference: 'MTX-WALLET01',
+      customer: { email: 'fatou@example.com' },
+    });
+
+    await admin(
+      request(server).post(`/api/v1/platform/refunds/${refund.id}/mark-sent`),
+    )
+      .send({ reference: 'WAVE-R1' })
+      .expect(200);
+    const stored = await connection
+      .collection('refunds')
+      .findOne({ _id: new Types.ObjectId(refund.id) });
+    expect(stored).toMatchObject({
+      status: 'completed',
+      manualReference: 'WAVE-R1',
+    });
+    expect(
+      (await connection.collection('payments').findOne({ _id: payment!._id }))
+        ?.refundedAmount,
+    ).toBe(1000);
+    // Never twice, and the Solde is debited once.
+    await admin(
+      request(server).post(`/api/v1/platform/refunds/${refund.id}/mark-sent`),
+    )
+      .send({ reference: 'WAVE-R1' })
+      .expect(400);
+    expect((await summary()).available).toBe(before - 1000);
+
+    // A refused refund gives the amount back.
+    const second = asSuccess<{ id: string }>(
+      (
+        await staff(request(server).post('/api/v1/payments/refunds'))
+          .set('Idempotency-Key', 'refund-test-2')
+          .send({ paymentId: String(payment!._id), amount: 500 })
+          .expect(201)
+      ).body,
+    );
+    await admin(
+      request(server).post(`/api/v1/platform/refunds/${second.id}/reject`),
+    )
+      .send({ reason: 'Doublon de la première demande' })
+      .expect(200);
+    expect((await summary()).available).toBe(before - 1000);
+
+    // Back to the balance the next tests start from.
+    await admin(
+      request(server).post(
+        `/api/v1/platform/organizations/${organizationId}/wallet/adjustments`,
+      ),
+    )
+      .send({ amount: 1000, note: 'Remise à niveau du test' })
+      .expect(200);
+  });
+
   it('refuses a withdrawal before a number is confirmed by the e-mailed code', async () => {
     const res = await staff(request(server).post('/api/v1/wallet/payouts'))
       .send({})

@@ -19,6 +19,8 @@ interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   withOrganization?: boolean;
+  /** Extra headers, e.g. the Idempotency-Key a refund requires. */
+  headers?: Record<string, string>;
 }
 
 interface RefreshResponse {
@@ -179,6 +181,7 @@ async function request<T>(
   if (options.withOrganization !== false && activeOrganizationId) {
     headers["X-Organization-Id"] = activeOrganizationId;
   }
+  Object.assign(headers, options.headers);
 
   const response = await fetch(`${API_URL}${path}`, {
     method: options.method ?? "GET",

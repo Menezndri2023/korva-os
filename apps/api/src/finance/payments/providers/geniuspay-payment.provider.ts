@@ -123,6 +123,8 @@ export class GeniusPayProvider implements PaymentProvider {
   readonly name = 'geniuspay';
   /** "currency: XOF, EUR, USD" per the create-payment reference. */
   readonly supportedCurrencies = ['XOF', 'EUR', 'USD'] as const;
+  /** No refund endpoint documented: PaymentsService routes refunds to KORVA's administration. */
+  readonly refundsManually = true;
   private readonly logger = new Logger(GeniusPayProvider.name);
   private readonly credential: GeniusPayCredential;
 

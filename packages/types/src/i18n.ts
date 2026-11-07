@@ -298,6 +298,8 @@ export const WALLET_ENTRY_LABELS_EN: Record<WalletEntryKind, string> = {
   payout: "Withdrawal",
   payout_fee: "Withdrawal fee",
   payout_reversal: "Withdrawal cancelled — amount returned",
+  refund: "Customer refund",
+  refund_reversal: "Refund cancelled — amount returned",
   subscription: "KORVA plan paid from the balance",
   subscription_reversal: "KORVA plan — amount returned",
   adjustment: "Correction by KORVA",

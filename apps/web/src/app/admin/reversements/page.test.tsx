@@ -24,6 +24,19 @@ const payout = {
   createdAt: "2026-10-30T00:00:00.000Z",
 };
 
+const refund = {
+  id: "r-1",
+  organizationId: "org-1",
+  organizationName: "Boutique Awa",
+  amount: 5000,
+  currency: "XOF",
+  status: "processing",
+  providerReference: "MTX-ABC",
+  invoiceNumber: "FAC-0007",
+  customer: { name: "Fatou Koné", phone: "+225 07 00 00 00 01", email: "fatou@example.com" },
+  createdAt: "2026-11-07T10:00:00.000Z",
+};
+
 describe("AdminPayoutsPage", () => {
   beforeEach(() => {
     getMock.mockReset();
@@ -32,7 +45,9 @@ describe("AdminPayoutsPage", () => {
     getMock.mockImplementation(async (path: string) =>
       path === "/platform/wallets/overview"
         ? { currency: "XOF", heldAvailable: 14325, heldPending: 0, commissionThisMonth: 225, payoutsToApprove: 1, payoutsProcessing: 0, approvalMode: "manual" }
-        : [payout],
+        : path === "/platform/refunds"
+          ? [refund]
+          : [payout],
     );
   });
 
@@ -65,6 +80,18 @@ describe("AdminPayoutsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer comme versé" }));
     await waitFor(() =>
       expect(postMock).toHaveBeenCalledWith("/platform/payouts/p-1/mark-paid", { reference: "WAVE-T123", fee: 20 }),
+    );
+  });
+
+  it("lists a customer refund to send, with who to pay, and records it once sent", async () => {
+    renderWithProviders(<AdminPayoutsPage />);
+    expect(await screen.findByText(/Fatou Koné — \+225 07 00 00 00 01/)).toBeInTheDocument();
+    expect(screen.getByText(/Paiement GeniusPay MTX-ABC/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remboursé au client" }));
+    fireEvent.change(screen.getByLabelText("Référence du transfert au client"), { target: { value: "WAVE-R9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer comme remboursé" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/platform/refunds/r-1/mark-sent", { reference: "WAVE-R9" }),
     );
   });
 });

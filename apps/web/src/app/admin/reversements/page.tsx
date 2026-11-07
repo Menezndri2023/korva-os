@@ -118,7 +118,147 @@ export default function AdminPayoutsPage() {
           <PayoutRow key={payout.id} payout={payout} onChanged={refresh} />
         ))}
       </div>
+
+      <CustomerRefunds />
     </div>
+  );
+}
+
+interface ManualRefund {
+  id: string;
+  organizationId: string;
+  organizationName: string;
+  amount: number;
+  currency: string;
+  reason?: string;
+  status: "processing" | "completed" | "failed";
+  providerReference?: string;
+  invoiceNumber?: string;
+  customer: { name: string; email?: string; phone?: string };
+  manualReference?: string;
+  rejectionReason?: string;
+  createdAt: string;
+}
+
+/**
+ * Customer refunds of payments made online: GeniusPay has no refund API, so the business's Solde
+ * was debited and KORVA sends the money back by hand — then records the transfer's reference.
+ */
+function CustomerRefunds() {
+  const queryClient = useQueryClient();
+  const refunds = useQuery({
+    queryKey: ["platform", "refunds"],
+    queryFn: () => adminApi.get<ManualRefund[]>("/platform/refunds"),
+  });
+  const toSend = refunds.data?.filter((refund) => refund.status === "processing") ?? [];
+  const done = refunds.data?.filter((refund) => refund.status !== "processing").slice(0, 10) ?? [];
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["platform", "refunds"] });
+
+  return (
+    <section className="mt-8 space-y-3">
+      <h2 className="text-lg font-semibold">Remboursements clients à envoyer</h2>
+      <p className="text-sm text-text-muted">
+        Paiements en ligne remboursés par une entreprise : le montant est déjà retiré de son Solde. Renvoyez-le au
+        client (Wave, ou remboursement depuis le tableau de bord GeniusPay), puis notez la référence.
+      </p>
+      {refunds.isError && <Card className="p-4 text-sm text-destructive">Impossible de charger les remboursements.</Card>}
+      {refunds.data && toSend.length === 0 && (
+        <Card>
+          <EmptyState title="Aucun remboursement à envoyer." description="Les entreprises remboursent depuis la facture payée." />
+        </Card>
+      )}
+      {toSend.map((refund) => (
+        <RefundRow key={refund.id} refund={refund} onChanged={refresh} />
+      ))}
+      {done.length > 0 && (
+        <Card className="p-4">
+          <p className="mb-2 text-sm font-medium">Derniers traités</p>
+          <ul className="divide-y divide-border text-sm">
+            {done.map((refund) => (
+              <li key={refund.id} className="flex flex-wrap justify-between gap-2 py-1.5">
+                <span>
+                  {formatMoney(refund.amount, refund.currency)} — {refund.organizationName} — {refund.customer.name || refund.customer.email}
+                </span>
+                <span className="text-text-muted">
+                  {refund.status === "completed" ? `Envoyé, réf. ${refund.manualReference}` : `Refusé : ${refund.rejectionReason}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </section>
+  );
+}
+
+function RefundRow({ refund, onChanged }: { refund: ManualRefund; onChanged: () => void }) {
+  const [mode, setMode] = useState<"idle" | "sent" | "reject">("idle");
+  const [value, setValue] = useState("");
+  const act = useMutation({
+    mutationFn: () =>
+      mode === "sent"
+        ? adminApi.post(`/platform/refunds/${refund.id}/mark-sent`, { reference: value.trim() })
+        : adminApi.post(`/platform/refunds/${refund.id}/reject`, { reason: value.trim() }),
+    onSuccess: () => {
+      setMode("idle");
+      setValue("");
+      onChanged();
+    },
+  });
+  return (
+    <Card className="space-y-2 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-lg font-semibold tabular-nums">{formatMoney(refund.amount, refund.currency)}</p>
+        <Link href={`/admin/entreprises/${refund.organizationId}`} className="text-sm hover:underline">
+          {refund.organizationName}
+        </Link>
+      </div>
+      <p className="text-sm">
+        Client : {refund.customer.name || "—"}
+        {refund.customer.phone ? ` — ${refund.customer.phone}` : ""}
+        {refund.customer.email ? ` — ${refund.customer.email}` : ""}
+      </p>
+      <p className="text-xs text-text-muted">
+        {refund.invoiceNumber ? `Facture ${refund.invoiceNumber}. ` : ""}
+        {refund.providerReference ? `Paiement GeniusPay ${refund.providerReference}. ` : ""}
+        {refund.reason ? `Motif : ${refund.reason}. ` : ""}
+        Demandé le {formatDay(refund.createdAt)}.
+      </p>
+      {act.isError && <p className="text-sm text-destructive">L&apos;action n&apos;a pas abouti. Réessayez.</p>}
+      {mode === "idle" ? (
+        <div className="flex flex-wrap gap-2 border-t border-border pt-3">
+          <Button type="button" size="sm" onClick={() => setMode("sent")}>
+            Remboursé au client
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setMode("reject")}>
+            Refuser ce remboursement
+          </Button>
+        </div>
+      ) : (
+        <form
+          className="space-y-2 border-t border-border pt-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            act.mutate();
+          }}
+        >
+          <label className="block text-sm">
+            <span className="mb-1 block text-text-muted">
+              {mode === "sent" ? "Référence du transfert au client" : "Motif (montré à l'entreprise, le montant lui est rendu)"}
+            </span>
+            <Input value={value} minLength={3} maxLength={300} required onChange={(event) => setValue(event.target.value)} />
+          </label>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" loading={act.isPending}>
+              {mode === "sent" ? "Enregistrer comme remboursé" : "Refuser le remboursement"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setMode("idle")}>
+              Annuler
+            </Button>
+          </div>
+        </form>
+      )}
+    </Card>
   );
 }
 

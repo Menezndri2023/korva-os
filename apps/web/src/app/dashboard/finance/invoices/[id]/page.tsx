@@ -1,6 +1,7 @@
 "use client";
 
 import { DownloadButton } from "@/components/download-button";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -316,8 +317,12 @@ export default function InvoiceDetailPage() {
                         })`
                       : ""}
                   </span>
-                  <span className="text-text-muted">
+                  <span className="flex items-center gap-3 text-text-muted">
                     {new Date(payment.createdAt).toLocaleString(intlLocale(locale))}
+                    {(payment.status === "completed" || payment.status === "refunded") &&
+                      payment.amount - (payment.refundedAmount ?? 0) > 0 && (
+                        <RefundButton payment={payment} onDone={() => void queryClient.invalidateQueries()} />
+                      )}
                   </span>
                 </li>
               ))}
@@ -381,5 +386,85 @@ export default function InvoiceDetailPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * "Rembourser": a payment taken in cash or by hand is refunded at once; one paid online through
+ * KORVA (GeniusPay has no refund API) is taken off the Solde and sent back to the customer by
+ * KORVA, which then records the transfer's reference.
+ */
+function RefundButton({ payment, onDone }: { payment: Payment; onDone: () => void }) {
+  const t = useT();
+  const locale = useDashboardLocale();
+  const refundable = Math.round((payment.amount - (payment.refundedAmount ?? 0)) * 100) / 100;
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState(String(refundable));
+  const [reason, setReason] = useState("");
+  const [key] = useState(() => `refund:${payment.id}:${Date.now()}`);
+  const refund = useMutation({
+    mutationFn: () =>
+      apiClient.post(
+        "/payments/refunds",
+        { paymentId: payment.id, amount: Number(amount), reason: reason.trim() || undefined },
+        { headers: { "Idempotency-Key": key } },
+      ),
+    onSuccess: () => {
+      setOpen(false);
+      onDone();
+    },
+  });
+  if (!open) {
+    return (
+      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(true)}>
+        {t("Rembourser", "Refund")}
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        refund.mutate();
+      }}
+    >
+      <Input
+        type="number"
+        min={0}
+        max={refundable}
+        step="any"
+        aria-label={t("Montant à rembourser", "Amount to refund")}
+        value={amount}
+        onChange={(event) => setAmount(event.target.value)}
+        className="w-28"
+      />
+      <Input
+        aria-label={t("Motif du remboursement", "Refund reason")}
+        placeholder={t("Motif (optionnel)", "Reason (optional)")}
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+        className="w-40"
+      />
+      <Button type="submit" size="sm" loading={refund.isPending} disabled={!(Number(amount) > 0 && Number(amount) <= refundable)}>
+        {t(`Rembourser ${formatCurrency(Number(amount) || 0, payment.currency, locale)}`, `Refund ${formatCurrency(Number(amount) || 0, payment.currency, locale)}`)}
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+        {t("Annuler", "Cancel")}
+      </Button>
+      {payment.provider === "geniuspay" && (
+        <p className="w-full text-xs text-text-muted">
+          {t(
+            "Paiement en ligne : le montant est retiré de votre Solde KORVA, et KORVA le renvoie au client.",
+            "Online payment: the amount is taken from your KORVA balance, and KORVA sends it back to the customer.",
+          )}
+        </p>
+      )}
+      {refund.isError && (
+        <p className="w-full text-xs text-destructive">
+          {refund.error instanceof ApiError ? refund.error.message : t("Le remboursement n'a pas abouti.", "The refund did not go through.")}
+        </p>
+      )}
+    </form>
   );
 }

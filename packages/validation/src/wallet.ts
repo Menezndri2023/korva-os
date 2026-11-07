@@ -72,3 +72,9 @@ export const walletStatementQuerySchema = z.object({
   format: z.enum(["csv", "pdf"]).default("csv"),
 });
 export type WalletStatementQuery = z.infer<typeof walletStatementQuerySchema>;
+
+/** The administration sent a customer refund by hand: the operator's transaction reference. */
+export const markRefundSentSchema = z.object({
+  reference: z.string().trim().min(3).max(100),
+});
+export type MarkRefundSentInput = z.infer<typeof markRefundSentSchema>;
