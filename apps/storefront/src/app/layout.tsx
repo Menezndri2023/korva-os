@@ -9,6 +9,7 @@ import {
   Cormorant_Garamond,
 } from "next/font/google";
 import "./globals.css";
+import { ErrorReporter } from "@korva/ui";
 import { Providers } from "./providers";
 
 const geistSans = Geist({
@@ -59,6 +60,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${geistSans.variable} ${geistMono.variable} ${playfairDisplay.variable} ${fraunces.variable} ${spaceGrotesk.variable} ${poppins.variable} ${cormorantGaramond.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <ErrorReporter
+          endpoint={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/client-errors`}
+          app="storefront"
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

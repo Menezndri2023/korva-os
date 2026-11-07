@@ -3,6 +3,7 @@ import { Bricolage_Grotesque, Figtree, IBM_Plex_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
+import { ErrorReporter } from "@korva/ui";
 import { Providers } from "./providers";
 
 /**
@@ -117,6 +118,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Script id="theme-init" strategy="beforeInteractive" nonce={nonce}>
           {THEME_INIT_SCRIPT}
         </Script>
+        <ErrorReporter
+          endpoint={`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/client-errors`}
+          app="web"
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

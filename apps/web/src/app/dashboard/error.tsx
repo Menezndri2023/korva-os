@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Button, Card } from "@korva/ui";
+import { Button, Card, reportClientError } from "@korva/ui";
 import { useT } from "@/lib/dashboard-locale";
 
 export default function DashboardError({
@@ -14,6 +14,8 @@ export default function DashboardError({
   const t = useT();
   useEffect(() => {
     console.error(error);
+    // Rendering crashes are caught here before window.onerror could see them.
+    reportClientError(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/client-errors`, "web", error);
   }, [error]);
 
   return (

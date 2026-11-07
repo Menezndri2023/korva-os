@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Button } from "@korva/ui";
+import { Button, reportClientError } from "@korva/ui";
 
 export default function GlobalError({
   error,
@@ -12,6 +12,8 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error(error);
+    // Rendering crashes are caught here before window.onerror could see them.
+    reportClientError(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1"}/client-errors`, "web", error);
   }, [error]);
 
   return (

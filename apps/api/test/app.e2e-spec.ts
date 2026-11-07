@@ -34,4 +34,20 @@ describe('Health (e2e)', () => {
       .expect(200)
       .expect({ success: true, data: { status: 'ok' } });
   });
+
+  it('POST /api/v1/client-errors takes a browser error, and refuses anything else', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/client-errors')
+      .send({
+        app: 'storefront',
+        message: "Cannot read properties of undefined (reading 'map')",
+        stack: 'TypeError: …\n    at CheckoutPanel',
+        path: '/boutique-awa/track?kind=order&email=fatou@example.com',
+      })
+      .expect(204);
+    await request(app.getHttpServer())
+      .post('/api/v1/client-errors')
+      .send({ app: 'other', message: 'x', path: '/' })
+      .expect(400);
+  });
 });

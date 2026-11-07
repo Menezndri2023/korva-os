@@ -96,3 +96,28 @@ export function captureApiException(
     Sentry.captureException(exception);
   });
 }
+
+/**
+ * An error from a visitor's browser (apps/web or apps/storefront), forwarded by
+ * ClientErrorsController — before it, a crash on a customer's phone was seen by nobody. Only
+ * the page's path (never its query string: the tracking page carries an e-mail there), the
+ * message and the stack are kept.
+ */
+export function captureClientError(report: {
+  app: 'web' | 'storefront';
+  message: string;
+  stack?: string;
+  path: string;
+  release?: string;
+}): void {
+  if (!Sentry.getClient()) return;
+  const error = new Error(report.message);
+  error.name = 'ClientError';
+  if (report.stack) error.stack = report.stack;
+  Sentry.withScope((scope) => {
+    scope.setTag('client.app', report.app);
+    scope.setTag('client.path', report.path);
+    if (report.release) scope.setTag('client.release', report.release);
+    Sentry.captureException(error);
+  });
+}

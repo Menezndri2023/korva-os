@@ -18,3 +18,4 @@ export * from "./stat-tile/stat-tile.tsx";
 export * from "./table/table.tsx";
 export * from "./skeleton/skeleton.tsx";
 export * from "./ui-locale.tsx";
+export * from "./error-reporter/error-reporter.tsx";
