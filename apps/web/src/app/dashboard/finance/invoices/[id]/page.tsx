@@ -1,6 +1,7 @@
 "use client";
 
 import { DownloadButton } from "@/components/download-button";
+import { giftCardErrorText } from "@/lib/gift-card-errors";
 import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -331,6 +332,10 @@ export default function InvoiceDetailPage() {
         </div>
 
         {(invoice.status === "issued" || invoice.status === "partially_paid") && (
+          <GiftCardPayment invoiceId={invoice.id} onPaid={() => void queryClient.invalidateQueries()} />
+        )}
+
+        {(invoice.status === "issued" || invoice.status === "partially_paid") && (
           <form
             onSubmit={handleSubmit((values) =>
               payMutation.mutate({
@@ -463,6 +468,66 @@ function RefundButton({ payment, onDone }: { payment: Payment; onDone: () => voi
       {refund.isError && (
         <p className="w-full text-xs text-destructive">
           {refund.error instanceof ApiError ? refund.error.message : t("Le remboursement n'a pas abouti.", "The refund did not go through.")}
+        </p>
+      )}
+    </form>
+  );
+}
+
+/** "Payer avec une carte cadeau": the card pays what it can of what is left on the invoice. */
+function GiftCardPayment({ invoiceId, onPaid }: { invoiceId: string; onPaid: () => void }) {
+  const t = useT();
+  const locale = useDashboardLocale();
+  const [code, setCode] = useState("");
+  const [open, setOpen] = useState(false);
+  const pay = useMutation({
+    mutationFn: () => apiClient.post<{ amount: number; balance: number }>("/gift-cards/pay", { code: code.trim(), invoiceId }),
+    onSuccess: () => {
+      setCode("");
+      onPaid();
+    },
+  });
+  if (!open) {
+    return (
+      <div className="mt-4">
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(true)}>
+          {t("Payer avec une carte cadeau", "Pay with a gift card")}
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <form
+      className="mt-4 flex flex-wrap items-center gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        pay.mutate();
+      }}
+    >
+      <Input
+        aria-label={t("Code de la carte cadeau", "Gift card code")}
+        placeholder="KDO-XXXX-XXXX"
+        value={code}
+        onChange={(event) => setCode(event.target.value)}
+        className="w-48 font-mono"
+      />
+      <Button type="submit" size="sm" loading={pay.isPending} disabled={code.trim().length < 4}>
+        {t("Utiliser la carte", "Use the card")}
+      </Button>
+      {pay.isSuccess && (
+        <p className="w-full text-xs text-text-muted" role="status">
+          {t(
+            `${pay.data.amount.toLocaleString(intlLocale(locale))} payés avec la carte, il reste ${pay.data.balance.toLocaleString(intlLocale(locale))} dessus.`,
+            `${pay.data.amount.toLocaleString(intlLocale(locale))} paid with the card, ${pay.data.balance.toLocaleString(intlLocale(locale))} left on it.`,
+          )}
+        </p>
+      )}
+      {pay.isError && (
+        <p className="w-full text-xs text-destructive">
+          {(() => {
+            const known = giftCardErrorText(pay.error);
+            return known ? t(...known) : t("La carte n'a pas pu être utilisée.", "The card could not be used.");
+          })()}
         </p>
       )}
     </form>

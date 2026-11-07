@@ -238,3 +238,23 @@ export const monthQuerySchema = z.object({
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Mois au format AAAA-MM"),
 });
 export type MonthQuery = z.infer<typeof monthQuerySchema>;
+
+/** POST /gift-cards — a card the business sold or offers. */
+export const createGiftCardSchema = z.object({
+  amount: z.number().positive().max(10_000_000),
+  recipientName: z.string().trim().max(120).optional(),
+  recipientEmail: z.string().trim().email().max(200).optional(),
+  message: z.string().trim().max(500).optional(),
+  expiresAt: z.string().datetime().optional(),
+  /** E-mail the code to the recipient now. */
+  sendEmail: z.boolean().optional(),
+});
+export type CreateGiftCardInput = z.infer<typeof createGiftCardSchema>;
+
+/** POST /gift-cards/pay — pay an invoice with a card's code (at most its balance). */
+export const payWithGiftCardSchema = z.object({
+  code: z.string().trim().min(4).max(40),
+  invoiceId: z.string().min(1),
+  amount: z.number().positive().optional(),
+});
+export type PayWithGiftCardInput = z.infer<typeof payWithGiftCardSchema>;

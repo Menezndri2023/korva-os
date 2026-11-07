@@ -126,6 +126,8 @@ export const createPublicOrderSchema = z.object({
   notes: z.string().max(2000).optional(),
   contact: publicContactSchema,
   discountCode: z.string().max(40).optional(),
+  /** Pays the order (up to the card's balance) with a gift card's code. */
+  giftCardCode: z.string().trim().max(40).optional(),
   shippingAddress: publicShippingAddressSchema.optional(),
   /** Required by the API when the organization offers fulfillment modes; ignored otherwise. */
   fulfillmentMode: z.enum(FULFILLMENT_MODES).optional(),

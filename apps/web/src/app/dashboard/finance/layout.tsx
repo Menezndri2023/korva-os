@@ -11,6 +11,7 @@ const TABS = [
   { href: "/dashboard/finance/time-entries", label: ["Suivi du temps", "Time tracking"] },
   { href: "/dashboard/finance/projects", label: ["Projets", "Projects"] },
   { href: "/dashboard/finance/discount-codes", label: ["Codes promo", "Discount codes"] },
+  { href: "/dashboard/finance/gift-cards", label: ["Cartes cadeaux", "Gift cards"] },
   { href: "/dashboard/finance/recurring-billing", label: ["Abonnements clients", "Customer subscriptions"] },
 ] satisfies { href: string; label: [string, string] }[];
 

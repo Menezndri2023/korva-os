@@ -15,6 +15,7 @@ import { migration as m0013 } from './0013-platform-notes-index';
 import { migration as m0014 } from './0014-trade-tools-keep-used';
 import { migration as m0015 } from './0015-till-closings-index';
 import { migration as m0016 } from './0016-referral-indexes';
+import { migration as m0017 } from './0017-gift-card-indexes';
 
 /**
  * Every migration, registered explicitly.
@@ -47,4 +48,5 @@ export const MIGRATIONS: MigrationDefinition[] = [
   m0014,
   m0015,
   m0016,
+  m0017,
 ];

@@ -93,6 +93,12 @@ import {
 import { CounterPaymentsController } from './counter/counter-payments.controller';
 import { WalletService } from './wallet/wallet.service';
 import { WalletStatementService } from './wallet/wallet-statement.service';
+import { GiftCardsService } from './gift-cards/gift-cards.service';
+import { GiftCardsController } from './gift-cards/gift-cards.controller';
+import {
+  GiftCard,
+  GiftCardSchema,
+} from './gift-cards/schemas/gift-card.schema';
 import {
   Organization,
   OrganizationSchema,
@@ -130,6 +136,7 @@ import { EmailModule } from '../shared/email/email.module';
       { name: Payout.name, schema: PayoutSchema },
       { name: WalletSettings.name, schema: WalletSettingsSchema },
       { name: Organization.name, schema: OrganizationSchema },
+      { name: GiftCard.name, schema: GiftCardSchema },
     ]),
     // Le Solde KORVA reads the plan (commission, withdrawal rules) and e-mails the withdrawal
     // number's confirmation code. Neither module imports FinanceModule.
@@ -146,6 +153,7 @@ import { EmailModule } from '../shared/email/email.module';
     DocumentsModule,
   ],
   controllers: [
+    GiftCardsController,
     QuotesController,
     InvoicesController,
     PaymentsController,
@@ -162,6 +170,7 @@ import { EmailModule } from '../shared/email/email.module';
   providers: [
     WalletService,
     WalletStatementService,
+    GiftCardsService,
     CounterPaymentsService,
     TillService,
     InvoiceReminderService,
@@ -195,6 +204,7 @@ import { EmailModule } from '../shared/email/email.module';
     RecurringBillingSchedulerService,
   ],
   exports: [
+    GiftCardsService,
     WalletService,
     InvoicesService,
     QuotesService,

@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { GiftCardsService } from '../finance/gift-cards/gift-cards.service';
 import { BusinessAlertsService } from '../business-alerts/business-alerts.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -130,6 +131,7 @@ export class PublicService {
   private readonly logger = new Logger(PublicService.name);
 
   constructor(
+    private readonly giftCardsService: GiftCardsService,
     private readonly businessAlerts: BusinessAlertsService,
     private readonly organizationsService: OrganizationsService,
     private readonly subscriptionsService: SubscriptionsService,
@@ -1234,6 +1236,22 @@ export class PublicService {
       items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
     );
 
+    // A gift card is checked BEFORE the order exists: a wrong or spent code is said at once,
+    // and nothing is created for it.
+    if (input.giftCardCode) {
+      const card = await this.giftCardsService.findByCode(
+        organizationId,
+        input.giftCardCode,
+      );
+      this.giftCardsService.assertUsable(card);
+      if (card.currency !== input.currency) {
+        throw new BadRequestException({
+          code: 'GIFT_CARD_CURRENCY',
+          message: 'This gift card is in another currency',
+        });
+      }
+    }
+
     const order = await this.ordersService.createFromStorefront(
       organizationId,
       {
@@ -1301,12 +1319,73 @@ export class PublicService {
       customer: customerLabel(contact),
     });
 
+    // Paid with a gift card: the order is confirmed and invoiced now, and the card pays what it
+    // can; the rest is paid as chosen (cash, or online — initiateOnlinePayment charges only
+    // what remains).
+    let giftCard: { amount: number; remaining: number } | undefined;
+    if (input.giftCardCode) {
+      try {
+        await this.ordersService.confirm(
+          organizationId,
+          undefined,
+          order.id as string,
+        );
+        let invoice = await this.ordersService.generateInvoice(
+          organizationId,
+          undefined,
+          order.id as string,
+        );
+        if (invoice.status === 'draft') {
+          invoice = await this.invoicesService.issue(
+            organizationId,
+            undefined,
+            invoice.id as string,
+          );
+        }
+        const paid = await this.giftCardsService.payInvoice(
+          organizationId,
+          undefined,
+          input.giftCardCode,
+          invoice.id as string,
+        );
+        giftCard = {
+          amount: paid.amount,
+          remaining: Math.round((order.total - paid.amount) * 100) / 100,
+        };
+      } catch (error) {
+        this.logger.warn(
+          `Order ${order.number}: gift card not applied (${error instanceof Error ? error.message : String(error)})`,
+        );
+        giftCard = { amount: 0, remaining: order.total };
+      }
+    }
+
     return {
       id: order.id as string,
       number: order.number,
       total: order.total,
       currency: order.currency,
       status: order.status,
+      ...(giftCard ? { giftCard } : {}),
+    };
+  }
+
+  /** "Ma carte cadeau": what is left on a card — the code is the only key. */
+  async giftCardBalance(slug: string, code: string) {
+    const organization = await this.resolveOrganization(slug);
+    const card = await this.giftCardsService.findByCode(
+      organization.id as string,
+      code,
+    );
+    return {
+      code: card.code,
+      balance: card.balance,
+      currency: card.currency,
+      expiresAt: card.expiresAt,
+      usable:
+        card.status === 'active' &&
+        card.balance > 0 &&
+        (!card.expiresAt || card.expiresAt > new Date()),
     };
   }
 

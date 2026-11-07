@@ -660,6 +660,8 @@ export function CheckoutPanel({
     acceptedPaymentMethods[0] ?? "cash",
   );
   const [redirecting, setRedirecting] = useState(false);
+  const [giftCardCode, setGiftCardCode] = useState("");
+  const [giftCardBalance, setGiftCardBalance] = useState<number | null>(null);
   // Online payment has a floor (MIN_ONLINE_PAYMENT: GeniusPay's fixed fee would eat the sale), and
   // in a shop not priced in CFA francs GeniusPay charges the customer in XOF at its own rate — said
   // here, before the customer lands on a payment page showing another currency.
@@ -735,8 +737,9 @@ export function CheckoutPanel({
 
   const orderMutation = useMutation({
     mutationFn: (values: CreatePublicOrderInput) =>
-      publicApiClient.post<{ id: string; number: string }>(`/public/${slug}/orders`, {
+      publicApiClient.post<{ id: string; number: string; giftCard?: { amount: number; remaining: number } }>(`/public/${slug}/orders`, {
         ...values,
+        giftCardCode: giftCardCode.trim() || undefined,
         contact: {
           email: values.contact.email,
           firstName: values.contact.firstName || undefined,
@@ -757,6 +760,11 @@ export function CheckoutPanel({
           : {}),
       }),
     onSuccess: (order, values) => {
+      // Fully paid by a gift card: nothing left to pay, online or not.
+      if (order.giftCard && order.giftCard.remaining <= 0) {
+        onSuccess(order.number);
+        return;
+      }
       if (paymentMethod === "online") {
         payMutation.mutate({ orderId: order.id, email: values.contact.email });
         return;
@@ -787,6 +795,48 @@ export function CheckoutPanel({
             aria-label={t("Code promo", "Discount code")}
             {...register("discountCode")}
           />
+
+          <div className="space-y-1">
+            <div className="flex gap-2">
+              <Input
+                placeholder={t("Carte cadeau (optionnel)", "Gift card (optional)")}
+                aria-label={t("Code de carte cadeau", "Gift card code")}
+                value={giftCardCode}
+                onChange={(event) => {
+                  setGiftCardCode(event.target.value);
+                  setGiftCardBalance(null);
+                }}
+                className="font-mono"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={giftCardCode.trim().length < 4}
+                onClick={() => {
+                  publicApiClient
+                    .get<{ balance: number; currency: string; usable: boolean }>(
+                      `/public/${slug}/gift-cards/${encodeURIComponent(giftCardCode.trim())}`,
+                    )
+                    .then((card) => setGiftCardBalance(card.usable ? card.balance : 0))
+                    .catch(() => setGiftCardBalance(-1));
+                }}
+              >
+                {t("Vérifier", "Check")}
+              </Button>
+            </div>
+            {giftCardBalance !== null && (
+              <p className={`text-xs ${giftCardBalance > 0 ? "text-text-muted" : "text-destructive"}`} role="status">
+                {giftCardBalance > 0
+                  ? t(
+                      `Carte valable : ${Math.min(giftCardBalance, total).toFixed(2)} ${currency} seront payés avec, ${Math.max(0, total - giftCardBalance).toFixed(2)} ${currency} restent à payer.`,
+                      `Valid card: ${Math.min(giftCardBalance, total).toFixed(2)} ${currency} will be paid with it, ${Math.max(0, total - giftCardBalance).toFixed(2)} ${currency} left to pay.`,
+                    )
+                  : giftCardBalance === 0
+                    ? t("Cette carte n'a plus de solde utilisable.", "This card has no usable balance left.")
+                    : t("Aucune carte cadeau avec ce code.", "No gift card with this code.")}
+              </p>
+            )}
+          </div>
 
           <Input
             placeholder={t("Prénom", "First name")}

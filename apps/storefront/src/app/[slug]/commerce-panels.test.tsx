@@ -611,3 +611,35 @@ describe("useCart — signed-in customer", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("CheckoutPanel — gift card", () => {
+  it("checks a card, says what it covers, and sends its code with the order", async () => {
+    getMock.mockReset();
+    getMock.mockResolvedValue({ balance: 2000, currency: "XOF", usable: true });
+    postMock.mockReset();
+    postMock.mockResolvedValue({ id: "o-1", number: "CMD-9", giftCard: { amount: 2000, remaining: 500 } });
+    const onSuccess = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CheckoutPanel
+          slug="maquis"
+          cart={[{ offerId: "garba", name: "Garba", unitPrice: 2500, quantity: 1 }] as unknown as Parameters<typeof CheckoutPanel>[0]["cart"]}
+          currency="XOF"
+          acceptedPaymentMethods={["cash"]}
+          onClose={() => {}}
+          onSuccess={onSuccess}
+        />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Code de carte cadeau"), { target: { value: "KDO-AB12-CD34" } });
+    fireEvent.click(screen.getByRole("button", { name: "Vérifier" }));
+    expect(await screen.findByText(/2000.00 XOF seront payés avec, 500.00 XOF restent à payer/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Adresse e-mail"), { target: { value: "kofi@client.ci" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmer la commande" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/public/maquis/orders", expect.objectContaining({ giftCardCode: "KDO-AB12-CD34" })),
+    );
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledWith("CMD-9"));
+  });
+});

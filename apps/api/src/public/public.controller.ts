@@ -319,6 +319,16 @@ export class PublicController {
    * only accepted proof of ownership; the order number in the path is never sufficient on its
    * own. See PublicService#trackOrder for the generic-404 requirement this enforces.
    */
+  /** A gift card's balance — the code is the key, so the tracking limit applies. */
+  @Throttle(PUBLIC_TRACKING_THROTTLE)
+  @Get('gift-cards/:code')
+  giftCardBalance(
+    @Param('organizationSlug') slug: string,
+    @Param('code') code: string,
+  ) {
+    return this.publicService.giftCardBalance(slug, code);
+  }
+
   @Throttle(PUBLIC_TRACKING_THROTTLE)
   @Get('orders/:orderNumber')
   trackOrder(
