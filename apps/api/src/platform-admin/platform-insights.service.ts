@@ -95,7 +95,9 @@ export class PlatformInsightsService {
             {
               $match: {
                 createdAt: { $gte: since },
-                kind: { $in: ['sale', 'commission', 'provider_fee'] },
+                kind: {
+                  $in: ['sale', 'commission', 'provider_fee', 'conversion_fee'],
+                },
               },
             },
             {
@@ -148,7 +150,13 @@ export class PlatformInsightsService {
         total: round2(byKind.get('sale')?.total ?? 0),
         count: byKind.get('sale')?.count ?? 0,
         commissions: round2(-(byKind.get('commission')?.total ?? 0)),
-        providerFees: round2(-(byKind.get('provider_fee')?.total ?? 0)),
+        // A currency conversion is GeniusPay's too: what it kept on the sale either way.
+        providerFees: round2(
+          -(
+            (byKind.get('provider_fee')?.total ?? 0) +
+            (byKind.get('conversion_fee')?.total ?? 0)
+          ),
+        ),
       },
       payoutsPaid: {
         total: round2(payoutsPaid[0]?.total ?? 0),

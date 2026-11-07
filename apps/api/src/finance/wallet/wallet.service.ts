@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
+import { saleCostsInSaleCurrency, type SaleCosts } from './provider-fees';
 import { Model, Types } from 'mongoose';
 import {
   MIN_PAYOUT_AMOUNT,
@@ -315,30 +316,40 @@ export class WalletService {
     if (await this.entryModel.exists({ sourceKey: `sale:${paymentId}` }))
       return;
 
-    let fee: number | undefined;
+    let costs: SaleCosts = { conversion: 0 };
     if (payment.providerReference) {
       try {
         const provider = await this.providerResolver.resolve({
           flow: 'commerce',
           organizationId,
         });
-        fee = (await provider.verifyPayment(payment.providerReference))
-          .providerFee;
+        costs = saleCostsInSaleCurrency(
+          payment,
+          await provider.verifyPayment(payment.providerReference),
+        );
       } catch (error) {
         this.logger.warn(
           `Wallet: could not read the provider fee of payment ${paymentId} (${error instanceof Error ? error.message : String(error)})`,
         );
       }
     }
+    const t = await this.translatorFor(organizationId);
+    let fee = costs.fee;
     let feeNote: string | undefined;
     if (fee === undefined) {
       const fallbackBps = Number(
         this.configService.get<string>('WALLET_FALLBACK_FEE_BPS') ?? 300,
       );
       fee = round2((payment.amount * fallbackBps) / 10_000);
-      feeNote = (await this.translatorFor(organizationId))(
+      feeNote = t(
         'Frais estimés : GeniusPay ne les a pas indiqués pour ce paiement.',
         'Estimated fee: GeniusPay did not report it for this payment.',
+      );
+    } else if (costs.detail?.providerFee !== undefined) {
+      const { providerFee, providerCurrency } = costs.detail;
+      feeNote = t(
+        `${providerFee} ${providerCurrency} retenus par GeniusPay`,
+        `${providerFee} ${providerCurrency} kept by GeniusPay`,
       );
     }
     const plan = await this.planOf(organizationId);
@@ -361,6 +372,18 @@ export class WalletService {
         amount: -fee,
         sourceKey: `fee:${paymentId}`,
         note: feeNote,
+      });
+    }
+    if (costs.conversion > 0 && costs.detail) {
+      await this.addEntry({
+        ...base,
+        kind: 'conversion_fee',
+        amount: -costs.conversion,
+        sourceKey: `conversion:${paymentId}`,
+        note: t(
+          `GeniusPay a encaissé ${costs.detail.providerAmount} ${costs.detail.providerCurrency} pour ${payment.amount} ${payment.currency}`,
+          `GeniusPay collected ${costs.detail.providerAmount} ${costs.detail.providerCurrency} for ${payment.amount} ${payment.currency}`,
+        ),
       });
     }
     if (commission > 0) {

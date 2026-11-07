@@ -47,11 +47,19 @@ export interface PaymentProviderResult {
    */
   mandateReference?: string;
   /**
-   * What the provider kept on this payment, in the payment's currency — GeniusPay's `fees`
-   * ("gateway + plateforme"). Read by the Solde KORVA so a business is credited exactly what KORVA
-   * received, never an estimate. Only set by `verifyPayment()`, only when the provider says it.
+   * What the provider kept on this payment — GeniusPay's `fees` ("gateway + plateforme"), in
+   * `providerCurrency` when that is set, else in the payment's currency. Read by the Solde KORVA
+   * so a business is credited exactly what KORVA received, never an estimate. Only set by
+   * `verifyPayment()`, only when the provider says it.
    */
   providerFee?: number;
+  /**
+   * The amount and currency the provider actually charged, when it says so. They differ from the
+   * payment's own when the provider converts: GeniusPay charges a 1 EUR order as 610.70 XOF (seen
+   * on a real payment, 2026-11-02) and reports its fee in XOF too.
+   */
+  providerAmount?: number;
+  providerCurrency?: string;
 }
 
 /** A withdrawal sent to a business's mobile money account — see the Solde KORVA (finance/wallet). */

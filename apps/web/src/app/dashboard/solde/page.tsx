@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  estimateSale,
   MIN_PAYOUT_AMOUNT,
   PAYOUT_PROVIDERS,
   PAYOUT_PROVIDER_LABELS,
@@ -14,6 +15,7 @@ import {
   type Payout,
   type PayoutFrequency,
   type PayoutProvider,
+  type ProviderPaymentMethod,
   type WalletEntry,
   type WalletSummary,
 } from "@korva/types";
@@ -149,6 +151,7 @@ export default function WalletPage() {
             </p>
           </Card>
 
+          {summary.currency === "XOF" && <SaleCalculatorCard summary={summary} money={money} />}
           <WithdrawCard summary={summary} money={money} onDone={refresh} />
           <DestinationCard summary={summary} onDone={refresh} />
           <AutoPayoutCard summary={summary} onDone={refresh} />
@@ -564,6 +567,87 @@ function SubscriptionAutopayCard({ summary, onDone }: { summary: WalletSummary; 
           {errorText(save.error, t)}
         </p>
       )}
+    </Card>
+  );
+}
+
+/**
+ * "Combien je reçois ?": every cost of one online sale, before it happens — GeniusPay's fee for
+ * the way the customer pays, KORVA's commission, the withdrawal fee — so nothing on the ledger
+ * comes as a surprise. Estimates from GeniusPay's published prices (PROVIDER_FEE_RATES); the
+ * ledger below always shows what GeniusPay actually kept. XOF only: GeniusPay's fixed fee is in
+ * XOF, and a sale in another currency also pays GeniusPay's exchange rate.
+ */
+function SaleCalculatorCard({ summary, money }: { summary: WalletSummary; money: (amount: number) => string }) {
+  const t = useT();
+  const [amount, setAmount] = useState("10000");
+  const sale = Math.max(0, Math.floor(Number(amount) || 0));
+  const methods: { key: ProviderPaymentMethod; label: string }[] = [
+    { key: "wave", label: "Wave" },
+    { key: "mobile_money", label: t("Orange, MTN, Moov", "Orange, MTN, Moov") },
+    { key: "card", label: t("Carte bancaire", "Bank card") },
+  ];
+  const rows = methods.map((method) => ({ ...method, estimate: estimateSale(sale, method.key, summary.plan) }));
+  const percent = (part: number) => (sale > 0 ? ` (${((part / sale) * 100).toFixed(1)} %)` : "");
+
+  return (
+    <Card className="space-y-3 p-5">
+      <div>
+        <h2 className="text-base font-semibold text-text">{t("Combien je reçois ?", "How much do I receive?")}</h2>
+        <p className="mt-1 text-sm text-text-muted">
+          {t(
+            "Tapez le prix d'une vente : voici ce qui arrive sur votre numéro selon la façon dont le client paie.",
+            "Type the price of a sale: here is what reaches your number, depending on how the customer pays.",
+          )}
+        </p>
+      </div>
+      <Input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        aria-label={t("Prix de la vente", "Sale price")}
+        value={amount}
+        onChange={(event) => setAmount(event.target.value)}
+        className="max-w-48"
+      />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[28rem] text-sm">
+          <thead>
+            <tr className="text-left text-xs text-text-muted">
+              <th className="py-1.5 pr-3 font-medium">{t("Le client paie par", "Customer pays by")}</th>
+              <th className="py-1.5 pr-3 text-right font-medium">{t("Frais GeniusPay", "GeniusPay fee")}</th>
+              <th className="py-1.5 pr-3 text-right font-medium">{t("Commission KORVA", "KORVA commission")}</th>
+              <th className="py-1.5 pr-3 text-right font-medium">{t("Frais de retrait", "Withdrawal fee")}</th>
+              <th className="py-1.5 text-right font-medium">{t("Vous recevez", "You receive")}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map(({ key, label, estimate }) => (
+              <tr key={key}>
+                <td className="py-2 pr-3 text-text">{label}</td>
+                <td className="py-2 pr-3 text-right tabular-nums text-text-muted">{money(estimate.providerFee)}</td>
+                <td className="py-2 pr-3 text-right tabular-nums text-text-muted">{money(estimate.commission)}</td>
+                <td className="py-2 pr-3 text-right tabular-nums text-text-muted">
+                  {estimate.payoutFee === 0 && sale > 0 ? t("Offerts", "Free") : money(estimate.payoutFee)}
+                </td>
+                <td className="py-2 text-right font-semibold tabular-nums text-text">
+                  {money(estimate.received)}
+                  <span className="block text-xs font-normal text-text-muted">
+                    {t("coût", "cost")}
+                    {percent(estimate.sale - estimate.received)}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-text-muted">
+        {t(
+          "Estimation d'après les tarifs publiés par GeniusPay (Wave 2,5 % + 100 F, autres mobile money 4,5 % + 100 F, carte 6 % + 100 F, retrait 1 %). Les 100 F fixes pèsent lourd sur les petites ventes : en dessous de 2 000 F, préférez l'espèce ou le regroupement. Vos mouvements ci-dessous montrent les frais réellement retenus.",
+          "Estimate from GeniusPay's published prices (Wave 2.5% + 100 F, other mobile money 4.5% + 100 F, card 6% + 100 F, withdrawal 1%). The fixed 100 F weighs heavily on small sales: under 2,000 F, prefer cash or grouping. Your movements below show the fees actually kept.",
+        )}
+      </p>
     </Card>
   );
 }

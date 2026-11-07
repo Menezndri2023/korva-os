@@ -198,10 +198,17 @@ export class GeniusPayProvider implements PaymentProvider {
       );
     }
     const fees = Number(data?.fees);
+    const amount = Number(data?.amount);
+    const currency = data?.currency;
     return {
       providerReference,
       status: mapGeniusPayStatus(status),
       ...(Number.isFinite(fees) && fees >= 0 ? { providerFee: fees } : {}),
+      // GeniusPay settles in XOF whatever the order's currency: `amount` and `fees` are then in
+      // XOF ("amount":610.7,"currency":"XOF","fees":115.28 for a 1 EUR order).
+      ...(Number.isFinite(amount) && amount > 0 && typeof currency === 'string'
+        ? { providerAmount: amount, providerCurrency: currency.toUpperCase() }
+        : {}),
     };
   }
 

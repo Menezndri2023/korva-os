@@ -293,6 +293,7 @@ export const FULFILLMENT_MODE_LABELS_EN: Record<FulfillmentMode, string> = {
 export const WALLET_ENTRY_LABELS_EN: Record<WalletEntryKind, string> = {
   sale: "Sale paid online",
   provider_fee: "Payment fee (GeniusPay)",
+  conversion_fee: "Currency conversion (GeniusPay)",
   commission: "KORVA commission",
   payout: "Withdrawal",
   payout_fee: "Withdrawal fee",

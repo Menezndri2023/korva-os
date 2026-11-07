@@ -48,6 +48,25 @@ describe("WalletPage", () => {
     for (const mock of [getMock, postMock, putMock, patchMock]) mock.mockReset();
   });
 
+  it("shows what one sale really brings in, every cost included", async () => {
+    serve(summary);
+    renderWithProviders(<WalletPage />);
+
+    const wave = (await screen.findByText("Wave", { selector: "td" })).closest("tr")!;
+    // 10 000 F by Wave on Starter: GeniusPay 2.5 % + 100 = 350, KORVA 1.5 % = 150,
+    // withdrawal 1 % of the 9 500 credited = 95 → 9 405 received.
+    expect(wave.textContent).toMatch(/350/);
+    expect(wave.textContent).toMatch(/150/);
+    expect(wave.textContent).toMatch(/95/);
+    expect(wave.textContent).toMatch(/9\s?405/);
+
+    fireEvent.change(screen.getByLabelText("Prix de la vente"), { target: { value: "1000" } });
+    // 1 000 F by card: 160 + 15 + 8 → 817, a 18.3 % cost.
+    const card = screen.getByText("Carte bancaire", { selector: "td" }).closest("tr")!;
+    expect(card.textContent).toMatch(/817/);
+    expect(card.textContent).toMatch(/18\.3 %/);
+  });
+
   it("shows the balance, and asks for a number confirmed by code before any withdrawal", async () => {
     serve(summary);
     putMock.mockResolvedValue({ pending: true });
