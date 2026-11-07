@@ -35,6 +35,7 @@ import type {
 } from "@/lib/public-types";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
 import { formatOfferPrice } from "@/lib/offer-labels";
+import { uploadImage } from "@/lib/upload-image";
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, [string, string]> = {
   cash: ["Espèces / à la livraison ou au retrait", "Cash / on delivery or collection"],
@@ -366,7 +367,7 @@ export function BookingPanel({
                     />
                     {resource.photo ? (
                       // eslint-disable-next-line @next/next/no-img-element -- arbitrary/uploaded URL, not a static asset
-                      <img src={resource.photo} alt="" className="h-10 w-10 rounded-full object-cover" />
+                      <img {...uploadImage(resource.photo, [160], "40px")} alt="" className="h-10 w-10 rounded-full object-cover" />
                     ) : (
                       <span
                         aria-hidden="true"

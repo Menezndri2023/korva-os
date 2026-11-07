@@ -5,6 +5,7 @@ import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
 import { SectionHeading } from "./SectionHeading";
 import { useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 export function GallerySection({ organization }: { organization: PublicOrganization }) {
   const t = useT();
@@ -31,7 +32,7 @@ function GalleryImage({ url, caption }: { url: string; caption?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={url}
+      {...uploadImage(url, [320, 640, 960], "(min-width: 768px) 33vw, 50vw")}
       alt={caption ?? ""}
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}

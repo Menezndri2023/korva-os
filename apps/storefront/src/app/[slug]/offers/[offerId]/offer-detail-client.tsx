@@ -29,6 +29,7 @@ import {
   summarizeOptions,
 } from "@/templates/sections/OfferOptionsPicker";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 export default function OfferDetailClient({
   slug,
@@ -189,7 +190,7 @@ export default function OfferDetailClient({
                   {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary tenant-supplied
                       host, not one of Next's configured image domains (see middleware.ts img-src). */}
                   <img
-                    src={activeSrc}
+                    {...uploadImage(activeSrc, [640, 960, 1280], "(min-width: 768px) 50vw, 100vw")}
                     alt={offer.name}
                     fetchPriority="high"
                     decoding="async"
@@ -211,7 +212,7 @@ export default function OfferDetailClient({
                         }`}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
-                        <img src={image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                        <img {...uploadImage(image, [160, 320], "96px")} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
                       </button>
                     ))}
                   </div>

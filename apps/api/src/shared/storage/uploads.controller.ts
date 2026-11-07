@@ -1,3 +1,7 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import sharp from 'sharp';
 import { SkipThrottle } from '@nestjs/throttler';
 import {
   BadRequestException,
@@ -7,6 +11,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
   Res,
   UploadedFile,
   UseInterceptors,
@@ -146,14 +151,36 @@ export class UploadsController {
   async read(
     @Param('organizationId') organizationId: string,
     @Param('filename') filename: string,
+    @Query('w') width: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
-    const file = await this.storageService.readStream(organizationId, filename);
+    let file = await this.storageService.readStream(organizationId, filename);
     if (!file) {
       throw new NotFoundException({
         code: 'FILE_NOT_FOUND',
         message: 'File not found',
       });
+    }
+
+    // ?w=320: the photo at the width it is shown, in WebP — a 2000 px, 300 KB original shown
+    // as a 171 px card thumbnail made a shop's first screen take 16 s on 3G (2026-11-07).
+    const resized = RESIZE_WIDTHS.includes(Number(width))
+      ? await resizedImage(organizationId, filename, Number(width), file)
+      : null;
+    if (resized) {
+      res.setHeader('Content-Type', 'image/webp');
+      res.setHeader('Content-Length', resized.length.toString());
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.send(resized);
+      return;
+    }
+    if (RESIZE_WIDTHS.includes(Number(width))) {
+      // Resizing read the stream and failed: the original, from a fresh read.
+      file =
+        (await this.storageService.readStream(organizationId, filename)) ??
+        file;
     }
 
     res.setHeader('Content-Type', file.mimeType);
@@ -197,5 +224,49 @@ export class UploadsController {
     }
 
     return { deleted: true };
+  }
+}
+
+/** The widths a photo may be asked at — a short list, so the cache stays small and nobody can
+ *  make the server resize to a thousand sizes. */
+export const RESIZE_WIDTHS = [160, 320, 480, 640, 960, 1280];
+const RESIZABLE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const RESIZE_CACHE_DIR = join(tmpdir(), 'korva-resized');
+
+/**
+ * The photo at `width` (never enlarged), as WebP, from a disk cache that survives requests but
+ * not a container restart — rebuilt on first ask. Anything that is not a resizable photo, or
+ * that fails, answers null: the original is then sent as before.
+ */
+async function resizedImage(
+  organizationId: string,
+  filename: string,
+  width: number,
+  file: { mimeType: string; stream: NodeJS.ReadableStream },
+): Promise<Buffer | null> {
+  if (!RESIZABLE_TYPES.includes(file.mimeType)) return null;
+  const cached = join(
+    RESIZE_CACHE_DIR,
+    `${organizationId}-${filename}-${width}.webp`,
+  );
+  try {
+    return await readFile(cached);
+  } catch {
+    // Not cached yet.
+  }
+  try {
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.stream)
+      chunks.push(Buffer.from(chunk as Buffer));
+    const output = await sharp(Buffer.concat(chunks))
+      .rotate()
+      .resize({ width, withoutEnlargement: true })
+      .webp({ quality: 72 })
+      .toBuffer();
+    await mkdir(RESIZE_CACHE_DIR, { recursive: true });
+    await writeFile(cached, output).catch(() => undefined);
+    return output;
+  } catch {
+    return null;
   }
 }

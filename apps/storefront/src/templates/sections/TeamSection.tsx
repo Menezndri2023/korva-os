@@ -5,6 +5,7 @@ import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
 import { SectionHeading } from "./SectionHeading";
 import { useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 export function TeamSection({ organization }: { organization: PublicOrganization }) {
   const t = useT();
@@ -38,7 +39,7 @@ function MemberPhoto({ photo, name }: { photo?: string; name: string }) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={photo}
+        {...uploadImage(photo, [160, 320], "160px")}
         alt=""
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}

@@ -19,6 +19,7 @@ import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
 import { useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 const UNCATEGORIZED = "Autres";
 
@@ -71,7 +72,7 @@ export function TableTemplate({
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={organization.heroImage}
+              {...uploadImage(organization.heroImage, [640, 960, 1280], "100vw")}
               alt=""
               fetchPriority="high"
               decoding="async"

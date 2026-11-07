@@ -19,6 +19,7 @@ import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
 import { useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 const ALL_CATEGORY = "Tout";
 
@@ -222,7 +223,7 @@ function HeroBanner({ src, title, tagline }: { src: string; title: string; tagli
     <div className="relative overflow-hidden rounded-3xl">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        {...uploadImage(src, [640, 960, 1280], "100vw")}
         alt=""
         fetchPriority="high"
         decoding="async"

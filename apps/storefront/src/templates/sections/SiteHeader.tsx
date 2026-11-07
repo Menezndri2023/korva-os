@@ -6,6 +6,7 @@ import { Menu, ShoppingBag, UserRound } from "lucide-react";
 import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
 import { useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 export interface SiteHeaderLink {
   href: string;
@@ -191,7 +192,7 @@ export function Monogram({
       // middleware.ts img-src comment).
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={organization.logo}
+        {...uploadImage(organization.logo, [160, 320], "80px")}
         alt=""
         loading="eager"
         decoding="async"

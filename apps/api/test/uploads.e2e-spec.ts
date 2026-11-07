@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
 import request from 'supertest';
+import sharp from 'sharp';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
@@ -159,6 +160,69 @@ describe('Uploads (e2e) — local storage provider', () => {
     await request(server)
       .get(`/api/v1/uploads/${organizationId}/${upload.filename}`)
       .expect(404);
+  });
+
+  it('serves a photo at the width it is shown, as WebP, and the original otherwise', async () => {
+    const photo = await sharp({
+      create: { width: 1600, height: 1200, channels: 3, background: '#c86b2a' },
+    })
+      .jpeg({ quality: 90 })
+      .toBuffer();
+    const upload = asSuccess<UploadPayload>(
+      (
+        await request(server)
+          .post('/api/v1/uploads')
+          .set('Authorization', `Bearer ${ownerAccessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .attach('file', photo, {
+            filename: 'pagne.jpg',
+            contentType: 'image/jpeg',
+          })
+          .expect(201)
+      ).body,
+    );
+    const path = `/api/v1/uploads/${organizationId}/${upload.filename}`;
+
+    const small = await request(server)
+      .get(`${path}?w=320`)
+      .buffer(true)
+      .expect(200);
+    expect(small.headers['content-type']).toBe('image/webp');
+    const body = small.body as Buffer;
+    expect((await sharp(body).metadata()).width).toBe(320);
+    expect(body.length).toBeLessThan(photo.length);
+    // Cached: the same bytes the second time.
+    const again = await request(server)
+      .get(`${path}?w=320`)
+      .buffer(true)
+      .expect(200);
+    expect(Buffer.compare(again.body as Buffer, body)).toBe(0);
+
+    // A width outside the list: the original, untouched.
+    const original = await request(server).get(`${path}?w=333`).expect(200);
+    expect(original.headers['content-type']).toBe('image/jpeg');
+    expect(original.headers['content-length']).toBe(String(photo.length));
+  });
+
+  it('falls back to the original when a file cannot be resized', async () => {
+    const upload = asSuccess<UploadPayload>(
+      (
+        await request(server)
+          .post('/api/v1/uploads')
+          .set('Authorization', `Bearer ${ownerAccessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .attach('file', PNG_SIGNATURE, {
+            filename: 'tiny.png',
+            contentType: 'image/png',
+          })
+          .expect(201)
+      ).body,
+    );
+    const res = await request(server)
+      .get(`/api/v1/uploads/${organizationId}/${upload.filename}?w=320`)
+      .expect(200);
+    expect(res.headers['content-type']).toBe('image/png');
+    expect(res.headers['content-length']).toBe(String(PNG_SIGNATURE.length));
   });
 
   it('rejects a disallowed declared mimetype before it ever reaches storage', async () => {

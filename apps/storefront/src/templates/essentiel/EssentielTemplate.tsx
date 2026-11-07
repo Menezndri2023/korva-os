@@ -20,6 +20,7 @@ import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 /** The original, sector-agnostic storefront layout — always available regardless of plan, and
  *  the fallback whenever a plan no longer covers the org's chosen template (see
@@ -186,7 +187,7 @@ function HeroSection({ organization }: { organization: PublicOrganization }) {
         // Arbitrary tenant-supplied host — same rationale as OfferImage.
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={organization.heroImage}
+          {...uploadImage(organization.heroImage, [640, 960, 1280], "100vw")}
           alt=""
           fetchPriority="high"
           decoding="async"

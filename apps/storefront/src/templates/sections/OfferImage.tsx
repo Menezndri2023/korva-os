@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { PublicOffer } from "@/lib/public-types";
 import { KT } from "../kt-classes";
+import { uploadImage } from "@/lib/upload-image";
 
 /**
  * An offer's first photo, in a box whose shape the caller sets (`className` carries the aspect
@@ -53,7 +54,7 @@ export function OfferImage({
           middleware.ts img-src comment). */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        {...uploadImage(src, [320, 480, 640, 960], "(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw")}
         alt={offer.name}
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : "auto"}

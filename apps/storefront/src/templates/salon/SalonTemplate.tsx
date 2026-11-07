@@ -20,6 +20,7 @@ import { SiteFooter } from "../sections/SiteFooter";
 import { siteWording } from "../wording";
 import { Confirmation } from "../sections/Confirmation";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 /** Beauty & wellness, non-medical health, fitness, hospitality, personal services — booking is
  *  the primary call to action everywhere, well above cart/commerce. */
@@ -82,7 +83,7 @@ export function SalonTemplate({
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={organization.heroImage}
+              {...uploadImage(organization.heroImage, [640, 960, 1280], "100vw")}
               alt=""
               fetchPriority="high"
               decoding="async"

@@ -22,6 +22,7 @@ import { SiteFooter } from "../sections/SiteFooter";
 import { siteWording } from "../wording";
 import { Confirmation } from "../sections/Confirmation";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
+import { uploadImage } from "@/lib/upload-image";
 
 /**
  * Services vitrine — professional services, trades/construction, real estate, digital
@@ -210,7 +211,7 @@ function HeroImage({ src }: { src: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={src}
+      {...uploadImage(src, [640, 960, 1280], "100vw")}
       alt=""
       fetchPriority="high"
       decoding="async"

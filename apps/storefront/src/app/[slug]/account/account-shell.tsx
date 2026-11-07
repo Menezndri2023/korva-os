@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePublicOrganization } from "@/lib/use-public-organization";
+import { uploadImage } from "@/lib/upload-image";
 
 /**
  * Shared header/layout for every /[slug]/account/* page. It carries the business's own name and
@@ -24,7 +25,7 @@ export function AccountShell({
         <div className="mx-auto flex max-w-2xl items-center gap-3">
           {organization?.logo ? (
             // eslint-disable-next-line @next/next/no-img-element -- tenant logo on any host
-            <img src={organization.logo} alt="" className="h-10 w-10 shrink-0 rounded-xl object-cover" />
+            <img {...uploadImage(organization.logo, [160, 320], "80px")} alt="" className="h-10 w-10 shrink-0 rounded-xl object-cover" />
           ) : (
             <span
               aria-hidden
