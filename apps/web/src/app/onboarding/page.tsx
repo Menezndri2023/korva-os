@@ -31,7 +31,8 @@ import {
   type Organization,
   type Workflow,
 } from "@korva/types";
-import { Button, Card, Input, Select } from "@korva/ui";
+import { Check } from "lucide-react";
+import { Button, Input, Select } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
 import { forgetReferral, readReferral } from "@/lib/referral";
@@ -54,6 +55,14 @@ const MODULE_LABELS: Record<KorvaModule, [string, string]> = {
 /** The countries KORVA bills in, with their currency — shared with the public pricing section
  *  so the two can never offer a country the other does not (see @korva/types/plan-tiers.ts). */
 const COUNTRIES = BILLABLE_COUNTRIES;
+
+/** The visitor's country, guessed from the browser's time zone (Abidjan → Côte d'Ivoire). */
+const DEFAULT_COUNTRY =
+  typeof Intl !== "undefined"
+    ? (COUNTRIES.find((country) =>
+        country.timeZones.includes(Intl.DateTimeFormat().resolvedOptions().timeZone),
+      )?.code ?? "FR")
+    : "FR";
 
 // See the matching comment in dashboard/settings/page.tsx — one shared list, because it now
 // also determines which Plan documents are seeded.
@@ -144,19 +153,22 @@ export default function OnboardingPage() {
   // than read with react-hook-form's watch(), which the React Compiler cannot memoize (see the
   // react-hooks/incompatible-library warnings this repo already carries) — the value only ever
   // changes in the country field's onChange below, so there is nothing to subscribe to.
-  const [billingCurrency, setBillingCurrency] = useState(currencyForCountry("FR"));
+  const [billingCurrency, setBillingCurrency] = useState(currencyForCountry(DEFAULT_COUNTRY));
+  // Three short steps instead of one long form (2026-11-07): the activity, where, the tools.
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const {
     register,
     handleSubmit,
     setValue,
+    trigger,
     control,
     formState: { errors },
   } = useForm<CreateOrganizationInput>({
     resolver: zodResolver(onboardingSchema),
     defaultValues: {
-      country: "FR",
-      currency: currencyForCountry("FR"),
+      country: DEFAULT_COUNTRY,
+      currency: currencyForCountry(DEFAULT_COUNTRY),
       timezone: resolveDefaultTimezone(),
       language: locale,
     },
@@ -270,11 +282,7 @@ export default function OnboardingPage() {
       <div className="w-full max-w-lg space-y-6">
         <div className="text-center">
           <h1 className="text-2xl font-semibold">{t("Configurez votre entreprise", "Set up your business")}</h1>
-          <p className="mt-1 text-sm text-text-muted">{t(
-            "Quelques informations pour démarrer sur KORVA OS.",
-            "A few details to get started on KORVA OS.",
-          )}</p>
-          <p className="mt-1 text-sm font-medium text-text">
+          <p className="mt-1 text-sm text-text-muted">
             {t(
               `Les ${SIGNUP_TRIAL.days} premiers jours, toutes les fonctions de la formule ${PLAN_NAMES[SIGNUP_TRIAL.plan]} sont offertes, sans carte bancaire.`,
               `For the first ${SIGNUP_TRIAL.days} days, every feature of the ${planName(SIGNUP_TRIAL.plan, locale)} plan is free, no credit card needed.`,
@@ -282,11 +290,32 @@ export default function OnboardingPage() {
           </p>
         </div>
 
-        <Card className="space-y-2 p-4">
-          <p className="text-sm font-medium">{t(
-            "Importer mon entreprise (optionnel)",
-            "Import my business (optional)",
-          )}</p>
+        {/* Where the owner is: three steps, each one screen. */}
+        <div>
+          <p className="text-sm font-medium text-text">
+            {t(`Étape ${step} sur 3`, `Step ${step} of 3`)} —{" "}
+            {step === 1
+              ? t("Votre activité", "Your business")
+              : step === 2
+                ? t("Où travaillez-vous ?", "Where do you work?")
+                : t("Vos outils", "Your tools")}
+          </p>
+          <div className="mt-2 grid grid-cols-3 gap-1.5" aria-hidden="true">
+            {[1, 2, 3].map((index) => (
+              <span key={index} className={`h-1.5 rounded-full ${index <= step ? "bg-action" : "bg-surface-muted"}`} />
+            ))}
+          </div>
+        </div>
+
+        <form className="space-y-4" onSubmit={handleSubmit((data) => mutation.mutate(data))}>
+          {/* Every step stays mounted (hidden, not removed), so what was typed is kept. */}
+          <div className={step === 1 ? "space-y-4" : "hidden"}>
+          <details className="rounded-xl border border-border bg-surface p-4" open={Boolean(imported)}>
+          <summary className="cursor-pointer text-sm font-medium">{t(
+            "J'ai déjà un site web (facultatif)",
+            "I already have a website (optional)",
+          )}</summary>
+          <div className="mt-2 space-y-2">
           <p className="text-xs text-text-muted">
             {t(
               "Vous avez déjà un site web ? Collez son adresse pour préremplir le nom, le slogan et le logo ci-dessous — tout reste modifiable avant de valider.",
@@ -326,9 +355,9 @@ export default function OnboardingPage() {
               )}
             </p>
           )}
-        </Card>
+          </div>
+          </details>
 
-        <form className="space-y-4" onSubmit={handleSubmit((data) => mutation.mutate(data))}>
           <div>
             <label className="block text-sm font-medium" htmlFor="name">
               {t("Nom de l'entreprise", "Business name")}
@@ -344,8 +373,8 @@ export default function OnboardingPage() {
             )}</p>
             <p className="mt-1 text-xs text-text-muted">
               {t(
-                "Optionnel — préremplit le secteur et les modules suggérés ci-dessous, modifiables librement.",
-                "Optional — pre-fills the line of business and suggested modules below, which you can change freely.",
+                "Choisissez le plus proche : votre site, vos outils et vos premières offres sont préparés pour lui. Tout reste modifiable.",
+                "Pick the closest: your website, tools and first offers are prepared for it. Everything stays editable.",
               )}
             </p>
             <Input
@@ -364,27 +393,47 @@ export default function OnboardingPage() {
                 "No line of business matches this search.",
               )}</p>
             )}
-            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {filteredVerticals.map((template) => (
-                <button
-                  key={template.key}
-                  type="button"
-                  onClick={() => applyVerticalTemplate(template.key)}
-                  className="text-left"
-                >
-                  <Card
-                    className={`p-3 transition-colors hover:bg-surface-muted ${
-                      selectedVertical === template.key ? "border-primary" : ""
+            {errors.businessModel && !selectedVertical && (
+              <p className="mt-2 text-xs text-red-600" role="alert">
+                {t(
+                  "Choisissez votre secteur ci-dessous, ou ouvrez « Mon activité n'est pas dans la liste ».",
+                  "Pick your line of business below, or open “My business is not in the list”.",
+                )}
+              </p>
+            )}
+            {/* Two columns even on a phone, the name only there: nineteen full cards were a scroll
+                of their own. The chosen one is unmistakable. */}
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {filteredVerticals.map((template) => {
+                const chosen = selectedVertical === template.key;
+                return (
+                  <button
+                    key={template.key}
+                    type="button"
+                    aria-pressed={chosen}
+                    onClick={() => applyVerticalTemplate(template.key)}
+                    className={`flex min-h-12 items-start gap-2 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+                      chosen ? "border-action bg-action-soft ring-1 ring-action" : "border-border bg-surface hover:bg-surface-muted"
                     }`}
                   >
-                    <p className="text-sm font-medium">{verticalText(template, locale).label}</p>
-                    <p className="mt-0.5 text-xs text-text-muted">{verticalText(template, locale).description}</p>
-                  </Card>
-                </button>
-              ))}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium leading-snug">{verticalText(template, locale).label}</span>
+                      <span className="mt-0.5 hidden text-xs text-text-muted sm:block">{verticalText(template, locale).description}</span>
+                    </span>
+                    {chosen && <Check aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-action" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
+          <details className="rounded-xl border border-border p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              {selectedVertical
+                ? t("Ajuster le secteur et le type d'activité", "Adjust the line and type of business")
+                : t("Mon activité n'est pas dans la liste", "My business is not in the list")}
+            </summary>
+            <div className="mt-3 space-y-4">
           <div>
             <label className="block text-sm font-medium" htmlFor="type">
               {t("Secteur d'activité", "Line of business")}
@@ -433,37 +482,11 @@ export default function OnboardingPage() {
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium" htmlFor="business-description">
-              {t(
-                "Décrivez vos produits ou services (optionnel)",
-                "Describe your products or services (optional)",
-              )}
-            </label>
-            <p className="mt-1 text-xs text-text-muted">
-              {t(
-                "Utilisé pour préremplir le slogan et le texte \"À propos\" de votre page publique — tout reste modifiable ensuite dans Réglages.",
-                "Used to pre-fill the tagline and the “About” text of your public page — everything stays editable later in Settings.",
-              )}
-            </p>
-            <textarea
-              id="business-description"
-              className="mt-2 w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
-              rows={3}
-              maxLength={2000}
-              placeholder={t(
-                "ex: Nous proposons des coupes, colorations et soins capillaires bio à Paris.",
-                "e.g. We offer organic haircuts, colouring and hair care in London.",
-              )}
-              {...register("businessDescription", {
-                setValueAs: (v: string) => (v === "" ? undefined : v),
-              })}
-            />
-            {errors.businessDescription && (
-              <p className="mt-1 text-xs text-red-600">{errors.businessDescription.message}</p>
-            )}
+            </div>
+          </details>
           </div>
 
+          <div className={step === 2 ? "space-y-4" : "hidden"}>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium" htmlFor="country">
@@ -478,6 +501,10 @@ export default function OnboardingPage() {
                   const currency = currencyForCountry(event.target.value);
                   setValue("currency", currency);
                   setBillingCurrency(currency);
+                  // The country's own time zone: nobody should have to find "Africa/Abidjan" in a
+                  // list of four hundred.
+                  const zone = COUNTRIES.find((country) => country.code === event.target.value)?.timeZones[0];
+                  if (zone && TIMEZONES.includes(zone)) setValue("timezone", zone);
                 }}
               >
                 {COUNTRIES.map((country) => (
@@ -540,6 +567,9 @@ export default function OnboardingPage() {
             </Select>
           </div>
 
+          </div>
+
+          <div className={step === 3 ? "space-y-4" : "hidden"}>
           <div>
             <p className="block text-sm font-medium">{t(
               "Que souhaitez-vous gérer ?",
@@ -588,10 +618,43 @@ export default function OnboardingPage() {
                 feature after `workflow` moved to the free plan. */}
             <p className="mt-1 text-xs text-text-muted">
               {t(
-                `Vous pourrez en activer d'autres plus tard. Les devis, factures et campagnes arrivent avec la formule ${PLAN_NAMES[MODULE_MIN_PLAN.finance]} ; l'assistant IA avec la formule ${PLAN_NAMES[MODULE_MIN_PLAN.ai]}.`,
-                `You can turn on others later. Quotes, invoices and campaigns come with the ${planName(MODULE_MIN_PLAN.finance, locale)} plan; the AI assistant with the ${planName(MODULE_MIN_PLAN.ai, locale)} plan.`,
+                `Déjà cochés pour votre métier. Vous pourrez en activer d'autres plus tard ; les devis, factures et campagnes arrivent avec la formule ${PLAN_NAMES[MODULE_MIN_PLAN.finance]}${MODULE_MIN_PLAN.ai === "free" ? "" : `, l'assistant IA avec la formule ${PLAN_NAMES[MODULE_MIN_PLAN.ai]}`}.`,
+                `Already ticked for your trade. You can turn on others later; quotes, invoices and campaigns come with the ${planName(MODULE_MIN_PLAN.finance, locale)} plan${MODULE_MIN_PLAN.ai === "free" ? "" : `, the AI assistant with the ${planName(MODULE_MIN_PLAN.ai, locale)} plan`}.`,
               )}
             </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium" htmlFor="business-description">
+              {t(
+                "Décrivez vos produits ou services (optionnel)",
+                "Describe your products or services (optional)",
+              )}
+            </label>
+            <p className="mt-1 text-xs text-text-muted">
+              {t(
+                "Utilisé pour préremplir le slogan et le texte \"À propos\" de votre page publique — tout reste modifiable ensuite dans Réglages.",
+                "Used to pre-fill the tagline and the “About” text of your public page — everything stays editable later in Settings.",
+              )}
+            </p>
+            <textarea
+              id="business-description"
+              className="mt-2 w-full rounded-md border border-border-input px-3 py-2 text-sm focus:border-focus focus:outline-none"
+              rows={3}
+              maxLength={2000}
+              placeholder={t(
+                "ex: Nous proposons des coupes, colorations et soins capillaires bio à Paris.",
+                "e.g. We offer organic haircuts, colouring and hair care in London.",
+              )}
+              {...register("businessDescription", {
+                setValueAs: (v: string) => (v === "" ? undefined : v),
+              })}
+            />
+            {errors.businessDescription && (
+              <p className="mt-1 text-xs text-red-600">{errors.businessDescription.message}</p>
+            )}
+          </div>
+
           </div>
 
           {mutation.isError && (
@@ -600,9 +663,29 @@ export default function OnboardingPage() {
             </p>
           )}
 
-          <Button type="submit" loading={mutation.isPending} className="w-full">
-            {mutation.isPending ? t("Création...", "Creating...") : t("Créer mon organisation", "Create my organization")}
-          </Button>
+          <div className="flex gap-2">
+            {step > 1 && (
+              <Button type="button" variant="secondary" onClick={() => setStep((current) => (current - 1) as 1 | 2 | 3)}>
+                {t("Retour", "Back")}
+              </Button>
+            )}
+            {step < 3 && (
+              <Button
+                type="button"
+                className="flex-1"
+                onClick={async () => {
+                  const fields = step === 1 ? (["name", "type", "businessModel"] as const) : (["country", "timezone"] as const);
+                  if (await trigger([...fields])) setStep((current) => (current + 1) as 1 | 2 | 3);
+                }}
+              >
+                {t("Continuer", "Continue")}
+              </Button>
+            )}
+            {/* Mounted on every step (shown on the last), so the form keeps one submit. */}
+            <Button type="submit" loading={mutation.isPending} className={step === 3 ? "flex-1" : "hidden"}>
+              {mutation.isPending ? t("Création...", "Creating...") : t("Créer mon organisation", "Create my organization")}
+            </Button>
+          </div>
         </form>
       </div>
     </div>

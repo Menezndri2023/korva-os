@@ -430,4 +430,26 @@ describe("OnboardingPage — signup trial", () => {
     const paths = postMock.mock.calls.map(([path]) => path);
     expect(paths.indexOf("/organizations")).toBeLessThan(paths.indexOf("/subscriptions/trial"));
   });
+
+  it("walks the owner through three steps, and needs a name and a trade to go on", async () => {
+    renderWithProviders(<OnboardingPage />);
+    expect(screen.getByText(/Étape 1 sur 3/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    await waitFor(() => expect(screen.getByText(/Étape 1 sur 3/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Nom de l'entreprise"), { target: { value: "Salon Awa" } });
+    fireEvent.click(screen.getByRole("button", { name: /Salon & bien-être/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(await screen.findByText(/Étape 2 sur 3/)).toBeInTheDocument();
+
+    // The country decides the time zone: nobody looks for Africa/Abidjan in a list.
+    fireEvent.change(screen.getByLabelText("Pays"), { target: { value: "CI" } });
+    expect(screen.getByLabelText("Fuseau horaire")).toHaveValue("Africa/Abidjan");
+
+    fireEvent.click(screen.getByRole("button", { name: "Continuer" }));
+    expect(await screen.findByText(/Étape 3 sur 3/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retour" }));
+    expect(await screen.findByText(/Étape 2 sur 3/)).toBeInTheDocument();
+  });
 });
