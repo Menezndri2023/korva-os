@@ -11,9 +11,11 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import {
   listPayoutsAdminQuerySchema,
+  markPayoutPaidSchema,
   rejectPayoutSchema,
   walletAdjustmentSchema,
   type ListPayoutsAdminQuery,
+  type MarkPayoutPaidInput,
   type RejectPayoutInput,
   type WalletAdjustmentInput,
 } from '@korva/validation';
@@ -47,6 +49,16 @@ export class PlatformPayoutsAdminController {
   @HttpCode(200)
   approve(@Param('id') id: string) {
     return this.wallet.approve(id);
+  }
+
+  @Post('payouts/:id/mark-paid')
+  @HttpCode(200)
+  markPaid(
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(markPayoutPaidSchema))
+    body: MarkPayoutPaidInput,
+  ) {
+    return this.wallet.markPaidManually(id, body.reference, body.fee);
   }
 
   @Post('payouts/:id/reject')

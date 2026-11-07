@@ -55,4 +55,16 @@ describe("AdminPayoutsPage", () => {
       expect(postMock).toHaveBeenCalledWith("/platform/payouts/p-1/reject", { reason: "Numéro à vérifier" }),
     );
   });
+
+  it("records one paid by hand, with the operator's reference and fee", async () => {
+    renderWithProviders(<AdminPayoutsPage />);
+    await screen.findByText("Boutique Awa");
+    fireEvent.click(screen.getByRole("button", { name: "Versé à la main" }));
+    fireEvent.change(screen.getByLabelText("Référence de la transaction"), { target: { value: "WAVE-T123" } });
+    fireEvent.change(screen.getByLabelText(/Frais payés/), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer comme versé" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/platform/payouts/p-1/mark-paid", { reference: "WAVE-T123", fee: 20 }),
+    );
+  });
 });

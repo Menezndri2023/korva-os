@@ -947,6 +947,12 @@ export class WalletService {
       }
       return;
     }
+    // Paid by hand (markPaidManually) and interrupted before it closed: GeniusPay knows nothing
+    // of it — finish closing it with what the administration recorded.
+    if (payout.providerReference.startsWith('manual:')) {
+      await this.complete(payout);
+      return;
+    }
     const provider = await this.providerResolver.resolve({
       flow: 'commerce',
       organizationId: payout.organizationId.toString(),
@@ -979,6 +985,43 @@ export class WalletService {
       });
     }
     return sent;
+  }
+
+  /**
+   * The administration paid a requested withdrawal by hand — from KORVA's own Wave or Orange Money,
+   * or GeniusPay's dashboard — and records it: the withdrawal closes as paid, with the operator's
+   * reference and the real fee (passed on as for any withdrawal, except on Business). This is how
+   * businesses get paid while GeniusPay has not opened its payout API to KORVA. The reference
+   * is stored as "manual:…", so nothing ever asks GeniusPay about it, and a withdrawal being sent
+   * through GeniusPay at the same moment cannot also be marked: only a "requested" one can.
+   */
+  async markPaidManually(
+    payoutId: string,
+    reference: string,
+    fee?: number,
+  ): Promise<PayoutDocument> {
+    const claimed = await this.payoutModel
+      .findOneAndUpdate(
+        { _id: new Types.ObjectId(payoutId), status: 'requested' },
+        {
+          $set: {
+            status: 'processing',
+            approvedAt: new Date(),
+            providerReference: `manual:${reference}`,
+            ...(fee !== undefined ? { fee } : {}),
+          },
+        },
+        { new: true },
+      )
+      .exec();
+    if (!claimed) {
+      throw new BadRequestException({
+        code: 'PAYOUT_NOT_APPROVABLE',
+        message: 'Only a requested withdrawal can be marked as paid',
+      });
+    }
+    await this.complete(claimed, fee);
+    return (await this.payoutModel.findById(claimed._id).exec())!;
   }
 
   async reject(payoutId: string, reason: string): Promise<void> {

@@ -45,6 +45,16 @@ export const rejectPayoutSchema = z.object({
 });
 export type RejectPayoutInput = z.infer<typeof rejectPayoutSchema>;
 
+/** The administration paid a withdrawal itself (Wave, Orange Money… from KORVA's own phone or
+ *  GeniusPay's dashboard) while GeniusPay's payout API is not open to KORVA. */
+export const markPayoutPaidSchema = z.object({
+  /** The operator's transaction reference, so the business can check it on its own phone. */
+  reference: z.string().trim().min(3).max(100),
+  /** What the transfer actually cost, in the withdrawal's currency. */
+  fee: z.number().min(0).max(1_000_000).optional(),
+});
+export type MarkPayoutPaidInput = z.infer<typeof markPayoutPaidSchema>;
+
 export const walletAdjustmentSchema = z.object({
   amount: z.number().refine((value) => value !== 0, "Montant non nul"),
   note: z.string().trim().min(3).max(300),

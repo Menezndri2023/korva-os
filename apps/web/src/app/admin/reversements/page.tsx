@@ -125,11 +125,22 @@ export default function AdminPayoutsPage() {
 function PayoutRow({ payout, onChanged }: { payout: Row; onChanged: () => void }) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
+  const [markingPaid, setMarkingPaid] = useState(false);
+  const [reference, setReference] = useState("");
+  const [fee, setFee] = useState("");
   const act = useMutation({
-    mutationFn: (input: { action: "approve" | "reject" | "sync"; reason?: string }) =>
-      adminApi.post(`/platform/payouts/${payout.id}/${input.action}`, input.reason ? { reason: input.reason } : {}),
+    mutationFn: (
+      input:
+        | { action: "approve" | "sync" }
+        | { action: "reject"; reason: string }
+        | { action: "mark-paid"; reference: string; fee?: number },
+    ) => {
+      const { action, ...body } = input;
+      return adminApi.post(`/platform/payouts/${payout.id}/${action}`, body);
+    },
     onSuccess: () => {
       setRejecting(false);
+      setMarkingPaid(false);
       onChanged();
     },
   });
@@ -155,14 +166,51 @@ function PayoutRow({ payout, onChanged }: { payout: Row; onChanged: () => void }
       </p>
       {(payout.providerReference || payout.failureReason || payout.fee != null) && (
         <p className="text-xs text-text-muted">
-          {payout.providerReference ? `Référence GeniusPay ${payout.providerReference}. ` : ""}
+          {payout.providerReference
+            ? payout.providerReference.startsWith("manual:")
+              ? `Versé à la main, référence ${payout.providerReference.slice("manual:".length)}. `
+              : `Référence GeniusPay ${payout.providerReference}. `
+            : ""}
           {payout.fee != null ? `Frais ${formatMoney(payout.fee, payout.currency)}. ` : ""}
           {payout.failureReason ?? ""}
         </p>
       )}
       {act.isError && <p className="text-sm text-destructive">L&apos;action n&apos;a pas abouti. Réessayez.</p>}
 
-      {rejecting ? (
+      {markingPaid ? (
+        <form
+          className="space-y-2 border-t border-border pt-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            act.mutate({
+              action: "mark-paid",
+              reference: reference.trim(),
+              ...(fee.trim() ? { fee: Number(fee) } : {}),
+            });
+          }}
+        >
+          <p className="text-sm text-text-muted">
+            Envoyez {formatMoney(payout.amount, payout.currency)} à ce numéro depuis le compte de KORVA (Wave, Orange
+            Money…), puis notez la référence de la transaction : l&apos;entreprise la voit sur son Solde.
+          </p>
+          <label className="block text-sm">
+            <span className="mb-1 block text-text-muted">Référence de la transaction</span>
+            <Input value={reference} minLength={3} maxLength={100} required onChange={(event) => setReference(event.target.value)} />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block text-text-muted">Frais payés (laisser vide si aucun)</span>
+            <Input type="number" min={0} step="any" value={fee} onChange={(event) => setFee(event.target.value)} />
+          </label>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" loading={act.isPending}>
+              Enregistrer comme versé
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setMarkingPaid(false)}>
+              Annuler
+            </Button>
+          </div>
+        </form>
+      ) : rejecting ? (
         <form
           className="space-y-2 border-t border-border pt-3"
           onSubmit={(event) => {
@@ -190,6 +238,9 @@ function PayoutRow({ payout, onChanged }: { payout: Row; onChanged: () => void }
               <>
                 <Button type="button" size="sm" loading={act.isPending} onClick={() => act.mutate({ action: "approve" })}>
                   Valider et envoyer
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={() => setMarkingPaid(true)}>
+                  Versé à la main
                 </Button>
                 <Button type="button" size="sm" variant="secondary" onClick={() => setRejecting(true)}>
                   Refuser

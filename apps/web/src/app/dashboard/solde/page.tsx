@@ -176,6 +176,13 @@ export default function WalletPage() {
                   {new Date(payout.createdAt).toLocaleDateString(intlLocale(locale))}
                 </span>
                 {payout.failureReason && <span className="block text-xs text-text-muted">{payout.failureReason}</span>}
+                {payout.status === "completed" && payout.providerReference && (
+                  <span className="block text-xs text-text-muted">
+                    {t("Référence du transfert", "Transfer reference")} :{" "}
+                    {payout.providerReference.replace(/^manual:/, "")}
+                    {payout.fee ? ` — ${t("frais", "fee")} ${money(payout.fee)}` : ""}
+                  </span>
+                )}
               </span>
               <Badge variant={STATUS_VARIANT[payout.status]}>{locale === "en" ? PAYOUT_STATUS_LABELS_EN[payout.status] : PAYOUT_STATUS_LABELS[payout.status]}</Badge>
             </li>

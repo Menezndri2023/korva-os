@@ -395,6 +395,51 @@ describe('Solde KORVA (e2e)', () => {
     expect((await summary()).available).toBe(4175);
   });
 
+  it('records a withdrawal the administration paid by hand, with its reference and real fee', async () => {
+    await connection
+      .collection('payouts')
+      .updateMany({}, { $set: { trigger: 'auto' } }); // free the weekly request
+    const payout = asSuccess<{ id: string }>(
+      (
+        await staff(request(server).post('/api/v1/wallet/payouts'))
+          .send({ amount: 2000 })
+          .expect(201)
+      ).body,
+    );
+    const paid = asSuccess<{ status: string; fee: number }>(
+      (
+        await admin(
+          request(server).post(
+            `/api/v1/platform/payouts/${payout.id}/mark-paid`,
+          ),
+        )
+          .send({ reference: 'WAVE-T123456', fee: 20 })
+          .expect(200)
+      ).body,
+    );
+    expect(paid).toMatchObject({ status: 'completed', fee: 20 });
+    // 4 175 − 2 000 withdrawn − 20 fee passed on (Starter).
+    expect(await summary()).toMatchObject({
+      available: 2155,
+      openPayout: null,
+    });
+    // Never twice.
+    await admin(
+      request(server).post(`/api/v1/platform/payouts/${payout.id}/mark-paid`),
+    )
+      .send({ reference: 'WAVE-T123456' })
+      .expect(400);
+
+    // Back to the balance the next tests start from.
+    await admin(
+      request(server).post(
+        `/api/v1/platform/organizations/${organizationId}/wallet/adjustments`,
+      ),
+    )
+      .send({ amount: 2020, note: 'Remise à niveau du test' })
+      .expect(200);
+  });
+
   it('runs automatic withdrawals from the sweep — not before the new number’s cooling-off', async () => {
     await staff(request(server).patch('/api/v1/wallet/auto-payout'))
       .send({ enabled: true, frequency: 'weekly', minimum: 1000 })
