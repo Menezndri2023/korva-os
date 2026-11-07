@@ -255,6 +255,35 @@ export async function uploadFile(file: File): Promise<UploadResult> {
   return payload.data;
 }
 
+/**
+ * Downloads a file the API renders (a PDF, a CSV) and hands it to the browser as `filename`.
+ * Same headers as request(), and the same single refresh-and-retry when the access token has just
+ * expired — these routes answer the file itself, not the JSON envelope, so request() cannot.
+ */
+export async function downloadFile(path: string, filename: string, isRetry = false): Promise<void> {
+  const { accessToken, activeOrganizationId } = useAuthStore.getState();
+  const headers: Record<string, string> = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  if (activeOrganizationId) headers["X-Organization-Id"] = activeOrganizationId;
+  const response = await fetch(`${API_URL}${path}`, { headers, credentials: "include" });
+  if (response.status === 401 && !isRetry && accessToken && useAuthStore.getState().viewOnly === null) {
+    await getRefreshedAccessToken();
+    return downloadFile(path, filename, true);
+  }
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as ApiResponse<unknown> | null;
+    throw payload && !payload.success ? toApiError(payload) : new Error(`Download failed (${response.status})`);
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export const apiClient = {
   get: <T>(path: string, options?: Omit<RequestOptions, "method" | "body">) =>
     request<T>(path, { ...options, method: "GET" }).then((payload) => payload.data as T),

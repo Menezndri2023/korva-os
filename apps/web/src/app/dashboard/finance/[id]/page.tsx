@@ -1,5 +1,6 @@
 "use client";
 
+import { DownloadButton } from "@/components/download-button";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -117,6 +118,11 @@ export default function QuoteDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{t(...STATUS_LABELS[quote.status])}</Badge>
+            <DownloadButton
+              path={`/quotes/${quote.id}/pdf`}
+              filename={`${quote.number}.pdf`}
+              label={t("Télécharger le PDF", "Download the PDF")}
+            />
             {quote.status === "draft" && (
               <Button
                 variant="secondary"

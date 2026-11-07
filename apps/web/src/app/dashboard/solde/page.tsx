@@ -23,6 +23,7 @@ import { Badge, Button, Card, EmptyState, Input, Notice, PageHeader } from "@kor
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
 import { OnlinePaymentFees } from "@/components/online-payment-fees";
+import { DownloadButton } from "@/components/download-button";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 
@@ -146,6 +147,7 @@ export default function WalletPage() {
           </Card>
 
           <SaleCalculatorCard summary={summary} money={money} />
+          <StatementCard money={money} />
           <WithdrawCard summary={summary} money={money} onDone={refresh} />
           <DestinationCard summary={summary} onDone={refresh} />
           <AutoPayoutCard summary={summary} onDone={refresh} />
@@ -658,6 +660,99 @@ function SaleCalculatorCard({ summary, money }: { summary: WalletSummary; money:
           "Estimate from GeniusPay's published prices. The fixed 100 F weighs heavily on small sales: under 2,000 F, prefer cash or grouping. Your movements below show the fees actually kept.",
         )}
       </p>
+    </Card>
+  );
+}
+
+interface WalletStatementView {
+  month: string;
+  currency: string;
+  opening: number;
+  closing: number;
+  totals: { kind: string; label: string; amount: number; count: number }[];
+}
+
+/** The last twelve calendar months, newest first, as "YYYY-MM". */
+function recentMonths(): string[] {
+  const now = new Date();
+  return Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  });
+}
+
+/**
+ * Le relevé mensuel: the month's opening balance, each kind of movement, the closing balance —
+ * and the same month as an Excel file or a PDF, for the accountant.
+ */
+function StatementCard({ money }: { money: (amount: number) => string }) {
+  const t = useT();
+  const locale = useDashboardLocale();
+  const authReady = useAuthReady();
+  const months = recentMonths();
+  const [month, setMonth] = useState(months[0]!);
+  const statement = useQuery({
+    queryKey: ["wallet", "statement", month],
+    queryFn: () => apiClient.get<WalletStatementView>(`/wallet/statement?month=${month}`),
+    enabled: authReady,
+  });
+  const monthLabel = (value: string) => {
+    const [year, m] = value.split("-").map(Number) as [number, number];
+    return new Date(year, m - 1, 1).toLocaleDateString(intlLocale(locale), { month: "long", year: "numeric" });
+  };
+
+  return (
+    <Card className="space-y-3 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-text">{t("Relevé du mois", "Monthly statement")}</h2>
+        <select
+          aria-label={t("Mois du relevé", "Statement month")}
+          value={month}
+          onChange={(event) => setMonth(event.target.value)}
+          className="rounded-md border border-border-input bg-surface px-2 py-1.5 text-sm text-text"
+        >
+          {months.map((value) => (
+            <option key={value} value={value}>
+              {monthLabel(value)}
+            </option>
+          ))}
+        </select>
+      </div>
+      {statement.isError && (
+        <p className="text-sm text-destructive">{t("Impossible de charger le relevé.", "The statement could not be loaded.")}</p>
+      )}
+      {statement.data && (
+        <dl className="divide-y divide-border text-sm">
+          <div className="flex justify-between py-1.5">
+            <dt className="text-text-muted">{t("Solde au début du mois", "Balance at the start of the month")}</dt>
+            <dd className="tabular-nums text-text">{money(statement.data.opening)}</dd>
+          </div>
+          {statement.data.totals.map((total) => (
+            <div key={total.kind} className="flex justify-between py-1.5">
+              <dt className="text-text">
+                {total.label} <span className="text-text-muted">({total.count})</span>
+              </dt>
+              <dd className="tabular-nums text-text">{money(total.amount)}</dd>
+            </div>
+          ))}
+          <div className="flex justify-between py-1.5 font-semibold">
+            <dt className="text-text">{t("Solde à la fin du mois", "Balance at the end of the month")}</dt>
+            <dd className="tabular-nums text-text">{money(statement.data.closing)}</dd>
+          </div>
+        </dl>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <DownloadButton
+          path={`/wallet/statement/download?month=${month}&format=csv`}
+          filename={`releve-solde-${month}.csv`}
+          label={t("Télécharger pour Excel", "Download for Excel")}
+        />
+        <DownloadButton
+          path={`/wallet/statement/download?month=${month}&format=pdf`}
+          filename={`releve-solde-${month}.pdf`}
+          label={t("Télécharger le PDF", "Download the PDF")}
+        />
+      </div>
     </Card>
   );
 }

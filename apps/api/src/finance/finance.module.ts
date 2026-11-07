@@ -92,6 +92,11 @@ import {
 } from './counter/schemas/till-closing.schema';
 import { CounterPaymentsController } from './counter/counter-payments.controller';
 import { WalletService } from './wallet/wallet.service';
+import { WalletStatementService } from './wallet/wallet-statement.service';
+import {
+  Organization,
+  OrganizationSchema,
+} from '../organizations/schemas/organization.schema';
 import { BusinessAlertsModule } from '../business-alerts/business-alerts.module';
 import { WalletController } from './wallet/wallet.controller';
 import {
@@ -124,6 +129,7 @@ import { EmailModule } from '../shared/email/email.module';
       { name: WalletEntry.name, schema: WalletEntrySchema },
       { name: Payout.name, schema: PayoutSchema },
       { name: WalletSettings.name, schema: WalletSettingsSchema },
+      { name: Organization.name, schema: OrganizationSchema },
     ]),
     // Le Solde KORVA reads the plan (commission, withdrawal rules) and e-mails the withdrawal
     // number's confirmation code. Neither module imports FinanceModule.
@@ -155,6 +161,7 @@ import { EmailModule } from '../shared/email/email.module';
   ],
   providers: [
     WalletService,
+    WalletStatementService,
     CounterPaymentsService,
     TillService,
     InvoiceReminderService,

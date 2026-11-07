@@ -94,3 +94,26 @@ describe('DocumentRenderingService.renderPdf', () => {
     expect(parsed.getPageCount()).toBe(1);
   });
 });
+
+describe('DocumentRenderingService — French figures', () => {
+  it('renders amounts formatted for French (narrow no-break spaces) and odd characters', async () => {
+    const service = new DocumentRenderingService();
+    const money = new Intl.NumberFormat('fr-FR', {
+      style: 'currency',
+      currency: 'XOF',
+    }).format(150000);
+    expect(money).toContain(' ');
+    const pdf = await service.renderPdf({
+      documentType: 'invoice',
+      title: 'Facture FAC-0001',
+      organizationHeader: { name: 'Salon Awa 💇' },
+      metadata: [{ label: 'Total', value: money }],
+      table: {
+        columns: ['Article', 'Total'],
+        rows: [['Tresses ≈ 3 h', money]],
+        totals: [{ label: 'Total', value: money }],
+      },
+    });
+    expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+  });
+});

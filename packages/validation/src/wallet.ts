@@ -65,3 +65,10 @@ export const listPayoutsAdminQuerySchema = z.object({
   status: z.enum(["requested", "processing", "completed", "failed", "rejected"]).optional(),
 });
 export type ListPayoutsAdminQuery = z.infer<typeof listPayoutsAdminQuerySchema>;
+
+/** GET /wallet/statement — one calendar month of the Solde, as JSON, CSV or PDF. */
+export const walletStatementQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Mois au format AAAA-MM"),
+  format: z.enum(["csv", "pdf"]).default("csv"),
+});
+export type WalletStatementQuery = z.infer<typeof walletStatementQuerySchema>;

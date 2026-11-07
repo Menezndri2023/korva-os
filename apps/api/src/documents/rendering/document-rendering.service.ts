@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib';
 
 export interface DocumentTemplate {
-  documentType: 'invoice' | 'quote' | 'certificate';
+  documentType: 'invoice' | 'quote' | 'certificate' | 'statement';
   title: string;
   organizationHeader: { name: string; address?: string };
   metadata: { label: string; value: string }[];
@@ -36,10 +36,12 @@ const BODY_SIZE = 10;
  */
 @Injectable()
 export class DocumentRenderingService {
-  async renderPdf(template: DocumentTemplate): Promise<Buffer> {
+  async renderPdf(input: DocumentTemplate): Promise<Buffer> {
+    let template = input;
     const doc = await PDFDocument.create();
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
+    template = pdfSafeTemplate(template, font);
 
     const height = estimateHeight(template);
     const page = doc.addPage([PAGE_WIDTH, height]);
@@ -108,6 +110,85 @@ export class DocumentRenderingService {
 
     return Buffer.from(await doc.save());
   }
+}
+
+/** Spaces Intl puts in French numbers and dates ("15 000 F CFA") that the standard PDF fonts
+ *  (WinAnsi) cannot encode — mapped to the no-break space they can. Anything else outside
+ *  WinAnsi (an emoji in a product name, a ≈) becomes "?" instead of failing the whole document:
+ *  before this, every French invoice of 1 000 or more answered 500. */
+const PDF_CHARACTER_FALLBACKS: Record<string, string> = {
+  '\u202f': '\u00a0',
+  '\u2009': ' ',
+  '\u2007': ' ',
+  '\u2212': '-',
+};
+
+function pdfSafeText(
+  text: string,
+  font: PDFFont,
+  cache: Map<string, string>,
+): string {
+  let out = '';
+  for (const char of text) {
+    let safe = cache.get(char);
+    if (safe === undefined) {
+      const candidate = PDF_CHARACTER_FALLBACKS[char] ?? char;
+      try {
+        font.encodeText(candidate);
+        safe = candidate;
+      } catch {
+        safe = '?';
+      }
+      cache.set(char, safe);
+    }
+    out += safe;
+  }
+  return out;
+}
+
+function pdfSafeTemplate(
+  template: DocumentTemplate,
+  font: PDFFont,
+): DocumentTemplate {
+  const cache = new Map<string, string>();
+  const safe = (text: string) => pdfSafeText(text, font, cache);
+  return {
+    ...template,
+    title: safe(template.title),
+    organizationHeader: {
+      name: safe(template.organizationHeader.name),
+      ...(template.organizationHeader.address
+        ? { address: safe(template.organizationHeader.address) }
+        : {}),
+    },
+    metadata: template.metadata.map((entry) => ({
+      label: safe(entry.label),
+      value: safe(entry.value),
+    })),
+    ...(template.table
+      ? {
+          table: {
+            columns: template.table.columns.map(safe),
+            rows: template.table.rows.map((row) => row.map(safe)),
+            totals: template.table.totals.map((total) => ({
+              label: safe(total.label),
+              value: safe(total.value),
+            })),
+          },
+        }
+      : {}),
+    ...(template.body
+      ? {
+          body: {
+            ...(template.body.heading
+              ? { heading: safe(template.body.heading) }
+              : {}),
+            paragraphs: template.body.paragraphs.map(safe),
+          },
+        }
+      : {}),
+    ...(template.footer ? { footer: safe(template.footer) } : {}),
+  };
 }
 
 interface DrawTextOptions {

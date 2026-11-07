@@ -37,6 +37,18 @@ const summary: WalletSummary = {
 function serve(wallet: WalletSummary) {
   getMock.mockImplementation(async (path: string) => {
     if (path === "/wallet") return wallet;
+    if (path.startsWith("/wallet/statement"))
+      return {
+        month: "2026-11",
+        currency: wallet.currency,
+        opening: 2000,
+        closing: 16250,
+        totals: [
+          { kind: "sale", label: "Vente payée en ligne", amount: 15000, count: 1 },
+          { kind: "commission", label: "Commission KORVA", amount: -750, count: 1 },
+        ],
+        lines: [],
+      };
     if (path.startsWith("/wallet/entries"))
       return [{ id: "e-1", kind: "sale", amount: 15000, currency: "XOF", availableAt: "2026-10-30", createdAt: "2026-10-27" }];
     return [];
@@ -77,6 +89,15 @@ describe("WalletPage", () => {
     const wave = screen.getByText("Wave", { selector: "td" }).closest("tr")!;
     expect(wave.textContent).toMatch(/0,69/);
     expect(wave.textContent).toMatch(/8,63/);
+  });
+
+  it("shows the month's statement and offers it for Excel and as a PDF", async () => {
+    serve(summary);
+    renderWithProviders(<WalletPage />);
+    expect(await screen.findByText("Relevé du mois")).toBeInTheDocument();
+    expect(await screen.findByText("Solde à la fin du mois")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Télécharger pour Excel" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Télécharger le PDF" }).length).toBeGreaterThan(0);
   });
 
   it("shows the balance, and asks for a number confirmed by code before any withdrawal", async () => {

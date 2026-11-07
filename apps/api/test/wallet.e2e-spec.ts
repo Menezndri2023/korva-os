@@ -299,6 +299,46 @@ describe('Solde KORVA (e2e)', () => {
     expect((await app.get(WalletService).runSweep()).credited).toBe(0);
   });
 
+  it('gives the month as a statement — JSON, Excel CSV and PDF', async () => {
+    const month = new Date().toISOString().slice(0, 7);
+    const statement = asSuccess<{
+      opening: number;
+      closing: number;
+      totals: { kind: string; amount: number }[];
+    }>(
+      (
+        await staff(request(server).get('/api/v1/wallet/statement'))
+          .query({ month })
+          .expect(200)
+      ).body,
+    );
+    expect(statement.opening).toBe(0);
+    expect(statement.closing).toBe(14250);
+    expect(statement.totals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'sale', amount: 15000 }),
+        expect.objectContaining({ kind: 'commission', amount: -300 }),
+      ]),
+    );
+    const csv = await staff(
+      request(server).get('/api/v1/wallet/statement/download'),
+    )
+      .query({ month, format: 'csv' })
+      .expect(200);
+    expect(csv.headers['content-type']).toContain('text/csv');
+    expect(String(csv.text)).toContain('Vente payée en ligne');
+    const pdf = await staff(
+      request(server).get('/api/v1/wallet/statement/download'),
+    )
+      .query({ month, format: 'pdf' })
+      .buffer(true)
+      .expect(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    await staff(request(server).get('/api/v1/wallet/statement'))
+      .query({ month: '2026-13' })
+      .expect(400);
+  });
+
   it('refuses a withdrawal before a number is confirmed by the e-mailed code', async () => {
     const res = await staff(request(server).post('/api/v1/wallet/payouts'))
       .send({})

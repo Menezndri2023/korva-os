@@ -23,6 +23,7 @@ import {
 } from '../crm/contacts/schemas/contact.schema';
 import { zonedTimeToUtc } from '../booking/availability/availability.service';
 import { intlLocaleOf, translator, type Translate } from '../shared/i18n';
+import { toCsv, type CsvCell } from '../shared/csv';
 
 /** One file carries at most this many rows; the rest of the period needs a shorter range. */
 export const EXPORT_ROW_LIMIT = 10_000;
@@ -58,30 +59,11 @@ function statusIn(
   return pair ? t(...pair) : key;
 }
 
-type Cell = string | number | null | undefined;
-
-/** Byte order mark: without it Excel reads the UTF-8 file as Latin-1 and breaks every accent. */
-const BOM = String.fromCharCode(0xfeff);
+type Cell = CsvCell;
 
 /** Every document here has Mongoose timestamps; the schema classes just do not declare them. */
 function createdAt(document: object): Date {
   return (document as { createdAt: Date }).createdAt;
-}
-
-/** A cell for French Excel: semicolons and quotes escaped, decimal comma. */
-function cell(value: Cell): string {
-  if (value === null || value === undefined) return '';
-  const text =
-    typeof value === 'number' ? String(value).replace('.', ',') : value;
-  // A leading =, +, - or @ would be read by Excel as a formula (CSV injection): prefix a quote.
-  const safe =
-    /^[=+\-@]/.test(text) && typeof value !== 'number' ? `'${text}` : text;
-  return /[;"\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
-
-function toCsv(header: string[], rows: Cell[][]): string {
-  const lines = [header, ...rows].map((row) => row.map(cell).join(';'));
-  return `${BOM}${lines.join('\r\n')}\r\n`;
 }
 
 function contactName(contact: Partial<Contact> | undefined): string {

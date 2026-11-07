@@ -1,5 +1,6 @@
 "use client";
 
+import { DownloadButton } from "@/components/download-button";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -155,6 +156,11 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{t(...STATUS_LABELS[invoice.status])}</Badge>
+            <DownloadButton
+              path={`/invoices/${invoice.id}/pdf`}
+              filename={`${invoice.number}.pdf`}
+              label={t("Télécharger le PDF", "Download the PDF")}
+            />
             {invoice.status === "draft" && (
               <Button
                 variant="secondary"
