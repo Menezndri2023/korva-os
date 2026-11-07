@@ -13,10 +13,12 @@ import {
   createExpenseSchema,
   generateInvoiceFromExpensesSchema,
   listExpensesQuerySchema,
+  monthQuerySchema,
   updateExpenseSchema,
   type CreateExpenseInput,
   type GenerateInvoiceFromExpensesInput,
   type ListExpensesQuery,
+  type MonthQuery,
   type UpdateExpenseInput,
 } from '@korva/validation';
 import type { TenantContext } from '@korva/types';
@@ -50,6 +52,16 @@ export class ExpensesController {
     query: ListExpensesQuery,
   ) {
     return this.expensesService.list(tenant.organizationId, query);
+  }
+
+  /** "Bénéfice du mois": ?month=YYYY-MM — what came in minus the month's expenses. */
+  @RequirePermissions('invoices.read')
+  @Get('profit')
+  profit(
+    @CurrentTenant() tenant: TenantContext,
+    @Query(new ZodValidationPipe(monthQuerySchema)) query: MonthQuery,
+  ) {
+    return this.expensesService.profit(tenant.organizationId, query.month);
   }
 
   @RequirePermissions('invoices.read')

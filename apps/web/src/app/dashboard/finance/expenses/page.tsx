@@ -8,6 +8,7 @@ import { createExpenseSchema, type CreateExpenseInput } from "@korva/validation"
 import { EXPENSE_STATUSES, type Contact, type Expense, type ExpenseStatus } from "@korva/types";
 import { Badge, Button, Card, Dialog, Input, Pagination } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { MonthlyProfitCard } from "@/components/monthly-profit-card";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
 
@@ -136,6 +137,8 @@ export default function ExpensesPage() {
           )}
         </p>
       </div>
+
+      <MonthlyProfitCard />
 
       <div className="flex items-center justify-between gap-3">
         <select

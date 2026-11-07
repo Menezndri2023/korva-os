@@ -232,3 +232,9 @@ export const closeTillSchema = z.object({
 });
 export type CloseTillInput = z.infer<typeof closeTillSchema>;
 
+
+/** ?month=YYYY-MM — one calendar month (profit, statements). */
+export const monthQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Mois au format AAAA-MM"),
+});
+export type MonthQuery = z.infer<typeof monthQuerySchema>;

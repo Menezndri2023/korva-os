@@ -1,3 +1,4 @@
+import { zonedTimeToUtc } from '../../booking/availability/availability.service';
 import {
   BadRequestException,
   Injectable,
@@ -360,4 +361,104 @@ export class ExpensesService {
       });
     }
   }
+
+  /**
+   * "Bénéfice du mois": what came in (payments completed in the month, any method, less the
+   * refunds made in it) minus the month's expenses (not voided), in the business's currency and
+   * calendar month. A cash view — what the owner can actually see in the till and the account —
+   * not an accounting result (no depreciation, no stock valuation).
+   */
+  async profit(organizationId: string, month: string): Promise<MonthlyProfit> {
+    const db = this.connection.db!;
+    const orgId = new Types.ObjectId(organizationId);
+    const organization = await db
+      .collection('organizations')
+      .findOne({ _id: orgId }, { projection: { currency: 1, timezone: 1 } });
+    const currency = (organization?.currency as string | undefined) ?? 'XOF';
+    const timeZone = (organization?.timezone as string | undefined) ?? 'UTC';
+    const [year, m] = month.split('-').map(Number) as [number, number];
+    const next =
+      m === 12 ? `${year + 1}-01` : `${year}-${String(m + 1).padStart(2, '0')}`;
+    const range = {
+      $gte: zonedTimeToUtc(`${month}-01`, '00:00', timeZone),
+      $lt: zonedTimeToUtc(`${next}-01`, '00:00', timeZone),
+    };
+    const sum = async (
+      collection: string,
+      match: Record<string, unknown>,
+      field = '$amount',
+    ) => {
+      const [row] = await db
+        .collection(collection)
+        .aggregate<{ total: number }>([
+          { $match: { organizationId: orgId, currency, ...match } },
+          { $group: { _id: null, total: { $sum: field } } },
+        ])
+        .toArray();
+      return row?.total ?? 0;
+    };
+    const [collected, byCategory] = await Promise.all([
+      sum('payments', {
+        status: { $in: ['completed', 'refunded'] },
+        createdAt: range,
+      }),
+      db
+        .collection('expenses')
+        .aggregate<{ _id: string; total: number }>([
+          {
+            $match: {
+              organizationId: orgId,
+              currency,
+              status: { $ne: 'voided' },
+              date: range,
+            },
+          },
+          { $group: { _id: '$category', total: { $sum: '$amount' } } },
+          { $sort: { total: -1 } },
+        ])
+        .toArray(),
+    ]);
+    // Refunds have no currency of their own: those of this business's payments, done in the month.
+    const [refundRow] = await db
+      .collection('refunds')
+      .aggregate<{ total: number }>([
+        {
+          $match: {
+            organizationId: orgId,
+            status: 'completed',
+            updatedAt: range,
+          },
+        },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ])
+      .toArray();
+    const round = (value: number) => Math.round(value * 100) / 100;
+    const refunded = round(refundRow?.total ?? 0);
+    const expenses = round(
+      byCategory.reduce((total, row) => total + row.total, 0),
+    );
+    const income = round(collected - refunded);
+    return {
+      month,
+      currency,
+      collected: round(collected),
+      refunded,
+      expenses,
+      profit: round(income - expenses),
+      expensesByCategory: byCategory.map((row) => ({
+        category: row._id,
+        amount: round(row.total),
+      })),
+    };
+  }
+}
+
+export interface MonthlyProfit {
+  month: string;
+  currency: string;
+  collected: number;
+  refunded: number;
+  expenses: number;
+  profit: number;
+  expensesByCategory: { category: string; amount: number }[];
 }

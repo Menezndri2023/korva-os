@@ -138,6 +138,84 @@ describe('Expenses module (e2e)', () => {
     return { accessToken, organizationId, contactId };
   }
 
+  describe('Bénéfice du mois', () => {
+    it("is what came in this month, less refunds, less the month's expenses", async () => {
+      const shop = await registerOrgAndContact(
+        'profit-owner@korva.test',
+        'Profit Org',
+      );
+      const as = (req: request.Test) =>
+        req
+          .set('Authorization', `Bearer ${shop.accessToken}`)
+          .set('X-Organization-Id', shop.organizationId);
+      const now = new Date();
+      for (const [category, amount] of [
+        ['rent', 300],
+        ['supplies', 50],
+      ] as const) {
+        await as(request(server).post('/api/v1/expenses'))
+          .send({
+            category,
+            description: category,
+            amount,
+            currency: 'EUR',
+            date: now.toISOString(),
+          })
+          .expect(201);
+      }
+      await as(request(server).post('/api/v1/expenses'))
+        .send({
+          category: 'old',
+          description: 'last year',
+          amount: 999,
+          currency: 'EUR',
+          date: '2025-01-15T12:00:00.000Z',
+        })
+        .expect(201);
+      await connection.collection('payments').insertMany([
+        {
+          organizationId: new Types.ObjectId(shop.organizationId),
+          invoiceId: new Types.ObjectId(),
+          amount: 1000,
+          currency: 'EUR',
+          status: 'completed',
+          provider: 'manual',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          organizationId: new Types.ObjectId(shop.organizationId),
+          invoiceId: new Types.ObjectId(),
+          amount: 80,
+          currency: 'EUR',
+          status: 'pending',
+          provider: 'geniuspay',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+      const month = new Date().toISOString().slice(0, 7);
+      const profit = asSuccess<{
+        collected: number;
+        expenses: number;
+        profit: number;
+        expensesByCategory: { category: string }[];
+      }>(
+        (
+          await as(request(server).get('/api/v1/expenses/profit'))
+            .query({ month })
+            .expect(200)
+        ).body,
+      );
+      expect(profit).toMatchObject({
+        collected: 1000,
+        expenses: 350,
+        profit: 650,
+      });
+      expect(profit.expensesByCategory[0]?.category).toBe('rent');
+    });
+  });
+
   describe('Expenses module', () => {
     let accessToken: string;
     let organizationId: string;
