@@ -22,6 +22,7 @@ import {
 import { Badge, Button, Card, EmptyState, Input, Notice, PageHeader } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
+import { OnlinePaymentFees } from "@/components/online-payment-fees";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 
@@ -133,25 +134,18 @@ export default function WalletPage() {
                 </p>
               </div>
             </div>
-            <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">
-              {t(
-                `Sur chaque vente en ligne : frais GeniusPay et commission KORVA de ${(summary.commissionBasisPoints / 100).toLocaleString(intlLocale(locale))} % (votre formule).`,
-                `On each online sale: GeniusPay's fee and a KORVA commission of ${(summary.commissionBasisPoints / 100).toLocaleString("en-GB")}% (your plan).`,
-              )}{" "}
-              {PLAN_PAYOUT_RULES[summary.plan].payoutFeeIncluded
-                ? t("Les frais de retrait sont offerts par KORVA.", "KORVA pays the withdrawal fee.")
-                : t(
-                    "Les frais de retrait GeniusPay sont déduits du montant versé.",
-                    "GeniusPay's withdrawal fee is taken from the amount paid out.",
-                  )}{" "}
-              {t(
-                "L'argent encaissé en espèces reste dans votre caisse et n'apparaît pas ici.",
-                "Cash you take stays in your till and does not appear here.",
-              )}
-            </p>
+            <div className="mt-4 space-y-2 border-t border-border pt-3">
+              <OnlinePaymentFees currency={summary.currency} plan={summary.plan} />
+              <p className="text-xs text-text-muted">
+                {t(
+                  "L'argent encaissé en espèces reste dans votre caisse et n'apparaît pas ici.",
+                  "Cash you take stays in your till and does not appear here.",
+                )}
+              </p>
+            </div>
           </Card>
 
-          {summary.currency === "XOF" && <SaleCalculatorCard summary={summary} money={money} />}
+          <SaleCalculatorCard summary={summary} money={money} />
           <WithdrawCard summary={summary} money={money} onDone={refresh} />
           <DestinationCard summary={summary} onDone={refresh} />
           <AutoPayoutCard summary={summary} onDone={refresh} />
@@ -580,22 +574,30 @@ function SubscriptionAutopayCard({ summary, onDone }: { summary: WalletSummary; 
 
 /**
  * "Combien je reçois ?": every cost of one online sale, before it happens — GeniusPay's fee for
- * the way the customer pays, KORVA's commission, the withdrawal fee — so nothing on the ledger
- * comes as a surprise. Estimates from GeniusPay's published prices (PROVIDER_FEE_RATES); the
- * ledger below always shows what GeniusPay actually kept. XOF only: GeniusPay's fixed fee is in
- * XOF, and a sale in another currency also pays GeniusPay's exchange rate.
+ * the way the customer pays, the exchange loss for a shop not priced in CFA francs, KORVA's
+ * commission, the withdrawal fee — so nothing on the ledger comes as a surprise. Estimates from
+ * GeniusPay's published prices and observed rate (packages/types wallet.ts); the ledger below
+ * always shows what GeniusPay actually kept. A currency whose GeniusPay rate is not known yet
+ * (USD) gets no table, only the warning above.
  */
 function SaleCalculatorCard({ summary, money }: { summary: WalletSummary; money: (amount: number) => string }) {
   const t = useT();
-  const [amount, setAmount] = useState("10000");
-  const sale = Math.max(0, Math.floor(Number(amount) || 0));
+  const local = summary.currency === "XOF" || summary.currency === "XAF";
+  const [amount, setAmount] = useState(local ? "10000" : "10");
+  const sale = Math.max(0, local ? Math.floor(Number(amount) || 0) : Number(amount) || 0);
   const methods: { key: ProviderPaymentMethod; label: string }[] = [
     { key: "wave", label: "Wave" },
     { key: "mobile_money", label: t("Orange, MTN, Moov", "Orange, MTN, Moov") },
     { key: "card", label: t("Carte bancaire", "Bank card") },
   ];
-  const rows = methods.map((method) => ({ ...method, estimate: estimateSale(sale, method.key, summary.plan) }));
+  const rows = methods.flatMap((method) => {
+    const estimate = estimateSale(sale, method.key, summary.plan, summary.currency);
+    return estimate ? [{ ...method, estimate }] : [];
+  });
+  if (rows.length === 0) return null;
   const percent = (part: number) => (sale > 0 ? ` (${((part / sale) * 100).toFixed(1)} %)` : "");
+  const cell = "py-2 pr-3 text-right tabular-nums text-text-muted";
+  const head = "py-1.5 pr-3 text-right font-medium";
 
   return (
     <Card className="space-y-3 p-5">
@@ -610,8 +612,9 @@ function SaleCalculatorCard({ summary, money }: { summary: WalletSummary; money:
       </div>
       <Input
         type="number"
-        inputMode="numeric"
+        inputMode={local ? "numeric" : "decimal"}
         min={0}
+        step={local ? 1 : 0.01}
         aria-label={t("Prix de la vente", "Sale price")}
         value={amount}
         onChange={(event) => setAmount(event.target.value)}
@@ -622,9 +625,10 @@ function SaleCalculatorCard({ summary, money }: { summary: WalletSummary; money:
           <thead>
             <tr className="text-left text-xs text-text-muted">
               <th className="py-1.5 pr-3 font-medium">{t("Le client paie par", "Customer pays by")}</th>
-              <th className="py-1.5 pr-3 text-right font-medium">{t("Frais GeniusPay", "GeniusPay fee")}</th>
-              <th className="py-1.5 pr-3 text-right font-medium">{t("Commission KORVA", "KORVA commission")}</th>
-              <th className="py-1.5 pr-3 text-right font-medium">{t("Frais de retrait", "Withdrawal fee")}</th>
+              <th className={head}>{t("Frais GeniusPay", "GeniusPay fee")}</th>
+              {!local && <th className={head}>{t("Change", "Exchange")}</th>}
+              <th className={head}>{t("Commission KORVA", "KORVA commission")}</th>
+              <th className={head}>{t("Frais de retrait", "Withdrawal fee")}</th>
               <th className="py-1.5 text-right font-medium">{t("Vous recevez", "You receive")}</th>
             </tr>
           </thead>
@@ -632,11 +636,10 @@ function SaleCalculatorCard({ summary, money }: { summary: WalletSummary; money:
             {rows.map(({ key, label, estimate }) => (
               <tr key={key}>
                 <td className="py-2 pr-3 text-text">{label}</td>
-                <td className="py-2 pr-3 text-right tabular-nums text-text-muted">{money(estimate.providerFee)}</td>
-                <td className="py-2 pr-3 text-right tabular-nums text-text-muted">{money(estimate.commission)}</td>
-                <td className="py-2 pr-3 text-right tabular-nums text-text-muted">
-                  {estimate.payoutFee === 0 && sale > 0 ? t("Offerts", "Free") : money(estimate.payoutFee)}
-                </td>
+                <td className={cell}>{money(estimate.providerFee)}</td>
+                {!local && <td className={cell}>{money(estimate.conversion)}</td>}
+                <td className={cell}>{money(estimate.commission)}</td>
+                <td className={cell}>{money(estimate.payoutFee)}</td>
                 <td className="py-2 text-right font-semibold tabular-nums text-text">
                   {money(estimate.received)}
                   <span className="block text-xs font-normal text-text-muted">
@@ -651,8 +654,8 @@ function SaleCalculatorCard({ summary, money }: { summary: WalletSummary; money:
       </div>
       <p className="text-xs text-text-muted">
         {t(
-          "Estimation d'après les tarifs publiés par GeniusPay (Wave 2,5 % + 100 F, autres mobile money 4,5 % + 100 F, carte 6 % + 100 F, retrait 1 %). Les 100 F fixes pèsent lourd sur les petites ventes : en dessous de 2 000 F, préférez l'espèce ou le regroupement. Vos mouvements ci-dessous montrent les frais réellement retenus.",
-          "Estimate from GeniusPay's published prices (Wave 2.5% + 100 F, other mobile money 4.5% + 100 F, card 6% + 100 F, withdrawal 1%). The fixed 100 F weighs heavily on small sales: under 2,000 F, prefer cash or grouping. Your movements below show the fees actually kept.",
+          "Estimation d'après les tarifs publiés par GeniusPay. Les 100 F fixes pèsent lourd sur les petites ventes : en dessous de 2 000 F, préférez l'espèce ou le regroupement. Vos mouvements ci-dessous montrent les frais réellement retenus.",
+          "Estimate from GeniusPay's published prices. The fixed 100 F weighs heavily on small sales: under 2,000 F, prefer cash or grouping. Your movements below show the fees actually kept.",
         )}
       </p>
     </Card>

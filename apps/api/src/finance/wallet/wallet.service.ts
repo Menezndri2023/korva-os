@@ -75,7 +75,7 @@ function isDuplicateKey(error: unknown): boolean {
  *   sale ─► + amount, − GeniusPay's fee (read on the payment), − KORVA's commission (plan rate)
  *           all three released after WALLET_HOLD_DAYS (default 3): refunds and fraud first
  *   withdrawal ─► − amount when requested; + amount back if it fails or is refused;
- *                 − GeniusPay's withdrawal fee once paid (not on Business)
+ *                 − GeniusPay's withdrawal fee once paid (every plan since 2026-11-07)
  *
  * Withdrawals are approved by the administration first (PAYOUT_APPROVAL=manual, the default)
  * until GeniusPay has confirmed in writing that KORVA may pay third parties; PAYOUT_APPROVAL=auto

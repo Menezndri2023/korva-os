@@ -24,7 +24,7 @@ const summary: WalletSummary = {
   available: 14325,
   pending: 5000,
   plan: "starter",
-  commissionBasisPoints: 150,
+  commissionBasisPoints: 200,
   holdDays: 3,
   destination: null,
   pendingDestination: null,
@@ -53,18 +53,30 @@ describe("WalletPage", () => {
     renderWithProviders(<WalletPage />);
 
     const wave = (await screen.findByText("Wave", { selector: "td" })).closest("tr")!;
-    // 10 000 F by Wave on Starter: GeniusPay 2.5 % + 100 = 350, KORVA 1.5 % = 150,
-    // withdrawal 1 % of the 9 500 credited = 95 → 9 405 received.
+    // 10 000 F by Wave on Starter: GeniusPay 2.5 % + 100 = 350, KORVA 2 % = 200,
+    // withdrawal 1 % of the 9 450 credited = 95 → 9 355 received.
     expect(wave.textContent).toMatch(/350/);
-    expect(wave.textContent).toMatch(/150/);
+    expect(wave.textContent).toMatch(/200/);
     expect(wave.textContent).toMatch(/95/);
-    expect(wave.textContent).toMatch(/9\s?405/);
+    expect(wave.textContent).toMatch(/9\s?355/);
 
     fireEvent.change(screen.getByLabelText("Prix de la vente"), { target: { value: "1000" } });
-    // 1 000 F by card: 160 + 15 + 8 → 817, a 18.3 % cost.
+    // 1 000 F by card: 160 + 20 + 8 → 812, a 18.8 % cost.
     const card = screen.getByText("Carte bancaire", { selector: "td" }).closest("tr")!;
-    expect(card.textContent).toMatch(/817/);
-    expect(card.textContent).toMatch(/18\.3 %/);
+    expect(card.textContent).toMatch(/812/);
+    expect(card.textContent).toMatch(/18\.8 %/);
+  });
+
+  it("warns a shop in euros of GeniusPay's exchange rate, and counts it in the estimate", async () => {
+    serve({ ...summary, currency: "EUR" });
+    renderWithProviders(<WalletPage />);
+
+    expect(await screen.findByText(/environ 610,70 F pour 1 €/)).toBeInTheDocument();
+    // 10 € by Wave: 6 107 F charged; fee 252.68 F ≈ 0.39 €; exchange 10 − 9.31 = 0.69 €;
+    // commission 0.20 €; withdrawal 1 % of 8.72 = 0.09 € → 8.63 €.
+    const wave = screen.getByText("Wave", { selector: "td" }).closest("tr")!;
+    expect(wave.textContent).toMatch(/0,69/);
+    expect(wave.textContent).toMatch(/8,63/);
   });
 
   it("shows the balance, and asks for a number confirmed by code before any withdrawal", async () => {
@@ -73,7 +85,7 @@ describe("WalletPage", () => {
     renderWithProviders(<WalletPage />);
 
     expect(await screen.findByText("Vente payée en ligne")).toBeInTheDocument();
-    expect(screen.getByText(/commission KORVA de 1,5 %/)).toBeInTheDocument();
+    expect(screen.getByText(/commission KORVA de 2 %/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retirer" })).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("Numéro (format international)"), { target: { value: "+225 07 07 07 07 07" } });

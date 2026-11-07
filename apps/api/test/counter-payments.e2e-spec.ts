@@ -216,6 +216,25 @@ describe('Caisse — QR mobile money (e2e)', () => {
     expect(wallet.available).toBe(4700);
   });
 
+  it('refuses an amount under the online minimum, before any invoice is made', async () => {
+    const invoicesBefore = await connection
+      .collection('invoices')
+      .countDocuments({ organizationId: new Types.ObjectId(organizationId) });
+    const refused = await staff(
+      request(server).post('/api/v1/counter-payments'),
+    )
+      .send({ amount: 300 })
+      .expect(400);
+    expect((refused.body as { error: { code: string } }).error.code).toBe(
+      'ONLINE_PAYMENT_BELOW_MINIMUM',
+    );
+    expect(
+      await connection
+        .collection('invoices')
+        .countDocuments({ organizationId: new Types.ObjectId(organizationId) }),
+    ).toBe(invoicesBefore);
+  });
+
   it('keeps waiting while the customer has not paid, and lists the counter sales', async () => {
     const second = asSuccess<CounterPayment>(
       (

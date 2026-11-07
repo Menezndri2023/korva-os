@@ -14,6 +14,8 @@ import {
 import {
   FULFILLMENT_MODE_LABELS,
   FULFILLMENT_MODE_LABELS_EN,
+  minimumOnlinePayment,
+  PROVIDER_OBSERVED_XOF_RATES,
   type FulfillmentMode,
   type PaymentMethod,
 } from "@korva/types";
@@ -524,6 +526,15 @@ export function CheckoutPanel({
     acceptedPaymentMethods[0] ?? "cash",
   );
   const [redirecting, setRedirecting] = useState(false);
+  // Online payment has a floor (MIN_ONLINE_PAYMENT: GeniusPay's fixed fee would eat the sale), and
+  // in a shop not priced in CFA francs GeniusPay charges the customer in XOF at its own rate — said
+  // here, before the customer lands on a payment page showing another currency.
+  const onlineMinimum = minimumOnlinePayment(currency);
+  const onlineBelowMinimum = total < onlineMinimum;
+  const settlesInXof = !["XOF", "XAF"].includes(currency.toUpperCase());
+  const observedXofRate = PROVIDER_OBSERVED_XOF_RATES[currency.toUpperCase()];
+  const formatXof = (amount: number) =>
+    `${Math.round(amount).toLocaleString(locale === "en" ? "en-GB" : "fr-FR")} F CFA`;
 
   const {
     register,
@@ -823,12 +834,35 @@ export function CheckoutPanel({
                     name="paymentMethod"
                     value={method}
                     checked={paymentMethod === method}
+                    disabled={method === "online" && onlineBelowMinimum}
                     onChange={() => setPaymentMethod(method)}
                   />
                   {t(...PAYMENT_METHOD_LABELS[method])}
                 </label>
               ))}
             </div>
+          )}
+
+          {paymentMethod === "online" && onlineBelowMinimum && (
+            <p className="text-xs text-destructive">
+              {t(
+                `Le paiement en ligne commence à ${onlineMinimum} ${currency}. Ajoutez un article${acceptedPaymentMethods.length > 1 ? " ou choisissez un autre mode de paiement" : ""}.`,
+                `Online payment starts at ${onlineMinimum} ${currency}. Add an item${acceptedPaymentMethods.length > 1 ? " or choose another payment method" : ""}.`,
+              )}
+            </p>
+          )}
+          {paymentMethod === "online" && settlesInXof && !onlineBelowMinimum && (
+            <p className="rounded-md bg-surface-muted px-3 py-2 text-xs text-text-muted">
+              {observedXofRate
+                ? t(
+                    `Le paiement en ligne se fait en francs CFA : vous paierez environ ${formatXof(total * observedXofRate)} pour ${total.toFixed(2)} ${currency}, au taux de change de GeniusPay.`,
+                    `Online payment is made in CFA francs: you will pay about ${formatXof(total * observedXofRate)} for ${total.toFixed(2)} ${currency}, at GeniusPay's exchange rate.`,
+                  )
+                : t(
+                    `Le paiement en ligne se fait en francs CFA, au taux de change de GeniusPay : le montant exact s'affiche sur la page de paiement.`,
+                    `Online payment is made in CFA francs at GeniusPay's exchange rate: the exact amount shows on the payment page.`,
+                  )}
+            </p>
           )}
 
           {errors.items && <p className="text-xs text-destructive">{errors.items.message ?? t("Panier invalide.", "The basket is not valid.")}</p>}
@@ -850,6 +884,7 @@ export function CheckoutPanel({
             disabled={
               cart.length === 0 ||
               belowMinimum ||
+              (paymentMethod === "online" && onlineBelowMinimum) ||
               needsZone ||
               (configured && when === "later" && !requestedTime)
             }

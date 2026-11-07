@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { ClientSession, Connection, Types } from 'mongoose';
-import type { PaymentStatus } from '@korva/types';
+import { minimumOnlinePayment, type PaymentStatus } from '@korva/types';
 import type { CreatePaymentInput, CreateRefundInput } from '@korva/validation';
 import { PaymentsRepository } from './payments.repository';
 import { Payment, PaymentDocument } from './schemas/payment.schema';
@@ -199,6 +199,18 @@ export class PaymentsService {
         code: 'PAYMENT_EXCEEDS_BALANCE',
         message: `Payment amount (${input.amount}) exceeds the remaining balance (${remaining})`,
       });
+    }
+    // Online only: below KORVA's floor GeniusPay's fixed fee would take more than a fifth of the
+    // sale (MIN_ONLINE_PAYMENT, validated 2026-11-07). Cash and staff-recorded payments have none.
+    if (online) {
+      const minimum = minimumOnlinePayment(invoice.currency);
+      if (input.amount < minimum) {
+        throw new BadRequestException({
+          code: 'ONLINE_PAYMENT_BELOW_MINIMUM',
+          message: `Online payment starts at ${minimum} ${invoice.currency}`,
+          minimum,
+        });
+      }
     }
     // Deliberately NOT checked against `remaining`/amountPaid — a tip is extra money the
     // customer chose to give, not part of what's owed on the invoice (see the schema's own doc).

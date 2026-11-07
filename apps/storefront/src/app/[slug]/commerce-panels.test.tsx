@@ -446,3 +446,38 @@ describe("CheckoutPanel — editing the basket", () => {
     expect(screen.getByText("Votre panier est vide.")).toBeInTheDocument();
   });
 });
+
+describe("CheckoutPanel — online payment", () => {
+  function renderOnline(cart: { offerId: string; name: string; unitPrice: number; quantity: number }[], currency: string) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <CheckoutPanel
+          slug="boutique"
+          cart={cart as unknown as Parameters<typeof CheckoutPanel>[0]["cart"]}
+          currency={currency}
+          acceptedPaymentMethods={["online", "cash"]}
+          onClose={() => {}}
+          onSuccess={() => {}}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("tells a customer of a shop in euros what they will pay in CFA francs", () => {
+    renderOnline([{ offerId: "o", name: "Sac", unitPrice: 10, quantity: 1 }], "EUR");
+    expect(screen.getByText(/vous paierez environ 6\s107 F CFA pour 10.00 EUR/)).toBeInTheDocument();
+  });
+
+  it("says nothing of conversion in a shop already in CFA francs", () => {
+    renderOnline([{ offerId: "o", name: "Garba", unitPrice: 2500, quantity: 1 }], "XOF");
+    expect(screen.queryByText(/francs CFA/)).not.toBeInTheDocument();
+  });
+
+  it("refuses online payment under the minimum and offers the other method", () => {
+    renderOnline([{ offerId: "o", name: "Eau", unitPrice: 300, quantity: 1 }], "XOF");
+    expect(screen.getByText(/Le paiement en ligne commence à 500 XOF/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Payer par mobile money ou carte" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /Mobile money ou carte/ })).toBeDisabled();
+  });
+});

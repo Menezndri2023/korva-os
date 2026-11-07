@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import type { CounterPayment } from '@korva/types';
+import { minimumOnlinePayment, type CounterPayment } from '@korva/types';
 import type { CreateCounterPaymentInput } from '@korva/validation';
 import {
   Contact,
@@ -85,6 +85,16 @@ export class CounterPaymentsService {
       throw new BadRequestException({
         code: 'CURRENCY_NOT_CHARGEABLE',
         message: `Mobile money payment is not available in ${organization.currency}.`,
+      });
+    }
+    // Checked before the invoice exists, so a refused amount leaves nothing behind
+    // (PaymentsService enforces the same floor for every online payment).
+    const minimum = minimumOnlinePayment(organization.currency);
+    if (input.amount < minimum) {
+      throw new BadRequestException({
+        code: 'ONLINE_PAYMENT_BELOW_MINIMUM',
+        message: `Online payment starts at ${minimum} ${organization.currency}`,
+        minimum,
       });
     }
 

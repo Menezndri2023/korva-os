@@ -6,15 +6,36 @@ import type { PlanKey } from "./plan-tiers.ts";
  * GeniusPay's fee on it, KORVA's commission, a withdrawal… — from which the balance is computed.
  *
  * What a business receives = sale − GeniusPay's own fee (read on each payment) − KORVA's
- * commission (its plan's rate, below). GeniusPay's withdrawal fee is passed on too, except on
- * Business. Cash taken at the counter never enters the balance: it is in the till.
+ * commission (its plan's rate, below) − GeniusPay's withdrawal fee, on every plan. Cash taken at
+ * the counter never enters the balance: it is in the till.
+ *
+ * Grid validated by the user on 2026-11-07, after the fee study on real GeniusPay transactions:
+ * the old Business rate (0.5 %) was below the 1 % withdrawal fee KORVA paid on its behalf, so
+ * KORVA lost money on every Business sale. Every rate now leaves KORVA a margin once that fee is
+ * passed on.
  */
 export const PLAN_COMMISSION_BASIS_POINTS: Record<PlanKey, number> = {
   free: 300,
-  starter: 150,
-  pro: 100,
-  business: 50,
+  starter: 200,
+  pro: 150,
+  business: 100,
 };
+
+/**
+ * The smallest amount a customer may pay ONLINE, per currency. GeniusPay's fixed 100 XOF would
+ * otherwise take more than 20 % of the sale (its own floor is 200 XOF). Below it, the customer
+ * pays cash or adds to the basket. Currencies not listed have no floor of KORVA's own.
+ */
+export const MIN_ONLINE_PAYMENT: Record<string, number> = {
+  XOF: 500,
+  XAF: 500,
+  EUR: 1,
+  USD: 1,
+};
+
+export function minimumOnlinePayment(currency: string): number {
+  return MIN_ONLINE_PAYMENT[currency.toUpperCase()] ?? 0;
+}
 
 export function commissionPercentLabel(plan: PlanKey): string {
   return `${(PLAN_COMMISSION_BASIS_POINTS[plan] / 100).toLocaleString("fr-FR")} %`;
@@ -40,27 +61,71 @@ export const PROVIDER_PAYOUT_FEE_BASIS_POINTS = 100;
 /** Currency of the fixed parts above: GeniusPay settles everything in XOF. */
 export const PROVIDER_FEE_CURRENCY = "XOF";
 
+/**
+ * International sales: GeniusPay charges the customer in XOF at ITS rate. Seen on every real EUR
+ * payment (2026-11-02 and 2026-11-05): 1 EUR → 610.70 XOF, 10 EUR → 6 107 XOF. The legal parity is
+ * 655.957 XOF, so about 6.9 % of a euro sale is lost to the exchange before any fee. No USD payment
+ * has been seen yet: USD estimates are not offered until one is.
+ */
+export const PROVIDER_OBSERVED_XOF_RATES: Record<string, number> = { EUR: 610.7 };
+export const LEGAL_XOF_PARITIES: Record<string, number> = { EUR: 655.957 };
+
+/** The share of a sale lost to GeniusPay's exchange rate, or null when nothing is known. */
+export function providerExchangeLossShare(currency: string): number | null {
+  const code = currency.toUpperCase();
+  if (code === "XOF" || code === "XAF") return 0;
+  const observed = PROVIDER_OBSERVED_XOF_RATES[code];
+  const parity = LEGAL_XOF_PARITIES[code];
+  return observed && parity ? 1 - observed / parity : null;
+}
+
 export interface SaleEstimate {
   sale: number;
   providerFee: number;
+  /** Lost to GeniusPay's exchange rate (0 for a sale in XOF/XAF). */
+  conversion: number;
   commission: number;
-  /** 0 on plans where KORVA pays the withdrawal fee. */
   payoutFee: number;
   /** What reaches the business's mobile money number. */
   received: number;
 }
 
-/** What a business receives from one online sale in XOF, every cost included — an estimate. */
-export function estimateSale(amount: number, method: ProviderPaymentMethod, plan: PlanKey): SaleEstimate {
-  const round = (value: number) => Math.round(value);
+/**
+ * What a business receives from one online sale, every cost included — an estimate, in the sale's
+ * currency. XOF/XAF and EUR are supported; any other currency returns null (its exchange rate at
+ * GeniusPay is not known yet).
+ */
+export function estimateSale(
+  amount: number,
+  method: ProviderPaymentMethod,
+  plan: PlanKey,
+  currency = "XOF",
+): SaleEstimate | null {
+  const code = currency.toUpperCase();
+  const local = code === "XOF" || code === "XAF";
+  const observed = PROVIDER_OBSERVED_XOF_RATES[code];
+  const parity = LEGAL_XOF_PARITIES[code];
+  if (!local && !(observed && parity)) return null;
+  const round = local ? (value: number) => Math.round(value) : (value: number) => Math.round(value * 100) / 100;
   const rate = PROVIDER_FEE_RATES[method];
-  const providerFee = amount > 0 ? round((amount * rate.basisPoints) / 10_000 + rate.fixed) : 0;
+  // In XOF: what GeniusPay charges the customer, then its fee on that.
+  const chargedXof = local ? amount : amount * observed!;
+  const feeXof = amount > 0 ? (chargedXof * rate.basisPoints) / 10_000 + rate.fixed : 0;
+  const providerFee = round(local ? feeXof : feeXof / parity!);
+  const conversion = local ? 0 : round(Math.max(0, amount - chargedXof / parity!));
   const commission = round((amount * PLAN_COMMISSION_BASIS_POINTS[plan]) / 10_000);
-  const credited = Math.max(0, amount - providerFee - commission);
+  const credited = Math.max(0, amount - providerFee - conversion - commission);
   const payoutFee = PLAN_PAYOUT_RULES[plan].payoutFeeIncluded
     ? 0
     : round((credited * PROVIDER_PAYOUT_FEE_BASIS_POINTS) / 10_000);
-  return { sale: amount, providerFee, commission, payoutFee, received: Math.max(0, credited - payoutFee) };
+  return {
+    sale: amount,
+    providerFee,
+    conversion,
+    commission,
+    payoutFee,
+    received: round(Math.max(0, credited - payoutFee)),
+  };
 }
 
 /** How each plan withdraws. Every plan can switch on automatic withdrawals. */
@@ -71,14 +136,15 @@ export const PLAN_PAYOUT_RULES: Record<
     manualPerWeek: number | null;
     /** Automatic withdrawals may run every day (else weekly). */
     dailyAutoPayout: boolean;
-    /** KORVA pays GeniusPay's withdrawal fee. */
+    /** KORVA pays GeniusPay's withdrawal fee. False on every plan since 2026-11-07 (see the
+     *  commission grid above); kept so a future offer can include it again in one place. */
     payoutFeeIncluded: boolean;
   }
 > = {
   free: { manualPerWeek: 1, dailyAutoPayout: false, payoutFeeIncluded: false },
   starter: { manualPerWeek: 1, dailyAutoPayout: false, payoutFeeIncluded: false },
   pro: { manualPerWeek: null, dailyAutoPayout: true, payoutFeeIncluded: false },
-  business: { manualPerWeek: null, dailyAutoPayout: true, payoutFeeIncluded: true },
+  business: { manualPerWeek: null, dailyAutoPayout: true, payoutFeeIncluded: false },
 };
 
 /** Where a withdrawal can go — GeniusPay's payout destinations ("Wave, Orange Money, MTN, Moov"). */

@@ -1,5 +1,6 @@
 "use client";
 
+import { OnlinePaymentFees } from "@/components/online-payment-fees";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { KorvaPlanInvoices } from "@/components/korva-plan-invoices";
@@ -49,6 +50,7 @@ import type {
   KorvaProduct,
   Organization,
   Plan,
+  PlanKey,
   SubscriptionSummary,
   TeamMember,
   Testimonial,
@@ -1280,6 +1282,14 @@ export default function SettingsPage() {
                       {!planFeatures.has("online_payment") && <PlanLock feature="online_payment" />}
                     </label>
                   </div>
+                  {organization?.currency && (
+                    <div className="mt-2">
+                      <OnlinePaymentFees
+                        currency={organization.currency}
+                        plan={(planFeatures.planKey as PlanKey | undefined) ?? "free"}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

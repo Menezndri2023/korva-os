@@ -268,15 +268,15 @@ describe('Solde KORVA (e2e)', () => {
       data: { reference: 'MTX-WALLET01' },
     }).expect(200);
 
-    // 15 000 − 450 (GeniusPay) − 225 (1.5 % Starter) = 14 325, released at once (WALLET_HOLD_DAYS=0)
-    expect(await summary()).toMatchObject({ available: 14325, pending: 0 });
+    // 15 000 − 450 (GeniusPay) − 300 (2 % Starter) = 14 250, released at once (WALLET_HOLD_DAYS=0)
+    expect(await summary()).toMatchObject({ available: 14250, pending: 0 });
     const entries = asSuccess<{ kind: string; amount: number }[]>(
       (await staff(request(server).get('/api/v1/wallet/entries')).expect(200))
         .body,
     );
     expect(entries.map((e) => [e.kind, e.amount]).sort()).toEqual(
       [
-        ['commission', -225],
+        ['commission', -300],
         ['provider_fee', -450],
         ['sale', 15000],
       ].sort(),
@@ -330,7 +330,7 @@ describe('Solde KORVA (e2e)', () => {
     );
     expect(payout).toMatchObject({ status: 'requested', amount: 10000 });
     expect(await summary()).toMatchObject({
-      available: 4325,
+      available: 4250,
       manualPayoutsLeftThisWeek: 0,
     });
 
@@ -370,7 +370,7 @@ describe('Solde KORVA (e2e)', () => {
     });
     expect(payout?.open).toBeUndefined();
     expect(await summary()).toMatchObject({
-      available: 4175,
+      available: 4100,
       openPayout: null,
     });
   });
@@ -386,13 +386,13 @@ describe('Solde KORVA (e2e)', () => {
           .expect(201)
       ).body,
     );
-    expect((await summary()).available).toBe(1175);
+    expect((await summary()).available).toBe(1100);
     await admin(
       request(server).post(`/api/v1/platform/payouts/${payout.id}/reject`),
     )
       .send({ reason: 'Numéro à vérifier' })
       .expect(200);
-    expect((await summary()).available).toBe(4175);
+    expect((await summary()).available).toBe(4100);
   });
 
   it('records a withdrawal the administration paid by hand, with its reference and real fee', async () => {
@@ -418,9 +418,9 @@ describe('Solde KORVA (e2e)', () => {
       ).body,
     );
     expect(paid).toMatchObject({ status: 'completed', fee: 20 });
-    // 4 175 − 2 000 withdrawn − 20 fee passed on (Starter).
+    // 4 100 − 2 000 withdrawn − 20 fee passed on (Starter).
     expect(await summary()).toMatchObject({
-      available: 2155,
+      available: 2080,
       openPayout: null,
     });
     // Never twice.
@@ -462,7 +462,7 @@ describe('Solde KORVA (e2e)', () => {
     const auto = await connection
       .collection('payouts')
       .findOne({ trigger: 'auto', status: 'requested' });
-    expect(auto).toMatchObject({ amount: 4175 });
+    expect(auto).toMatchObject({ amount: 4100 });
     expect((await summary()).available).toBe(0);
   });
 
@@ -475,7 +475,7 @@ describe('Solde KORVA (e2e)', () => {
       ).body,
     );
     expect(overview).toMatchObject({
-      commissionThisMonth: 225,
+      commissionThisMonth: 300,
       payoutsToApprove: 1,
       approvalMode: 'manual',
     });
