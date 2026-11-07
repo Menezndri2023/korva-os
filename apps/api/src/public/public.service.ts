@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { BusinessAlertsService } from '../business-alerts/business-alerts.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -126,6 +127,7 @@ export class PublicService {
   private readonly logger = new Logger(PublicService.name);
 
   constructor(
+    private readonly businessAlerts: BusinessAlertsService,
     private readonly organizationsService: OrganizationsService,
     private readonly subscriptionsService: SubscriptionsService,
     private readonly offersService: OffersService,
@@ -1017,6 +1019,13 @@ export class PublicService {
           bookingInput,
         );
 
+    void this.businessAlerts.notify(organizationId, {
+      kind: 'booking',
+      offerName: offer.name,
+      startAt: booking.startAt,
+      customer: customerLabel(contact),
+    });
+
     return {
       id: booking.id as string,
       status: booking.status,
@@ -1170,6 +1179,14 @@ export class PublicService {
         error,
       );
     }
+
+    void this.businessAlerts.notify(organizationId, {
+      kind: 'order',
+      number: order.number,
+      total: order.total,
+      currency: order.currency,
+      customer: customerLabel(contact),
+    });
 
     return {
       id: order.id as string,
@@ -1343,6 +1360,11 @@ export class PublicService {
       entityId: lead.id as string,
       content: input.message,
     });
+    void this.businessAlerts.notify(organizationId, {
+      kind: 'request',
+      message: input.message,
+      customer: customerLabel(contact),
+    });
 
     return {
       id: lead.id as string,
@@ -1457,4 +1479,16 @@ export class PublicService {
       pricing: booking.pricing,
     };
   }
+}
+
+/** How an alert names the customer: first name and e-mail when known. */
+function customerLabel(contact: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}): string {
+  const name = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
+  return name && contact.email
+    ? `${name} (${contact.email})`
+    : name || contact.email || 'Un client';
 }

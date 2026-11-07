@@ -92,6 +92,7 @@ import {
 } from './counter/schemas/till-closing.schema';
 import { CounterPaymentsController } from './counter/counter-payments.controller';
 import { WalletService } from './wallet/wallet.service';
+import { BusinessAlertsModule } from '../business-alerts/business-alerts.module';
 import { WalletController } from './wallet/wallet.controller';
 import {
   WalletEntry,
@@ -107,6 +108,7 @@ import { EmailModule } from '../shared/email/email.module';
 
 @Module({
   imports: [
+    BusinessAlertsModule,
     MongooseModule.forFeature([
       { name: Quote.name, schema: QuoteSchema },
       { name: Invoice.name, schema: InvoiceSchema },

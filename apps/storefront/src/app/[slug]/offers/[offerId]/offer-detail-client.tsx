@@ -8,7 +8,8 @@ import { PublicApiError, publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
 import { offerTypeLabel, formatOfferPrice } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOfferReviewSummary, PublicOrganization } from "@/lib/public-types";
-import { BookingPanel, CheckoutPanel } from "../../lazy-commerce-panels";
+import { BookingPanel, CheckoutPanel, RequestPanel } from "../../lazy-commerce-panels";
+import { requestLabel, type RequestKind } from "@/lib/request-kind";
 import { OfferPrice } from "@/templates/sections/OfferPrice";
 import { useCustomerAuth } from "@/lib/use-customer-auth";
 import { resolveStorefrontStyle } from "@/templates/palette";
@@ -61,6 +62,7 @@ export default function OfferDetailClient({
   const { hydrated: authHydrated, isAuthenticated, customer } = useCustomerAuth(slug);
   const [showBooking, setShowBooking] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [showRequest, setShowRequest] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const [imageFailed, setImageFailed] = useState(false);
@@ -133,6 +135,17 @@ export default function OfferDetailClient({
 
   const bookingEnabled = organization.enabledModules.includes("booking");
   const commerceEnabled = organization.enabledModules.includes("commerce");
+  // An offer nobody can order or book on the site is asked about instead — a quote, a visit, or
+  // information — whenever the business keeps a CRM to receive the request.
+  const requestKind: RequestKind | null =
+    !organization.enabledModules.includes("crm") ||
+    (offer.type === "booking" ? bookingEnabled : commerceEnabled)
+      ? null
+      : organization.businessModel === "quotes"
+        ? "quote"
+        : organization.businessModel === "real_estate"
+          ? "visit"
+          : "info";
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
   const images = offer.images;
   const selectedVariant =
@@ -341,6 +354,11 @@ export default function OfferDetailClient({
                   {t("Ajouter au panier", "Add to basket")}
                 </Button>
               )}
+              {requestKind && (
+                <Button size="lg" className={`w-full sm:w-auto ${KT.accentBg} ${KT.accentContrastText}`} onClick={() => setShowRequest(true)}>
+                  {t(...requestLabel(requestKind))}
+                </Button>
+              )}
               {organization.whatsappNumber && (
                 // Built on click, not at render: the message carries this page's address, and
                 // `window` does not exist during the server render.
@@ -364,7 +382,9 @@ export default function OfferDetailClient({
                   }}
                 >
                   <MessageCircle aria-hidden className="h-5 w-5" />
-                  {offer.type === "booking" ? t("Demander sur WhatsApp", "Ask on WhatsApp") : t("Commander sur WhatsApp", "Order on WhatsApp")}
+                  {offer.type === "booking" || requestKind
+                    ? t("Demander sur WhatsApp", "Ask on WhatsApp")
+                    : t("Commander sur WhatsApp", "Order on WhatsApp")}
                 </Button>
               )}
               {missingOptions.length > 0 && offer.type !== "booking" && commerceEnabled && (
@@ -386,6 +406,22 @@ export default function OfferDetailClient({
           number={organization.whatsappNumber}
           shopName={organization.name}
           raised={commerceEnabled && cartCount > 0}
+        />
+      )}
+
+      {showRequest && requestKind && (
+        <RequestPanel
+          slug={slug}
+          kind={requestKind}
+          offerName={offer.name}
+          onClose={() => setShowRequest(false)}
+          onSuccess={() => {
+            setShowRequest(false);
+            setConfirmation(t(
+              "Votre demande a bien été envoyée. L'entreprise vous répond au plus vite.",
+              "Your request has been sent. The business will get back to you shortly.",
+            ));
+          }}
         />
       )}
 

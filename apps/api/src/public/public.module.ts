@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BusinessAlertsModule } from '../business-alerts/business-alerts.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { PublicService } from './public.service';
 import { PublicController, PublicSitesController } from './public.controller';
@@ -21,6 +22,7 @@ import { Contact, ContactSchema } from '../crm/contacts/schemas/contact.schema';
 
 @Module({
   imports: [
+    BusinessAlertsModule,
     OrganizationsModule,
     CatalogModule,
     BookingModule,

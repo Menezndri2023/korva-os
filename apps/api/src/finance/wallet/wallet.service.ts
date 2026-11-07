@@ -8,6 +8,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { BusinessAlertsService } from '../../business-alerts/business-alerts.service';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
@@ -100,6 +101,7 @@ export class WalletService {
     private readonly providerResolver: PaymentProviderResolverService,
     private readonly configService: ConfigService,
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
+    private readonly businessAlerts: BusinessAlertsService,
   ) {}
 
   holdDays(): number {
@@ -348,8 +350,8 @@ export class WalletService {
     } else if (costs.detail?.providerFee !== undefined) {
       const { providerFee, providerCurrency } = costs.detail;
       feeNote = t(
-        `${providerFee} ${providerCurrency} retenus par GeniusPay`,
-        `${providerFee} ${providerCurrency} kept by GeniusPay`,
+        `${round2(providerFee)} ${providerCurrency} retenus par GeniusPay`,
+        `${round2(providerFee)} ${providerCurrency} kept by GeniusPay`,
       );
     }
     const plan = await this.planOf(organizationId);
@@ -381,8 +383,8 @@ export class WalletService {
         amount: -costs.conversion,
         sourceKey: `conversion:${paymentId}`,
         note: t(
-          `GeniusPay a encaissé ${costs.detail.providerAmount} ${costs.detail.providerCurrency} pour ${payment.amount} ${payment.currency}`,
-          `GeniusPay collected ${costs.detail.providerAmount} ${costs.detail.providerCurrency} for ${payment.amount} ${payment.currency}`,
+          `GeniusPay a encaissé ${round2(costs.detail.providerAmount)} ${costs.detail.providerCurrency} pour ${payment.amount} ${payment.currency}`,
+          `GeniusPay collected ${round2(costs.detail.providerAmount)} ${costs.detail.providerCurrency} for ${payment.amount} ${payment.currency}`,
         ),
       });
     }
@@ -401,6 +403,15 @@ export class WalletService {
       amount: payment.amount,
       sourceKey: `sale:${paymentId}`,
     });
+    // The cashier already sees a counter payment arrive on the till screen: only payments made
+    // away from the business (its site) are worth an e-mail.
+    if (!payment.idempotencyKey?.startsWith('counter:')) {
+      void this.businessAlerts.notify(organizationId, {
+        kind: 'online_payment',
+        amount: payment.amount,
+        currency: payment.currency,
+      });
+    }
   }
 
   /* ─────────────────────────── withdrawal number ─────────────────────────── */

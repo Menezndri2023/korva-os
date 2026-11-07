@@ -8,6 +8,7 @@ import {
   createPublicBookingSchema,
   createPublicOrderSchema,
   type CreatePublicBookingInput,
+  type CreatePublicLeadInput,
   type CreatePublicOrderInput,
   type TrackCartCheckoutStartedInput,
 } from "@korva/validation";
@@ -22,6 +23,7 @@ import {
 import { Button, Dialog, Input, Select } from "@korva/ui";
 import { publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { lineKey, MAX_LINE_QUANTITY, type CartActions } from "@/lib/use-cart";
+import { requestLabel, type RequestKind } from "@/lib/request-kind";
 import type {
   CartLine,
   PublicOffer,
@@ -85,6 +87,94 @@ const STAY_UNAVAILABLE_LABELS: Record<string, [string, string]> = {
   SLOT_UNAVAILABLE: ["Déjà réservé à ces dates.", "Already booked on these dates."],
   SLOT_BLOCKED: ["Fermé à ces dates.", "Closed on these dates."],
 };
+
+/**
+ * The on-site request — "Vitrine et demande de devis" for a business that works on quotes, a visit
+ * for a property, information otherwise — sent as a lead to the business's CRM (POST
+ * /public/:slug/leads), which alerts the business. Before it, such a site offered WhatsApp only.
+ */
+export function RequestPanel({
+  slug,
+  kind,
+  offerName,
+  onClose,
+  onSuccess,
+}: {
+  slug: string;
+  kind: RequestKind;
+  offerName?: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const t = useT();
+  const [firstName, setFirstName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState(
+    offerName
+      ? kind === "quote"
+        ? t(`Bonjour, je souhaite un devis pour « ${offerName} ».`, `Hello, I would like a quote for “${offerName}”.`)
+        : kind === "visit"
+          ? t(`Bonjour, je souhaite visiter « ${offerName} ».`, `Hello, I would like to visit “${offerName}”.`)
+          : t(`Bonjour, je souhaite des renseignements sur « ${offerName} ».`, `Hello, I would like information about “${offerName}”.`)
+      : "",
+  );
+  const send = useMutation({
+    mutationFn: (input: CreatePublicLeadInput) => publicApiClient.post(`/public/${slug}/leads`, input),
+    onSuccess,
+  });
+
+  return (
+    <Dialog open onClose={onClose} title={t(...requestLabel(kind))}>
+      <DialogCloseButton onClose={onClose} />
+      <form
+        className="space-y-3 text-sm"
+        onSubmit={(event) => {
+          event.preventDefault();
+          send.mutate({
+            message: message.trim(),
+            source: kind === "quote" ? "website_quote" : kind === "visit" ? "website_visit" : "website_request",
+            contact: {
+              email: email.trim(),
+              firstName: firstName.trim() || undefined,
+              phone: phone.trim() || undefined,
+            },
+          });
+        }}
+      >
+        <Input aria-label={t("Prénom", "First name")} placeholder={t("Prénom", "First name")} value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+        <Input
+          type="email"
+          required
+          aria-label={t("Adresse e-mail", "Email address")}
+          placeholder={t("E-mail", "E-mail")}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <Input aria-label={t("Téléphone", "Phone")} placeholder={t("Téléphone (optionnel)", "Phone (optional)")} value={phone} onChange={(e) => setPhone(e.target.value)} />
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-text-muted">{t("Votre demande", "Your request")}</span>
+          <textarea
+            required
+            maxLength={2000}
+            rows={5}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="w-full rounded-md border border-border-input bg-surface px-3 py-2 text-sm text-text focus:border-focus focus:outline-none"
+          />
+        </label>
+        {send.isError && (
+          <p className="text-xs text-destructive">
+            {send.error instanceof PublicApiError ? send.error.message : t("L'envoi n'a pas abouti. Réessayez.", "Sending failed. Try again.")}
+          </p>
+        )}
+        <Button type="submit" loading={send.isPending} disabled={!email.trim() || !message.trim()} className="w-full">
+          {send.isPending ? t("Envoi...", "Sending...") : t("Envoyer la demande", "Send the request")}
+        </Button>
+      </form>
+    </Dialog>
+  );
+}
 
 export function BookingPanel({
   slug,

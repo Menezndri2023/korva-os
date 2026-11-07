@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BookingPanel, CheckoutPanel } from "./commerce-panels";
+import { BookingPanel, CheckoutPanel, RequestPanel } from "./commerce-panels";
 import { publicApiClient } from "@/lib/public-api-client";
 import { useCart } from "@/lib/use-cart";
 import type { PublicOffer } from "@/lib/public-types";
@@ -502,5 +502,36 @@ describe("CheckoutPanel — online payment", () => {
     expect(screen.getByText(/Le paiement en ligne commence à 500 XOF/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Payer par mobile money ou carte" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: /Mobile money ou carte/ })).toBeDisabled();
+  });
+});
+
+describe("RequestPanel", () => {
+  beforeEach(() => {
+    postMock.mockReset();
+    postMock.mockResolvedValue({ id: "lead-1", status: "new" });
+  });
+
+  it("sends a quote request, the offer already named in the message", async () => {
+    const user = userEvent.setup();
+    const onSuccess = vi.fn();
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <RequestPanel slug="konan" kind="quote" offerName="Audit comptable" onClose={() => {}} onSuccess={onSuccess} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("heading", { name: "Demander un devis" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Bonjour, je souhaite un devis pour « Audit comptable »."))
+      .toBeInTheDocument();
+    await user.type(screen.getByLabelText("Adresse e-mail"), "kofi@example.com");
+    await user.click(screen.getByRole("button", { name: "Envoyer la demande" }));
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/public/konan/leads", {
+        message: "Bonjour, je souhaite un devis pour « Audit comptable ».",
+        source: "website_quote",
+        contact: { email: "kofi@example.com", firstName: undefined, phone: undefined },
+      }),
+    );
+    expect(onSuccess).toHaveBeenCalled();
   });
 });

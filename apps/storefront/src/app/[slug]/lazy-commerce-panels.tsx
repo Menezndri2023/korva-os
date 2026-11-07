@@ -20,3 +20,8 @@ export const CheckoutPanel = dynamic(
   () => import("./commerce-panels").then((mod) => mod.CheckoutPanel),
   { ssr: false },
 );
+
+export const RequestPanel = dynamic(
+  () => import("./commerce-panels").then((mod) => mod.RequestPanel),
+  { ssr: false },
+);

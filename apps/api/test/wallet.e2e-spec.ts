@@ -270,6 +270,17 @@ describe('Solde KORVA (e2e)', () => {
 
     // 15 000 − 450 (GeniusPay) − 300 (2 % Starter) = 14 250, released at once (WALLET_HOLD_DAYS=0)
     expect(await summary()).toMatchObject({ available: 14250, pending: 0 });
+    // The owner hears of it by e-mail, not only by opening the dashboard.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(
+      emails.some(
+        (mail) =>
+          mail.to === 'owner@boutique.ci' &&
+          (mail as { subject?: string }).subject?.startsWith(
+            'Paiement en ligne reçu',
+          ),
+      ),
+    ).toBe(true);
     const entries = asSuccess<{ kind: string; amount: number }[]>(
       (await staff(request(server).get('/api/v1/wallet/entries')).expect(200))
         .body,
