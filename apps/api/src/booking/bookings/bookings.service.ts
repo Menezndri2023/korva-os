@@ -358,9 +358,32 @@ export class BookingsService {
     return cleared ?? updated;
   }
 
+  /**
+   * Frees the slots held by bookings whose online deposit (Booking.depositDueBy) was never paid:
+   * each is cancelled like any other booking — events, audit, the slot open again. Run by the
+   * booking reminder sweep.
+   */
+  async releaseUnpaidDeposits(now: Date = new Date()): Promise<number> {
+    const due = await this.bookingsRepository.findUnpaidDepositsDue(now);
+    let released = 0;
+    for (const booking of due) {
+      try {
+        await this.cancel(
+          booking.organizationId.toString(),
+          undefined,
+          booking.id as string,
+        );
+        released += 1;
+      } catch {
+        // Cancelled or completed meanwhile — nothing to free.
+      }
+    }
+    return released;
+  }
+
   async cancel(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     id: string,
   ): Promise<BookingDocument> {
     const booking = await this.getById(organizationId, id);

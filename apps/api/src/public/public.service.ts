@@ -18,6 +18,8 @@ import {
   getStorefrontTemplate,
   selectableFontPairings,
   selectablePalettes,
+  depositAmount,
+  minimumOnlinePayment,
   onlinePaymentTermsAccepted,
   planHasFeature,
   pickDeterministic,
@@ -493,6 +495,7 @@ export class PublicService {
       optionGroups: offer.optionGroups,
       bookingUnit: offer.bookingUnit ?? 'slot',
       minNights: offer.minNights ?? undefined,
+      depositPercent: offer.depositPercent ?? undefined,
     };
   }
 
@@ -1031,12 +1034,117 @@ export class PublicService {
       customer: customerLabel(contact),
     });
 
+    const deposit = await this.requestBookingDeposit(
+      slug,
+      organization,
+      offer,
+      booking,
+      contact,
+    );
+
     return {
       id: booking.id as string,
       status: booking.status,
       startAt: booking.startAt,
       endAt: booking.endAt,
+      ...(deposit ?? {}),
     };
+  }
+
+  /**
+   * Acompte en ligne (2026-11-07): an offer with a depositPercent, at a business that offers
+   * online payment, asks the customer to pay that share of the price now. The booking gets its
+   * order and invoice, the deposit is an online payment against that invoice (partly paid →
+   * Booking.paymentStatus "deposit_paid" through syncBookingPaymentStatusFromInvoice), and an
+   * unpaid deposit frees the slot after DEPOSIT_PAYMENT_WINDOW_MINUTES (BookingsService
+   * releaseUnpaidDeposits). No online payment, no deposit: the booking stands as before.
+   */
+  private async requestBookingDeposit(
+    slug: string,
+    organization: OrganizationDocument,
+    offer: { depositPercent?: number | null },
+    booking: { id?: unknown; pricing: { amount: number; currency: string } },
+    contact: { email?: string | null },
+  ): Promise<{ checkoutUrl: string; depositAmount: number } | null> {
+    const percent = offer.depositPercent ?? 0;
+    if (percent <= 0 || !contact.email) return null;
+    const methods = await this.resolveAvailablePaymentMethods(organization);
+    if (!methods.includes('online')) return null;
+    const organizationId = organization.id as string;
+    const bookingId = booking.id as string;
+    const amount = Math.max(
+      minimumOnlinePayment(booking.pricing.currency),
+      depositAmount(booking.pricing.amount, percent, booking.pricing.currency),
+    );
+    if (amount > booking.pricing.amount) return null;
+    try {
+      const provider = await this.paymentProviderResolver.resolve({
+        flow: 'commerce',
+        organizationId,
+      });
+      const order = await this.ordersService.createFromBooking(
+        organizationId,
+        undefined,
+        bookingId,
+      );
+      await this.ordersService.confirm(
+        organizationId,
+        undefined,
+        order.id as string,
+      );
+      let invoice = await this.ordersService.generateInvoice(
+        organizationId,
+        undefined,
+        order.id as string,
+      );
+      if (invoice.status === 'draft') {
+        invoice = await this.invoicesService.issue(
+          organizationId,
+          undefined,
+          invoice.id as string,
+        );
+      }
+      const storefrontUrl = (
+        process.env.STOREFRONT_URL ?? 'http://localhost:3001'
+      ).replace(/\/$/, '');
+      const payment = await this.paymentsService.create(
+        organizationId,
+        undefined,
+        { invoiceId: invoice.id as string, amount, method: 'online' },
+        `public-booking-deposit:${bookingId}`,
+        {
+          provider,
+          customerEmail: contact.email,
+          redirectUrl: `${storefrontUrl}/${slug}/track?${new URLSearchParams({
+            kind: 'booking',
+            number: bookingId,
+            email: contact.email,
+            paid: '1',
+          }).toString()}`,
+        },
+      );
+      if (!payment.checkoutUrl) return null;
+      await this.bookingModel
+        .updateOne(
+          { _id: new Types.ObjectId(bookingId) },
+          {
+            $set: {
+              depositAmount: amount,
+              depositDueBy: new Date(
+                Date.now() + depositPaymentWindowMinutes() * 60_000,
+              ),
+            },
+          },
+        )
+        .exec();
+      return { checkoutUrl: payment.checkoutUrl, depositAmount: amount };
+    } catch (error) {
+      // The booking itself stands; the business sees it unpaid and can ask for the deposit.
+      this.logger.warn(
+        `Booking ${bookingId}: deposit payment could not be started (${error instanceof Error ? error.message : String(error)})`,
+      );
+      return null;
+    }
   }
 
   /**
@@ -1476,12 +1584,47 @@ export class PublicService {
       throw trackingNotFound('booking');
     }
 
+    // The deposit asked online when booking, checked with GeniusPay while still open — the
+    // customer usually lands here straight from the payment page.
+    let deposit = booking.depositAmount
+      ? await this.paymentsService.findByIdempotencyKey(
+          organization.id as string,
+          `public-booking-deposit:${booking.id as string}`,
+        )
+      : null;
+    if (
+      deposit &&
+      (deposit.status === 'pending' || deposit.status === 'processing') &&
+      deposit.providerReference
+    ) {
+      deposit = await this.paymentsService
+        .reconcileProcessingPayment(
+          organization.id as string,
+          deposit.id as string,
+        )
+        .catch(() => deposit);
+    }
+
     return {
       id: booking.id as string,
       status: booking.status,
       startAt: booking.startAt,
       endAt: booking.endAt,
       pricing: booking.pricing,
+      ...(booking.depositAmount
+        ? {
+            deposit: {
+              amount: booking.depositAmount,
+              status:
+                deposit?.status === 'completed' ||
+                deposit?.status === 'refunded'
+                  ? ('paid' as const)
+                  : deposit?.status === 'failed'
+                    ? ('failed' as const)
+                    : ('pending' as const),
+            },
+          }
+        : {}),
     };
   }
 }
@@ -1496,4 +1639,10 @@ function customerLabel(contact: {
   return name && contact.email
     ? `${name} (${contact.email})`
     : name || contact.email || 'Un client';
+}
+
+/** How long a customer has to pay a booking deposit before the slot is freed again. */
+export function depositPaymentWindowMinutes(): number {
+  const minutes = Number(process.env.DEPOSIT_PAYMENT_WINDOW_MINUTES ?? 60);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 60;
 }

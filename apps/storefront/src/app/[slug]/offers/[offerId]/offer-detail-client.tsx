@@ -428,6 +428,7 @@ export default function OfferDetailClient({
       {showBooking && (
         <BookingPanel
           slug={slug}
+          acceptsOnlinePayment={organization.acceptedPaymentMethods.includes("online")}
           offer={offer}
           onClose={() => setShowBooking(false)}
           onSuccess={() => {

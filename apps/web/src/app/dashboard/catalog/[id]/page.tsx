@@ -187,6 +187,7 @@ export default function OfferDetailPage() {
       bookingUnit: offer.bookingUnit ?? "slot",
       minNights: offer.minNights ?? null,
       bufferMinutes: offer.bufferMinutes ?? null,
+      depositPercent: offer.depositPercent ?? null,
     });
   }
   function cancelEdit() {
@@ -587,6 +588,30 @@ export default function OfferDetailPage() {
                   setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
                 })}
               />
+            )}
+            {fields.duration && (
+              <div className="col-span-2 space-y-1">
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="5"
+                  aria-label={t("Acompte demandé à la réservation (%)", "Deposit asked when booking (%)")}
+                  placeholder={t(
+                    "Acompte à payer en ligne à la réservation, en % du prix (optionnel)",
+                    "Deposit paid online when booking, as a % of the price (optional)",
+                  )}
+                  {...register("depositPercent", {
+                    setValueAs: (v: string | number | null) => (v === "" || v == null ? null : Number(v)),
+                  })}
+                />
+                <p className="text-xs text-text-muted">
+                  {t(
+                    "Contre les rendez-vous manqués : le client paie cette part en ligne pour garantir son créneau, le reste sur place. Demandé seulement si vous proposez le paiement en ligne ; sans paiement dans l'heure, le créneau est libéré.",
+                    "Against no-shows: the customer pays this share online to secure the slot, the rest on site. Asked only if you offer online payment; unpaid within the hour, the slot is released.",
+                  )}
+                </p>
+              </div>
             )}
             {fields.duration && bookingUnit !== "night" && (
               <Input

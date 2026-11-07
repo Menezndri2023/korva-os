@@ -227,6 +227,38 @@ describe("BookingPanel", () => {
     expect(body.resourceId).toBeUndefined();
   });
 
+  it("asks the offer's deposit online, and sends the customer to pay it", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path.endsWith("/resources")) {
+        return Promise.resolve([{ id: "res-1", name: "Fauteuil 1", type: "chair" }]);
+      }
+      return Promise.resolve({ date: "2026-07-06", durationMinutes: 45, slots: SLOTS });
+    });
+    postMock.mockResolvedValue({ id: "b-1", status: "confirmed", checkoutUrl: "https://pay.genius.ci/c/MTX-D1" });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, set href(value: string) { assign(value); } });
+    const user = userEvent.setup();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <BookingPanel
+          slug="salon"
+          offer={{ ...baseOffer, durationMinutes: 45, depositPercent: 30 }}
+          acceptsOnlinePayment
+          onClose={() => {}}
+          onSuccess={() => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText(/Un acompte de .*10,50.* \(30 %\) se paie en ligne/)).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "14:00" }, { timeout: 5_000 }));
+    await user.type(screen.getByLabelText("Adresse e-mail"), "awa@client.test");
+    await user.click(screen.getByRole("button", { name: "Réserver et payer l'acompte" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("https://pay.genius.ci/c/MTX-D1"));
+    vi.unstubAllGlobals();
+  });
+
   it("chooses the only place by itself instead of asking for it", async () => {
     getMock.mockImplementation((path: string) => {
       if (path.endsWith("/resources")) {

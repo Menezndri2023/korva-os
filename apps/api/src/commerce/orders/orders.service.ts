@@ -225,7 +225,7 @@ export class OrdersService {
 
   async createFromBooking(
     organizationId: string,
-    userId: string,
+    userId: string | undefined,
     bookingId: string,
   ): Promise<OrderDocument> {
     const existing = await this.ordersRepository.findByBookingId(

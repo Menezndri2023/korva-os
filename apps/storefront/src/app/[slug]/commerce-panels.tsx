@@ -15,6 +15,7 @@ import {
 import {
   FULFILLMENT_MODE_LABELS,
   FULFILLMENT_MODE_LABELS_EN,
+  depositAmount,
   minimumOnlinePayment,
   PROVIDER_OBSERVED_XOF_RATES,
   type FulfillmentMode,
@@ -33,6 +34,7 @@ import type {
   PublicStayQuote,
 } from "@/lib/public-types";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
+import { formatOfferPrice } from "@/lib/offer-labels";
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, [string, string]> = {
   cash: ["Espèces / à la livraison ou au retrait", "Cash / on delivery or collection"],
@@ -179,15 +181,20 @@ export function RequestPanel({
 export function BookingPanel({
   slug,
   offer,
+  acceptsOnlinePayment = false,
   onClose,
   onSuccess,
 }: {
   slug: string;
   offer: PublicOffer;
+  /** The business offers online payment: an offer's deposit (depositPercent) is then asked. */
+  acceptsOnlinePayment?: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const t = useT();
+  const locale = useStorefrontLocale();
+  const [redirecting, setRedirecting] = useState(false);
   const [date, setDate] = useState(localToday);
   const [chosenDuration, setChosenDuration] = useState(60);
   const fixedDuration = offer.durationMinutes;
@@ -284,7 +291,7 @@ export function BookingPanel({
 
   const bookMutation = useMutation({
     mutationFn: (values: CreatePublicBookingInput) =>
-      publicApiClient.post(`/public/${slug}/bookings`, {
+      publicApiClient.post<{ checkoutUrl?: string }>(`/public/${slug}/bookings`, {
         ...values,
         contact: {
           email: values.contact.email,
@@ -292,8 +299,18 @@ export function BookingPanel({
           phone: values.contact.phone || undefined,
         },
       }),
-    onSuccess,
+    // A deposit to pay: straight to the payment page, which brings the customer back to the
+    // booking's tracking page. No deposit (or it could not start): the usual confirmation.
+    onSuccess: (result) => {
+      if (result?.checkoutUrl) {
+        setRedirecting(true);
+        window.location.href = result.checkoutUrl;
+        return;
+      }
+      onSuccess();
+    },
   });
+  const depositPercent = acceptsOnlinePayment ? (offer.depositPercent ?? 0) : 0;
 
   // Nobody to book: the business switched every resource off (the API creates a default one
   // when there was never any). Say so instead of showing a form that can never be sent.
@@ -543,6 +560,18 @@ export function BookingPanel({
           error={!!errors.contact?.phone}
         />
 
+        {depositPercent > 0 && (
+          <p className="rounded-md bg-surface-muted px-3 py-2 text-xs text-text-muted">
+            {(() => {
+              const total = isStay ? (stayQuery.data?.total ?? offer.pricing.amount) : offer.pricing.amount;
+              const deposit = formatOfferPrice(depositAmount(total, depositPercent, offer.pricing.currency), offer.pricing.currency, locale);
+              return t(
+                `Un acompte de ${deposit} (${depositPercent} %) se paie en ligne pour garantir la réservation, le reste sur place. Sans paiement dans l'heure, le créneau est libéré.`,
+                `A deposit of ${deposit} (${depositPercent}%) is paid online to secure the booking, the rest on site. Unpaid within the hour, the slot is released.`,
+              );
+            })()}
+          </p>
+        )}
         {bookMutation.isError && (
           <p className="text-xs text-destructive">
             {bookMutation.error instanceof PublicApiError ? bookMutation.error.message : t("Erreur", "Error")}
@@ -550,11 +579,17 @@ export function BookingPanel({
         )}
         <Button
           type="submit"
-          loading={bookMutation.isPending}
+          loading={bookMutation.isPending || redirecting}
           disabled={isStay ? !stayReady : !startAt}
           className="w-full"
         >
-          {bookMutation.isPending ? t("Envoi...", "Sending...") : t("Confirmer la réservation", "Confirm the booking")}
+          {redirecting
+            ? t("Redirection vers le paiement...", "Taking you to payment...")
+            : bookMutation.isPending
+              ? t("Envoi...", "Sending...")
+              : depositPercent > 0
+                ? t("Réserver et payer l'acompte", "Book and pay the deposit")
+                : t("Confirmer la réservation", "Confirm the booking")}
         </Button>
       </form>
     </Dialog>

@@ -123,6 +123,10 @@ export interface Offer {
   /** Minutes the resource stays unavailable AFTER a slot of this offer (cleaning, setting up the
    *  next client). The customer's booking still ends at its own end. */
   bufferMinutes?: number | null;
+  /** Share of the price (1–100 %) the customer pays ONLINE when booking, to hold the slot
+   *  against no-shows. Asked only when the business offers online payment; an unpaid deposit
+   *  releases the slot after DEPOSIT_PAYMENT_WINDOW_MINUTES. Unset/null: no deposit. */
+  depositPercent?: number | null;
   /** Price before a promotion, shown struck through next to `pricing.amount`. Always higher than
    *  it (enforced by the API). Unset or null means no promotion is displayed. */
   compareAtPrice?: number | null;

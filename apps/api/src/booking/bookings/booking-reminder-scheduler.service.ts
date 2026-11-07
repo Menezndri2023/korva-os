@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { BookingsService } from './bookings.service';
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
@@ -67,6 +68,7 @@ export class BookingReminderSchedulerService
   constructor(
     private readonly configService: ConfigService,
     private readonly bookingsRepository: BookingsRepository,
+    private readonly bookingsService: BookingsService,
     private readonly offersService: OffersService,
     private readonly contactsService: ContactsService,
     private readonly conversationsService: ConversationsService,
@@ -128,6 +130,17 @@ export class BookingReminderSchedulerService
    *  upsertJobScheduler's first tick — same reasoning/pattern as CalendarSyncSchedulerService. */
   async runSweep(): Promise<void> {
     this.logger.log('Booking reminder sweep starting');
+    // Same tick, no extra Redis loop: slots held by an online deposit nobody paid are freed.
+    const released = await this.bookingsService
+      .releaseUnpaidDeposits()
+      .catch((error: unknown) => {
+        this.logger.error('Releasing unpaid booking deposits failed', error);
+        return 0;
+      });
+    if (released > 0)
+      this.logger.log(
+        `Freed ${released} booking(s) whose deposit was never paid`,
+      );
     const windowMs = this.getWindowHours() * 60 * 60 * 1000;
     const candidates =
       await this.bookingsRepository.findUpcomingUnreminded(windowMs);

@@ -228,6 +228,7 @@ export default function StorefrontClient({
       {bookingOffer && (
         <BookingPanel
           slug={slug}
+          acceptsOnlinePayment={organization.acceptedPaymentMethods.includes("online")}
           offer={bookingOffer}
           onClose={() => setBookingOffer(null)}
           onSuccess={() => {

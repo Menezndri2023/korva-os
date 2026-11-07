@@ -271,6 +271,7 @@ export default function CatalogueClient({ slug, nonce }: { slug: string; nonce?:
       {bookingOffer && (
         <BookingPanel
           slug={slug}
+          acceptsOnlinePayment={organization.acceptedPaymentMethods.includes("online")}
           offer={bookingOffer}
           onClose={() => setBookingOffer(null)}
           onSuccess={() => {

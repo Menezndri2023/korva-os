@@ -101,6 +101,7 @@ export const createOfferSchema = z.object({
   bookingUnit: z.enum(BOOKING_UNITS).optional(),
   minNights: z.number().int().min(1).max(365).nullable().optional(),
   bufferMinutes: z.number().int().min(0).max(240).nullable().optional(),
+  depositPercent: z.number().int().min(1).max(100).nullable().optional(),
   optionGroups: z.array(offerOptionGroupSchema).max(10).optional(),
 });
 export type CreateOfferInput = z.infer<typeof createOfferSchema>;

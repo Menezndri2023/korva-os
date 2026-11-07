@@ -54,6 +54,12 @@ export const MIN_ONLINE_PAYMENT: Record<string, number> = {
   USD: 1,
 };
 
+/** A booking deposit for a price: whole francs for XOF/XAF, cents otherwise. */
+export function depositAmount(price: number, percent: number, currency: string): number {
+  const raw = (price * percent) / 100;
+  return ["XOF", "XAF"].includes(currency.toUpperCase()) ? Math.round(raw) : Math.round(raw * 100) / 100;
+}
+
 export function minimumOnlinePayment(currency: string): number {
   return MIN_ONLINE_PAYMENT[currency.toUpperCase()] ?? 0;
 }

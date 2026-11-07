@@ -51,6 +51,14 @@ export class Booking {
   @Prop({ type: String, enum: BOOKING_PAYMENT_STATUSES, default: 'unpaid' })
   paymentStatus!: BookingPaymentStatus;
 
+  /** The deposit the customer was asked to pay online (Offer.depositPercent), and until when:
+   *  unpaid past it, the booking is cancelled and the slot freed. */
+  @Prop()
+  depositAmount?: number;
+
+  @Prop()
+  depositDueBy?: Date;
+
   /** See Booking.nights in @korva/types — set on a stay only. */
   @Prop({ min: 1 })
   nights?: number;

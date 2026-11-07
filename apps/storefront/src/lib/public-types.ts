@@ -113,6 +113,8 @@ export interface PublicOffer {
   /** "night" for a stay booked from an arrival to a departure date — see Offer.bookingUnit. */
   bookingUnit?: "slot" | "night";
   minNights?: number;
+  /** Share of the price paid online when booking — see Offer.depositPercent. */
+  depositPercent?: number;
   /** Choices made when ordering (cuisson, taille, suppléments) — see OfferOptionGroup. */
   optionGroups?: OfferOptionGroup[];
 }
@@ -200,6 +202,8 @@ export interface TrackedBooking {
   startAt: string;
   endAt: string;
   pricing: { amount: number; currency: string };
+  /** The deposit asked online when booking (Offer.depositPercent), checked live. */
+  deposit?: { amount: number; status: "paid" | "pending" | "failed" };
 }
 
 /** Mirrors CustomerAuthService's toPublicCustomer shape exactly. */

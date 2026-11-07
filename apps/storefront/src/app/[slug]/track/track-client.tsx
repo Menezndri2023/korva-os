@@ -72,6 +72,10 @@ export default function TrackClient({ slug }: { slug: string }) {
       ),
     enabled: hasQuery && urlKind === "booking",
     retry: false,
+    refetchInterval: (query) =>
+      backFromPayment && query.state.data?.deposit?.status === "pending" && query.state.dataUpdateCount < 30
+        ? 4000
+        : false,
   });
 
   const activeQuery = urlKind === "order" ? orderQuery : bookingQuery;
@@ -177,6 +181,10 @@ export default function TrackClient({ slug }: { slug: string }) {
 
         {hasQuery && urlKind === "order" && orderQuery.isSuccess && (
           <OrderResult order={orderQuery.data} />
+        )}
+
+        {hasQuery && urlKind === "booking" && bookingQuery.isSuccess && bookingQuery.data.deposit && (
+          <DepositState deposit={bookingQuery.data.deposit} currency={bookingQuery.data.pricing.currency} backFromPayment={backFromPayment} />
         )}
 
         {hasQuery && urlKind === "booking" && bookingQuery.isSuccess && (
@@ -325,6 +333,55 @@ function BookingResult({ booking }: { booking: TrackedBooking }) {
         <span>{t("Montant", "Amount")}</span>
         <span>{formatOfferPrice(booking.pricing.amount, booking.pricing.currency, locale)}</span>
       </div>
+    </Card>
+  );
+}
+
+function DepositState({
+  deposit,
+  currency,
+  backFromPayment,
+}: {
+  deposit: NonNullable<TrackedBooking["deposit"]>;
+  currency: string;
+  backFromPayment: boolean;
+}) {
+  const t = useT();
+  const locale = useStorefrontLocale();
+  const amount = formatOfferPrice(deposit.amount, currency, locale);
+  if (deposit.status === "paid") {
+    return (
+      <Card className="p-4 text-sm" role="status">
+        <p className="font-medium text-text">{t("Acompte reçu, merci !", "Deposit received, thank you!")}</p>
+        <p className="mt-1 text-text-muted">
+          {t(`Votre acompte de ${amount} est payé : votre réservation est garantie.`, `Your ${amount} deposit is paid: your booking is secured.`)}
+        </p>
+      </Card>
+    );
+  }
+  if (deposit.status === "pending") {
+    return (
+      <Card className="p-4 text-sm" role="status">
+        <p className="font-medium text-text">
+          {backFromPayment
+            ? t("Acompte en cours de confirmation…", "Confirming your deposit…")
+            : t(`Acompte de ${amount} en attente`, `${amount} deposit pending`)}
+        </p>
+        <p className="mt-1 text-text-muted">
+          {t(
+            "Cette page se met à jour toute seule. Sans paiement dans l'heure qui suit la réservation, le créneau est libéré.",
+            "This page updates by itself. Unpaid within the hour after booking, the slot is released.",
+          )}
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card className="p-4 text-sm text-destructive" role="status">
+      {t(
+        "Le paiement de l'acompte n'a pas abouti et rien n'a été prélevé. Réservez à nouveau depuis le site, ou contactez l'établissement.",
+        "The deposit payment did not go through and nothing was charged. Book again from the site, or contact the business.",
+      )}
     </Card>
   );
 }

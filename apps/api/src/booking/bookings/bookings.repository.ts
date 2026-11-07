@@ -216,4 +216,16 @@ export class BookingsRepository {
       )
       .exec();
   }
+
+  /** Bookings whose online deposit is past due and still unpaid — every organization. */
+  findUnpaidDepositsDue(now: Date): Promise<BookingDocument[]> {
+    return this.bookingModel
+      .find({
+        depositDueBy: { $lt: now },
+        paymentStatus: 'unpaid',
+        status: { $in: ['pending', 'confirmed'] },
+      })
+      .limit(200)
+      .exec();
+  }
 }
