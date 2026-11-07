@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ONLINE_PAYMENT_TERMS_VERSION } from '@korva/types';
 import { INestApplication } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
@@ -268,7 +269,10 @@ describe('Plan features (e2e)', () => {
     // Online payment is open on Free (2026-10-30, Solde KORVA): KORVA earns its 3 % commission
     // on each sale instead of a subscription.
     await auth(request(server).patch('/api/v1/organizations/me'))
-      .send({ acceptedPaymentMethods: ['cash', 'online'] })
+      .send({
+        acceptedPaymentMethods: ['cash', 'online'],
+        acceptOnlinePaymentTerms: ONLINE_PAYMENT_TERMS_VERSION,
+      })
       .expect(200);
 
     await putOrganizationOnPlan(connection, organization.id, 'starter');
@@ -295,7 +299,10 @@ describe('Plan features (e2e)', () => {
       })
       .expect(201);
     await auth(request(server).patch('/api/v1/organizations/me'))
-      .send({ acceptedPaymentMethods: ['cash', 'online'] })
+      .send({
+        acceptedPaymentMethods: ['cash', 'online'],
+        acceptOnlinePaymentTerms: ONLINE_PAYMENT_TERMS_VERSION,
+      })
       .expect(200);
   });
 });

@@ -1,4 +1,5 @@
 import { createServer, type Server } from 'node:http';
+import { ONLINE_PAYMENT_TERMS_VERSION } from '@korva/types';
 import type { AddressInfo } from 'node:net';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
@@ -122,7 +123,7 @@ describe('Caisse — QR mobile money (e2e)', () => {
     await new Promise((resolve) => stub.close(resolve));
   });
 
-  async function business(email: string, currency: string) {
+  async function business(email: string, currency: string, acceptTerms = true) {
     const token = asSuccess<{ accessToken: string }>(
       (
         await request(server)
@@ -147,13 +148,16 @@ describe('Caisse — QR mobile money (e2e)', () => {
           .expect(201)
       ).body,
     );
-    return {
-      org,
-      staff: (req: request.Test) =>
-        req
-          .set('Authorization', `Bearer ${token}`)
-          .set('X-Organization-Id', org.id),
-    };
+    const staffOf = (req: request.Test) =>
+      req
+        .set('Authorization', `Bearer ${token}`)
+        .set('X-Organization-Id', org.id);
+    if (acceptTerms) {
+      await staffOf(request(server).patch('/api/v1/organizations/me'))
+        .send({ acceptOnlinePaymentTerms: ONLINE_PAYMENT_TERMS_VERSION })
+        .expect(200);
+    }
+    return { org, staff: staffOf };
   }
 
   let staff: (req: request.Test) => request.Test;
@@ -214,6 +218,17 @@ describe('Caisse — QR mobile money (e2e)', () => {
       (await staff(request(server).get('/api/v1/wallet')).expect(200)).body,
     );
     expect(wallet.available).toBe(4700);
+  });
+
+  it('refuses mobile money at the counter until the business accepts the online payment terms', async () => {
+    const undecided = await business('owner@sans-conditions.ci', 'XOF', false);
+    const refused = await undecided
+      .staff(request(server).post('/api/v1/counter-payments'))
+      .send({ amount: 5000 })
+      .expect(400);
+    expect((refused.body as { error: { code: string } }).error.code).toBe(
+      'ONLINE_PAYMENT_TERMS_REQUIRED',
+    );
   });
 
   it('refuses an amount under the online minimum, before any invoice is made', async () => {

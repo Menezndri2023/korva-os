@@ -19,6 +19,16 @@ function errorText(error: unknown, t: Translate): string {
           "Le paiement mobile money n'est pas encore disponible pour votre entreprise. Contactez KORVA.",
           "Mobile money payment is not available for your business yet. Contact KORVA.",
         );
+      case "ONLINE_PAYMENT_TERMS_REQUIRED":
+        return t(
+          "Pour encaisser par mobile money, activez d'abord le paiement en ligne et acceptez ses conditions dans Paramètres > Entreprise. Vous pouvez aussi rester aux espèces, sans commission.",
+          "To take mobile money, first turn on online payment and accept its terms in Settings > Business. You can also stay with cash, with no commission.",
+        );
+      case "ONLINE_PAYMENT_BELOW_MINIMUM":
+        return t(
+          "Le paiement mobile money commence à 500 F : encaissez ce montant en espèces.",
+          "Mobile money payment starts at 500 F: take this amount in cash.",
+        );
       case "CURRENCY_NOT_CHARGEABLE":
         return t(
           "Le paiement mobile money n'est pas disponible dans la devise de votre entreprise.",

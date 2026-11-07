@@ -211,6 +211,14 @@ export function PublicFooter({ locale = "fr" }: { locale?: Locale }) {
             <p className="text-sm font-semibold">KORVA OS</p>
           </div>
           <p className="max-w-xs text-sm">{t.footerLead}</p>
+          <p className="text-sm">
+            <Link
+              href={locale === "en" ? "/en/terms/online-payment" : "/conditions/paiement-en-ligne"}
+              className="hover:text-paper hover:underline"
+            >
+              {locale === "en" ? "Online payment terms" : "Conditions du paiement en ligne"}
+            </Link>
+          </p>
           <p className="text-sm">&copy; {new Date().getFullYear()} KORVA OS</p>
         </div>
         <nav aria-label={t.footerTrades}>

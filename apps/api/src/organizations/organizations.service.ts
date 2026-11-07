@@ -12,12 +12,15 @@ import type {
 } from '@korva/validation';
 import {
   BUSINESS_MODEL_DEFINITIONS,
+  ONLINE_PAYMENT_TERMS_VERSION,
+  onlinePaymentTermsAccepted,
   SYSTEM_ROLE_RANK,
   planHasFeature,
   verticalForOrganizationType,
   type BusinessModel,
   type KorvaModule,
 } from '@korva/types';
+import { Types } from 'mongoose';
 import { OrganizationsRepository } from './organizations.repository';
 import { OrganizationDocument } from './schemas/organization.schema';
 import {
@@ -309,7 +312,22 @@ export class OrganizationsService {
   async update(
     id: string,
     input: UpdateOrganizationInput,
+    actorUserId?: string,
   ): Promise<OrganizationDocument> {
+    const { acceptOnlinePaymentTerms, ...changes } = input;
+    // Accepting the online payment terms is recorded with whoever saved it — only the current
+    // version counts (ONLINE_PAYMENT_TERMS_VERSION).
+    const acceptingTerms =
+      acceptOnlinePaymentTerms === ONLINE_PAYMENT_TERMS_VERSION && actorUserId;
+    const termsUpdate = acceptingTerms
+      ? {
+          onlinePaymentTerms: {
+            version: ONLINE_PAYMENT_TERMS_VERSION,
+            acceptedAt: new Date(),
+            acceptedByUserId: new Types.ObjectId(actorUserId),
+          },
+        }
+      : {};
     if (input.enabledModules) {
       await this.entitlementsService.assertModulesAllowed(
         id,
@@ -323,6 +341,19 @@ export class OrganizationsService {
       const current = await this.organizationsRepository.findById(id);
       if (!current?.acceptedPaymentMethods?.includes('online')) {
         await this.entitlementsService.assertFeature(id, 'online_payment');
+      }
+      // Online payment is the business's choice, made knowingly: it cannot be on without the
+      // current terms accepted — now, or before.
+      if (
+        !acceptingTerms &&
+        !onlinePaymentTermsAccepted(current?.onlinePaymentTerms)
+      ) {
+        throw new BadRequestException({
+          code: 'ONLINE_PAYMENT_TERMS_REQUIRED',
+          message:
+            'Accept the online payment terms to offer online payment to your customers',
+          version: ONLINE_PAYMENT_TERMS_VERSION,
+        });
       }
     }
     if (
@@ -371,7 +402,10 @@ export class OrganizationsService {
         });
       }
     }
-    const organization = await this.organizationsRepository.update(id, input);
+    const organization = await this.organizationsRepository.update(id, {
+      ...changes,
+      ...termsUpdate,
+    });
     if (!organization) {
       throw new NotFoundException({
         code: 'ORGANIZATION_NOT_FOUND',

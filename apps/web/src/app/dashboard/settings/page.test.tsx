@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // file runs well within Vitest's 5 s default; under the full suite's parallel load a few tests
 // crossed it, which failed runs for no defect. A heavier page gets a longer budget.
 vi.setConfig({ testTimeout: 15_000 });
+import { ONLINE_PAYMENT_TERMS_VERSION } from "@korva/types";
 import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SettingsPage from "./page";
@@ -222,6 +223,7 @@ describe("SettingsPage — Organization profile edit", () => {
     brandColor?: string;
     tagline?: string;
     heroImage?: string;
+    acceptedPaymentMethods?: string[];
   };
 
   beforeEach(() => {
@@ -310,6 +312,44 @@ describe("SettingsPage — Organization profile edit", () => {
       expect(
         getMock.mock.calls.filter(([path]) => path === "/organizations/me").length,
       ).toBeGreaterThan(1),
+    );
+  });
+
+  it("lets the business choose online payment only with the terms accepted, and records them", async () => {
+    organization = {
+      ...organization,
+      currency: "XOF",
+      enabledModules: ["crm", "commerce"],
+      acceptedPaymentMethods: ["cash"],
+    };
+    patchMock.mockResolvedValue(organization);
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await screen.findByText("Org de test");
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+    const online = screen.getByRole("checkbox", { name: /Paiement en ligne : mobile money/ });
+    const form = online.closest("form")!;
+    await user.click(online);
+    expect(screen.getByRole("link", { name: "conditions du paiement en ligne" })).toHaveAttribute(
+      "href",
+      "/conditions/paiement-en-ligne",
+    );
+
+    await user.click(within(form).getByRole("button", { name: "Enregistrer" }));
+    expect(await screen.findByText(/Acceptez les conditions du paiement en ligne/)).toBeInTheDocument();
+    expect(patchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("checkbox", { name: /J'ai lu et j'accepte/ }));
+    await user.click(within(form).getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith(
+        "/organizations/me",
+        expect.objectContaining({
+          acceptedPaymentMethods: ["cash", "online"],
+          acceptOnlinePaymentTerms: ONLINE_PAYMENT_TERMS_VERSION,
+        }),
+      ),
     );
   });
 

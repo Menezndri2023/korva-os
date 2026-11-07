@@ -7,7 +7,11 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { minimumOnlinePayment, type CounterPayment } from '@korva/types';
+import {
+  minimumOnlinePayment,
+  onlinePaymentTermsAccepted,
+  type CounterPayment,
+} from '@korva/types';
 import type { CreateCounterPaymentInput } from '@korva/validation';
 import {
   Contact,
@@ -64,6 +68,14 @@ export class CounterPaymentsService {
   ): Promise<CounterPayment> {
     const organization =
       await this.organizationsService.getById(organizationId);
+    // The QR at the counter is KORVA's online payment too: the business's choice, terms accepted.
+    if (!onlinePaymentTermsAccepted(organization.onlinePaymentTerms)) {
+      throw new BadRequestException({
+        code: 'ONLINE_PAYMENT_TERMS_REQUIRED',
+        message:
+          'Accept the online payment terms in your Settings to take mobile money payments',
+      });
+    }
     let provider;
     try {
       provider = await this.paymentProviderResolver.resolve({

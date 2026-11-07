@@ -162,6 +162,22 @@ export class Organization {
   @Prop({ type: [String], default: undefined })
   acceptedPaymentMethods?: PaymentMethod[];
 
+  /** See Organization.onlinePaymentTerms in @korva/types. */
+  @Prop({
+    type: {
+      version: String,
+      acceptedAt: Date,
+      acceptedByUserId: { type: Types.ObjectId, ref: 'User' },
+      _id: false,
+    },
+    default: undefined,
+  })
+  onlinePaymentTerms?: {
+    version: string;
+    acceptedAt: Date;
+    acceptedByUserId: Types.ObjectId;
+  };
+
   /** Long-form "about us" text for the public storefront — Pro plan and above, see
    *  EntitlementsService.assertContentSectionsAllowed. */
   @Prop()

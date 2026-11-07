@@ -25,6 +25,8 @@ import {
   SUPPORTED_BILLING_CURRENCIES,
   SYSTEM_EVENTS,
   organizationHasFeature,
+  ONLINE_PAYMENT_TERMS_VERSION,
+  onlinePaymentTermsAccepted,
   planMeetsMinimum,
   PREMIUM_FONT_PAIRING_KEYS,
   PREMIUM_PALETTE_KEYS,
@@ -395,6 +397,10 @@ export default function SettingsPage() {
   const watchedStorefrontTemplate = watchOrg("storefrontTemplate");
   const watchedStorefrontPalette = watchOrg("storefrontPalette");
   const watchedStorefrontFontPairing = watchOrg("storefrontFontPairing");
+  // Online payment is the business's choice, made with the terms accepted (API: ONLINE_PAYMENT_TERMS_REQUIRED).
+  const watchedPaymentMethods = watchOrg("acceptedPaymentMethods");
+  const [acceptOnlineTerms, setAcceptOnlineTerms] = useState(false);
+  const [termsMissing, setTermsMissing] = useState(false);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const heroImageFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -825,7 +831,20 @@ export default function SettingsPage() {
             </dl>
           ) : (
             <form
-              onSubmit={handleOrgSubmit((values) => updateOrgMutation.mutate(values))}
+              onSubmit={handleOrgSubmit((values) => {
+                const needsTerms =
+                  values.acceptedPaymentMethods?.includes("online") &&
+                  !onlinePaymentTermsAccepted(organization?.onlinePaymentTerms);
+                if (needsTerms && !acceptOnlineTerms) {
+                  setTermsMissing(true);
+                  return;
+                }
+                setTermsMissing(false);
+                updateOrgMutation.mutate({
+                  ...values,
+                  ...(needsTerms ? { acceptOnlinePaymentTerms: ONLINE_PAYMENT_TERMS_VERSION } : {}),
+                });
+              })}
               className="mt-4 grid grid-cols-1 gap-3 rounded-md border border-border p-4 sm:grid-cols-2"
             >
               <div>
@@ -1247,7 +1266,13 @@ export default function SettingsPage() {
               {organization?.enabledModules.includes("commerce") && (
                 <div className="sm:col-span-2">
                   <p className="mb-1 text-xs font-medium text-text">
-                    {t("Moyens de paiement acceptés à la commande", "Payment methods accepted at checkout")}
+                    {t("Comment vos clients paient-ils ?", "How do your customers pay?")}
+                  </p>
+                  <p className="mb-1 text-xs text-text-muted">
+                    {t(
+                      "À vous de choisir : les espèces seules, sans aucune commission, ou aussi le paiement en ligne KORVA, avec la commission de votre formule.",
+                      "Your choice: cash only, with no commission at all, or KORVA online payment too, with your plan's commission.",
+                    )}
                   </p>
                   <p className="mb-2 text-xs text-text-muted">
                     {t(
@@ -1262,7 +1287,7 @@ export default function SettingsPage() {
                         value="cash"
                         {...registerOrg("acceptedPaymentMethods")}
                       />
-                      {t("Espèces / à la livraison ou au retrait", "Cash / on delivery or collection")}
+                      {t("Espèces, à la livraison, au retrait ou sur place (sans commission)", "Cash, on delivery, collection or in person (no commission)")}
                     </label>
                     <label className="flex items-center gap-2 text-sm text-text">
                       <input
@@ -1282,12 +1307,50 @@ export default function SettingsPage() {
                       {!planFeatures.has("online_payment") && <PlanLock feature="online_payment" />}
                     </label>
                   </div>
-                  {organization?.currency && (
-                    <div className="mt-2">
+                  {organization?.currency && watchedPaymentMethods?.includes("online") && (
+                    <div className="mt-2 space-y-2 rounded-md border border-border p-3">
                       <OnlinePaymentFees
                         currency={organization.currency}
                         plan={(planFeatures.planKey as PlanKey | undefined) ?? "free"}
                       />
+                      {onlinePaymentTermsAccepted(organization.onlinePaymentTerms) ? (
+                        <p className="text-xs text-text-muted">
+                          {t(
+                            `Conditions du paiement en ligne acceptées le ${new Date(organization.onlinePaymentTerms!.acceptedAt).toLocaleDateString(intlLocale(locale))}.`,
+                            `Online payment terms accepted on ${new Date(organization.onlinePaymentTerms!.acceptedAt).toLocaleDateString(intlLocale(locale))}.`,
+                          )}{" "}
+                          <a href={locale === "en" ? "/en/terms/online-payment" : "/conditions/paiement-en-ligne"} target="_blank" rel="noreferrer" className="underline">
+                            {t("Relire", "Read again")}
+                          </a>
+                        </p>
+                      ) : (
+                        <label className="flex items-start gap-2 text-sm text-text">
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={acceptOnlineTerms}
+                            onChange={(event) => {
+                              setAcceptOnlineTerms(event.target.checked);
+                              if (event.target.checked) setTermsMissing(false);
+                            }}
+                          />
+                          <span>
+                            {t("J'ai lu et j'accepte les ", "I have read and accept the ")}
+                            <a href={locale === "en" ? "/en/terms/online-payment" : "/conditions/paiement-en-ligne"} target="_blank" rel="noreferrer" className="underline">
+                              {t("conditions du paiement en ligne", "online payment terms")}
+                            </a>
+                            {t(" (frais, commission, délais, retraits, remboursements).", " (fees, commission, delays, withdrawals, refunds).")}
+                          </span>
+                        </label>
+                      )}
+                      {termsMissing && (
+                        <p className="text-xs text-destructive">
+                          {t(
+                            "Acceptez les conditions du paiement en ligne pour le proposer à vos clients, ou décochez-le pour rester aux espèces.",
+                            "Accept the online payment terms to offer it to your customers, or untick it to stay with cash.",
+                          )}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

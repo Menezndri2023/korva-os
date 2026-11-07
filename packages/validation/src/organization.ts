@@ -133,6 +133,8 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   /** Omit to accept cash only (today's universal default). Must stay non-empty — a storefront
    *  offering no payment method at all isn't a valid checkout configuration. */
   acceptedPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).min(1).optional(),
+  /** Sent with the save that turns online payment on: the terms version the user accepted. */
+  acceptOnlinePaymentTerms: z.string().max(20).optional(),
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
   /** Whole-array replace: the trade tools brought back into the menu (Settings › Autres outils). */
   extraTools: z.array(z.enum(TRADE_TOOLS)).max(TRADE_TOOLS.length).optional(),

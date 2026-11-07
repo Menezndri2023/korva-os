@@ -156,6 +156,9 @@ export interface Organization {
   /** Never empty in practice — the schema defaults new organizations to `["cash"]`. See
    *  PAYMENT_METHODS' own doc comment. */
   acceptedPaymentMethods?: PaymentMethod[];
+  /** Who accepted the online payment terms, when, and which version (wallet.ts). Online payment
+   *  is offered — shop, counter QR — only while the CURRENT version is accepted. */
+  onlinePaymentTerms?: { version: string; acceptedAt: string; acceptedByUserId: string };
   /** Long-form "about us" text for the public storefront — Pro plan and above, see
    *  EntitlementsService.assertContentSectionsAllowed. Distinct from the short `tagline`. */
   aboutText?: string;

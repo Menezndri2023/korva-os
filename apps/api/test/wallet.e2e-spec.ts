@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { ONLINE_PAYMENT_TERMS_VERSION } from '@korva/types';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Test } from '@nestjs/testing';
@@ -234,6 +235,7 @@ describe('Solde KORVA (e2e)', () => {
       .send({
         enabledModules: ['crm', 'catalog', 'commerce', 'finance', 'website'],
         acceptedPaymentMethods: ['cash', 'online'],
+        acceptOnlinePaymentTerms: ONLINE_PAYMENT_TERMS_VERSION,
       })
       .expect(200);
     const contact = asSuccess<{ id: string }>(

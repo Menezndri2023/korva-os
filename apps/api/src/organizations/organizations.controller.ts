@@ -83,10 +83,15 @@ export class OrganizationsController {
   @Patch('me')
   updateActive(
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: AuthenticatedUser,
     @Body(new ZodValidationPipe(updateOrganizationSchema))
     body: UpdateOrganizationInput,
   ) {
-    return this.organizationsService.update(tenant.organizationId, body);
+    return this.organizationsService.update(
+      tenant.organizationId,
+      body,
+      user.userId,
+    );
   }
 
   @Get('me/members')

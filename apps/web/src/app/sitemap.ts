@@ -21,6 +21,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...pair("/metiers", "/en/trades", 0.9, "monthly"),
     ...SEO_TRADES.flatMap((trade) => pair(tradePath(trade, "fr"), tradePath(trade, "en"), 0.8, "monthly")),
     ...pair("/conseils", "/en/guides", 0.7, "weekly"),
+    ...pair("/conditions/paiement-en-ligne", "/en/terms/online-payment", 0.3, "monthly"),
     ...ARTICLES.flatMap((article) => pair(articlePath(article, "fr"), articlePath(article, "en"), 0.7, "monthly")),
     { url: `${base}/register`, changeFrequency: "yearly", priority: 0.5 },
   ];

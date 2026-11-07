@@ -22,6 +22,27 @@ export const PLAN_COMMISSION_BASIS_POINTS: Record<PlanKey, number> = {
 };
 
 /**
+ * Online payment through KORVA is the business's CHOICE (2026-11-07): it may stay cash-only, with
+ * no commission at all, or turn KORVA's online payment on — after accepting the terms of
+ * /conditions/paiement-en-ligne. Bump the version whenever those terms change in substance:
+ * every business must then accept again before taking a new online payment.
+ */
+export const ONLINE_PAYMENT_TERMS_VERSION = "2026-11-07";
+
+export interface OnlinePaymentTermsAcceptance {
+  version: string;
+  acceptedAt: string;
+  acceptedByUserId: string;
+}
+
+/** True when the business accepted the CURRENT terms. */
+export function onlinePaymentTermsAccepted(
+  terms: { version?: string } | null | undefined,
+): boolean {
+  return terms?.version === ONLINE_PAYMENT_TERMS_VERSION;
+}
+
+/**
  * The smallest amount a customer may pay ONLINE, per currency. GeniusPay's fixed 100 XOF would
  * otherwise take more than 20 % of the sale (its own floor is 200 XOF). Below it, the customer
  * pays cash or adds to the basket. Currencies not listed have no floor of KORVA's own.

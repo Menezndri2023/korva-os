@@ -18,6 +18,7 @@ import {
   getStorefrontTemplate,
   selectableFontPairings,
   selectablePalettes,
+  onlinePaymentTermsAccepted,
   planHasFeature,
   pickDeterministic,
   planMeetsMinimum,
@@ -341,10 +342,14 @@ export class PublicService {
     if (!configured.includes('online')) {
       return configured;
     }
-    const onlineAvailable = await this.isOnlinePaymentAvailable(
-      organization.id as string,
-      organization.currency,
-    );
+    // Saved before the terms existed (or the terms changed since): no online payment until the
+    // business accepts them again in its Settings.
+    const onlineAvailable =
+      onlinePaymentTermsAccepted(organization.onlinePaymentTerms) &&
+      (await this.isOnlinePaymentAvailable(
+        organization.id as string,
+        organization.currency,
+      ));
     if (onlineAvailable) {
       return configured;
     }

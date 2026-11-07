@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { ONLINE_PAYMENT_TERMS_VERSION } from '@korva/types';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Test } from '@nestjs/testing';
@@ -162,12 +163,31 @@ describe('GeniusPay mobile money (e2e)', () => {
       req
         .set('Authorization', `Bearer ${token}`)
         .set('X-Organization-Id', org.id);
-    await staff(request(server).patch('/api/v1/organizations/me'))
+    // Online payment is the business's choice, and needs its terms accepted.
+    const refused = await staff(
+      request(server).patch('/api/v1/organizations/me'),
+    )
       .send({
         enabledModules: ['crm', 'catalog', 'commerce', 'finance', 'website'],
         acceptedPaymentMethods: ['cash', 'online'],
       })
+      .expect(400);
+    expect((refused.body as { error: { code: string } }).error.code).toBe(
+      'ONLINE_PAYMENT_TERMS_REQUIRED',
+    );
+    const accepted = await staff(
+      request(server).patch('/api/v1/organizations/me'),
+    )
+      .send({
+        enabledModules: ['crm', 'catalog', 'commerce', 'finance', 'website'],
+        acceptedPaymentMethods: ['cash', 'online'],
+        acceptOnlinePaymentTerms: ONLINE_PAYMENT_TERMS_VERSION,
+      })
       .expect(200);
+    expect(
+      asSuccess<{ onlinePaymentTerms: { version: string } }>(accepted.body)
+        .onlinePaymentTerms.version,
+    ).toBe(ONLINE_PAYMENT_TERMS_VERSION);
 
     const site = await request(server)
       .get(`/api/v1/public/${slug}`)
@@ -433,6 +453,7 @@ describe('GeniusPay mobile money (e2e)', () => {
       .send({
         enabledModules: ['crm', 'catalog', 'commerce', 'finance', 'website'],
         acceptedPaymentMethods: ['cash', 'online'],
+        acceptOnlinePaymentTerms: ONLINE_PAYMENT_TERMS_VERSION,
       })
       .expect(200);
     const site = await request(server)
