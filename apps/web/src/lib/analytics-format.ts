@@ -164,6 +164,10 @@ const FEMININE_ACTION_LABELS: Record<string, string> = {
 
 /** "Facture créée", "Contact supprimé": entity label plus an agreeing action label. */
 export function activityActionLabel(entity: string, action: string, locale: Locale = "fr"): string {
+  // A payment "payment" or a refund "refund" repeated the noun: say what happened to it.
+  if (entity === "payment" && action === "PAYMENT") return locale === "en" ? "received" : "reçu";
+  if (entity === "refund" && action === "REFUND") return locale === "en" ? "made" : "effectué";
+  if (entity === "payment" && action === "REFUND") return locale === "en" ? "refunded" : "remboursé";
   if (locale === "en") return ACTIVITY_ACTION_LABELS_EN[action] ?? action.toLowerCase();
   if (FEMININE_ENTITIES.has(entity) && FEMININE_ACTION_LABELS[action]) {
     return FEMININE_ACTION_LABELS[action];

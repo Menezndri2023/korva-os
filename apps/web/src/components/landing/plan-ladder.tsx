@@ -169,6 +169,12 @@ const TEXT = {
     cta: "Commencer gratuitement",
     ctaNote: (days: number, name: string) =>
       `${days} jours de formule ${name} offerts à l'inscription, sans carte bancaire. Vous changez de formule quand vous voulez, et vos données restent les vôtres.`,
+    perMonth: "/ mois",
+    ctaFree: "Commencer gratuitement",
+    ctaTrial: "Essayer 14 jours",
+    ctaPlan: (name: string) => `Choisir ${name}`,
+    more: (count: number) => `Tout le détail (${count} de plus)`,
+    less: "Replier le détail",
   },
   en: {
     pricesFor: "Your prices for",
@@ -180,6 +186,12 @@ const TEXT = {
     cta: "Start for free",
     ctaNote: (days: number, name: string) =>
       `${days} days of the ${name} plan free when you sign up, no credit card. Change plans whenever you like; your data stays yours.`,
+    perMonth: "/ month",
+    ctaFree: "Start for free",
+    ctaTrial: "Try it for 14 days",
+    ctaPlan: (name: string) => `Choose ${name}`,
+    more: (count: number) => `Full details (${count} more)`,
+    less: "Hide the details",
   },
 } satisfies Record<Locale, unknown>;
 
@@ -195,9 +207,6 @@ export function PlanLadder({ locale = "fr" }: { locale?: Locale }) {
   // null until the visitor picks a country themselves, so detection keeps working on first
   // paint and is then overridden for good once they choose.
   const [chosenCountry, setChosenCountry] = useState<string | null>(null);
-  // Phones show one plan at a time: the four full lists made this section alone some 3,000px
-  // of scrolling. From sm: all four stay visible, as a ladder to compare.
-  const [mobilePlan, setMobilePlan] = useState<PlanKey>(SIGNUP_TRIAL.plan);
   const countryCode = chosenCountry ?? detectedCountry;
 
   const currency = currencyForCountry(countryCode);
@@ -226,123 +235,90 @@ export function PlanLadder({ locale = "fr" }: { locale?: Locale }) {
         </p>
       </div>
 
-      <div role="group" aria-label={t.shownPlan} className="mt-6 grid grid-cols-4 gap-1 rounded-xl bg-paper-shade p-1 sm:hidden">
-        {PLAN_KEYS.map((plan) => (
-          <button
-            key={plan}
-            type="button"
-            aria-pressed={plan === mobilePlan}
-            onClick={() => setMobilePlan(plan)}
-            className={`rounded-lg px-1 py-2 text-sm font-medium transition-colors ${
-              plan === mobilePlan ? "bg-ink text-paper shadow" : "text-ink-soft"
-            }`}
-          >
-            {PLAN_NAMES[plan]}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-4 divide-y divide-rule border-t border-ink sm:mt-8">
+      {/* Four cards side by side (two on a tablet, one under the other on a phone): the price,
+          who it is for, its five strongest lines and one button each — the full list folds away
+          under "Tout le détail". The long ruled ladder this replaces was a wall of ticks nobody
+          could compare. */}
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {PLAN_KEYS.map((plan) => {
           const price = PLAN_PRICES[currency][plan];
-          const gained = modulesGainedAt(plan);
-          const ai = aiLine(plan, locale);
           const isEntry = plan === "free";
-          const quotas = quotaLines(plan, locale);
+          const highlighted = plan === SIGNUP_TRIAL.plan;
+          const ai = aiLine(plan, locale);
+          const lines: { text: string; strong?: boolean }[] = [
+            ...(isEntry
+              ? []
+              : [{ text: t.everything(PLAN_NAMES[PLAN_KEYS[PLAN_KEYS.indexOf(plan) - 1]!]), strong: true }]),
+            ...modulesGainedAt(plan).map((module) => ({ text: content.modulePromises[module] })),
+            ...[...featuresGainedAt(plan, locale), ...(content.planPerks[plan] ?? [])].map((text) => ({ text })),
+            {
+              text:
+                seatLine(plan, locale) +
+                (isEntry ? "" : t.extraSeat(format.display(EXTRA_SEAT_PRICES[currency]), !EXTRA_SEAT_PURCHASABLE)),
+            },
+            ...quotaLines(plan, locale).map((text) => ({ text })),
+            ...paymentLines(plan, locale).map((text) => ({ text })),
+            ...(ai ? [{ text: ai }] : []),
+          ];
+          const highlights = lines.slice(0, 5);
+          const rest = lines.slice(5);
 
           return (
-            <div
+            <article
               key={plan}
-              className={`gap-3 py-6 sm:grid sm:grid-cols-[15rem_1fr] sm:gap-10 ${
-                plan === mobilePlan ? "grid" : "hidden"
+              className={`flex flex-col rounded-2xl border p-5 ${
+                highlighted ? "border-primary bg-paper shadow-lg shadow-ink/10 ring-1 ring-primary" : "border-rule bg-paper"
               }`}
             >
-              <div>
-                <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-ink">
-                  {PLAN_NAMES[plan]}
-                  {plan === SIGNUP_TRIAL.plan && (
-                    <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-on-primary">
-                      {t.trial(SIGNUP_TRIAL.days)}
-                    </span>
-                  )}
-                </h3>
-                {/* Mono, and this is the one place it is used: the four prices form a column
-                    that has to line up, and proportional digits do not. */}
-                <p className="mt-1 font-mono text-2xl tabular-nums text-ink">
-                  {isEntry ? "0" : format.display(price)}
-                  {isEntry && <span className="ml-1.5 font-sans text-base">{currency}</span>}
-                </p>
-                <p className="mt-1.5 text-sm leading-snug text-ink-soft">
-                  {content.planAudience[plan]}
-                </p>
-              </div>
-
-              <ul className="grid gap-x-8 gap-y-1.5 sm:grid-cols-2">
-                {!isEntry && (
-                  <li className="flex gap-2.5 text-[0.9375rem] font-medium leading-snug text-ink sm:col-span-2">
-                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                      ✓
-                    </span>
-                    {t.everything(PLAN_NAMES[PLAN_KEYS[PLAN_KEYS.indexOf(plan) - 1]!])}
-                  </li>
-                )}
-                {gained.map((module) => (
-                  <li key={module} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
-                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                      ✓
-                    </span>
-                    {content.modulePromises[module]}
-                  </li>
-                ))}
-                {[...featuresGainedAt(plan, locale), ...(content.planPerks[plan] ?? [])].map((perk) => (
-                  <li key={perk} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
-                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                      ✓
-                    </span>
-                    {perk}
-                  </li>
-                ))}
-                <li className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
-                  <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                    ✓
+              <h3 className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight text-ink">
+                {PLAN_NAMES[plan]}
+                {highlighted && (
+                  <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-on-primary">
+                    {t.trial(SIGNUP_TRIAL.days)}
                   </span>
-                  {/* One span: as direct flex children, the seat count and the extra-seat price
-                      became two columns squeezed side by side. */}
-                  <span>
-                    {seatLine(plan, locale)}
-                    {!isEntry && (
-                      <span className="text-ink-soft">
-                        {t.extraSeat(format.display(EXTRA_SEAT_PRICES[currency]), !EXTRA_SEAT_PURCHASABLE)}
-                      </span>
-                    )}
-                  </span>
-                </li>
-                {quotas.map((line) => (
-                  <li key={line} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
-                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                      ✓
-                    </span>
-                    {line}
-                  </li>
-                ))}
-                {paymentLines(plan, locale).map((line) => (
-                  <li key={line} className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
-                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                      ✓
-                    </span>
-                    {line}
-                  </li>
-                ))}
-                {ai && (
-                  <li className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink">
-                    <span aria-hidden="true" className="mt-px select-none text-ink-soft">
-                      ✓
-                    </span>
-                    {ai}
-                  </li>
                 )}
+              </h3>
+              {/* Mono: the four prices line up across the cards. */}
+              <p className="mt-2 font-mono text-3xl tabular-nums text-ink">
+                {format.display(isEntry ? 0 : price)}
+                <span className="ml-1 font-sans text-sm text-ink-soft">{t.perMonth}</span>
+              </p>
+              <p className="mt-1.5 min-h-10 text-sm leading-snug text-ink-soft">{content.planAudience[plan]}</p>
+              <Link
+                href={locale === "en" ? "/register?lang=en" : "/register"}
+                className={`mt-4 inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 ${
+                  highlighted
+                    ? "bg-primary text-on-primary hover:bg-primary-hover"
+                    : "border border-ink/20 text-ink hover:border-ink"
+                }`}
+              >
+                {isEntry ? t.ctaFree : highlighted ? t.ctaTrial : t.ctaPlan(PLAN_NAMES[plan])}
+              </Link>
+              <ul className="mt-5 space-y-2 border-t border-rule pt-4">
+                {highlights.map((line) => (
+                  <li key={line.text} className={`flex gap-2.5 text-sm leading-snug ${line.strong ? "font-semibold text-ink" : "text-ink"}`}>
+                    <span aria-hidden="true" className="mt-px select-none text-success">✓</span>
+                    {line.text}
+                  </li>
+                ))}
               </ul>
-            </div>
+              {rest.length > 0 && (
+                <details className="group mt-3">
+                  <summary className="cursor-pointer list-none text-sm font-medium text-ink-soft underline-offset-4 hover:text-ink hover:underline [&::-webkit-details-marker]:hidden">
+                    <span className="group-open:hidden">{t.more(rest.length)}</span>
+                    <span className="hidden group-open:inline">{t.less}</span>
+                  </summary>
+                  <ul className="mt-2 space-y-2">
+                    {rest.map((line) => (
+                      <li key={line.text} className="flex gap-2.5 text-sm leading-snug text-ink">
+                        <span aria-hidden="true" className="mt-px select-none text-ink-soft">✓</span>
+                        {line.text}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </article>
           );
         })}
       </div>

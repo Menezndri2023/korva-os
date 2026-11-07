@@ -53,6 +53,22 @@ const TEXT = {
     closingH2: "Ouvrez le compte, dites votre métier. Le reste est déjà prêt.",
     closingCta: "Créer mon compte",
     haveAccount: "J'ai déjà un compte",
+    signInShort: "Connexion",
+    signUpShort: "Essai gratuit",
+    stepsH2: "Prêt en trois étapes",
+    steps: [
+      ["Créez votre compte", "Une adresse e-mail et un mot de passe. Pas de carte bancaire."],
+      ["Dites votre métier", "Salon, boutique, restaurant, formation… Votre espace, vos outils et votre site sont configurés pour lui."],
+      ["Partagez votre site", "Vos clients réservent, commandent et paient depuis leur téléphone. Vous suivez tout au même endroit."],
+    ],
+    faqH2: "Les questions qu'on nous pose",
+    faq: [
+      ["Est-ce vraiment gratuit pour commencer ?", "Oui. La formule Gratuite n'a pas de limite de durée. Vous passez à une formule payante seulement quand vous en avez besoin, et vous pouvez revenir en arrière."],
+      ["Mes clients doivent-ils installer une application ?", "Non. Votre site s'ouvre dans le navigateur de leur téléphone. Vous, vous utilisez KORVA depuis un téléphone ou un ordinateur, sans rien installer."],
+      ["Le paiement en ligne est-il obligatoire ?", "Non, c'est votre choix. Vous pouvez n'accepter que les espèces, sans aucune commission. Si vous activez le paiement en ligne (Wave, Orange Money, MTN, Moov, carte), les frais sont affichés avant chaque vente."],
+      ["Comment je récupère l'argent payé en ligne ?", "Il arrive sur votre Solde KORVA, que vous retirez vers votre numéro mobile money, à la demande ou automatiquement."],
+      ["Et si je ne suis pas à l'aise avec l'informatique ?", "Tout est déjà configuré pour votre métier. Si vous bloquez, écrivez-nous : une vraie personne vous répond."],
+    ],
   },
   en: {
     home: "KORVA OS, home",
@@ -75,6 +91,22 @@ const TEXT = {
     closingH2: "Open your account, tell us your trade. The rest is ready.",
     closingCta: "Create my account",
     haveAccount: "I already have an account",
+    signInShort: "Sign in",
+    signUpShort: "Free trial",
+    stepsH2: "Ready in three steps",
+    steps: [
+      ["Create your account", "An e-mail address and a password. No credit card."],
+      ["Tell us your trade", "Salon, shop, restaurant, training… Your workspace, tools and website are set up for it."],
+      ["Share your website", "Your customers book, order and pay from their phone. You follow everything in one place."],
+    ],
+    faqH2: "Questions people ask us",
+    faq: [
+      ["Is it really free to start?", "Yes. The Free plan has no time limit. You move to a paid plan only when you need it, and you can go back."],
+      ["Do my customers need to install an app?", "No. Your website opens in their phone's browser. You use KORVA from a phone or a computer, with nothing to install."],
+      ["Is online payment required?", "No, it is your choice. You can accept cash only, with no commission at all. If you turn online payment on (Wave, Orange Money, MTN, Moov, card), the fees are shown before every sale."],
+      ["How do I get the money paid online?", "It lands on your KORVA balance, which you withdraw to your mobile money number, on request or automatically."],
+      ["What if I am not comfortable with computers?", "Everything is already set up for your trade. If you get stuck, write to us: a real person answers."],
+    ],
   },
 } satisfies Record<Locale, unknown>;
 
@@ -121,6 +153,15 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
               offerCount: 4,
             },
           },
+          {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: t.faq.map(([question, answer]) => ({
+              "@type": "Question",
+              name: question,
+              acceptedAnswer: { "@type": "Answer", text: answer },
+            })),
+          },
         ]}
       />
       {/* ------------------------------------------------------------------ ink field */}
@@ -133,7 +174,7 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
             <KorvaWordmark />
             <span className="sr-only">{t.home}</span>
           </Link>
-          <nav className="flex items-center gap-1 sm:gap-2">
+          <nav className="flex min-w-0 items-center gap-0.5 sm:gap-2">
             <Link
               href={en ? "/en/trades" : "/metiers"}
               className="hidden rounded-md px-3 py-2 text-sm text-ink-muted transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper sm:inline-block"
@@ -151,13 +192,15 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
               href={login}
               className="whitespace-nowrap rounded-md px-2.5 py-2 text-sm text-ink-muted transition-colors hover:text-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper"
             >
-              {t.signIn}
+              <span className="sm:hidden">{t.signInShort}</span>
+              <span className="hidden sm:inline">{t.signIn}</span>
             </Link>
             <Link
               href={register}
               className="whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper focus-visible:ring-offset-2 focus-visible:ring-offset-ink-deep"
             >
-              {t.signUp}
+              <span className="sm:hidden">{t.signUpShort}</span>
+              <span className="hidden sm:inline">{t.signUp}</span>
             </Link>
           </nav>
         </header>
@@ -185,6 +228,27 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
         </div>
       </div>
 
+      {/* ----------------------------------------------------------- three steps (paper) */}
+      <section className="mx-auto max-w-6xl px-4 pt-16 sm:px-8 sm:pt-24">
+        <h2 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{t.stepsH2}</h2>
+        <ol className="mt-8 grid gap-6 sm:grid-cols-3">
+          {t.steps.map(([title, body], index) => (
+            <li key={title} className="flex gap-4 sm:flex-col sm:gap-3">
+              <span
+                aria-hidden="true"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink-deep font-mono text-base font-semibold text-primary"
+              >
+                {index + 1}
+              </span>
+              <div>
+                <h3 className="text-lg font-semibold text-ink">{title}</h3>
+                <p className="mt-1 text-[0.9375rem] leading-relaxed text-ink-soft">{body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       {/* ------------------------------------------------------- what it replaces (paper) */}
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-8 sm:py-24">
         <h2 className="max-w-2xl text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
@@ -206,8 +270,12 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
                 key={row.korva}
                 className="grid gap-1.5 py-5 sm:grid-cols-2 sm:gap-10 sm:py-4"
               >
-                <dt className="text-[0.9375rem] leading-snug text-ink-soft">{row.today}</dt>
-                <dd className="text-[0.9375rem] font-medium leading-snug text-ink">
+                <dt className="flex gap-2.5 text-[0.9375rem] leading-snug text-ink-soft">
+                  <span aria-hidden="true" className="select-none text-ink-soft/60">—</span>
+                  {row.today}
+                </dt>
+                <dd className="flex gap-2.5 text-[0.9375rem] font-semibold leading-snug text-ink">
+                  <span aria-hidden="true" className="select-none text-success">✓</span>
                   {row.korva}
                 </dd>
               </div>
@@ -236,7 +304,9 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
                 <div key={key} className="border-b border-rule py-5">
                   <dt className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <span className="text-lg font-semibold text-ink">{model.label}</span>
-                    <span className="text-sm font-medium text-accent">{model.siteKind}</span>
+                    <span className="rounded-full bg-paper px-2.5 py-0.5 text-xs font-medium text-ink ring-1 ring-rule">
+                      {model.siteKind}
+                    </span>
                   </dt>
                   <dd className="mt-1 text-[0.9375rem] leading-snug text-ink-soft">
                     {model.description}
@@ -260,6 +330,26 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
         </p>
         <div className="mt-10">
           <PlanLadder locale={locale} />
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------------------- FAQ (paper) */}
+      <section className="border-t border-rule">
+        <div className="mx-auto max-w-3xl px-4 py-16 sm:px-8 sm:py-20">
+          <h2 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{t.faqH2}</h2>
+          <div className="mt-8 divide-y divide-rule border-y border-rule">
+            {t.faq.map(([question, answer]) => (
+              <details key={question} className="group py-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-semibold text-ink [&::-webkit-details-marker]:hidden">
+                  {question}
+                  <span aria-hidden="true" className="text-xl leading-none text-ink-soft transition-transform group-open:rotate-45">
+                    +
+                  </span>
+                </summary>
+                <p className="mt-2 text-[0.9375rem] leading-relaxed text-ink-soft">{answer}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 

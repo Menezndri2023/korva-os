@@ -42,24 +42,30 @@ describe("TradePanel", () => {
 });
 
 describe("PlanLadder", () => {
-  it("opens on the trial plan on a phone, flagged as offered", () => {
+  it("shows the four plans as cards, the trial plan flagged as offered", () => {
     render(<PlanLadder />);
-    const switcher = screen.getByRole("group", { name: "Formule affichée" });
-    expect(
-      within(switcher).getByRole("button", { name: PLAN_NAMES[SIGNUP_TRIAL.plan] }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText(`${SIGNUP_TRIAL.days} jours offerts`)).toBeInTheDocument();
+    for (const name of Object.values(PLAN_NAMES)) {
+      expect(screen.getByRole("heading", { level: 3, name: new RegExp(`^${name}`) })).toBeInTheDocument();
+    }
+    const trial = screen.getByRole("heading", { level: 3, name: new RegExp(`^${PLAN_NAMES[SIGNUP_TRIAL.plan]}`) }).closest("article")!;
+    expect(within(trial).getByText(`${SIGNUP_TRIAL.days} jours offerts`)).toBeInTheDocument();
+    expect(within(trial).getByRole("link", { name: "Essayer 14 jours" })).toHaveAttribute("href", "/register");
   });
 
-  it("switches the plan shown on a phone", async () => {
+  it("keeps the full list of each plan one tap away", async () => {
     render(<PlanLadder />);
-    const switcher = screen.getByRole("group", { name: "Formule affichée" });
-    await userEvent.click(within(switcher).getByRole("button", { name: PLAN_NAMES.free }));
-    expect(within(switcher).getByRole("button", { name: PLAN_NAMES.free })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    const freeHeading = screen.getByRole("heading", { level: 3, name: PLAN_NAMES.free });
-    expect(freeHeading.closest("div.py-6")).toHaveClass("grid");
+    const free = screen.getByRole("heading", { level: 3, name: new RegExp(`^${PLAN_NAMES.free}`) }).closest("article")!;
+    const more = within(free).getByText(/Tout le détail \(\d+ de plus\)/);
+    await userEvent.click(more);
+    expect(within(free).getByText("Replier le détail")).toBeInTheDocument();
+  });
+});
+
+describe("TradePanel — other trades", () => {
+  it("reaches a trade that is not among the chips through the list", async () => {
+    render(<TradePanel />);
+    const last = VERTICAL_TEMPLATES[VERTICAL_TEMPLATES.length - 1]!;
+    await userEvent.selectOptions(screen.getAllByRole("combobox", { name: "Autre métier…" })[0]!, last.key);
+    expect(screen.getAllByText(last.label).length).toBeGreaterThan(0);
   });
 });

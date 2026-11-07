@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { tradeVocabularyIn, visibleTradeTools, type ActionCenterItem, type ActionCenterSummary, type Offer } from "@korva/types";
-import { Check } from "lucide-react";
+import { CalendarDays, Check, FileText, PackagePlus, Share2, ShoppingBag, Wallet } from "lucide-react";
 import { Badge, Card, EmptyState } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthStore } from "@/lib/auth-store";
@@ -21,6 +21,75 @@ import {
 import { intlLocale, useDashboardLocale, useT, type Translate } from "@/lib/dashboard-locale";
 import { STOREFRONT_URL } from "@/lib/storefront-url";
 import { KorvaReviewPrompt } from "@/components/korva-review-prompt";
+
+/** What happened in the business — not the plumbing (baskets, conversations, messages). */
+const BUSINESS_ACTIVITY = new Set(["order", "booking", "invoice", "payment", "quote", "contact", "lead", "review", "refund", "return_request"]);
+
+/**
+ * The day's first gestures, one tap away: take a payment, add to the catalogue, invoice, see the
+ * diary, send the site to customers on WhatsApp. Only what the business's modules allow.
+ */
+function QuickActions({
+  modules,
+  tools,
+  words,
+  slug,
+  name,
+  t,
+}: {
+  modules: Set<string>;
+  tools: Set<string>;
+  words: { bookings: string };
+  slug: string;
+  name: string;
+  t: Translate;
+}) {
+  const siteUrl = `${STOREFRONT_URL}/${slug}`;
+  const actions: { href: string; label: string; icon: typeof Wallet; external?: boolean }[] = [
+    ...(modules.has("finance") ? [{ href: "/dashboard/caisse", label: t("Encaisser", "Take a payment"), icon: Wallet }] : []),
+    ...(tools.has("bookings") ? [{ href: "/dashboard/bookings", label: words.bookings, icon: CalendarDays }] : []),
+    ...(tools.has("orders") ? [{ href: "/dashboard/orders", label: t("Commandes", "Orders"), icon: ShoppingBag }] : []),
+    ...(modules.has("catalog") ? [{ href: "/dashboard/catalog", label: t("Ajouter au catalogue", "Add to the catalogue"), icon: PackagePlus }] : []),
+    ...(modules.has("finance") ? [{ href: "/dashboard/finance/invoices", label: t("Faire une facture", "Make an invoice"), icon: FileText }] : []),
+    ...(modules.has("website")
+      ? [
+          {
+            href: `https://wa.me/?text=${encodeURIComponent(t(`Découvrez ${name} et réservez ou commandez en ligne : ${siteUrl}`, `Discover ${name} and book or order online: ${siteUrl}`))}`,
+            label: t("Partager mon site", "Share my website"),
+            icon: Share2,
+            external: true,
+          },
+        ]
+      : []),
+  ].slice(0, 5);
+  if (actions.length === 0) return null;
+  return (
+    <nav
+      aria-label={t("Actions rapides", "Quick actions")}
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 [&>*:last-child:nth-child(odd)]:col-span-2 sm:[&>*:last-child:nth-child(odd)]:col-span-1"
+    >
+      {actions.map(({ href, label, icon: Icon, external }) => {
+        const className =
+          "flex min-h-14 items-center gap-3 rounded-xl border border-border bg-surface p-3 text-sm font-medium text-text transition-colors hover:border-action hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-20 sm:flex-col sm:items-start sm:justify-between sm:gap-2";
+        const content = (
+          <>
+            <Icon aria-hidden className="h-5 w-5 text-action" />
+            {label}
+          </>
+        );
+        return external ? (
+          <a key={label} href={href} target="_blank" rel="noreferrer" className={className}>
+            {content}
+          </a>
+        ) : (
+          <Link key={label} href={href} className={className}>
+            {content}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 
 function actionItemTypeLabel(type: ActionCenterItem["type"], t: Translate): string {
   switch (type) {
@@ -40,7 +109,8 @@ export default function DashboardPage() {
   const { data: organization, isLoading: isOrganizationLoading } = useActiveOrganization();
   const authReady = useAuthReady();
   const overviewQuery = useAnalyticsOverview();
-  const activityQuery = useAnalyticsActivity(5);
+  // More than shown: the technical entries (carts, conversations, messages) are filtered out.
+  const activityQuery = useAnalyticsActivity(20);
   const locale = useDashboardLocale();
   const t = useT();
 
@@ -101,13 +171,27 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">
-          {t("Bienvenue", "Welcome")}{user?.firstName ? `, ${user.firstName}` : ""}
+        <p className="text-sm text-text-muted first-letter:uppercase">
+          {new Date().toLocaleDateString(intlLocale(locale), { weekday: "long", day: "numeric", month: "long" })}
+        </p>
+        <h1 className="mt-0.5 text-2xl font-semibold">
+          {t("Bonjour", "Hello")}{user?.firstName ? `, ${user.firstName}` : ""}
         </h1>
         <p className="mt-1 text-sm text-text-muted">
           {isOrganizationLoading ? t("Chargement...", "Loading...") : (organization?.name ?? "—")}
         </p>
       </div>
+
+      {organization && (
+        <QuickActions
+          modules={enabledModules}
+          tools={tools}
+          words={words}
+          slug={organization.slug}
+          name={organization.name}
+          t={t}
+        />
+      )}
 
       {organization && (
         <GettingStarted
@@ -191,7 +275,12 @@ export default function DashboardPage() {
       {overviewQuery.data && totalActivity > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]">
           {/* auto-fit: three or four figures depending on the trade, always filling the row. */}
-          <SummaryCard label={t("Prospects", "Leads")} value={overviewQuery.data.leads.total} href="/dashboard/crm/leads" />
+          {/* Prospects matter to a business that sells on request (quotes, property) or has neither
+              orders nor bookings; a shop or a salon reads its sales and its diary instead. */}
+          {(["quotes", "real_estate"].includes(organization?.businessModel ?? "") ||
+            (!tools.has("orders") && !tools.has("bookings"))) && (
+            <SummaryCard label={t("Prospects", "Leads")} value={overviewQuery.data.leads.total} href="/dashboard/crm/leads" />
+          )}
           {tools.has("bookings") && (
             <SummaryCard
               label={t(`${words.bookings} à venir`, `Upcoming ${words.bookings.toLowerCase()}`)}
@@ -224,12 +313,15 @@ export default function DashboardPage() {
           </div>
           <div className="mt-4">
             {activityQuery.isLoading && <p className="text-sm text-text-muted">{t("Chargement...", "Loading...")}</p>}
-            {activityQuery.data && activityQuery.data.length === 0 && (
+            {activityQuery.data && activityQuery.data.filter((entry) => BUSINESS_ACTIVITY.has(entry.entity)).length === 0 && (
               <p className="text-sm text-text-muted">{t("Aucune activité récente.", "No recent activity.")}</p>
             )}
             {activityQuery.data && activityQuery.data.length > 0 && (
               <ul className="divide-y divide-border">
-                {activityQuery.data.map((entry) => (
+                {activityQuery.data
+                  .filter((entry) => BUSINESS_ACTIVITY.has(entry.entity))
+                  .slice(0, 6)
+                  .map((entry) => (
                   <li key={entry.id} className="flex items-center justify-between py-2 text-sm">
                     <span className="text-text">
                       {labelIn(ACTIVITY_ENTITY_LABELS, ACTIVITY_ENTITY_LABELS_EN, entry.entity, locale)}{" "}
@@ -275,6 +367,18 @@ function AttentionSection({
     );
   }
   if (!summary || !feed) return null;
+
+  // Nothing to do: one quiet line, not a card the size of a problem.
+  if (total === 0) {
+    return (
+      <p className="flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text-muted">
+        <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-success-soft text-success">
+          <Check className="h-3.5 w-3.5" />
+        </span>
+        {t("Rien ne demande votre attention pour le moment.", "Nothing needs your attention right now.")}
+      </p>
+    );
+  }
 
   return (
     <Card className="p-6">

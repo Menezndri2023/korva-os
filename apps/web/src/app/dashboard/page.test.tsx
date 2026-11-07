@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, within, waitFor } from "@testing-library/react";
 import DashboardPage from "./page";
 import { renderWithProviders } from "@/test/render";
 import { apiClient, ApiError } from "@/lib/api-client";
@@ -16,7 +16,7 @@ vi.mock("@/lib/auth-store", () => ({
 
 vi.mock("@/lib/use-active-organization", () => ({
   useActiveOrganization: () => ({
-    data: { name: "Org de test", enabledModules: ["analytics", "crm"] },
+    data: { name: "Org de test", slug: "org-de-test", enabledModules: ["analytics", "crm", "finance", "catalog", "website"] },
     isLoading: false,
   }),
 }));
@@ -132,7 +132,7 @@ describe("DashboardPage", () => {
     renderWithProviders(<DashboardPage />);
 
     expect(
-      await screen.findByText("Rien ne nécessite votre attention pour le moment — tout est sous contrôle."),
+      await screen.findByText("Rien ne demande votre attention pour le moment."),
     ).toBeInTheDocument();
   });
 
@@ -163,5 +163,12 @@ describe("DashboardPage", () => {
       "href",
       "/dashboard/action-center",
     );
+  });
+
+  it("offers the day's first gestures as quick actions", async () => {
+    getMock.mockImplementation(mockGetByPath(emptyOverview, []));
+    renderWithProviders(<DashboardPage />);
+    const quick = await screen.findByRole("navigation", { name: "Actions rapides" });
+    expect(within(quick).getAllByRole("link").length).toBeGreaterThan(0);
   });
 });

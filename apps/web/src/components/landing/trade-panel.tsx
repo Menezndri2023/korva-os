@@ -46,12 +46,16 @@ function starterSentence(vertical: VerticalTemplate, locale: Locale): string | n
   return `${when}, ${then}.`;
 }
 
+/** How many trades show as chips; the rest are in the "Autre métier" list. */
+const FEATURED_TRADES = 8;
+
 const TEXT = {
   fr: {
     question: "Quel est votre métier ?",
     youGet: "Ce que vous obtenez en ouvrant le compte",
     dayOne: "Dès le premier jour, gratuitement",
     plan: (name: string) => `formule ${name}`,
+    otherTrade: "Autre métier…",
     automation: "Une automatisation, déjà configurée",
     automationPlan: (name: string) => `Les automatisations demandent la formule ${name}.`,
     site: "Votre site public",
@@ -66,6 +70,7 @@ const TEXT = {
     youGet: "What you get when you open your account",
     dayOne: "From day one, for free",
     plan: (name: string) => `${name} plan`,
+    otherTrade: "Another trade…",
     automation: "An automation, already set up",
     automationPlan: (name: string) => `Automations need the ${name} plan.`,
     site: "Your public website",
@@ -129,8 +134,10 @@ export function TradePanel({ locale = "fr" }: { locale?: Locale }) {
           working; has-[:checked] and has-[:focus-visible] style the label around it. */}
       <fieldset className="hidden sm:block" aria-describedby={groupId}>
         <legend className="text-sm text-ink-muted">{t.question}</legend>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {VERTICAL_TEMPLATES.map((item) => (
+        {/* The eight trades most visitors are, as chips; the others in one list beside them —
+            nineteen chips made a wall the eye had to read twice. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {VERTICAL_TEMPLATES.slice(0, FEATURED_TRADES).map((item) => (
             <label
               key={item.key}
               className="cursor-pointer rounded-full border border-ink-soft px-3.5 py-1.5 text-sm text-ink-muted transition-colors hover:border-paper hover:text-paper has-[:checked]:border-primary has-[:checked]:bg-primary has-[:checked]:font-semibold has-[:checked]:text-on-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-paper has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-ink-deep"
@@ -146,6 +153,19 @@ export function TradePanel({ locale = "fr" }: { locale?: Locale }) {
               {verticalText(item, locale).label}
             </label>
           ))}
+          <select
+            aria-label={t.otherTrade}
+            value={VERTICAL_TEMPLATES.slice(FEATURED_TRADES).some((item) => item.key === selectedKey) ? selectedKey : ""}
+            onChange={(event) => event.target.value && setSelectedKey(event.target.value)}
+            className="rounded-full border border-ink-soft bg-ink-deep px-3.5 py-1.5 text-sm text-ink-muted transition-colors hover:border-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-paper"
+          >
+            <option value="">{t.otherTrade}</option>
+            {VERTICAL_TEMPLATES.slice(FEATURED_TRADES).map((item) => (
+              <option key={item.key} value={item.key}>
+                {verticalText(item, locale).label}
+              </option>
+            ))}
+          </select>
         </div>
       </fieldset>
 
@@ -197,10 +217,9 @@ export function TradePanel({ locale = "fr" }: { locale?: Locale }) {
                       +
                     </span>
                     <span>
-                      {promises[module]}
-                      <span className="text-mark">
-                        {" "}
-                        — {t.plan(PLAN_NAMES[MODULE_MIN_PLAN[module]])}
+                      {promises[module]}{" "}
+                      <span className="whitespace-nowrap rounded-full bg-paper-shade px-2 py-0.5 text-xs font-medium text-ink-soft">
+                        {t.plan(PLAN_NAMES[MODULE_MIN_PLAN[module]])}
                       </span>
                     </span>
                   </li>
