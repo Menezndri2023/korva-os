@@ -41,6 +41,8 @@ export default function TrackClient({ slug }: { slug: string }) {
   const urlNumber = searchParams.get("number") ?? "";
   const urlEmail = searchParams.get("email") ?? "";
   const hasQuery = urlNumber.trim().length > 0 && urlEmail.trim().length > 0;
+  // Set by the return address of an online payment (PublicService#payOrder).
+  const backFromPayment = searchParams.get("paid") === "1";
 
   const [kind, setKind] = useState<TrackKind>(urlKind);
   const [number, setNumber] = useState(urlNumber);
@@ -54,6 +56,12 @@ export default function TrackClient({ slug }: { slug: string }) {
       ),
     enabled: hasQuery && urlKind === "order",
     retry: false,
+    // Back from the payment page, GeniusPay may confirm a few seconds later: ask again until it
+    // does, for two minutes at most.
+    refetchInterval: (query) =>
+      backFromPayment && query.state.data?.payment?.status === "pending" && query.state.dataUpdateCount < 30
+        ? 4000
+        : false,
   });
 
   const bookingQuery = useQuery({
@@ -163,6 +171,10 @@ export default function TrackClient({ slug }: { slug: string }) {
           </Card>
         )}
 
+        {hasQuery && urlKind === "order" && orderQuery.isSuccess && orderQuery.data.payment && (
+          <PaymentState status={orderQuery.data.payment.status} backFromPayment={backFromPayment} />
+        )}
+
         {hasQuery && urlKind === "order" && orderQuery.isSuccess && (
           <OrderResult order={orderQuery.data} />
         )}
@@ -175,6 +187,54 @@ export default function TrackClient({ slug }: { slug: string }) {
   );
 }
 
+function PaymentState({
+  status,
+  backFromPayment,
+}: {
+  status: "paid" | "pending" | "failed";
+  backFromPayment: boolean;
+}) {
+  const t = useT();
+  if (status === "paid") {
+    return (
+      <Card className="border-success p-4 text-sm" role="status">
+        <p className="font-medium text-text">{t("Paiement reçu, merci !", "Payment received, thank you!")}</p>
+        <p className="mt-1 text-text-muted">
+          {t(
+            "Votre commande est payée. Gardez ce lien pour suivre sa préparation.",
+            "Your order is paid. Keep this link to follow its preparation.",
+          )}
+        </p>
+      </Card>
+    );
+  }
+  if (status === "pending") {
+    return (
+      <Card className="p-4 text-sm" role="status">
+        <p className="font-medium text-text">
+          {backFromPayment
+            ? t("Paiement en cours de confirmation…", "Confirming your payment…")
+            : t("Paiement en attente", "Payment pending")}
+        </p>
+        <p className="mt-1 text-text-muted">
+          {t(
+            "Cette page se met à jour toute seule dès que le paiement est confirmé. Si vous avez annulé, rien n'a été prélevé.",
+            "This page updates by itself as soon as the payment is confirmed. If you cancelled, nothing was charged.",
+          )}
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card className="p-4 text-sm text-destructive" role="status">
+      {t(
+        "Le paiement n'a pas abouti et rien n'a été prélevé. Vous pouvez repasser commande depuis la boutique, ou contacter le commerçant.",
+        "The payment did not go through and nothing was charged. You can order again from the shop, or contact the business.",
+      )}
+    </Card>
+  );
+}
+
 function OrderResult({ order }: { order: TrackedOrder }) {
   const locale = useStorefrontLocale();
   const t = useT();
@@ -183,7 +243,7 @@ function OrderResult({ order }: { order: TrackedOrder }) {
   return (
     <Card className="space-y-4 p-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-medium text-text">Commande {order.number}</h2>
+        <h2 className="font-medium text-text">{t(`Commande ${order.number}`, `Order ${order.number}`)}</h2>
         {order.status === "cancelled" ? (
           <Badge variant="destructive">{t("Annulée", "Cancelled")}</Badge>
         ) : (

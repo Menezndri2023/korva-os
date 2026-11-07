@@ -237,6 +237,35 @@ describe('GeniusPay mobile money (e2e)', () => {
       currency: 'XOF',
       customer: { email: 'fatou@example.com' },
     });
+    // Back from GeniusPay, the customer lands on their own order, not an empty tracking form.
+    const order = await connection
+      .collection('orders')
+      .findOne({ _id: new Types.ObjectId(orderId) });
+    const back = new URL(
+      String((create.body as { success_url?: string }).success_url),
+    );
+    expect(back.pathname).toBe(`/${slug}/track`);
+    expect(Object.fromEntries(back.searchParams)).toEqual({
+      kind: 'order',
+      number: String(order!.number),
+      email: 'fatou@example.com',
+      paid: '1',
+    });
+  });
+
+  async function trackedPayment(): Promise<unknown> {
+    const order = await connection
+      .collection('orders')
+      .findOne({ _id: new Types.ObjectId(orderId) });
+    const res = await request(server)
+      .get(`/api/v1/public/${slug}/orders/${String(order!.number)}`)
+      .query({ email: 'fatou@example.com' })
+      .expect(200);
+    return asSuccess<{ payment: unknown }>(res.body).payment;
+  }
+
+  it('tells the customer back on the tracking page that the payment is still being confirmed', async () => {
+    expect(await trackedPayment()).toEqual({ status: 'pending' });
   });
 
   function deliver(body: object, secret = WEBHOOK_SECRET) {
@@ -298,6 +327,7 @@ describe('GeniusPay mobile money (e2e)', () => {
       .collection('invoices')
       .findOne({ _id: order!.invoiceId as Types.ObjectId });
     expect(invoice?.status).toBe('paid');
+    expect(await trackedPayment()).toEqual({ status: 'paid' });
   });
 
   it('records the same delivery once', async () => {

@@ -52,7 +52,7 @@ import { Public } from '../common/decorators/public.decorator';
  * Tighter than the global 120/min and AUTH_THROTTLE's 30/min: a single unauthenticated POST here
  * creates a *confirmed* booking that occupies real, often capacity-1 availability — unlike a
  * login attempt, each hit here can directly deny a slot to a genuine customer. A real visitor
- * books at most a handful of slots in one sitting, so 5/min leaves normal use untouched while
+ * books at most a handful of slots in one sitting, so 30/min (5 until 2026-11-07, see below) leaves normal use untouched while
  * making a rapid calendar-flooding burst meaningfully slower from a single source. This is an
  * anti-abuse throttle, not a defense against a distributed/botnet attacker spreading requests
  * across many IPs — see docs/PRODUCTION_READINESS.md for that broader, separately-scoped gap.
@@ -62,7 +62,19 @@ import { Public } from '../common/decorators/public.decorator';
  * exactly the kind of low-volume-for-a-real-customer, high-value-for-an-enumeration-attempt
  * route this limit was designed for.
  */
-const PUBLIC_BOOKING_THROTTLE = { default: { limit: 5, ttl: 60_000 } };
+const PUBLIC_BOOKING_THROTTLE = { default: { limit: 30, ttl: 60_000 } };
+
+/**
+ * 2026-11-07 — the limits above are PER IP ADDRESS, and in West Africa a mobile operator puts
+ * many subscribers behind one address (carrier-grade NAT): 5 bookings a minute per IP, and the
+ * API-wide 120 requests a minute, would have been shared by every Orange or MTN customer in a
+ * city browsing any KORVA shop. Browsing (all GET routes of a shop) gets a ceiling sized for a
+ * shared address; writes keep one that still slows a flood from one machine (30/min); tracking
+ * lookups, which test a guessed number + e-mail, get 60/min — enough for the page that polls
+ * after an online payment (every 4 s for 2 minutes), still far too slow to enumerate.
+ */
+const PUBLIC_BROWSING_THROTTLE = { default: { limit: 600, ttl: 60_000 } };
+const PUBLIC_TRACKING_THROTTLE = { default: { limit: 60, ttl: 60_000 } };
 
 /**
  * Phase E4 (docs/KORVA_OS_V2_AUDIT.md §2.6) — a distinct, non-parameterized route namespace
@@ -134,6 +146,7 @@ export class PublicSitesController {
 
 @ApiTags('public')
 @Public()
+@Throttle(PUBLIC_BROWSING_THROTTLE)
 @Controller('public/:organizationSlug')
 export class PublicController {
   constructor(private readonly publicService: PublicService) {}
@@ -269,6 +282,7 @@ export class PublicController {
     return this.publicService.createBooking(slug, body);
   }
 
+  @Throttle(PUBLIC_BOOKING_THROTTLE)
   @Post('orders')
   createOrder(
     @Param('organizationSlug') slug: string,
@@ -290,6 +304,7 @@ export class PublicController {
   }
 
   /** Backs the embeddable widget's lead-capture form — see PublicService#createLead. */
+  @Throttle(PUBLIC_BOOKING_THROTTLE)
   @Post('leads')
   createLead(
     @Param('organizationSlug') slug: string,
@@ -304,7 +319,7 @@ export class PublicController {
    * only accepted proof of ownership; the order number in the path is never sufficient on its
    * own. See PublicService#trackOrder for the generic-404 requirement this enforces.
    */
-  @Throttle(PUBLIC_BOOKING_THROTTLE)
+  @Throttle(PUBLIC_TRACKING_THROTTLE)
   @Get('orders/:orderNumber')
   trackOrder(
     @Param('organizationSlug') slug: string,
@@ -316,7 +331,7 @@ export class PublicController {
   }
 
   /** Same email-as-sole-authorization model as trackOrder above. */
-  @Throttle(PUBLIC_BOOKING_THROTTLE)
+  @Throttle(PUBLIC_TRACKING_THROTTLE)
   @Get('bookings/:bookingId')
   trackBooking(
     @Param('organizationSlug') slug: string,

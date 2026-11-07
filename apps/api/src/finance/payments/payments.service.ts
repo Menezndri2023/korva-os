@@ -589,6 +589,18 @@ export class PaymentsService {
    * structurally unreachable by this method — this NotFoundException-adjacent early return would
    * never even attempt the provider query.
    */
+  /** The one payment a given idempotency key ever produced, if any — e.g. a storefront order's
+   *  online payment, keyed `public-order-payment:<orderId>`. */
+  findByIdempotencyKey(
+    organizationId: string,
+    idempotencyKey: string,
+  ): Promise<PaymentDocument | null> {
+    return this.paymentsRepository.findByIdempotencyKey(
+      organizationId,
+      idempotencyKey,
+    );
+  }
+
   async reconcileProcessingPayment(
     organizationId: string,
     paymentId: string,

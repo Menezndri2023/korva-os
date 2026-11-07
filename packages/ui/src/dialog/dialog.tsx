@@ -51,7 +51,10 @@ export function Dialog({ open, onClose, title, children, className }: DialogProp
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         className={cn(
-          "relative w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl",
+          // Never taller than the screen, scrolling inside instead: a long form (the shop checkout
+          // with a delivery address and a payment notice) otherwise put its own submit button
+          // below the bottom of a phone, out of reach — centred content cannot be scrolled to.
+          "relative max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-border bg-surface p-6 shadow-xl",
           className,
         )}
       >

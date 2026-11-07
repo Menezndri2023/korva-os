@@ -1281,7 +1281,14 @@ export class PublicService {
     const storefrontUrl = (
       process.env.STOREFRONT_URL ?? 'http://localhost:3001'
     ).replace(/\/$/, '');
-    const redirectUrl = `${storefrontUrl}/${slug}/track`;
+    // Back from GeniusPay, the customer lands on THEIR order — number filled in, payment status
+    // checked live (trackOrder) — never on an empty tracking form they have no number for.
+    const redirectUrl = `${storefrontUrl}/${slug}/track?${new URLSearchParams({
+      kind: 'order',
+      number: order.number,
+      email: contact.email,
+      paid: '1',
+    }).toString()}`;
 
     const payment = await this.paymentsService.create(
       organizationId,
@@ -1373,9 +1380,38 @@ export class PublicService {
       throw trackingNotFound('order');
     }
 
+    // The order's online payment, checked with GeniusPay when still open: the customer is often
+    // back on this page before GeniusPay's webhook has arrived.
+    let payment = await this.paymentsService.findByIdempotencyKey(
+      organization.id as string,
+      `public-order-payment:${order.id as string}`,
+    );
+    if (
+      payment &&
+      (payment.status === 'pending' || payment.status === 'processing') &&
+      payment.providerReference
+    ) {
+      payment = await this.paymentsService
+        .reconcileProcessingPayment(
+          organization.id as string,
+          payment.id as string,
+        )
+        .catch(() => payment);
+    }
+
     return {
       number: order.number,
       status: order.status,
+      payment: payment
+        ? {
+            status:
+              payment.status === 'completed' || payment.status === 'refunded'
+                ? ('paid' as const)
+                : payment.status === 'failed'
+                  ? ('failed' as const)
+                  : ('pending' as const),
+          }
+        : null,
       items: order.items.map((item) => ({
         description: item.description,
         quantity: item.quantity,

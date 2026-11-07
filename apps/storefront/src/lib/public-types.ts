@@ -186,6 +186,8 @@ export interface CartLine {
 export interface TrackedOrder {
   number: string;
   status: OrderStatus;
+  /** The order's online payment, checked live with GeniusPay; null when paid otherwise. */
+  payment?: { status: "paid" | "pending" | "failed" } | null;
   items: { description: string; quantity: number; unitPrice: number }[];
   total: number;
   currency: string;

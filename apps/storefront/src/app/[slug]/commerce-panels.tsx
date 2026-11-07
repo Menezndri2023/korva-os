@@ -173,6 +173,14 @@ export function BookingPanel({
   }, [isStay, checkIn, checkOut, setValue]);
   const stayReady = isStay && stayQuery.data?.available === true;
 
+  // One place only (a new business has just its default one): nothing to choose, so it is chosen.
+  // Without this the customer met a list holding a single "Résidence Lagune" and a disabled
+  // button until they opened it — the 2026-11-07 journey check stopped there.
+  const onlyResourceId = !tableMode && resources.length === 1 ? resources[0]!.id : undefined;
+  useEffect(() => {
+    if (onlyResourceId && !resourceId) setValue("resourceId", onlyResourceId, { shouldValidate: true });
+  }, [onlyResourceId, resourceId, setValue]);
+
   // Any change to what the slots depend on invalidates the one already picked.
   useEffect(() => {
     setValue("startAt", undefined);
@@ -272,15 +280,15 @@ export function BookingPanel({
                 ))}
               </div>
             </div>
-          ) : (
+          ) : onlyResourceId ? null : (
           <Select
             {...register("resourceId", { setValueAs: (v: string) => (v === "" ? undefined : v) })}
-            aria-label={t("Emplacement", "Place")}
+            aria-label={isStay ? t("Logement", "Accommodation") : t("Emplacement", "Place")}
             error={!!errors.resourceId}
             className="w-full"
           >
             <option value="" disabled>
-              {t("Choisir un emplacement", "Choose a place")}
+              {isStay ? t("Choisir un logement", "Choose an accommodation") : t("Choisir un emplacement", "Choose a place")}
             </option>
             {resourcesQuery.data?.map((resource) => (
               <option key={resource.id} value={resource.id}>

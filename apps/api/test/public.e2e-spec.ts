@@ -1402,10 +1402,16 @@ describe('Public storefront API (e2e)', () => {
     // bookings can be created in quick succession.
     it('throttles a rapid burst of booking attempts with 429 once the dedicated limit is exceeded', async () => {
       const statuses: number[] = [];
-      for (let hour = 3; hour < 20 && !statuses.includes(429); hour++) {
+      // 30/min since 2026-11-07 (shared mobile IPs): past the 17 free hours, a repeated slot
+      // answers 400 — still a request the throttle counts.
+      for (
+        let attempt = 0;
+        attempt < 40 && !statuses.includes(429);
+        attempt++
+      ) {
         const res = await request(server)
           .post(`/api/v1/public/${slugA}/bookings`)
-          .send(bookingPayload(resourceIdA, offerIdA, hour));
+          .send(bookingPayload(resourceIdA, offerIdA, 3 + (attempt % 17)));
         statuses.push(res.status);
       }
 

@@ -48,7 +48,7 @@ function renderPanel(offer: PublicOffer) {
  *  whole monorepo's suites ran in parallel. */
 async function pickResource(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole("option", { name: "Fauteuil 1" }, { timeout: 5_000 });
-  await user.selectOptions(screen.getByLabelText("Emplacement"), "res-1");
+  await user.selectOptions(screen.getByLabelText(/^(Emplacement|Logement)$/), "res-1");
 }
 
 function slotsCalls(): string[] {
@@ -61,7 +61,10 @@ describe("BookingPanel", () => {
     postMock.mockReset();
     getMock.mockImplementation((path: string) => {
       if (path.endsWith("/resources")) {
-        return Promise.resolve([{ id: "res-1", name: "Fauteuil 1", type: "chair" }]);
+        return Promise.resolve([
+          { id: "res-1", name: "Fauteuil 1", type: "chair" },
+          { id: "res-2", name: "Fauteuil 2", type: "chair" },
+        ]);
       }
       if (path.includes("/slots")) {
         return Promise.resolve({ date: "2026-07-06", durationMinutes: 45, slots: SLOTS });
@@ -147,7 +150,10 @@ describe("BookingPanel", () => {
   it("books a stay with arrival and departure dates, priced by the API before confirming", async () => {
     getMock.mockImplementation((path: string) => {
       if (path.endsWith("/resources")) {
-        return Promise.resolve([{ id: "res-1", name: "Fauteuil 1", type: "room" }]);
+        return Promise.resolve([
+          { id: "res-1", name: "Fauteuil 1", type: "room" },
+          { id: "res-2", name: "Fauteuil 2", type: "room" },
+        ]);
       }
       if (path.includes("/stay-quote")) {
         return Promise.resolve({
@@ -221,10 +227,27 @@ describe("BookingPanel", () => {
     expect(body.resourceId).toBeUndefined();
   });
 
+  it("chooses the only place by itself instead of asking for it", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path.endsWith("/resources")) {
+        return Promise.resolve([{ id: "res-1", name: "Résidence Lagune", type: "room" }]);
+      }
+      return Promise.resolve({ date: "2026-07-06", durationMinutes: 45, slots: SLOTS });
+    });
+    renderPanel({ ...baseOffer, durationMinutes: 45 });
+
+    expect(await screen.findByRole("button", { name: "14:00" }, { timeout: 5_000 })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Emplacement")).not.toBeInTheDocument();
+    expect(slotsCalls().some((path) => path.includes("resourceId=res-1"))).toBe(true);
+  });
+
   it("cannot be submitted before a slot is picked, and says so when a day has none", async () => {
     getMock.mockImplementation((path: string) => {
       if (path.endsWith("/resources")) {
-        return Promise.resolve([{ id: "res-1", name: "Fauteuil 1", type: "chair" }]);
+        return Promise.resolve([
+          { id: "res-1", name: "Fauteuil 1", type: "chair" },
+          { id: "res-2", name: "Fauteuil 2", type: "chair" },
+        ]);
       }
       return Promise.resolve({ date: "2026-07-06", durationMinutes: 45, slots: [] });
     });
