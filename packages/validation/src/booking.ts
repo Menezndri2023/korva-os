@@ -9,7 +9,9 @@ export const weeklyAvailabilityWindowInputSchema = z
     startTime: z.string().regex(timeRegex, "expected HH:mm"),
     endTime: z.string().regex(timeRegex, "expected HH:mm"),
   })
-  .refine((w) => w.startTime < w.endTime, { message: "startTime must be before endTime" });
+  // An end EARLIER than the start runs past midnight (a bar 18:00 → 02:00; "00:00" = until
+  // midnight). Only an empty window is refused.
+  .refine((w) => w.startTime !== w.endTime, { message: "startTime and endTime must differ" });
 
 export const createResourceSchema = z.object({
   name: z.string().min(1).max(200),

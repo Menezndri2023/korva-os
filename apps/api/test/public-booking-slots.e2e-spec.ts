@@ -395,4 +395,74 @@ describe('Public booking slots and fixed-duration offers (e2e)', () => {
       .send({ durationMinutes: 24 * 60 })
       .expect(400);
   });
+
+  it('offers and books slots past midnight for opening hours that run into the next day', async () => {
+    // A bar open Monday 20:00 → 02:00 (Paris time).
+    const bar = asSuccess<{ id: string }>(
+      (
+        await auth(request(server).post('/api/v1/resources'))
+          .send({
+            name: 'Table du soir',
+            type: 'room',
+            weeklyAvailability: [
+              { dayOfWeek: 1, startTime: '20:00', endTime: '02:00' },
+            ],
+          })
+          .expect(201)
+      ).body,
+    ).id;
+    const offer = asSuccess<{ id: string }>(
+      (
+        await auth(request(server).post('/api/v1/offers'))
+          .send({
+            type: 'booking',
+            name: 'Soirée',
+            status: 'active',
+            durationMinutes: 60,
+            pricing: { amount: 15, currency: 'EUR' },
+          })
+          .expect(201)
+      ).body,
+    ).id;
+    const { slots } = await getSlots(
+      `resourceId=${bar}&offerId=${offer}&date=${monday}`,
+    );
+    const times = slots.map((slot) => slot.time);
+    expect(times[0]).toBe('20:00');
+    expect(times).toContain('00:30');
+    expect(times[times.length - 1]).toBe('01:00');
+    const lateSlot = slots.find((slot) => slot.time === '00:30')!;
+    // 00:30 is the next calendar day: one hour after 23:30, not twenty-three before it.
+    const elevenThirty = slots.find((slot) => slot.time === '23:30')!;
+    expect(
+      new Date(lateSlot.startAt).getTime() -
+        new Date(elevenThirty.startAt).getTime(),
+    ).toBe(60 * 60 * 1000);
+
+    // A booking across midnight is accepted; one after closing is not.
+    const across = slots.find((slot) => slot.time === '23:30')!;
+    await request(server)
+      .post(`/api/v1/public/${slug}/bookings`)
+      .send({
+        resourceId: bar,
+        offerId: offer,
+        startAt: across.startAt,
+        endAt: across.endAt,
+        contact: { email: 'nuit@customer.test', firstName: 'Kofi' },
+      })
+      .expect(201);
+    const afterClosing = new Date(
+      new Date(lateSlot.startAt).getTime() + 2 * 60 * 60 * 1000,
+    );
+    await request(server)
+      .post(`/api/v1/public/${slug}/bookings`)
+      .send({
+        resourceId: bar,
+        offerId: offer,
+        startAt: afterClosing.toISOString(),
+        endAt: new Date(afterClosing.getTime() + 60 * 60 * 1000).toISOString(),
+        contact: { email: 'trop-tard@customer.test', firstName: 'Ama' },
+      })
+      .expect(400);
+  });
 });

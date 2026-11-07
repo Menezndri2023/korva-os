@@ -14,6 +14,8 @@ import {
 } from "@korva/validation";
 import { RESOURCE_KINDS, RESOURCE_KIND_LABELS, RESOURCE_KIND_LABELS_EN, WEEKDAY_SHORT, type Resource } from "@korva/types";
 import { Badge, Button, Card, Input, Select } from "@korva/ui";
+import { zonedTimeToUtc } from "@/lib/zoned-time";
+import { useActiveOrganization } from "@/lib/use-active-organization";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { intlLocale, useDashboardLocale, useT } from "@/lib/dashboard-locale";
@@ -44,6 +46,7 @@ export default function ResourceDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const locale = useDashboardLocale();
   const t = useT();
+  const { data: organization } = useActiveOrganization();
   const DAY_LABELS = WEEKDAY_SHORT[locale];
   const kindLabels: Record<string, string> = locale === "en" ? RESOURCE_KIND_LABELS_EN : RESOURCE_KIND_LABELS;
 
@@ -111,9 +114,15 @@ export default function ResourceDetailPage() {
   });
 
   function submitBlockedSlot(values: BlockedSlotFormValues) {
+    // The hours typed are the business's own: read in its timezone, not as UTC (a Paris salon's
+    // 14:00 block used to land at 16:00). An end before the start runs past midnight.
+    const timeZone = organization?.timezone ?? "UTC";
+    const startAt = zonedTimeToUtc(values.date, values.startTime, timeZone);
+    let endAt = zonedTimeToUtc(values.date, values.endTime, timeZone);
+    if (endAt <= startAt) endAt = new Date(endAt.getTime() + 24 * 60 * 60 * 1000);
     const result = addBlockedSlotSchema.safeParse({
-      startAt: new Date(`${values.date}T${values.startTime}:00.000Z`).toISOString(),
-      endAt: new Date(`${values.date}T${values.endTime}:00.000Z`).toISOString(),
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
       reason: values.reason || undefined,
     });
     if (result.success) {
@@ -293,6 +302,12 @@ export default function ResourceDetailPage() {
                   </button>
                 </div>
               ))}
+              <p className="text-xs text-text-muted">
+                {t(
+                  "Une fermeture plus tôt que l'ouverture continue le lendemain : 18:00 → 02:00 pour un service du soir, 00:00 pour « jusqu'à minuit ».",
+                  "A closing earlier than the opening carries on into the next day: 18:00 → 02:00 for an evening service, 00:00 for “until midnight”.",
+                )}
+              </p>
               <button
                 type="button"
                 onClick={() => append({ dayOfWeek: 1, startTime: "09:00", endTime: "18:00" })}

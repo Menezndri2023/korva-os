@@ -115,7 +115,36 @@ export function nightsBetween(
   return toDayNumber(endAt) - toDayNumber(startAt);
 }
 
-/** Times are compared in the organization's own timezone — see ADR-004 and localDateParts above. */
+const MINUTES_PER_DAY = 24 * 60;
+
+/** A window's opening and closing in minutes from its own day's midnight. A closing earlier than
+ *  (or equal to) the opening is on the next day — 18:00 → 02:00 closes at 26:00. */
+function windowSpan(window: { startTime: string; endTime: string }): {
+  open: number;
+  close: number;
+} {
+  const open = timeToMinutes(window.startTime);
+  const close = timeToMinutes(window.endTime);
+  return { open, close: close <= open ? close + MINUTES_PER_DAY : close };
+}
+
+/** Days from one local "YYYY-MM-DD" to another. */
+function daysBetweenKeys(from: string, to: string): number {
+  const day = (key: string) =>
+    Date.UTC(
+      Number(key.slice(0, 4)),
+      Number(key.slice(5, 7)) - 1,
+      Number(key.slice(8, 10)),
+    );
+  return Math.round((day(to) - day(from)) / 86_400_000);
+}
+
+/**
+ * Times are compared in the organization's own timezone — see ADR-004 and localDateParts above.
+ * A window may run past midnight (2026-11-07: restaurants, bars and maquis open late): a booking
+ * fits it when it lies inside [opening, closing] measured from the window's own day — the day it
+ * starts on, or the day before for a booking starting after midnight.
+ */
 function isWithinWeeklyWindows(
   resource: ResourceDocument,
   startAt: Date,
@@ -126,14 +155,28 @@ function isWithinWeeklyWindows(
 
   const start = localDateParts(startAt, timeZone);
   const end = localDateParts(endAt, timeZone);
-  if (start.dayKey !== end.dayKey) return false;
+  const spanDays = daysBetweenKeys(start.dayKey, end.dayKey);
+  if (spanDays < 0 || spanDays > 1) return false;
+  const bookingStart = start.minutesOfDay;
+  const bookingEnd = end.minutesOfDay + spanDays * MINUTES_PER_DAY;
 
-  return resource.weeklyAvailability.some(
-    (window) =>
-      window.dayOfWeek === start.dayOfWeek &&
-      timeToMinutes(window.startTime) <= start.minutesOfDay &&
-      end.minutesOfDay <= timeToMinutes(window.endTime),
-  );
+  return resource.weeklyAvailability.some((window) => {
+    const { open, close } = windowSpan(window);
+    if (window.dayOfWeek === start.dayOfWeek) {
+      return open <= bookingStart && bookingEnd <= close;
+    }
+    // Opened the evening before and still open after midnight.
+    if (
+      close > MINUTES_PER_DAY &&
+      window.dayOfWeek === (start.dayOfWeek + 6) % 7
+    ) {
+      return (
+        open - MINUTES_PER_DAY <= bookingStart &&
+        bookingEnd <= close - MINUTES_PER_DAY
+      );
+    }
+    return false;
+  });
 }
 
 /** Blocked slots are absolute instants (not wall-clock hours), so plain Date comparison is
@@ -361,12 +404,23 @@ export class AvailabilityService {
       await this.organizationsService.getById(organizationId);
 
     const dayStart = zonedTimeToUtc(date, '00:00', timezone);
-    const dayEnd = zonedTimeToUtc(date, '23:59', timezone);
     const dayOfWeek = localDateParts(dayStart, timezone).dayOfWeek;
     const windows =
       resource.weeklyAvailability.length === 0
         ? [{ startTime: '00:00', endTime: '23:59' }]
         : resource.weeklyAvailability.filter((w) => w.dayOfWeek === dayOfWeek);
+    // A window running past midnight lists its late slots on its own (business) day: the next
+    // calendar day's bookings count too.
+    const nextDate = new Date(
+      Date.UTC(
+        Number(date.slice(0, 4)),
+        Number(date.slice(5, 7)) - 1,
+        Number(date.slice(8, 10)) + 1,
+      ),
+    )
+      .toISOString()
+      .slice(0, 10);
+    const dayEnd = zonedTimeToUtc(nextDate, '23:59', timezone);
 
     const bookings = await this.bookingsRepository.findForResourceOnDay(
       organizationId,
@@ -378,15 +432,19 @@ export class AvailabilityService {
     const slots: { startAt: string; endAt: string; time: string }[] = [];
 
     for (const window of windows) {
-      const open = timeToMinutes(window.startTime);
-      const close = timeToMinutes(window.endTime);
+      const { open, close } = windowSpan(window);
       for (
         let minute = open;
         minute + durationMinutes <= close;
         minute += step
       ) {
-        const time = minutesToTime(minute);
-        const startAt = zonedTimeToUtc(date, time, timezone);
+        const afterMidnight = minute >= MINUTES_PER_DAY;
+        const time = minutesToTime(minute % MINUTES_PER_DAY);
+        const startAt = zonedTimeToUtc(
+          afterMidnight ? nextDate : date,
+          time,
+          timezone,
+        );
         const endAt = new Date(startAt.getTime() + durationMinutes * 60_000);
         if (startAt <= now) continue;
         if (!isWithinWeeklyWindows(resource, startAt, endAt, timezone))
