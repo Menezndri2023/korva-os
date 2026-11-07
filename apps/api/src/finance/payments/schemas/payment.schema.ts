@@ -32,6 +32,12 @@ export class Payment {
   @Prop({ type: String, enum: PAYMENT_STATUSES, default: 'pending' })
   status!: PaymentStatus;
 
+  /** Set when an online payment the customer never completed was closed as failed after
+   *  ONLINE_PAYMENT_ABANDON_HOURS — see PaymentsService.reconcileProcessingPayment. Such a
+   *  payment is still revived if GeniusPay later reports it paid. */
+  @Prop()
+  abandonedAt?: Date;
+
   @Prop({ required: true })
   provider!: string;
 

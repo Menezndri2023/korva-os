@@ -616,8 +616,11 @@ export class PaymentsService {
       });
     }
     const notYetResolvedStatus: PaymentStatus[] = ['pending', 'processing'];
+    // Closed as abandoned, yet a late webhook (or the customer's tracking page) asks again: only
+    // a "completed" answer from the provider can reopen it — see the abandonment below.
+    const abandoned = payment.status === 'failed' && !!payment.abandonedAt;
     if (
-      !notYetResolvedStatus.includes(payment.status) ||
+      (!notYetResolvedStatus.includes(payment.status) && !abandoned) ||
       !payment.providerReference
     ) {
       // Already resolved (by the original request, or a prior/concurrent reconciliation run),
@@ -694,6 +697,8 @@ export class PaymentsService {
       }
     }
 
+    if (abandoned) return payment;
+
     if (providerStatus === 'failed') {
       try {
         const finalized = await this.paymentsRepository.finalizePayment(
@@ -716,6 +721,32 @@ export class PaymentsService {
       }
     }
 
+    // Still open at the provider long after the customer left the checkout page: an
+    // abandoned payment. Closed as failed, so the order and its invoice stop showing a payment
+    // "en cours" and the sweep stops asking GeniusPay about it every few minutes; abandonedAt
+    // lets a late "completed" from GeniusPay reopen it (above).
+    const abandonAfterMs =
+      Number(process.env.ONLINE_PAYMENT_ABANDON_HOURS ?? 24) * 60 * 60 * 1000;
+    const createdAt =
+      (payment.get('createdAt') as Date | undefined) ?? new Date();
+    if (
+      payment.method === 'online' &&
+      Date.now() - createdAt.getTime() > abandonAfterMs
+    ) {
+      const closed = await this.paymentsRepository.finalizePayment(
+        organizationId,
+        paymentId,
+        { status: 'failed', abandonedAt: new Date() },
+        undefined,
+        currentStatus,
+      );
+      if (closed) {
+        this.logger.log(
+          `Payment ${paymentId} closed as abandoned (still ${providerStatus} at the provider)`,
+        );
+        return closed;
+      }
+    }
     // pending/processing/refunded from the provider's point of view — not yet resolved; leave
     // as-is and let a future reconciliation run try again.
     return payment;

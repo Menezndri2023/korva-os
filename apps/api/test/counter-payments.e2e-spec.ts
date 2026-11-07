@@ -1,4 +1,5 @@
 import { createServer, type Server } from 'node:http';
+import { PaymentsService } from './../src/finance/payments/payments.service';
 import { ONLINE_PAYMENT_TERMS_VERSION } from '@korva/types';
 import type { AddressInfo } from 'node:net';
 import { Test } from '@nestjs/testing';
@@ -38,6 +39,8 @@ describe('Caisse — QR mobile money (e2e)', () => {
   let server: App;
   let connection: Connection;
   let created = 0;
+  /** References GeniusPay reports paid — MTX-C1 from the start, others when a test says so. */
+  const paidLate = new Set<string>();
   const lastPaymentBody: { value?: Record<string, unknown> } = {};
 
   const stub: Server = createServer((req, res) => {
@@ -66,7 +69,7 @@ describe('Caisse — QR mobile money (e2e)', () => {
           JSON.stringify({
             success: true,
             data:
-              reference === 'MTX-C1'
+              reference === 'MTX-C1' || paidLate.has(reference)
                 ? { reference, status: 'completed', fees: 150 }
                 : { reference, status: 'pending' },
           }),
@@ -323,5 +326,50 @@ describe('Caisse — QR mobile money (e2e)', () => {
     expect((res.body as { error: { code: string } }).error.code).toBe(
       'CURRENCY_NOT_CHARGEABLE',
     );
+  });
+
+  it('closes a payment the customer never finished after 24 h, and reopens it if paid late', async () => {
+    const waiting = asSuccess<CounterPayment>(
+      (
+        await staff(request(server).post('/api/v1/counter-payments'))
+          .send({ amount: 1500 })
+          .expect(201)
+      ).body,
+    );
+    // Opened two days ago, still pending at GeniusPay.
+    await connection
+      .collection('payments')
+      .updateOne(
+        { _id: new Types.ObjectId(waiting.id) },
+        { $set: { createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000) } },
+      );
+    const closed = asSuccess<CounterPayment>(
+      (
+        await staff(
+          request(server).get(`/api/v1/counter-payments/${waiting.id}`),
+        ).expect(200)
+      ).body,
+    );
+    expect(closed.status).toBe('failed');
+    const stored = await connection
+      .collection('payments')
+      .findOne({ _id: new Types.ObjectId(waiting.id) });
+    expect(stored?.abandonedAt).toBeInstanceOf(Date);
+
+    // The customer did pay in the end: GeniusPay's answer wins.
+    const payment = await connection
+      .collection('payments')
+      .findOne({ _id: new Types.ObjectId(waiting.id) });
+    paidLate.add(String(payment!.providerReference));
+    await app
+      .get(PaymentsService)
+      .reconcileProcessingPayment(organizationId, waiting.id);
+    expect(
+      (
+        await connection
+          .collection('payments')
+          .findOne({ _id: new Types.ObjectId(waiting.id) })
+      )?.status,
+    ).toBe('completed');
   });
 });
