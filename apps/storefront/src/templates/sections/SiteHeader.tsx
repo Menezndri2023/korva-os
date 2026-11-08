@@ -60,6 +60,13 @@ export function SiteHeader({
   const accountLabel = isAuthenticated ? (customerFirstName ?? t("Mon compte", "My account")) : t("Se connecter", "Sign in");
 
   return (
+    <>
+    {organization.announcement && (
+      // The business's announcement (site_announcement, Starter and above — the API sends it only then).
+      <p role="note" className={`px-4 py-2 text-center text-sm font-medium ${accent ? `${KT.surface} ${KT.text}` : `${KT.accentBg} ${KT.accentContrastText}`}`}>
+        {organization.announcement}
+      </p>
+    )}
     <header className={`sticky top-0 z-30 ${bar}`}>
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:px-6">
         <Link href={`/${slug}`} className="flex min-w-0 flex-1 items-center gap-3">
@@ -123,6 +130,7 @@ export function SiteHeader({
         />
       </div>
     </header>
+    </>
   );
 }
 

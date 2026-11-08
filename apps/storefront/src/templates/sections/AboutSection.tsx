@@ -4,7 +4,7 @@ import { SectionHeading } from "./SectionHeading";
 import { useT } from "@/lib/storefront-locale";
 
 /** Renders nothing when the org hasn't written one — a Pro+ content section (see
- *  EntitlementsService.assertContentSectionsAllowed), never a placeholder/empty state on the
+ *  OrganizationsService.update (site_about_faq / site_showcase)), never a placeholder/empty state on the
  *  public page. */
 export function AboutSection({ organization }: { organization: PublicOrganization }) {
   const t = useT();

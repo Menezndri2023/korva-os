@@ -6,6 +6,7 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
@@ -200,7 +201,7 @@ function MenuRow({
         <div className="flex items-baseline justify-between gap-3">
           <div className="flex items-center gap-1">
             <Link href={`/${slug}/offers/${offer.id}`} className="font-medium hover:underline">
-              {offer.name}
+              <FeaturedBadge offer={offer} />{offer.name}
             </Link>
             <WishlistButton slug={slug} offerId={offer.id} />
           </div>

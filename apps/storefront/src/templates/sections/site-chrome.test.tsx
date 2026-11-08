@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { SiteHeader, siteLinks } from "./SiteHeader";
+import { FeaturedBadge } from "./FeaturedBadge";
 import { OfferImage } from "./OfferImage";
 import { MobileCartBar } from "./MobileCartBar";
 
@@ -69,6 +70,16 @@ describe("SiteHeader", () => {
     expect(screen.getAllByRole("link", { name: /Awa/ }).length).toBeGreaterThan(0);
   });
 
+  it("shows the business's announcement above the header, and nothing when there is none", () => {
+    renderHeader({ organization: { ...organization, announcement: "Livraison offerte ce week-end" } });
+    expect(screen.getByRole("note")).toHaveTextContent("Livraison offerte ce week-end");
+  });
+
+  it("has no announcement band by default", () => {
+    renderHeader();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
   it("offers every link in the phone menu too, with the account last", () => {
     renderHeader();
     // Desktop nav + mobile menu: each link is rendered in both.
@@ -113,5 +124,14 @@ describe("MobileCartBar", () => {
     render(<MobileCartBar cartCount={1} onOpenCheckout={onOpenCheckout} />);
     fireEvent.click(screen.getByRole("button", { name: /1 article/ }));
     expect(onOpenCheckout).toHaveBeenCalledOnce();
+  });
+});
+
+describe("FeaturedBadge", () => {
+  it("marks a favourite and stays silent otherwise", () => {
+    const { rerender, container } = render(<FeaturedBadge offer={{ featured: true }} />);
+    expect(screen.getByText("Coup de cœur")).toBeInTheDocument();
+    rerender(<FeaturedBadge offer={{}} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

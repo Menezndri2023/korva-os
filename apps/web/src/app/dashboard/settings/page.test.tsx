@@ -1875,13 +1875,36 @@ describe("SettingsPage — storefront content sections", () => {
     mockDefaultGets("pro");
   });
 
-  it("shows a lock badge and disables the fieldset when the plan is below Pro", async () => {
+  it("opens the story on Starter and keeps team, gallery and testimonials locked for Pro", async () => {
     mockDefaultGets("starter");
     renderWithProviders(<SettingsPage />);
 
-    expect(await screen.findByText("🔒 Passer au plan Pro")).toBeInTheDocument();
-    const fieldset = (await screen.findByText("À propos")).closest("fieldset");
-    expect(fieldset).toBeDisabled();
+    expect(await screen.findByText("🔒 Formule Pro")).toBeInTheDocument();
+    expect(screen.queryByText("🔒 Formule Starter")).not.toBeInTheDocument();
+    expect((await screen.findByText("À propos")).closest("fieldset")).not.toBeDisabled();
+    expect(screen.getByLabelText("Bandeau d'annonce")).toBeEnabled();
+    expect(screen.getByText("Témoignages clients").closest("fieldset")).toBeDisabled();
+  });
+
+  it("locks the story too on the free plan", async () => {
+    mockDefaultGets("free");
+    renderWithProviders(<SettingsPage />);
+
+    expect(await screen.findByText("🔒 Formule Starter")).toBeInTheDocument();
+    expect((await screen.findByText("À propos")).closest("fieldset")).toBeDisabled();
+  });
+
+  it("saves the announcement shown at the top of the site", async () => {
+    patchMock.mockResolvedValue({ ...organization, announcement: "Livraison offerte" });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.type(await screen.findByLabelText("Bandeau d'annonce"), "  Livraison offerte ");
+    await user.click(screen.getByRole("button", { name: "Enregistrer l'annonce" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me", { announcement: "Livraison offerte" }),
+    );
   });
 
   it("saves the about text on a Pro plan", async () => {
@@ -1892,7 +1915,7 @@ describe("SettingsPage — storefront content sections", () => {
     const textarea = await screen.findByPlaceholderText(
       "Racontez l'histoire de votre entreprise...",
     );
-    expect(screen.queryByText("🔒 Passer au plan Pro")).not.toBeInTheDocument();
+    expect(screen.queryByText("🔒 Formule Pro")).not.toBeInTheDocument();
     await user.type(textarea, "Notre histoire");
     await user.click(screen.getByRole("button", { name: "Enregistrer le texte" }));
 

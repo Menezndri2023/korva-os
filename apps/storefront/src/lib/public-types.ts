@@ -68,6 +68,8 @@ export interface PublicOrganization {
    *  server-side, so undefined/empty here always means "don't render," never "check the plan
    *  yourself." See apps/storefront/src/templates/sections/. */
   aboutText?: string;
+  /** The announcement band at the top of the site — only sent on Starter and above. */
+  announcement?: string;
   testimonials?: Testimonial[];
   /** Real customers' reviews — every plan. Absent from an API older than this field. */
   reviewSummary?: PublicReviewSummary;
@@ -108,6 +110,8 @@ export interface PublicOffer {
   durationMinutes?: number;
   /** Price before a promotion, always higher than pricing.amount — see Offer.compareAtPrice. */
   compareAtPrice?: number;
+  /** « Coup de cœur » — only sent on Pro and above. */
+  featured?: boolean;
   /** Characteristics set by the business (matière, origine, équipements...) — Offer.attributes. */
   attributes?: Record<string, string>;
   /** "night" for a stay booked from an arrival to a departure date — see Offer.bookingUnit. */

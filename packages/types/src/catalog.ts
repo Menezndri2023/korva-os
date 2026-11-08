@@ -130,6 +130,8 @@ export interface Offer {
   /** Price before a promotion, shown struck through next to `pricing.amount`. Always higher than
    *  it (enforced by the API). Unset or null means no promotion is displayed. */
   compareAtPrice?: number | null;
+  /** Shown first and marked « Coup de cœur » on the public site (Pro and above). */
+  featured?: boolean;
   /** Choices made when ordering — see OfferOptionGroup. Absent means none. */
   optionGroups?: OfferOptionGroup[];
   createdAt: string;

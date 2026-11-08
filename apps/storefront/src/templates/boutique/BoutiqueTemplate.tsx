@@ -6,6 +6,7 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
@@ -211,7 +212,7 @@ function ProductCard({
       </div>
       <div className="flex flex-1 flex-col p-3 sm:p-4">
         <Link href={`/${slug}/offers/${offer.id}`} className="line-clamp-2 text-sm font-medium hover:underline sm:text-base">
-          {offer.name}
+          <FeaturedBadge offer={offer} />{offer.name}
         </Link>
         <p className={`mt-1 text-sm font-semibold sm:text-base ${KT.accentText}`}>
           <OfferPrice offer={offer} />

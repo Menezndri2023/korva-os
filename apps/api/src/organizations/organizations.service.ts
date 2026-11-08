@@ -368,14 +368,20 @@ export class OrganizationsService {
         fontPairing: input.storefrontFontPairing,
       });
     }
+    // The site grows with the plan: story and FAQ on Starter, people and pictures on Pro.
+    // Clearing is always allowed (an empty value or list), so a downgraded business can tidy up.
+    if (input.aboutText || (input.faqItems && input.faqItems.length > 0)) {
+      await this.entitlementsService.assertFeature(id, 'site_about_faq');
+    }
+    if (input.announcement) {
+      await this.entitlementsService.assertFeature(id, 'site_announcement');
+    }
     if (
-      input.testimonials !== undefined ||
-      input.teamMembers !== undefined ||
-      input.galleryImages !== undefined ||
-      input.faqItems !== undefined ||
-      input.aboutText !== undefined
+      (input.testimonials && input.testimonials.length > 0) ||
+      (input.teamMembers && input.teamMembers.length > 0) ||
+      (input.galleryImages && input.galleryImages.length > 0)
     ) {
-      await this.entitlementsService.assertContentSectionsAllowed(id);
+      await this.entitlementsService.assertFeature(id, 'site_showcase');
     }
     if (input.name) {
       const existing = await this.organizationsRepository.findBySlug(

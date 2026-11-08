@@ -107,6 +107,7 @@ interface PublicOrganizationPayload {
     customAccentApplied: boolean;
   };
   aboutText?: string;
+  announcement?: string;
   testimonials?: { id: string; authorName: string; quote: string }[];
   teamMembers?: { id: string; name: string; role: string }[];
   galleryImages?: { id: string; url: string }[];
@@ -883,7 +884,7 @@ describe('Public storefront API (e2e)', () => {
       expect(info.faqItems).toBeUndefined();
     });
 
-    it('rejects saving content sections below the Pro plan', async () => {
+    it('lets Starter tell its story (about, FAQ, announcement) but keeps team, gallery and testimonials for Pro', async () => {
       const { accessToken, organizationId } = await setupStorefrontOrg(
         'content-sections-reject@korva.test',
         'Content Reject Org',
@@ -896,15 +897,46 @@ describe('Public storefront API (e2e)', () => {
         .expect(201);
       await payPendingPlanChange(app, organizationId);
 
+      await request(server)
+        .patch('/api/v1/organizations/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          aboutText: 'Notre histoire',
+          faqItems: [{ id: 'f1', question: 'Livrez-vous ?', answer: 'Oui.' }],
+          announcement: 'Livraison offerte ce week-end',
+        })
+        .expect(200);
+
       const res = await request(server)
         .patch('/api/v1/organizations/me')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', organizationId)
-        .send({ aboutText: 'Notre histoire' })
+        .send({
+          teamMembers: [{ id: 'm1', name: 'Grace', role: 'Fondatrice' }],
+        })
         .expect(403);
-      expect(asError(res.body).code).toBe(
-        'STOREFRONT_CONTENT_SECTIONS_NOT_IN_PLAN',
+      expect(asError(res.body).code).toBe('PLAN_FEATURE_NOT_INCLUDED');
+    });
+
+    it('refuses the story sections and the announcement on the free plan', async () => {
+      const { accessToken, organizationId } = await setupStorefrontOrg(
+        'content-sections-free@korva.test',
+        'Content Free Org',
       );
+      await putOrganizationOnPlan(connection, organizationId, 'free');
+      for (const body of [
+        { aboutText: 'Notre histoire' },
+        { announcement: 'Promo' },
+      ]) {
+        const res = await request(server)
+          .patch('/api/v1/organizations/me')
+          .set('Authorization', `Bearer ${accessToken}`)
+          .set('X-Organization-Id', organizationId)
+          .send(body)
+          .expect(403);
+        expect(asError(res.body).code).toBe('PLAN_FEATURE_NOT_INCLUDED');
+      }
     });
 
     it('saves and publicly exposes content sections on a Pro plan, then clamps them after a downgrade', async () => {
@@ -934,6 +966,7 @@ describe('Public storefront API (e2e)', () => {
           faqItems: [
             { id: 'f1', question: 'Livrez-vous partout ?', answer: 'Oui.' },
           ],
+          announcement: 'Nouveautés chaque lundi',
         })
         .expect(200);
 
@@ -946,6 +979,7 @@ describe('Public storefront API (e2e)', () => {
       expect(infoOnPro.teamMembers).toHaveLength(1);
       expect(infoOnPro.galleryImages).toHaveLength(1);
       expect(infoOnPro.faqItems).toHaveLength(1);
+      expect(infoOnPro.announcement).toBe('Nouveautés chaque lundi');
 
       await request(server)
         .post('/api/v1/subscriptions/change-plan')
@@ -963,6 +997,82 @@ describe('Public storefront API (e2e)', () => {
       expect(infoOnFree.teamMembers).toBeUndefined();
       expect(infoOnFree.galleryImages).toBeUndefined();
       expect(infoOnFree.faqItems).toBeUndefined();
+      expect(infoOnFree.announcement).toBeUndefined();
+    });
+  });
+
+  describe('featured offers (« coups de cœur »)', () => {
+    async function createOffer(
+      accessToken: string,
+      organizationId: string,
+      name: string,
+      featured?: boolean,
+    ) {
+      return request(server)
+        .post('/api/v1/offers')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({
+          type: 'product',
+          name,
+          status: 'active',
+          pricing: { amount: 10, currency: 'EUR' },
+          ...(featured !== undefined ? { featured } : {}),
+        });
+    }
+
+    it('refuses marking a favourite below Pro', async () => {
+      const { accessToken, organizationId } = await setupStorefrontOrg(
+        'featured-free@korva.test',
+        'Featured Free Org',
+      );
+      const res = await createOffer(accessToken, organizationId, 'Pagne', true);
+      expect(res.status).toBe(403);
+      expect(asError(res.body).code).toBe('PLAN_FEATURE_NOT_INCLUDED');
+    });
+
+    it('puts a Pro business favourites first on its site, marked, and stops after a downgrade', async () => {
+      const { accessToken, organizationId, slug } = await setupStorefrontOrg(
+        'featured-pro@korva.test',
+        'Featured Pro Org',
+      );
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'pro' })
+        .expect(201);
+      await payPendingPlanChange(app, organizationId);
+
+      await createOffer(accessToken, organizationId, 'Favori', true).then((r) =>
+        expect(r.status).toBe(201),
+      );
+      await createOffer(accessToken, organizationId, 'Récent').then((r) =>
+        expect(r.status).toBe(201),
+      );
+
+      const onPro = await request(server)
+        .get(`/api/v1/public/${slug}/offers`)
+        .expect(200);
+      const offers = asSuccess<{ name: string; featured?: boolean }[]>(
+        onPro.body,
+      );
+      expect(offers[0]).toMatchObject({ name: 'Favori', featured: true });
+      expect(offers.find((o) => o.name === 'Récent')?.featured).toBeUndefined();
+
+      await request(server)
+        .post('/api/v1/subscriptions/change-plan')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .set('X-Organization-Id', organizationId)
+        .send({ planKey: 'free' })
+        .expect(201);
+      const onFree = await request(server)
+        .get(`/api/v1/public/${slug}/offers`)
+        .expect(200);
+      const freeOffers = asSuccess<{ name: string; featured?: boolean }[]>(
+        onFree.body,
+      );
+      expect(freeOffers.every((o) => o.featured === undefined)).toBe(true);
     });
   });
 

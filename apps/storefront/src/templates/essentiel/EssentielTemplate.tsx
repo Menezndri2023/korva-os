@@ -7,6 +7,7 @@ import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
@@ -152,7 +153,7 @@ function OfferCard({
       <div className="flex flex-1 flex-col p-4">
         <div className="flex items-start justify-between gap-2">
           <Link href={`/${slug}/offers/${offer.id}`} className="font-medium hover:underline">
-            {offer.name}
+            <FeaturedBadge offer={offer} />{offer.name}
           </Link>
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>

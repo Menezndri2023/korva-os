@@ -249,6 +249,7 @@ export function PlanLadder({ locale = "fr" }: { locale?: Locale }) {
             ...(isEntry
               ? []
               : [{ text: t.everything(PLAN_NAMES[PLAN_KEYS[PLAN_KEYS.indexOf(plan) - 1]!]), strong: true }]),
+            ...(content.planSite[plan] ? [{ text: content.planSite[plan]!, strong: true }] : []),
             ...modulesGainedAt(plan).map((module) => ({ text: content.modulePromises[module] })),
             ...[...featuresGainedAt(plan, locale), ...(content.planPerks[plan] ?? [])].map((text) => ({ text })),
             {

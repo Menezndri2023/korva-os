@@ -59,7 +59,7 @@ const hexColorSchema = z
   .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Must be a hex color, e.g. #1a73e8');
 
 /** Storefront content sections (Pro plan and above) — see
- *  EntitlementsService.assertContentSectionsAllowed. Whole-array-replace, not per-item CRUD:
+ *  OrganizationsService.update (site_about_faq / site_showcase). Whole-array-replace, not per-item CRUD:
  *  the frontend generates `id` client-side (e.g. crypto.randomUUID()) when adding a new item. */
 const testimonialSchema = z.object({
   id: z.string().min(1),
@@ -146,8 +146,10 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   enabledModules: z.array(z.enum(KORVA_MODULES)).optional(),
   /** Whole-array replace: the trade tools brought back into the menu (Settings › Autres outils). */
   extraTools: z.array(z.enum(TRADE_TOOLS)).max(TRADE_TOOLS.length).optional(),
-  /** Long-form "about us" text for the public storefront — Pro plan and above. */
+  /** Long-form "about us" text for the public storefront — Starter plan and above. */
   aboutText: z.string().max(4000).optional(),
+  /** The site's announcement band (Starter and above); "" removes it. */
+  announcement: z.string().trim().max(140).optional(),
   /** Google typically truncates a title around 60 chars and a description around 155-160 —
    *  these caps are generous headroom above that, not a hard SEO best-practice enforcement. */
   seoTitle: z.string().max(70).optional(),

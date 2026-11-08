@@ -190,10 +190,14 @@ export class Organization {
     acceptedByUserId: Types.ObjectId;
   };
 
-  /** Long-form "about us" text for the public storefront — Pro plan and above, see
-   *  EntitlementsService.assertContentSectionsAllowed. */
+  /** Long-form "about us" text for the public storefront — Starter plan and above, see
+   *  OrganizationsService.update (site_about_faq / site_showcase). */
   @Prop()
   aboutText?: string;
+
+  /** The public site's announcement band — Starter and above (site_announcement). */
+  @Prop()
+  announcement?: string;
 
   /** Org-configurable `<title>`/meta-description override for the public storefront page —
    *  available at every plan tier (unlike the content sections above), since basic SEO control

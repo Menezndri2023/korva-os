@@ -315,18 +315,6 @@ export class EntitlementsService {
    * plan — a flat gate, unlike assertStorefrontThemeAllowed's per-template minimum, since the
    * user explicitly chose "Pro unlocks everything" for these rather than a graduated rollout.
    */
-  async assertContentSectionsAllowed(organizationId: string): Promise<void> {
-    await this.assertSubscriptionActive(organizationId);
-    const plan = await this.subscriptionsService.getActivePlan(organizationId);
-    if (!planMeetsMinimum(plan.key, 'pro')) {
-      throw new ForbiddenException({
-        code: 'STOREFRONT_CONTENT_SECTIONS_NOT_IN_PLAN',
-        message: `Your plan ("${plan.name}") does not include storefront content sections (testimonials, team, gallery, about, FAQ) — upgrade to Pro or higher`,
-        details: { plan: plan.key },
-      });
-    }
-  }
-
   /**
    * Gates attaching a custom domain behind Starter. Ungated until 2026-10-12, which meant a
    * free organization could point its own domain at the platform and have Caddy issue it a TLS

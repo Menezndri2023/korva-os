@@ -87,6 +87,10 @@ export const CUSTOM_DOMAIN_MIN_PLAN: PlanKey = "starter";
  *   offer_variants     -> OffersService (adding a variant; existing ones are kept)
  *   compare_at_price   -> OffersService (setting one; clearing is always allowed)
  *   both_channels      -> EntitlementsService.assertModulesAllowed (booking AND commerce)
+ *   site_about_faq     -> OrganizationsService.update (aboutText, faqItems) + PublicService
+ *   site_announcement  -> OrganizationsService.update (announcement) + PublicService
+ *   site_showcase      -> OrganizationsService.update (team, gallery, testimonials) + PublicService
+ *   featured_offers    -> OffersService (marking an offer) + PublicService (badge and order)
  *   warehouses         -> WarehousesController writes (PlanFeatureGuard)
  *   suppliers          -> SuppliersController / PurchaseOrdersController writes (PlanFeatureGuard)
  *   advanced_analytics -> AnalyticsController insights (PlanFeatureGuard)
@@ -111,6 +115,12 @@ export const PLAN_FEATURE_MIN_PLAN = {
   offer_variants: "starter",
   compare_at_price: "starter",
   both_channels: "starter",
+  // The site grows with the plan (2026-11-08): Starter tells the business's story, Pro shows its
+  // people and its best offers. Free keeps a complete one-page site — nothing is taken away.
+  site_about_faq: "starter",
+  site_announcement: "starter",
+  site_showcase: "pro",
+  featured_offers: "pro",
   warehouses: "pro",
   suppliers: "pro",
   // Pro (2026-11-01): see further, take the data out, close the till.
@@ -134,6 +144,10 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   offer_variants: "Variantes de produits",
   compare_at_price: "Prix barré (promotions)",
   both_channels: "Réservations et commandes en même temps",
+  site_about_faq: "Pages « À propos » et questions fréquentes sur votre site",
+  site_announcement: "Bandeau d'annonce en haut de votre site (promo, horaires, nouveauté)",
+  site_showcase: "Équipe, galerie photo et témoignages sur votre site",
+  featured_offers: "Vos coups de cœur mis en avant en tête de votre site",
   warehouses: "Plusieurs entrepôts",
   suppliers: "Fournisseurs et bons de commande",
   advanced_analytics: "Statistiques avancées : comparaison, meilleurs clients et ventes",

@@ -118,6 +118,12 @@ export class OffersService {
         'offer_variants',
       );
     }
+    if (input.featured) {
+      await this.entitlementsService.assertFeature(
+        organizationId,
+        'featured_offers',
+      );
+    }
     if (input.compareAtPrice != null) {
       await this.entitlementsService.assertFeature(
         organizationId,
@@ -167,6 +173,7 @@ export class OffersService {
       lowStockThreshold: input.lowStockThreshold,
       durationMinutes: input.durationMinutes,
       compareAtPrice: input.compareAtPrice,
+      featured: input.featured,
       optionGroups: input.optionGroups,
       bookingUnit: input.bookingUnit,
       minNights: input.minNights,
@@ -301,6 +308,13 @@ export class OffersService {
       await this.entitlementsService.assertFeature(
         organizationId,
         'offer_variants',
+      );
+    }
+    // Marking is refused below Pro; un-marking is always allowed.
+    if (input.featured === true) {
+      await this.entitlementsService.assertFeature(
+        organizationId,
+        'featured_offers',
       );
     }
     if (

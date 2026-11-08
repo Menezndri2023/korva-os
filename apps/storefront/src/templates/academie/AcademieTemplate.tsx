@@ -6,6 +6,7 @@ import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import type { StorefrontTemplateProps } from "../types";
 import { AboutSection } from "../sections/AboutSection";
@@ -167,7 +168,7 @@ function CourseCard({
         </span>
         <div className="mt-2 flex items-start justify-between gap-2">
           <Link href={`/${slug}/offers/${offer.id}`} className={`text-lg font-semibold hover:underline ${KT.headingFont}`}>
-            {offer.name}
+            <FeaturedBadge offer={offer} />{offer.name}
           </Link>
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>

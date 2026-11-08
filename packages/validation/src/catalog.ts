@@ -98,6 +98,8 @@ export const createOfferSchema = z.object({
   /** The "before" price shown struck through next to pricing.amount. Must be higher than it —
    *  checked in OffersService, since an update may change either side alone. */
   compareAtPrice: z.number().positive().nullable().optional(),
+  /** « Coup de cœur » on the public site (Pro and above). */
+  featured: z.boolean().optional(),
   bookingUnit: z.enum(BOOKING_UNITS).optional(),
   minNights: z.number().int().min(1).max(365).nullable().optional(),
   bufferMinutes: z.number().int().min(0).max(240).nullable().optional(),

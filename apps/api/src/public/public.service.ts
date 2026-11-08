@@ -269,10 +269,11 @@ export class PublicService {
       ),
     ]);
     // Defense-in-depth, same reasoning as resolveStorefrontTheme's own plan clamp below: an
-    // organization downgraded after saving testimonials/team/gallery/about/FAQ must stop showing
-    // them on the public page even though the fields are still stored — enforced at save-time
-    // by EntitlementsService.assertContentSectionsAllowed, re-checked here at read-time.
-    const contentSectionsAllowed = planMeetsMinimum(plan.key, 'pro');
+    // organization downgraded after saving these sections must stop showing them on the public
+    // page even though the fields are still stored — enforced at save-time by
+    // OrganizationsService.update (site_about_faq / site_showcase / site_announcement).
+    const storyAllowed = planHasFeature(plan.key, 'site_about_faq');
+    const showcaseAllowed = planHasFeature(plan.key, 'site_showcase');
     return {
       name: organization.name,
       slug: organization.slug,
@@ -316,17 +317,16 @@ export class PublicService {
       // control isn't a premium feature.
       seoTitle: organization.seoTitle,
       seoDescription: organization.seoDescription,
-      aboutText: contentSectionsAllowed ? organization.aboutText : undefined,
-      testimonials: contentSectionsAllowed
-        ? organization.testimonials
-        : undefined,
-      teamMembers: contentSectionsAllowed
-        ? organization.teamMembers
-        : undefined,
-      galleryImages: contentSectionsAllowed
-        ? organization.galleryImages
-        : undefined,
-      faqItems: contentSectionsAllowed ? organization.faqItems : undefined,
+      aboutText: storyAllowed ? organization.aboutText : undefined,
+      faqItems: storyAllowed ? organization.faqItems : undefined,
+      announcement:
+        planHasFeature(plan.key, 'site_announcement') &&
+        organization.announcement
+          ? organization.announcement
+          : undefined,
+      testimonials: showcaseAllowed ? organization.testimonials : undefined,
+      teamMembers: showcaseAllowed ? organization.teamMembers : undefined,
+      galleryImages: showcaseAllowed ? organization.galleryImages : undefined,
       // Real customers' reviews are never plan-gated, unlike the curated testimonials above.
       reviewSummary,
     };
@@ -481,9 +481,11 @@ export class PublicService {
     );
   }
 
-  private toPublicOffer(offer: OfferDocument) {
+  private toPublicOffer(offer: OfferDocument, featuredAllowed = false) {
     return {
       id: offer.id as string,
+      // « Coup de cœur » only while the plan includes it (featured_offers); the mark stays stored.
+      featured: featuredAllowed && offer.featured ? true : undefined,
       type: offer.type,
       name: offer.name,
       description: offer.description,
@@ -515,7 +517,20 @@ export class PublicService {
       status: 'active',
       type: query.type,
     });
-    return data.map((offer) => this.toPublicOffer(offer));
+    const plan = await this.subscriptionsService.getActivePlan(
+      organization.id as string,
+    );
+    const featuredAllowed = planHasFeature(plan.key, 'featured_offers');
+    const offers = data.map((offer) =>
+      this.toPublicOffer(offer, featuredAllowed),
+    );
+    // The business's favourites lead the home page; Array.prototype.sort is stable, so the rest
+    // keep the newest-first order.
+    return featuredAllowed
+      ? offers.sort(
+          (a, b) => Number(b.featured ?? false) - Number(a.featured ?? false),
+        )
+      : offers;
   }
 
   /** Real pagination/search/sort/category-filter over the FULL active catalog — backs the

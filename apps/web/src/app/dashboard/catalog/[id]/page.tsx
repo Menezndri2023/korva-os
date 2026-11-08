@@ -37,6 +37,7 @@ import { CustomFieldsDisplay } from "@/components/custom-fields-display";
 import { CustomFieldsFieldset } from "@/components/custom-fields-fieldset";
 import { OfferImagesEditor } from "@/components/offer-images-editor";
 import { PlanLock } from "@/components/plan-lock";
+import { FeaturedOfferToggle } from "@/components/featured-offer-toggle";
 import { usePlanFeatures } from "@/lib/use-plan-features";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import {
@@ -357,6 +358,7 @@ export default function OfferDetailPage() {
                 {t("Aucune photo — cliquez sur « Modifier » pour en ajouter.", "No photos — click “Edit” to add some.")}
               </p>
             )}
+            <FeaturedOfferToggle offer={offer} />
             <dl className="mt-4 grid grid-cols-2 gap-4 text-sm md:grid-cols-4">
               <div>
                 <dt className="text-text-muted">SKU</dt>

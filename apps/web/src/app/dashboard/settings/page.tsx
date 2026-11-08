@@ -29,6 +29,7 @@ import {
   ONLINE_PAYMENT_TERMS_VERSION,
   onlinePaymentTermsAccepted,
   planMeetsMinimum,
+  planHasFeature,
   PREMIUM_FONT_PAIRING_KEYS,
   PREMIUM_PALETTE_KEYS,
   PREMIUM_THEME_MIN_PLAN,
@@ -2961,32 +2962,95 @@ function StorefrontContentSection() {
     queryFn: () => apiClient.get<SubscriptionSummary>("/subscriptions/me"),
   });
   const planKey = subscription?.plan.key;
-  const allowed = !planKey || planMeetsMinimum(planKey, "pro");
+  // The site grows with the plan: the story on Starter, the showcase on Pro (PLAN_FEATURE_MIN_PLAN).
+  const storyAllowed = !planKey || planHasFeature(planKey, "site_about_faq");
+  const showcaseAllowed = !planKey || planHasFeature(planKey, "site_showcase");
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-text">{t("Contenu de la page publique", "Public page content")}</h2>
-          <p className="mt-1 text-sm text-text-muted">
-            {t(
-              "Présentez votre entreprise comme un vrai site professionnel : à propos, équipe, galerie et avis clients.",
-              "Present your business like a real professional website: about, team, gallery and customer reviews.",
-            )}
-          </p>
-        </div>
-        {!allowed && <Badge>{t("🔒 Passer au plan Pro", "🔒 Move to the Pro plan")}</Badge>}
-      </div>
+      <h2 className="text-sm font-semibold text-text">{t("Contenu de la page publique", "Public page content")}</h2>
+      <p className="mt-1 text-sm text-text-muted">
+        {t(
+          "Plus votre formule est complète, plus votre site l'est : votre histoire dès Starter, votre équipe et vos photos dès Pro.",
+          "The fuller your plan, the fuller your website: your story from Starter, your team and photos from Pro.",
+        )}
+      </p>
       {!isLoading && organization && (
-        <fieldset disabled={!allowed} className="mt-4 space-y-6 disabled:opacity-60">
-          <AboutTextEditor organization={organization} />
-          <TestimonialsEditor organization={organization} />
-          <TeamMembersEditor organization={organization} />
-          <GalleryEditor organization={organization} />
-          <FaqEditor organization={organization} />
-        </fieldset>
+        <div className="mt-5 space-y-6">
+          <div className="rounded-md border border-border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-text">{t("Votre histoire", "Your story")}</h3>
+              {!storyAllowed && <Badge>{t("🔒 Formule Starter", "🔒 Starter plan")}</Badge>}
+            </div>
+            <fieldset disabled={!storyAllowed} className="mt-3 space-y-6 disabled:opacity-60">
+              <AnnouncementEditor organization={organization} />
+              <AboutTextEditor organization={organization} />
+              <FaqEditor organization={organization} />
+            </fieldset>
+          </div>
+          <div className="rounded-md border border-border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-text">{t("Votre vitrine", "Your showcase")}</h3>
+              {!showcaseAllowed && <Badge>{t("🔒 Formule Pro", "🔒 Pro plan")}</Badge>}
+            </div>
+            <fieldset disabled={!showcaseAllowed} className="mt-3 space-y-6 disabled:opacity-60">
+              <TeamMembersEditor organization={organization} />
+              <GalleryEditor organization={organization} />
+              <TestimonialsEditor organization={organization} />
+            </fieldset>
+          </div>
+        </div>
       )}
     </section>
+  );
+}
+
+/** The one-line band at the top of the public site (site_announcement, Starter and above). */
+function AnnouncementEditor({ organization }: { organization: Organization }) {
+  const t = useT();
+  const queryClient = useQueryClient();
+  const [value, setValue] = useState(organization.announcement ?? "");
+  const mutation = useMutation({
+    mutationFn: (announcement: string) =>
+      apiClient.patch<Organization>("/organizations/me", { announcement }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organizations", "me"] }),
+  });
+
+  return (
+    <div>
+      <label htmlFor="site-announcement" className="mb-1 block text-xs font-medium text-text">
+        {t("Bandeau d'annonce", "Announcement bar")}
+      </label>
+      <Input
+        id="site-announcement"
+        maxLength={140}
+        placeholder={t("Ex. : Livraison offerte ce week-end à Cocody", "E.g. Free delivery this weekend")}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <p className="mt-1 text-xs text-text-muted">
+        {t(
+          "Affiché tout en haut de votre site. Laissez vide pour le retirer.",
+          "Shown at the very top of your website. Leave empty to remove it.",
+        )}
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          loading={mutation.isPending}
+          onClick={() => mutation.mutate(value.trim())}
+        >
+          {mutation.isPending ? t("Enregistrement...", "Saving...") : t("Enregistrer l'annonce", "Save the announcement")}
+        </Button>
+        {mutation.isSuccess && <p className="text-xs text-text-muted">{t("Enregistré.", "Saved.")}</p>}
+        {mutation.isError && (
+          <p className="text-xs text-destructive">
+            {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -61,7 +61,7 @@ export interface OrganizationSettings {
 
 /**
  * Storefront "content" sections — testimonials/team/gallery/about — gated behind the Pro plan
- * (see EntitlementsService.assertContentSectionsAllowed) and rendered by every storefront
+ * (see OrganizationsService.update (site_about_faq / site_showcase)) and rendered by every storefront
  * template (apps/storefront/src/templates/sections/). These are free-form content an org owner
  * fills in themselves, distinct from the structural template/palette/font choice.
  */
@@ -161,9 +161,11 @@ export interface Organization {
   onlinePaymentTerms?: { version: string; acceptedAt: string; acceptedByUserId: string };
   /** La carte de fidélité — see LoyaltySettings. */
   loyalty?: { enabled: boolean; stampsRequired: number; reward: string };
-  /** Long-form "about us" text for the public storefront — Pro plan and above, see
-   *  EntitlementsService.assertContentSectionsAllowed. Distinct from the short `tagline`. */
+  /** Long-form "about us" text for the public storefront — Starter plan and above, see
+   *  OrganizationsService.update (site_about_faq / site_showcase). Distinct from the short `tagline`. */
   aboutText?: string;
+  /** One line shown in a band at the top of the public site (Starter and above). */
+  announcement?: string;
   /** Org-configurable SEO title/description override for the public storefront page — every
    *  plan tier, unlike the content sections above. Undefined falls back to an auto-derived
    *  title/description. */

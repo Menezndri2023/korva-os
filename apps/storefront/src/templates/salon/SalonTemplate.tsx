@@ -5,6 +5,7 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
@@ -199,7 +200,7 @@ function ServiceCard({
       </Link>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1">
-          <Link href={`/${slug}/offers/${offer.id}`} className="font-medium hover:underline">{offer.name}</Link>
+          <Link href={`/${slug}/offers/${offer.id}`} className="font-medium hover:underline"><FeaturedBadge offer={offer} />{offer.name}</Link>
           <WishlistButton slug={slug} offerId={offer.id} />
         </div>
         {offer.description && <p className={`mt-0.5 line-clamp-2 text-sm ${KT.textMuted}`}>{offer.description}</p>}

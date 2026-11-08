@@ -168,6 +168,10 @@ export class Offer {
   @Prop({ type: Number, min: 0 })
   compareAtPrice?: number | null;
 
+  /** See Offer.featured in @korva/types. */
+  @Prop()
+  featured?: boolean;
+
   /** See OfferOptionGroup in @korva/types. Stored as plain objects with client-generated ids;
    *  `default: undefined` so an offer without options stays without the key. */
   @Prop({ type: [Object], default: undefined })
