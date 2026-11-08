@@ -5,6 +5,8 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { PracticalInfo } from "../sections/PracticalInfo";
+import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
 import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
@@ -98,11 +100,9 @@ export function SalonTemplate({
           <h1 className={`text-4xl font-semibold sm:text-5xl ${KT.headingFont} ${hasHeroImage ? "text-white" : ""}`}>
             {organization.name}
           </h1>
-          {organization.tagline && (
-            <p className={`max-w-md text-base leading-relaxed sm:text-lg ${hasHeroImage ? "text-white/90" : KT.textMuted}`}>
-              {organization.tagline}
-            </p>
-          )}
+          <p className={`max-w-md text-base leading-relaxed sm:text-lg ${hasHeroImage ? "text-white/90" : KT.textMuted}`}>
+            {siteSubtitle(organization, t)}
+          </p>
           {bookingEnabled && bookableOffers.length > 0 && (
             <a
               href="#services"
@@ -115,6 +115,7 @@ export function SalonTemplate({
       </div>
 
       <main id="services" className="mx-auto w-full max-w-3xl scroll-mt-20 space-y-12 px-4 py-10 sm:px-6 sm:py-14">
+        <PracticalInfo organization={organization} commerceEnabled={commerceEnabled} bookingEnabled={bookingEnabled} />
         <Confirmation message={confirmation} />
 
         {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>{t(

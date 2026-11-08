@@ -6,6 +6,7 @@ import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { PracticalInfo } from "../sections/PracticalInfo";
 import type { StorefrontTemplateProps } from "../types";
 import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
@@ -73,6 +74,9 @@ export function AcademieTemplate({
       </section>
 
       <main className="mx-auto -mt-8 w-full max-w-5xl px-4 pb-12 sm:px-6">
+        <div className="mb-8">
+          <PracticalInfo organization={organization} commerceEnabled={commerceEnabled} bookingEnabled={bookingEnabled} />
+        </div>
         <Confirmation message={confirmation} />
 
         {!catalogVisible && <p className={`pt-12 text-sm ${KT.textMuted}`}>{t(

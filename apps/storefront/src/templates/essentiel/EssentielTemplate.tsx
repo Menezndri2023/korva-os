@@ -7,6 +7,8 @@ import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { PracticalInfo } from "../sections/PracticalInfo";
+import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
 import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
@@ -64,6 +66,9 @@ export function EssentielTemplate({
       <HeroSection organization={organization} />
 
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mb-8">
+          <PracticalInfo organization={organization} commerceEnabled={commerceEnabled} bookingEnabled={bookingEnabled} />
+        </div>
         <Confirmation message={confirmation} />
 
         {!catalogVisible && (
@@ -178,6 +183,7 @@ function OfferCard({
 /** The photo when there is one, the tagline when there is one — and when there is neither, the
  *  organization's name as a heading rather than a page that opens straight onto a grid. */
 function HeroSection({ organization }: { organization: PublicOrganization }) {
+  const t = useT();
   const [imageFailed, setImageFailed] = useState(false);
   const showImage = organization.heroImage && !imageFailed;
 
@@ -198,11 +204,9 @@ function HeroSection({ organization }: { organization: PublicOrganization }) {
       )}
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <h1 className={`text-3xl font-semibold sm:text-4xl ${KT.headingFont}`}>{organization.name}</h1>
-        {organization.tagline && (
-          <p className={`mt-2 max-w-xl text-base leading-relaxed sm:text-lg ${KT.textMuted}`}>
-            {organization.tagline}
-          </p>
-        )}
+        <p className={`mt-2 max-w-xl text-base leading-relaxed sm:text-lg ${KT.textMuted}`}>
+          {siteSubtitle(organization, t)}
+        </p>
       </div>
     </div>
   );

@@ -6,6 +6,8 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { PracticalInfo } from "../sections/PracticalInfo";
+import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
 import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
@@ -76,17 +78,30 @@ export function BoutiqueTemplate({
 
       {organization.heroImage ? (
         <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
-          <HeroBanner src={organization.heroImage} title={organization.name} tagline={organization.tagline} />
+          <HeroBanner src={organization.heroImage} title={organization.name} tagline={siteSubtitle(organization, t)} />
         </div>
       ) : (
-        <section className={`px-4 py-3 sm:px-6 ${KT.accentBg} ${KT.accentContrastText}`}>
-          <p className="mx-auto max-w-6xl text-center text-sm font-medium">
-            {organization.tagline || `Bienvenue chez ${organization.name}`}
-          </p>
+        <section className={`py-8 sm:py-12 ${KT.accentBg} ${KT.accentContrastText}`}>
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <h1 className={`text-3xl font-semibold leading-tight sm:text-4xl ${KT.headingFont}`}>{organization.name}</h1>
+            <p className="mt-2 max-w-xl text-base opacity-90 sm:text-lg">{siteSubtitle(organization, t)}</p>
+            {catalogVisible && (
+              <a
+                href="#catalogue"
+                className={`mt-5 inline-flex rounded-full px-6 py-2.5 text-sm font-semibold shadow-sm ${KT.bg} ${KT.text}`}
+              >
+                {t("Voir le catalogue", "See the catalogue")}
+              </a>
+            )}
+          </div>
         </section>
       )}
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6">
+        <PracticalInfo organization={organization} commerceEnabled={commerceEnabled} bookingEnabled={bookingEnabled} />
+      </div>
+
+      <main id="catalogue" className="mx-auto w-full max-w-6xl scroll-mt-20 px-4 py-6 sm:px-6 sm:py-8">
         <Confirmation message={confirmation} />
 
         {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>{t(
@@ -115,9 +130,9 @@ export function BoutiqueTemplate({
         )}
 
         {catalogVisible && offersLoading && (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
             {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className={`aspect-[4/5] animate-pulse rounded-2xl ${KT.surface}`} />
+              <div key={i} className={`aspect-square animate-pulse rounded-2xl ${KT.surface}`} />
             ))}
           </div>
         )}
@@ -138,7 +153,7 @@ export function BoutiqueTemplate({
         )}
 
         {catalogVisible && visibleOffers.length > 0 && (
-          <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
             {visibleOffers.map((offer, index) => (
               <ProductCard
                 key={offer.id}
@@ -188,7 +203,7 @@ function ProductCard({
     <div className={`group flex flex-col overflow-hidden rounded-2xl border transition-shadow duration-200 hover:shadow-lg ${KT.border} ${KT.surface}`}>
       <div className="relative">
         <Link href={`/${slug}/offers/${offer.id}`} tabIndex={-1} aria-hidden>
-          <OfferImage offer={offer} priority={priority} zoomOnHover className="aspect-[4/5] w-full" />
+          <OfferImage offer={offer} priority={priority} zoomOnHover className="aspect-square w-full" />
         </Link>
         <div className={`absolute right-2 top-2 rounded-full ${KT.surface}`}>
           <WishlistButton slug={slug} offerId={offer.id} />

@@ -6,6 +6,8 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { PracticalInfo } from "../sections/PracticalInfo";
+import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
 import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
@@ -86,9 +88,7 @@ export function TableTemplate({
           <h1 className={`text-4xl font-semibold sm:text-5xl ${KT.headingFont} ${hasHeroImage ? "text-white" : ""}`}>
             {organization.name}
           </h1>
-          {organization.tagline && (
-            <p className={`mt-3 text-base sm:text-lg ${hasHeroImage ? "text-white/90" : KT.textMuted}`}>{organization.tagline}</p>
-          )}
+          <p className={`mt-3 text-base sm:text-lg ${hasHeroImage ? "text-white/90" : KT.textMuted}`}>{siteSubtitle(organization, t)}</p>
         </div>
       </div>
 
@@ -106,7 +106,7 @@ export function TableTemplate({
                 href={`#${categoryAnchor(category)}`}
                 className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium ${KT.border} ${KT.surface} ${KT.accentSoftHoverBg}`}
               >
-                {category === UNCATEGORIZED ? t("Autres", "Other") : category}
+                {category === UNCATEGORIZED ? (groups.length === 1 ? t("La carte", "The menu") : t("Autres", "Other")) : category}
               </a>
             ))}
           </div>
@@ -114,6 +114,7 @@ export function TableTemplate({
       )}
 
       <main className="mx-auto w-full max-w-3xl space-y-10 px-4 py-10 sm:px-6">
+        <PracticalInfo organization={organization} commerceEnabled={commerceEnabled} bookingEnabled={bookingEnabled} />
         <Confirmation message={confirmation} />
 
         {!catalogVisible && <p className={`text-sm ${KT.textMuted}`}>{t(
@@ -147,7 +148,7 @@ export function TableTemplate({
           groups.map(([category, items]) => (
             <section key={category} id={categoryAnchor(category)} className="scroll-mt-32">
               <h2 className={`border-b-2 pb-3 text-2xl font-semibold ${KT.borderAccent} ${KT.text} ${KT.headingFont}`}>
-                {category === UNCATEGORIZED ? t("Autres", "Other") : category}
+                {category === UNCATEGORIZED ? (groups.length === 1 ? t("La carte", "The menu") : t("Autres", "Other")) : category}
               </h2>
               <ul className={`mt-2 divide-y ${KT.border}`}>
                 {items.map((offer) => (

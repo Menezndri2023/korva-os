@@ -7,6 +7,8 @@ import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { PracticalInfo } from "../sections/PracticalInfo";
+import { siteSubtitle } from "@/lib/site-subtitle";
 import type { StorefrontTemplateProps } from "../types";
 import { AboutSection } from "../sections/AboutSection";
 import { TeamSection } from "../sections/TeamSection";
@@ -80,8 +82,10 @@ export function VitrineTemplate({
             <h1 className={`text-4xl font-semibold leading-tight sm:text-5xl ${KT.headingFont}`}>
               {organization.tagline || organization.name}
             </h1>
-            {organization.tagline && (
+            {organization.tagline ? (
               <p className={`mt-4 text-lg font-medium ${KT.accentText}`}>{organization.name}</p>
+            ) : (
+              <p className={`mt-4 max-w-md text-lg ${KT.textMuted}`}>{siteSubtitle(organization, t)}</p>
             )}
             <a
               href="#services"
@@ -94,6 +98,9 @@ export function VitrineTemplate({
         </div>
       </section>
 
+      <div className="mx-auto w-full max-w-5xl px-4 pt-10 sm:px-6">
+        <PracticalInfo organization={organization} commerceEnabled={commerceEnabled} bookingEnabled={bookingEnabled} />
+      </div>
       <main id="services" className="mx-auto w-full max-w-5xl scroll-mt-20 px-4 py-14 sm:px-6 sm:py-16">
         <SectionHeading eyebrow={words.eyebrow} title={words.title} />
 
