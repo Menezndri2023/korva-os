@@ -89,6 +89,9 @@ const faqItemSchema = z.object({
   answer: z.string().min(1).max(2000),
 });
 
+/** Photos after the main one in a Business site's home slideshow (5 in all). */
+export const HERO_SLIDES_MAX = 4;
+
 export const updateOrganizationSchema = createOrganizationSchema.partial().extend({
   legalName: z.string().max(200).optional(),
   logo: z.string().url().optional(),
@@ -150,6 +153,15 @@ export const updateOrganizationSchema = createOrganizationSchema.partial().exten
   aboutText: z.string().max(4000).optional(),
   /** The site's announcement band (Starter and above); "" removes it. */
   announcement: z.string().trim().max(140).optional(),
+  /** Home page slideshow photos after heroImage (Business); [] removes them. */
+  heroSlides: z.array(z.string().url().max(2048)).max(HERO_SLIDES_MAX).optional(),
+  /** "" removes the id. */
+  googleAnalyticsId: z
+    .union([z.literal(""), z.string().trim().toUpperCase().regex(/^G-[A-Z0-9]{4,15}$/, "Un identifiant Google Analytics ressemble à G-XXXXXXXXXX")])
+    .optional(),
+  metaPixelId: z
+    .union([z.literal(""), z.string().trim().regex(/^\d{8,20}$/, "Un identifiant Meta Pixel est une suite de chiffres")])
+    .optional(),
   /** Google typically truncates a title around 60 chars and a description around 155-160 —
    *  these caps are generous headroom above that, not a hard SEO best-practice enforcement. */
   seoTitle: z.string().max(70).optional(),

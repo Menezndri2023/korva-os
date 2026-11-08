@@ -324,6 +324,20 @@ export class PublicService {
         organization.announcement
           ? organization.announcement
           : undefined,
+      heroSlides:
+        planHasFeature(plan.key, 'hero_slideshow') &&
+        organization.heroSlides?.length
+          ? organization.heroSlides
+          : undefined,
+      // Loaded by the site only after the visitor consents (apps/storefront SiteTracking).
+      tracking:
+        planHasFeature(plan.key, 'site_tracking') &&
+        (organization.googleAnalyticsId || organization.metaPixelId)
+          ? {
+              googleAnalyticsId: organization.googleAnalyticsId || undefined,
+              metaPixelId: organization.metaPixelId || undefined,
+            }
+          : undefined,
       testimonials: showcaseAllowed ? organization.testimonials : undefined,
       teamMembers: showcaseAllowed ? organization.teamMembers : undefined,
       galleryImages: showcaseAllowed ? organization.galleryImages : undefined,

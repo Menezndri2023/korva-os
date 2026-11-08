@@ -65,6 +65,7 @@ import type {
 } from "@korva/types";
 import {
   addMemberSchema,
+  HERO_SLIDES_MAX,
   createCustomFieldSchema,
   createRoleSchema,
   createWebhookSubscriptionSchema,
@@ -2965,6 +2966,8 @@ function StorefrontContentSection() {
   // The site grows with the plan: the story on Starter, the showcase on Pro (PLAN_FEATURE_MIN_PLAN).
   const storyAllowed = !planKey || planHasFeature(planKey, "site_about_faq");
   const showcaseAllowed = !planKey || planHasFeature(planKey, "site_showcase");
+  const trackingAllowed = !planKey || planHasFeature(planKey, "site_tracking");
+  const slideshowAllowed = !planKey || planHasFeature(planKey, "hero_slideshow");
 
   return (
     <section className="rounded-lg border border-border bg-surface p-6">
@@ -2999,9 +3002,169 @@ function StorefrontContentSection() {
               <TestimonialsEditor organization={organization} />
             </fieldset>
           </div>
+          <div className="rounded-md border border-border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-text">{t("Mesure d'audience et publicité", "Audience and ad tracking")}</h3>
+              {!trackingAllowed && <Badge>{t("🔒 Formule Pro", "🔒 Pro plan")}</Badge>}
+            </div>
+            <fieldset disabled={!trackingAllowed} className="mt-3 disabled:opacity-60">
+              <TrackingEditor organization={organization} />
+            </fieldset>
+          </div>
+          <div className="rounded-md border border-border p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-text">{t("Diaporama d'accueil", "Home slideshow")}</h3>
+              {!slideshowAllowed && <Badge>{t("🔒 Formule Business", "🔒 Business plan")}</Badge>}
+            </div>
+            <fieldset disabled={!slideshowAllowed} className="mt-3 disabled:opacity-60">
+              <HeroSlidesEditor organization={organization} />
+            </fieldset>
+          </div>
         </div>
       )}
     </section>
+  );
+}
+
+/** Google Analytics / Meta Pixel ids (site_tracking, Pro and above). The site loads them only
+ *  after each visitor accepts its cookie banner. "" removes an id. */
+function TrackingEditor({ organization }: { organization: Organization }) {
+  const t = useT();
+  const queryClient = useQueryClient();
+  const [googleAnalyticsId, setGoogleAnalyticsId] = useState(organization.googleAnalyticsId ?? "");
+  const [metaPixelId, setMetaPixelId] = useState(organization.metaPixelId ?? "");
+  const mutation = useMutation({
+    mutationFn: () =>
+      apiClient.patch<Organization>("/organizations/me", {
+        googleAnalyticsId: googleAnalyticsId.trim(),
+        metaPixelId: metaPixelId.trim(),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organizations", "me"] }),
+  });
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-text-muted">
+        {t(
+          "Mesurez vos visites et vos publicités. Vos visiteurs voient d'abord un bandeau : rien n'est chargé sans leur accord.",
+          "Measure your visits and your ads. Visitors first see a banner: nothing loads without their consent.",
+        )}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor="ga-id" className="mb-1 block text-xs font-medium text-text">
+            {t("Identifiant Google Analytics", "Google Analytics ID")}
+          </label>
+          <Input id="ga-id" placeholder="G-XXXXXXXXXX" value={googleAnalyticsId} onChange={(e) => setGoogleAnalyticsId(e.target.value)} />
+        </div>
+        <div>
+          <label htmlFor="meta-pixel-id" className="mb-1 block text-xs font-medium text-text">
+            {t("Identifiant Meta Pixel (Facebook, Instagram)", "Meta Pixel ID (Facebook, Instagram)")}
+          </label>
+          <Input id="meta-pixel-id" inputMode="numeric" placeholder="123456789012345" value={metaPixelId} onChange={(e) => setMetaPixelId(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" loading={mutation.isPending} onClick={() => mutation.mutate()}>
+          {t("Enregistrer le suivi", "Save tracking")}
+        </Button>
+        {mutation.isSuccess && <p className="text-xs text-text-muted">{t("Enregistré.", "Saved.")}</p>}
+        {mutation.isError && (
+          <p className="text-xs text-destructive">
+            {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Photos after the main one in the home slideshow (hero_slideshow, Business). */
+function HeroSlidesEditor({ organization }: { organization: Organization }) {
+  const t = useT();
+  const queryClient = useQueryClient();
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const slides = organization.heroSlides ?? [];
+  const full = slides.length >= HERO_SLIDES_MAX;
+
+  const mutation = useMutation({
+    mutationFn: (next: string[]) => apiClient.patch<Organization>("/organizations/me", { heroSlides: next }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["organizations", "me"] }),
+  });
+
+  async function handleUpload(file: File | undefined) {
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const result = await uploadFile(file);
+      mutation.mutate([...slides, result.url]);
+    } catch (error) {
+      setUploadError(error instanceof ApiError ? error.message : t("Échec de l'envoi du fichier.", "The file could not be uploaded."));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-text-muted">
+          {t(
+            `Jusqu'à ${HERO_SLIDES_MAX} photos qui défilent après votre photo d'accueil.`,
+            `Up to ${HERO_SLIDES_MAX} photos shown after your home photo.`,
+          )}
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => void handleUpload(event.target.files?.[0])}
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          loading={uploading}
+          disabled={full}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {t("Ajouter une photo au diaporama", "Add a slideshow photo")}
+        </Button>
+      </div>
+      {!organization.heroImage && slides.length > 0 && (
+        <p className="mt-2 text-xs text-text-muted">
+          {t("Ajoutez aussi une photo d'accueil ci-dessus : elle ouvre le diaporama.", "Also add a home photo above: it opens the slideshow.")}
+        </p>
+      )}
+      {uploadError && <p className="mt-2 text-xs text-destructive">{uploadError}</p>}
+      {mutation.isError && (
+        <p className="mt-2 text-xs text-destructive">
+          {mutation.error instanceof ApiError ? mutation.error.message : t("Erreur", "Error")}
+        </p>
+      )}
+      {slides.length > 0 && (
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {slides.map((url, index) => (
+            <div key={url} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element -- uploaded URL */}
+              <img src={url} alt={t(`Photo ${index + 2} du diaporama`, `Slideshow photo ${index + 2}`)} className="h-20 w-full rounded-md border border-border object-cover" />
+              <button
+                type="button"
+                aria-label={t(`Retirer la photo ${index + 2}`, `Remove photo ${index + 2}`)}
+                onClick={() => mutation.mutate(slides.filter((slide) => slide !== url))}
+                className="absolute right-1 top-1 rounded bg-surface px-1.5 py-0.5 text-xs text-destructive shadow"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

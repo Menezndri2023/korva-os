@@ -29,6 +29,15 @@ describe("middleware — custom domain rewrite (Phase E3)", () => {
     expect(response.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
   });
 
+  it("lets Google Analytics and Meta Pixel send their hits (loaded only after consent)", async () => {
+    mockResolveDomain({ success: false });
+    const { middleware } = await import("./middleware");
+    const response = await middleware(new NextRequest("http://sites.korvasuite.com/chez-awa"));
+    const csp = response.headers.get("Content-Security-Policy") ?? "";
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/\*\.google-analytics\.com/);
+    expect(csp).toMatch(/connect-src [^;]*https:\/\/www\.facebook\.com/);
+  });
+
   it("rewrites the root path on a custom domain to just /:slug (not /:slug/)", async () => {
     mockResolveDomain({ success: true, data: { slug: "boutique-a" } });
     const { middleware } = await import("./middleware");

@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { Badge, Button, Card } from "@korva/ui";
 import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { HeroSlides, heroImagesOf } from "../sections/HeroSlides";
 import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
@@ -23,7 +23,6 @@ import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
-import { uploadImage } from "@/lib/upload-image";
 
 /** The original, sector-agnostic storefront layout — always available regardless of plan, and
  *  the fallback whenever a plan no longer covers the org's chosen template (see
@@ -185,24 +184,10 @@ function OfferCard({
  *  organization's name as a heading rather than a page that opens straight onto a grid. */
 function HeroSection({ organization }: { organization: PublicOrganization }) {
   const t = useT();
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = organization.heroImage && !imageFailed;
 
   return (
     <div className={`border-b ${KT.border} ${KT.surface}`}>
-      {showImage && (
-        // Arbitrary tenant-supplied host — same rationale as OfferImage.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          {...uploadImage(organization.heroImage, [640, 960, 1280], "100vw")}
-          alt=""
-          fetchPriority="high"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onError={() => setImageFailed(true)}
-          className="h-52 w-full object-cover sm:h-80"
-        />
-      )}
+      <HeroSlides images={heroImagesOf(organization)} className="h-52 w-full sm:h-80" />
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <h1 className={`text-3xl font-semibold sm:text-4xl ${KT.headingFont}`}>{organization.name}</h1>
         <p className={`mt-2 max-w-xl text-base leading-relaxed sm:text-lg ${KT.textMuted}`}>

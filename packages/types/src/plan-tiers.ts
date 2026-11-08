@@ -91,6 +91,8 @@ export const CUSTOM_DOMAIN_MIN_PLAN: PlanKey = "starter";
  *   site_announcement  -> OrganizationsService.update (announcement) + PublicService
  *   site_showcase      -> OrganizationsService.update (team, gallery, testimonials) + PublicService
  *   featured_offers    -> OffersService (marking an offer) + PublicService (badge and order)
+ *   site_tracking      -> OrganizationsService.update (tracking ids) + PublicService (`tracking`)
+ *   hero_slideshow     -> OrganizationsService.update (heroSlides) + PublicService
  *   warehouses         -> WarehousesController writes (PlanFeatureGuard)
  *   suppliers          -> SuppliersController / PurchaseOrdersController writes (PlanFeatureGuard)
  *   advanced_analytics -> AnalyticsController insights (PlanFeatureGuard)
@@ -121,6 +123,7 @@ export const PLAN_FEATURE_MIN_PLAN = {
   site_announcement: "starter",
   site_showcase: "pro",
   featured_offers: "pro",
+  site_tracking: "pro",
   warehouses: "pro",
   suppliers: "pro",
   // Pro (2026-11-01): see further, take the data out, close the till.
@@ -132,6 +135,7 @@ export const PLAN_FEATURE_MIN_PLAN = {
   network_overview: "business",
   custom_roles: "business",
   accounting_export: "business",
+  hero_slideshow: "business",
 } as const satisfies Record<string, PlanKey>;
 export type PlanFeature = keyof typeof PLAN_FEATURE_MIN_PLAN;
 
@@ -148,6 +152,7 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   site_announcement: "Bandeau d'annonce en haut de votre site (promo, horaires, nouveauté)",
   site_showcase: "Équipe, galerie photo et témoignages sur votre site",
   featured_offers: "Vos coups de cœur mis en avant en tête de votre site",
+  site_tracking: "Mesure d'audience et publicité sur votre site : Google Analytics et Meta Pixel, avec bandeau de consentement",
   warehouses: "Plusieurs entrepôts",
   suppliers: "Fournisseurs et bons de commande",
   advanced_analytics: "Statistiques avancées : comparaison, meilleurs clients et ventes",
@@ -157,6 +162,7 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeature, string> = {
   network_overview: "Vue d'ensemble de tous vos établissements",
   custom_roles: "Rôles et droits personnalisés pour votre équipe",
   accounting_export: "Exports comptables : journal des ventes et TVA",
+  hero_slideshow: "Diaporama de photos en page d'accueil de votre site (jusqu'à 5 photos)",
 };
 
 export function planHasFeature(planKey: string, feature: PlanFeature): boolean {

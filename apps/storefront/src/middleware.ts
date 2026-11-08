@@ -84,7 +84,10 @@ export async function middleware(request: NextRequest) {
     // + the API origin explicitly: uploads are served from it, and over plain http in development.
     `img-src 'self' data: https: ${apiOrigin}`,
     `font-src 'self'`,
-    `connect-src 'self' ${apiOrigin}`,
+    // Google Analytics and Meta Pixel send their hits here — only after the visitor's consent,
+    // on Pro sites that set an id (app/[slug]/site-tracking.tsx). Their scripts need no entry:
+    // 'strict-dynamic' trusts what the nonce'd bundle loads.
+    `connect-src 'self' ${apiOrigin} https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://www.facebook.com`,
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,

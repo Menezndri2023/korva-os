@@ -199,6 +199,18 @@ export class Organization {
   @Prop()
   announcement?: string;
 
+  /** Home slideshow photos after heroImage — Business (hero_slideshow). `default: undefined`
+   *  so organizations without any stay without the key. */
+  @Prop({ type: [String], default: undefined })
+  heroSlides?: string[];
+
+  /** Audience and ad tracking ids — Pro and above (site_tracking). */
+  @Prop()
+  googleAnalyticsId?: string;
+
+  @Prop()
+  metaPixelId?: string;
+
   /** Org-configurable `<title>`/meta-description override for the public storefront page —
    *  available at every plan tier (unlike the content sections above), since basic SEO control
    *  isn't a premium feature. Undefined falls back to PublicService's auto-derived title/description

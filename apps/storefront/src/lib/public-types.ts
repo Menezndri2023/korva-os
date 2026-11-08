@@ -70,6 +70,10 @@ export interface PublicOrganization {
   aboutText?: string;
   /** The announcement band at the top of the site — only sent on Starter and above. */
   announcement?: string;
+  /** Slideshow photos after heroImage — only sent on Business. */
+  heroSlides?: string[];
+  /** Tracking ids — only sent on Pro and above; loaded after the visitor's consent. */
+  tracking?: { googleAnalyticsId?: string; metaPixelId?: string };
   testimonials?: Testimonial[];
   /** Real customers' reviews — every plan. Absent from an API older than this field. */
   reviewSummary?: PublicReviewSummary;

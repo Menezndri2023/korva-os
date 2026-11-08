@@ -1,6 +1,7 @@
 import { fetchOrganization } from "@/lib/fetch-organization";
 import { siteLocale } from "@/lib/storefront-locale-core";
 import { StorefrontLocaleProvider } from "@/lib/storefront-locale";
+import { SiteTracking } from "./site-tracking";
 
 /**
  * Every page of a business's site — home, catalogue, offer, customer account — in the business's
@@ -22,6 +23,13 @@ export default async function SiteLayout({
       <div lang={locale} className="contents">
         {children}
       </div>
+      {lookup.kind === "found" && lookup.organization.tracking && (
+        <SiteTracking
+          slug={slug}
+          googleAnalyticsId={lookup.organization.tracking.googleAnalyticsId}
+          metaPixelId={lookup.organization.tracking.metaPixelId}
+        />
+      )}
     </StorefrontLocaleProvider>
   );
 }

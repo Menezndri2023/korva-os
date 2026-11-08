@@ -5,6 +5,7 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { HeroSlides, heroImagesOf } from "../sections/HeroSlides";
 import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
@@ -23,7 +24,6 @@ import { SiteFooter } from "../sections/SiteFooter";
 import { siteWording } from "../wording";
 import { Confirmation } from "../sections/Confirmation";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
-import { uploadImage } from "@/lib/upload-image";
 
 /** Beauty & wellness, non-medical health, fitness, hospitality, personal services — booking is
  *  the primary call to action everywhere, well above cart/commerce. */
@@ -84,15 +84,7 @@ export function SalonTemplate({
       >
         {hasHeroImage && (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              {...uploadImage(organization.heroImage, [640, 960, 1280], "100vw")}
-              alt=""
-              fetchPriority="high"
-              decoding="async"
-              referrerPolicy="no-referrer"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+            <HeroSlides images={heroImagesOf(organization)} fill />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
           </>
         )}

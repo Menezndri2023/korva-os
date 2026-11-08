@@ -1879,7 +1879,7 @@ describe("SettingsPage — storefront content sections", () => {
     mockDefaultGets("starter");
     renderWithProviders(<SettingsPage />);
 
-    expect(await screen.findByText("🔒 Formule Pro")).toBeInTheDocument();
+    expect((await screen.findAllByText("🔒 Formule Pro")).length).toBeGreaterThan(0);
     expect(screen.queryByText("🔒 Formule Starter")).not.toBeInTheDocument();
     expect((await screen.findByText("À propos")).closest("fieldset")).not.toBeDisabled();
     expect(screen.getByLabelText("Bandeau d'annonce")).toBeEnabled();
@@ -1892,6 +1892,31 @@ describe("SettingsPage — storefront content sections", () => {
 
     expect(await screen.findByText("🔒 Formule Starter")).toBeInTheDocument();
     expect((await screen.findByText("À propos")).closest("fieldset")).toBeDisabled();
+  });
+
+  it("saves the Google Analytics and Meta Pixel ids on Pro", async () => {
+    patchMock.mockResolvedValue({ ...organization, googleAnalyticsId: "G-ABC123" });
+    const user = userEvent.setup();
+    renderWithProviders(<SettingsPage />);
+
+    await user.type(await screen.findByLabelText("Identifiant Google Analytics"), "G-ABC123");
+    await user.type(screen.getByLabelText("Identifiant Meta Pixel (Facebook, Instagram)"), "1234567890");
+    await user.click(screen.getByRole("button", { name: "Enregistrer le suivi" }));
+
+    await waitFor(() =>
+      expect(patchMock).toHaveBeenCalledWith("/organizations/me", {
+        googleAnalyticsId: "G-ABC123",
+        metaPixelId: "1234567890",
+      }),
+    );
+  });
+
+  it("keeps the slideshow for Business and tracking for Pro", async () => {
+    mockDefaultGets("starter");
+    renderWithProviders(<SettingsPage />);
+    expect((await screen.findAllByText("🔒 Formule Business")).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Identifiant Google Analytics")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ajouter une photo au diaporama" })).toBeDisabled();
   });
 
   it("saves the announcement shown at the top of the site", async () => {

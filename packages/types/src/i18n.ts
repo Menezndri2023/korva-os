@@ -266,6 +266,7 @@ export const PLAN_FEATURE_LABELS_EN: Record<PlanFeature, string> = {
   site_announcement: "Announcement bar at the top of your website (offer, opening hours, news)",
   site_showcase: "Team, photo gallery and testimonials on your website",
   featured_offers: "Your favourites showcased at the top of your website",
+  site_tracking: "Audience and ad tracking on your website: Google Analytics and Meta Pixel, with a consent banner",
   warehouses: "Several warehouses",
   suppliers: "Suppliers and purchase orders",
   advanced_analytics: "Advanced statistics: comparisons, best customers and sales",
@@ -275,6 +276,7 @@ export const PLAN_FEATURE_LABELS_EN: Record<PlanFeature, string> = {
   network_overview: "Overview of all your locations",
   accounting_export: "Accounting exports: sales journal and VAT",
   custom_roles: "Custom roles and permissions for your team",
+  hero_slideshow: "Photo slideshow on your website's home page (up to 5 photos)",
 };
 
 export const TRADE_TOOL_LABELS_EN: Record<TradeTool, string> = {

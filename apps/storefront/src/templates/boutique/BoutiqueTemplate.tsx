@@ -6,6 +6,7 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { HeroSlides, heroImagesOf } from "../sections/HeroSlides";
 import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
@@ -22,7 +23,6 @@ import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
 import { useT } from "@/lib/storefront-locale";
-import { uploadImage } from "@/lib/upload-image";
 
 const ALL_CATEGORY = "Tout";
 
@@ -79,7 +79,7 @@ export function BoutiqueTemplate({
 
       {organization.heroImage ? (
         <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
-          <HeroBanner src={organization.heroImage} title={organization.name} tagline={siteSubtitle(organization, t)} />
+          <HeroBanner images={heroImagesOf(organization)} title={organization.name} tagline={siteSubtitle(organization, t)} />
         </div>
       ) : (
         <section className={`py-8 sm:py-12 ${KT.accentBg} ${KT.accentContrastText}`}>
@@ -232,23 +232,12 @@ function ProductCard({
   );
 }
 
-function HeroBanner({ src, title, tagline }: { src: string; title: string; tagline?: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
+function HeroBanner({ images, title, tagline }: { images: string[]; title: string; tagline?: string }) {
   return (
     <div className="relative overflow-hidden rounded-3xl">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        {...uploadImage(src, [640, 960, 1280], "100vw")}
-        alt=""
-        fetchPriority="high"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
-        className="h-52 w-full object-cover sm:h-80"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-8">
+      <HeroSlides images={images} className="h-52 w-full sm:h-80" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 p-5 pb-8 text-white sm:p-8 sm:pb-10">
         <h1 className={`text-2xl font-semibold sm:text-4xl ${KT.headingFont}`}>{title}</h1>
         {tagline && <p className="mt-1 max-w-xl text-sm text-white/85 sm:text-base">{tagline}</p>}
       </div>

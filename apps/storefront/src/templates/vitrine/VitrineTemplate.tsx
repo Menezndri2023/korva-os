@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { Button } from "@korva/ui";
 import { offerTypeLabel } from "@/lib/offer-labels";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { HeroSlides, heroImagesOf } from "../sections/HeroSlides";
 import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
@@ -25,7 +25,6 @@ import { SiteFooter } from "../sections/SiteFooter";
 import { siteWording } from "../wording";
 import { Confirmation } from "../sections/Confirmation";
 import { useStorefrontLocale, useT } from "@/lib/storefront-locale";
-import { uploadImage } from "@/lib/upload-image";
 
 /**
  * Services vitrine — professional services, trades/construction, real estate, digital
@@ -95,7 +94,12 @@ export function VitrineTemplate({
               {t("Découvrir nos services", "Discover our services")}
             </a>
           </div>
-          {organization.heroImage && <HeroImage src={organization.heroImage} />}
+          {organization.heroImage && (
+            <HeroSlides
+              images={heroImagesOf(organization)}
+              className={`h-64 w-full rounded-3xl border shadow-lg sm:h-80 ${KT.border}`}
+            />
+          )}
         </div>
       </section>
 
@@ -210,23 +214,6 @@ function ServiceCard({
         </div>
       </div>
     </li>
-  );
-}
-
-function HeroImage({ src }: { src: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      {...uploadImage(src, [640, 960, 1280], "100vw")}
-      alt=""
-      fetchPriority="high"
-      decoding="async"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className={`h-64 w-full rounded-3xl border object-cover shadow-lg sm:h-80 ${KT.border}`}
-    />
   );
 }
 

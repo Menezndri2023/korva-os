@@ -3,6 +3,7 @@ import { MapPin, MessageCircle, Phone } from "lucide-react";
 import { telLink, whatsappLink } from "@/lib/contact";
 import type { PublicOrganization } from "@/lib/public-types";
 import { KT } from "../kt-classes";
+import { CONSENT_REOPEN_EVENT } from "@/app/[slug]/site-tracking";
 import type { SiteHeaderLink } from "./SiteHeader";
 import { useT } from "@/lib/storefront-locale";
 
@@ -29,13 +30,23 @@ export function SiteFooter({
           )}
           <ContactLines organization={organization} />
         </div>
-        {links.length > 0 && (
+        {(links.length > 0 || organization.tracking) && (
           <nav aria-label={t("Liens utiles", "Useful links")} className={`flex flex-col gap-2 text-sm ${KT.textMuted}`}>
             {links.map((link) => (
               <Link key={link.href} href={link.href} className="hover:underline">
                 {link.label}
               </Link>
             ))}
+            {organization.tracking && (
+              // Changing one's mind must be as easy as saying yes (site-tracking.tsx).
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new Event(CONSENT_REOPEN_EVENT))}
+                className="text-left hover:underline"
+              >
+                {t("Cookies", "Cookies")}
+              </button>
+            )}
           </nav>
         )}
       </div>

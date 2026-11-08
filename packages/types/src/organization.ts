@@ -166,6 +166,12 @@ export interface Organization {
   aboutText?: string;
   /** One line shown in a band at the top of the public site (Starter and above). */
   announcement?: string;
+  /** Photos shown after `heroImage` in the home page slideshow (Business, hero_slideshow). */
+  heroSlides?: string[];
+  /** Google Analytics 4 measurement id ("G-…") — Pro and above (site_tracking). */
+  googleAnalyticsId?: string;
+  /** Meta (Facebook) Pixel id — Pro and above (site_tracking). */
+  metaPixelId?: string;
   /** Org-configurable SEO title/description override for the public storefront page — every
    *  plan tier, unlike the content sections above. Undefined falls back to an auto-derived
    *  title/description. */

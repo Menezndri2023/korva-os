@@ -111,13 +111,14 @@ export const PLAN_PERKS: Record<string, readonly string[]> = {
 /**
  * What the business's own website looks like on each tier, in one line — the site grows with the
  * plan (2026-11-08). Every item is enforced: site_about_faq / site_announcement (Starter),
- * site_showcase / featured_offers / premium themes (Pro), customAccentMinPlan (Business).
+ * site_showcase / featured_offers / site_tracking / premium themes (Pro), hero_slideshow and
+ * customAccentMinPlan (Business).
  */
 export const PLAN_SITE: Record<string, string> = {
   free: "Site une page : catalogue, commande ou réservation, WhatsApp et avis clients",
   starter: "Site complet : votre histoire, vos questions fréquentes, un bandeau d'annonce, votre domaine",
-  pro: "Site vitrine pro : votre équipe, votre galerie, vos témoignages et vos coups de cœur en tête",
-  business: "Site à votre image : votre propre couleur de marque, en plus de tout le site Pro",
+  pro: "Site vitrine pro : équipe, galerie, témoignages, coups de cœur en tête, Google Analytics et Meta Pixel",
+  business: "Site à votre image : diaporama de photos en accueil et votre propre couleur de marque",
 };
 
 /** One line per tier, saying who it is for. */
@@ -195,8 +196,8 @@ const PLAN_PERKS_EN: Record<string, readonly string[]> = {
 const PLAN_SITE_EN: Record<string, string> = {
   free: "One-page website: catalogue, ordering or booking, WhatsApp and customer reviews",
   starter: "Full website: your story, your FAQ, an announcement bar, your own domain",
-  pro: "Professional showcase: your team, your gallery, your testimonials and your favourites first",
-  business: "A website in your image: your own brand colour, on top of the whole Pro website",
+  pro: "Professional showcase: team, gallery, testimonials, favourites first, Google Analytics and Meta Pixel",
+  business: "A website in your image: a home photo slideshow and your own brand colour",
 };
 
 const PLAN_AUDIENCE_EN: Record<string, string> = {

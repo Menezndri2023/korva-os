@@ -6,6 +6,7 @@ import { Button } from "@korva/ui";
 import type { PublicOffer } from "@/lib/public-types";
 import { WishlistButton } from "@/app/[slug]/wishlist-button";
 import { KT } from "../kt-classes";
+import { HeroSlides, heroImagesOf } from "../sections/HeroSlides";
 import { FeaturedBadge } from "../sections/FeaturedBadge";
 import { PracticalInfo } from "../sections/PracticalInfo";
 import { siteSubtitle } from "@/lib/site-subtitle";
@@ -22,7 +23,6 @@ import { SiteHeader, siteLinks } from "../sections/SiteHeader";
 import { SiteFooter } from "../sections/SiteFooter";
 import { Confirmation } from "../sections/Confirmation";
 import { useT } from "@/lib/storefront-locale";
-import { uploadImage } from "@/lib/upload-image";
 
 const UNCATEGORIZED = "Autres";
 
@@ -73,15 +73,7 @@ export function TableTemplate({
       >
         {hasHeroImage && (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              {...uploadImage(organization.heroImage, [640, 960, 1280], "100vw")}
-              alt=""
-              fetchPriority="high"
-              decoding="async"
-              referrerPolicy="no-referrer"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+            <HeroSlides images={heroImagesOf(organization)} fill />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
           </>
         )}

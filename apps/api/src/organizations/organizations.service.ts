@@ -376,6 +376,12 @@ export class OrganizationsService {
     if (input.announcement) {
       await this.entitlementsService.assertFeature(id, 'site_announcement');
     }
+    if (input.googleAnalyticsId || input.metaPixelId) {
+      await this.entitlementsService.assertFeature(id, 'site_tracking');
+    }
+    if (input.heroSlides && input.heroSlides.length > 0) {
+      await this.entitlementsService.assertFeature(id, 'hero_slideshow');
+    }
     if (
       (input.testimonials && input.testimonials.length > 0) ||
       (input.teamMembers && input.teamMembers.length > 0) ||
