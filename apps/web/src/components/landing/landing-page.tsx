@@ -140,7 +140,12 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
             name: BRAND_NAME,
             alternateName: BRAND_ALTERNATE_NAMES,
             url: "https://app.korvasuite.com",
-            parentOrganization: { "@type": "Organization", name: PUBLISHER.name, url: PUBLISHER.url },
+            parentOrganization: {
+              "@type": "Organization",
+              name: PUBLISHER.name,
+              url: PUBLISHER.url,
+              sameAs: [PUBLISHER.url, ...PUBLISHER.profiles],
+            },
             ...(BRAND_PROFILES.length ? { sameAs: BRAND_PROFILES } : {}),
             logo: "https://app.korvasuite.com/apple-icon.png",
             email: KORVA_SUPPORT.email,

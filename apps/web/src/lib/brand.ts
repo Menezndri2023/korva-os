@@ -20,6 +20,11 @@ export const PUBLISHER = {
   url: "https://vit-global.tech",
   /** The group's page about KORVA OS. */
   productPage: "https://vit-global.tech/fr/realisations/korva-os-gestion-entreprise",
+  /** The group's public profiles, given by the owner on 2026-11-09 (canonical www hosts). */
+  profiles: [
+    "https://www.facebook.com/profile.php?id=61596240321319",
+    "https://www.tiktok.com/@vitglobaltech",
+  ],
 };
 
 /**
