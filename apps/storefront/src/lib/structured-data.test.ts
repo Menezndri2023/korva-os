@@ -29,6 +29,12 @@ describe("structured data", () => {
     expect(offerJsonLd(product, salon, "u")["@type"]).toBe("Product");
   });
 
+  it("shows photos of the place before the logo, and nothing when there is no picture", () => {
+    const pictured = { ...salon, logo: "logo.png", heroImage: "hero.jpg", heroSlides: ["s1.jpg"] } as PublicOrganization;
+    expect(businessJsonLd(pictured, "u")).toMatchObject({ logo: "logo.png", image: ["hero.jpg", "s1.jpg", "logo.png"] });
+    expect(businessJsonLd(salon, "u")).not.toHaveProperty("image");
+  });
+
   it("can never close its script element", () => {
     expect(jsonLdHtml({ name: "</script><script>alert(1)</script>" })).not.toContain("</script>");
   });

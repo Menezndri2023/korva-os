@@ -5,6 +5,7 @@ import Script from "next/script";
 import "./globals.css";
 import { ErrorReporter } from "@korva/ui";
 import { Providers } from "./providers";
+import { BRAND_NAME, HOME_DESCRIPTION_FR, HOME_TITLE_FR } from "@/lib/brand";
 
 /**
  * Runs synchronously before the body ever paints — reads the visitor's stored theme choice (or
@@ -67,21 +68,21 @@ export const metadata: Metadata = {
   // (server-side, see lib/site-url.ts) is what the sitemap and robots.txt use.
   metadataBase: new URL(process.env.APP_URL ?? "https://app.korvasuite.com"),
   twitter: { card: "summary_large_image" },
+  // Brand first, then the words people actually search ("logiciel de gestion", "site internet"):
+  // see lib/brand.ts for why the alternate names live in the structured data too.
   title: {
-    default: "KORVA OS, la gestion de votre entreprise au même endroit",
+    default: HOME_TITLE_FR,
     template: "%s · KORVA OS",
   },
-  description:
-    "Clients, réservations, commandes, stock, factures et site public dans un seul compte, " +
-    "configuré pour votre métier. Gratuit pour commencer, sans carte bancaire.",
-  applicationName: "KORVA OS",
+  description: HOME_DESCRIPTION_FR,
+  applicationName: BRAND_NAME,
   // Google Search Console ownership of https://app.korvasuite.com (public, not a secret).
   verification: { google: "gcyX2n6EYn4ip0teMka5Xc27liad23u4i11hOGj5vQ8" },
   openGraph: {
     type: "website",
-    siteName: "KORVA OS",
+    siteName: BRAND_NAME,
     locale: "fr_FR",
-    title: "KORVA OS, la gestion de votre entreprise au même endroit",
+    title: HOME_TITLE_FR,
     description:
       "Votre cahier, votre carnet de rendez-vous et votre caisse au même endroit. " +
       "Choisissez votre métier, votre espace est déjà configuré.",

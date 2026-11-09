@@ -16,6 +16,12 @@ const BUSINESS_TYPE: Record<BusinessModel, string> = {
   association: "NGO",
 };
 
+function businessImages(organization: PublicOrganization): string[] {
+  return [organization.heroImage, ...(organization.heroSlides ?? []), organization.logo].filter(
+    (url): url is string => Boolean(url),
+  );
+}
+
 export function businessJsonLd(organization: PublicOrganization, url: string): Record<string, unknown> {
   const rating = organization.reviewSummary;
   return {
@@ -24,9 +30,11 @@ export function businessJsonLd(organization: PublicOrganization, url: string): R
     name: organization.name,
     url,
     ...(organization.tagline || organization.aboutText
-      ? { description: organization.tagline || organization.aboutText }
+      ? { description: (organization.tagline || organization.aboutText)!.trim() }
       : {}),
-    ...(organization.logo ? { logo: organization.logo, image: organization.logo } : {}),
+    ...(organization.logo ? { logo: organization.logo } : {}),
+    // Photos of the place first (Google asks LocalBusiness for real images), the logo last.
+    ...(businessImages(organization).length ? { image: businessImages(organization) } : {}),
     ...(organization.contactPhone || organization.whatsappNumber
       ? { telephone: organization.contactPhone || organization.whatsappNumber }
       : {}),
@@ -57,7 +65,7 @@ export function offerJsonLd(
     "@context": "https://schema.org",
     "@type": booked ? "Service" : "Product",
     name: offer.name,
-    ...(offer.description ? { description: offer.description } : {}),
+    ...(offer.description?.trim() ? { description: offer.description.trim() } : {}),
     ...(offer.images.length ? { image: offer.images } : {}),
     ...(booked
       ? { provider: { "@type": "LocalBusiness", name: organization.name } }

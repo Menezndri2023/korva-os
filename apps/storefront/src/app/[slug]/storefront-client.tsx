@@ -212,7 +212,7 @@ export default function StorefrontClient({
         <p className="bg-[var(--kt-surface)] pb-5 text-center text-xs text-[var(--kt-text-muted)]">
           {t("Site propulsé par", "Website powered by")}{" "}
           <a
-            href="https://korvasuite.com"
+            href="https://app.korvasuite.com/"
             className="inline-flex items-center gap-1 align-middle font-medium underline-offset-2 hover:underline"
           >
             {/* KORVA's cowrie, small: the credit carries the brand, not just its name. */}

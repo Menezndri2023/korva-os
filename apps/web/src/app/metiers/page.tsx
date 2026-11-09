@@ -5,7 +5,8 @@ import { PublicFooter, PublicHeader } from "@/components/seo/trade-page";
 import { SEO_TRADES } from "@/lib/seo-trades";
 
 export const metadata: Metadata = {
-  title: "KORVA OS pour votre métier : salons, restaurants, boutiques, artisans…",
+  // Absolute: the layout's "· KORVA OS" suffix would name the brand twice.
+  title: { absolute: "KORVA OS pour votre métier : salons, restaurants, boutiques, artisans…" },
   description:
     "Un logiciel de gestion configuré pour chaque métier : salons de coiffure, restaurants, boutiques, hôtels, centres de formation, artisans, agences, associations. Gratuit pour commencer.",
   alternates: { canonical: "/metiers", languages: { fr: "/metiers", en: "/en/trades" } },

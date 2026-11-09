@@ -219,7 +219,10 @@ export function PublicFooter({ locale = "fr" }: { locale?: Locale }) {
               {locale === "en" ? "Online payment terms" : "Conditions du paiement en ligne"}
             </Link>
           </p>
-          <p className="text-sm">&copy; {new Date().getFullYear()} KORVA OS</p>
+          {/* The product's other name, in visible text: someone searching "korva suite" or the
+              domain should find these pages, not only the structured data (lib/brand.ts). */}
+          <p className="text-sm">&copy; {new Date().getFullYear()} KORVA OS, {locale === "en" ? "by" : "par"} Korva Suite (korvasuite.com)
+          </p>
         </div>
         <nav aria-label={t.footerTrades}>
           <p className="mb-3 text-sm font-semibold text-paper">{t.footerTrades}</p>

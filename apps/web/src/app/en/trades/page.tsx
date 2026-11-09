@@ -5,7 +5,7 @@ import { PublicFooter, PublicHeader } from "@/components/seo/trade-page";
 import { SEO_TRADES, tradePath } from "@/lib/seo-trades";
 
 export const metadata: Metadata = {
-  title: "KORVA OS for your trade: salons, restaurants, shops, tradespeople…",
+  title: { absolute: "KORVA OS for your trade: salons, restaurants, shops, tradespeople…" },
   description:
     "Management software set up for each trade: hair salons, restaurants, shops, hotels, training centres, tradespeople, agencies, associations. Free to start.",
   alternates: { canonical: "/en/trades", languages: { fr: "/metiers", en: "/en/trades" } },

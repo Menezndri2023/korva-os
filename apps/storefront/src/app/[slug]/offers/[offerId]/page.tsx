@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import OfferDetailClient from "./offer-detail-client";
 import { serverApi } from "@/lib/server-api";
 import { jsonLdHtml, offerJsonLd } from "@/lib/structured-data";
+import { clipText } from "@/lib/seo-text";
 import {
   classifyLookupFailure,
   unresolvedStorefrontMetadata,
@@ -76,9 +77,11 @@ export async function generateMetadata({ params }: OfferDetailPageProps): Promis
   }
 
   const title = `${offer.name} — ${organization.name}`;
-  const description =
-    offer.description ??
-    t(`${offer.name}, proposé par ${organization.name} sur KORVA OS.`, `${offer.name}, offered by ${organization.name} on KORVA OS.`);
+  // The business's own words, trimmed and cut where search results cut; the fallback names the
+  // business, not KORVA — this snippet is the business's advertisement.
+  const description = offer.description?.trim()
+    ? clipText(offer.description)
+    : t(`${offer.name}, chez ${organization.name}.`, `${offer.name}, at ${organization.name}.`);
   const image = offer.images[0];
 
   return {

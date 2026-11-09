@@ -8,6 +8,7 @@ import { businessJsonLd, jsonLdHtml } from "@/lib/structured-data";
 import { unresolvedStorefrontMetadata } from "@/lib/organization-lookup";
 import { fetchOrganization } from "@/lib/fetch-organization";
 import { siteLocale, translator } from "@/lib/storefront-locale-core";
+import { shareImage, siteDescription, siteTitle } from "@/lib/seo-text";
 import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
 import { StorefrontOffline } from "./storefront-offline";
 
@@ -65,32 +66,17 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
     slug,
     organization.visibleSections.includes("catalog"),
   );
-  const offerNames = offers.slice(0, 3).map((offer) => offer.name);
-  const t = translator(siteLocale(organization.language));
-
-  const services: string[] = [];
-  if (organization.enabledModules.includes("booking")) {
-    services.push(t("réservation en ligne", "online booking"));
-  }
-  if (organization.enabledModules.includes("commerce")) {
-    services.push(t("commande en ligne", "online ordering"));
-  }
-
-  const autoDescriptionParts = [
-    t(`${organization.name} — boutique propulsée par KORVA OS.`, `${organization.name} — shop powered by KORVA OS.`),
-  ];
-  if (services.length > 0) {
-    autoDescriptionParts.push(t(`Services : ${services.join(", ")}.`, `Services: ${services.join(", ")}.`));
-  }
-  if (offerNames.length > 0) {
-    autoDescriptionParts.push(t(`Offres : ${offerNames.join(", ")}.`, `Offers: ${offerNames.join(", ")}.`));
-  }
+  // Featured offers first, as the page itself lists them; seo-text.ts dedupes the names.
+  const offerNames = offers.slice(0, 8).map((offer) => offer.name);
+  const locale = siteLocale(organization.language);
+  const t = translator(locale);
 
   // Phase E4 (docs/KORVA_OS_V2_AUDIT.md §2.6): an org-configured seoTitle/seoDescription always
-  // wins over the auto-derived fallback above — see Organization.seoTitle's own doc comment
-  // (apps/api) for why this is available at every plan tier, unlike the content sections.
-  const title = organization.seoTitle || organization.name;
-  const description = organization.seoDescription || autoDescriptionParts.join(" ");
+  // wins over the auto-derived fallback (lib/seo-text.ts) — see Organization.seoTitle's own doc
+  // comment (apps/api) for why this is available at every plan tier, unlike the content sections.
+  const title = siteTitle(organization, t);
+  const description = siteDescription(organization, offerNames, t);
+  const image = shareImage(organization);
 
   return {
     title,
@@ -102,14 +88,15 @@ export async function generateMetadata({ params }: StorefrontPageProps): Promise
       type: "website",
       url: canonicalUrl,
       siteName: organization.name,
-      // Only set when the organization actually has a logo on file — never a placeholder image.
-      ...(organization.logo ? { images: [{ url: organization.logo }] } : {}),
+      locale: locale === "en" ? "en_GB" : "fr_FR",
+      // Only a picture the business actually uploaded — never a placeholder image.
+      ...(image ? { images: [{ url: image }] } : {}),
     },
     twitter: {
-      card: organization.logo ? "summary_large_image" : "summary",
+      card: image ? "summary_large_image" : "summary",
       title,
       description,
-      ...(organization.logo ? { images: [organization.logo] } : {}),
+      ...(image ? { images: [image] } : {}),
     },
   };
 }

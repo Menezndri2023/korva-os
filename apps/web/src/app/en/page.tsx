@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing/landing-page";
 import { SignedInRedirect } from "@/components/landing/signed-in-redirect";
+import { BRAND_NAME, HOME_DESCRIPTION_EN, HOME_TITLE_EN } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: { absolute: "KORVA OS — run your whole business in one place" },
-  description:
-    "Customers, appointments, orders, stock, invoices and a website in one account, set up for your trade. Card and mobile money payments. Free to start, no credit card.",
+  title: { absolute: HOME_TITLE_EN },
+  description: HOME_DESCRIPTION_EN,
   alternates: { canonical: "/en", languages: { fr: "/", en: "/en", "x-default": "/" } },
   openGraph: {
-    title: "KORVA OS — run your whole business in one place",
+    type: "website",
+    siteName: BRAND_NAME,
+    title: HOME_TITLE_EN,
     description:
       "Your notebook, your appointment book and your till in one place. Pick your trade and your workspace is ready.",
     locale: "en_GB",

@@ -13,6 +13,7 @@ import { PlanLadder } from "./plan-ladder";
 import { PlatformReviews } from "./platform-reviews";
 import { TradePanel } from "./trade-panel";
 import { JsonLd } from "@/components/seo/json-ld";
+import { BRAND_ALTERNATE_NAMES, BRAND_NAME } from "@/lib/brand";
 import { LanguageLink, PublicFooter } from "@/components/seo/trade-page";
 import { KORVA_SUPPORT, PLAN_PRICES } from "@korva/types";
 
@@ -121,9 +122,23 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
       <JsonLd
         data={[
           {
+            // Google's "site name" in results comes from this block; alternateName is what lets
+            // a search for "korva" or "korva suite" be recognised as this site (lib/brand.ts).
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "@id": "https://app.korvasuite.com/#website",
+            name: BRAND_NAME,
+            alternateName: BRAND_ALTERNATE_NAMES,
+            url: "https://app.korvasuite.com/",
+            inLanguage: ["fr", "en"],
+            publisher: { "@id": "https://app.korvasuite.com/#organization" },
+          },
+          {
             "@context": "https://schema.org",
             "@type": "Organization",
-            name: "KORVA OS",
+            "@id": "https://app.korvasuite.com/#organization",
+            name: BRAND_NAME,
+            alternateName: BRAND_ALTERNATE_NAMES,
             url: "https://app.korvasuite.com",
             logo: "https://app.korvasuite.com/apple-icon.png",
             email: KORVA_SUPPORT.email,
@@ -132,13 +147,17 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
               contactType: "customer support",
               email: KORVA_SUPPORT.email,
               telephone: KORVA_SUPPORT.phoneDisplay.replace(/\s/g, ""),
-              availableLanguage: ["French"],
+              availableLanguage: ["French", "English"],
             },
           },
           {
             "@context": "https://schema.org",
             "@type": "SoftwareApplication",
-            name: "KORVA OS",
+            name: BRAND_NAME,
+            alternateName: BRAND_ALTERNATE_NAMES,
+            publisher: { "@id": "https://app.korvasuite.com/#organization" },
+            // The same markets llms.txt names: franc CFA countries, mobile money first.
+            areaServed: ["Côte d'Ivoire", "Sénégal", "Afrique de l'Ouest"],
             applicationCategory: "BusinessApplication",
             operatingSystem: "Web, Android, iOS (navigateur)",
             url: "https://app.korvasuite.com",
