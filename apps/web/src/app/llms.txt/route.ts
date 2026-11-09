@@ -2,6 +2,7 @@ import { PLAN_LIMITS, PLAN_PRICES, commissionPercentLabel } from "@korva/types";
 import { ARTICLES, articlePath } from "@/lib/articles";
 import { SEO_TRADES } from "@/lib/seo-trades";
 import { appUrl } from "@/lib/site-url";
+import { PUBLISHER } from "@/lib/brand";
 
 // Plain spaces: French formatting puts a narrow no-break space in "9 900", fine in a page,
 // noise in the plain text an assistant reads.
@@ -18,6 +19,8 @@ export function GET() {
   const body = `# KORVA OS
 
 > KORVA OS est un logiciel de gestion en ligne pour les petites entreprises d'Afrique francophone (Côte d'Ivoire, Sénégal et zone franc CFA) : clients, rendez-vous et réservations, commandes, stock, caisse, devis et factures, et un site internet, dans un seul compte configuré pour le métier de l'entreprise. Les clients paient par Wave, Orange Money, MTN, Moov ou carte bancaire (Visa, Mastercard). Gratuit pour commencer, sans carte bancaire.
+
+KORVA OS (aussi appelé KORVA ou Korva Suite, korvasuite.com) est un produit de ${PUBLISHER.name} (${PUBLISHER.url}).
 
 ## Ce que fait KORVA OS
 - Fiches clients avec historique, prospects et relances.
@@ -44,6 +47,7 @@ ${ARTICLES.map((article) => `- [${article.fr.title}](${base}${articlePath(articl
 - [Accueil](${base}/)
 - [Créer un compte gratuit](${base}/register)
 - [Tous les métiers](${base}/metiers)
+- [${PUBLISHER.name}, l'entreprise derrière KORVA OS](${PUBLISHER.productPage})
 
 ## In English
 

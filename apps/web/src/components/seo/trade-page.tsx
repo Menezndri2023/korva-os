@@ -14,6 +14,7 @@ import { KorvaGlyph, KorvaWordmark } from "@/components/brand/korva-mark";
 import { landingText } from "@/lib/landing-content";
 import { SEO_TRADES, tradePath, tradeWords, type SeoTrade } from "@/lib/seo-trades";
 import { appUrl } from "@/lib/site-url";
+import { PUBLISHER } from "@/lib/brand";
 import { articlesIndexPath } from "@/lib/articles";
 import { JsonLd } from "./json-ld";
 
@@ -221,7 +222,12 @@ export function PublicFooter({ locale = "fr" }: { locale?: Locale }) {
           </p>
           {/* The product's other name, in visible text: someone searching "korva suite" or the
               domain should find these pages, not only the structured data (lib/brand.ts). */}
-          <p className="text-sm">&copy; {new Date().getFullYear()} KORVA OS, {locale === "en" ? "by" : "par"} Korva Suite (korvasuite.com)
+          <p className="text-sm">
+            &copy; {new Date().getFullYear()} KORVA OS (Korva Suite, korvasuite.com),{" "}
+            {locale === "en" ? "a product of" : "un produit de"}{" "}
+            <a href={PUBLISHER.url} className="hover:text-paper hover:underline">
+              {PUBLISHER.name}
+            </a>
           </p>
         </div>
         <nav aria-label={t.footerTrades}>

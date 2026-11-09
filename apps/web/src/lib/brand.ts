@@ -10,6 +10,25 @@ export const BRAND_NAME = "KORVA OS";
 /** Every other name the product goes by, most likely search first. */
 export const BRAND_ALTERNATE_NAMES = ["KORVA", "Korva Suite", "KorvaSuite", "korvasuite.com"];
 
+/**
+ * The company behind KORVA OS. Declared as the Organization's parentOrganization and shown in
+ * the footer: the group's own site already presents KORVA OS and links here, so search engines
+ * can tie the two together.
+ */
+export const PUBLISHER = {
+  name: "VIT GLOBAL TECHNOLOGIES GROUP",
+  url: "https://vit-global.tech",
+  /** The group's page about KORVA OS. */
+  productPage: "https://vit-global.tech/fr/realisations/korva-os-gestion-entreprise",
+};
+
+/**
+ * KORVA's own profiles (Facebook, Instagram, LinkedIn, TikTok…): the `sameAs` of the
+ * Organization, the strongest signal that "KORVA" the search and this site are one entity.
+ * Only real, public addresses belong here.
+ */
+export const BRAND_PROFILES: string[] = [];
+
 export const HOME_TITLE_FR = "KORVA OS — logiciel de gestion et site internet pour votre entreprise";
 export const HOME_DESCRIPTION_FR =
   "KORVA OS (Korva Suite) : clients, rendez-vous, commandes, stock, caisse, factures et site " +

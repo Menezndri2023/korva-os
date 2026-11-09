@@ -13,7 +13,7 @@ import { PlanLadder } from "./plan-ladder";
 import { PlatformReviews } from "./platform-reviews";
 import { TradePanel } from "./trade-panel";
 import { JsonLd } from "@/components/seo/json-ld";
-import { BRAND_ALTERNATE_NAMES, BRAND_NAME } from "@/lib/brand";
+import { BRAND_ALTERNATE_NAMES, BRAND_NAME, BRAND_PROFILES, PUBLISHER } from "@/lib/brand";
 import { LanguageLink, PublicFooter } from "@/components/seo/trade-page";
 import { KORVA_SUPPORT, PLAN_PRICES } from "@korva/types";
 
@@ -140,6 +140,8 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
             name: BRAND_NAME,
             alternateName: BRAND_ALTERNATE_NAMES,
             url: "https://app.korvasuite.com",
+            parentOrganization: { "@type": "Organization", name: PUBLISHER.name, url: PUBLISHER.url },
+            ...(BRAND_PROFILES.length ? { sameAs: BRAND_PROFILES } : {}),
             logo: "https://app.korvasuite.com/apple-icon.png",
             email: KORVA_SUPPORT.email,
             contactPoint: {
