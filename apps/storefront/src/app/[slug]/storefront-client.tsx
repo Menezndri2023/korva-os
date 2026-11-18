@@ -19,6 +19,8 @@ import { TableTemplate } from "@/templates/table/TableTemplate";
 import { BoutiqueTemplate } from "@/templates/boutique/BoutiqueTemplate";
 import { AcademieTemplate } from "@/templates/academie/AcademieTemplate";
 import { SalonTemplate } from "@/templates/salon/SalonTemplate";
+import { SejourTemplate } from "@/templates/sejour/SejourTemplate";
+import { AgenceTemplate } from "@/templates/agence/AgenceTemplate";
 import { useRouter } from "next/navigation";
 import { useT } from "@/lib/storefront-locale";
 
@@ -42,6 +44,10 @@ function renderTemplate(key: string, props: StorefrontTemplateProps) {
       return <AcademieTemplate {...props} />;
     case "salon":
       return <SalonTemplate {...props} />;
+    case "sejour":
+      return <SejourTemplate {...props} />;
+    case "agence":
+      return <AgenceTemplate {...props} />;
     default:
       return <EssentielTemplate {...props} />;
   }

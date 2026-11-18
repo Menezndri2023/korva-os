@@ -28,6 +28,8 @@ export const STOREFRONT_TEMPLATE_KEYS = [
   "boutique",
   "academie",
   "salon",
+  "sejour",
+  "agence",
 ] as const;
 export type StorefrontTemplateKey = (typeof STOREFRONT_TEMPLATE_KEYS)[number];
 
@@ -255,7 +257,7 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplateDefinition[] = [
   {
     key: "vitrine",
     label: "Vitrine services",
-    description: "Services professionnels, artisanat & BTP, immobilier, agences, associations, événementiel.",
+    description: "Services professionnels, artisanat & BTP, agences, associations, événementiel.",
     minPlan: "free",
     palettes: ["graphite", "sauge", "ocre"],
     fontPairings: ["sobre", "editorial"],
@@ -295,10 +297,30 @@ export const STOREFRONT_TEMPLATES: StorefrontTemplateDefinition[] = [
   {
     key: "salon",
     label: "Salon",
-    description: "Beauté & bien-être, santé non médicale, sport & fitness, hôtellerie, garde d'enfants & services à la personne — réservation au premier plan.",
+    description: "Beauté & bien-être, santé non médicale, sport & fitness, garde d'enfants & services à la personne — réservation au premier plan.",
     minPlan: "free",
     palettes: ["corail", "sauge", "ardoise"],
     fontPairings: ["editorial", "arrondi"],
+    refinedChoiceMinPlan: "pro",
+    customAccentMinPlan: "business",
+  },
+  {
+    key: "sejour",
+    label: "Séjour",
+    description: "Hôtels, gîtes, chambres d'hôtes — les chambres en grand, capacité et équipements, prix à la nuit.",
+    minPlan: "free",
+    palettes: ["sauge", "terracotta", "marine"],
+    fontPairings: ["editorial", "chaleureux"],
+    refinedChoiceMinPlan: "pro",
+    customAccentMinPlan: "business",
+  },
+  {
+    key: "agence",
+    label: "Agence immobilière",
+    description: "Agences, gestion locative — annonces filtrables par vente ou location, type de bien, quartier, prix et surface.",
+    minPlan: "free",
+    palettes: ["graphite", "marine", "ocre"],
+    fontPairings: ["sobre", "geometrique"],
     refinedChoiceMinPlan: "pro",
     customAccentMinPlan: "business",
   },

@@ -46,6 +46,10 @@ function catalogueTitle(template: string, t: Translate): string {
       return t("Nos services", "Our services");
     case "boutique":
       return t("Notre boutique", "Our shop");
+    case "sejour":
+      return t("Nos chambres", "Our rooms");
+    case "agence":
+      return t("Nos biens", "Our properties");
     default:
       return t("Notre catalogue", "Our catalogue");
   }

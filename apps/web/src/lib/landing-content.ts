@@ -212,14 +212,22 @@ export const STOREFRONT_TEMPLATE_TEXT_EN: Record<string, { label: string; descri
   essentiel: { label: "Essential", description: "A universal, clean template — available on every plan." },
   vitrine: {
     label: "Services showcase",
-    description: "Professional services, trades, real estate, agencies, associations, events.",
+    description: "Professional services, trades, agencies, associations, events.",
   },
   table: { label: "Table", description: "Restaurants, light hospitality, catering." },
   boutique: { label: "Shop", description: "Retail and e-commerce, fashion, groceries, farming and direct sales." },
   academie: { label: "Academy", description: "Training, coaching, workshops." },
   salon: {
     label: "Salon",
-    description: "Beauty and wellbeing, fitness, hospitality, personal services — booking first.",
+    description: "Beauty and wellbeing, fitness, personal services — booking first.",
+  },
+  sejour: {
+    label: "Stay",
+    description: "Hotels, gîtes, guesthouses — rooms shown large, with capacity, amenities and a nightly price.",
+  },
+  agence: {
+    label: "Estate agency",
+    description: "Agencies and letting — listings filtered by sale or rent, type, district, price and surface.",
   },
 };
 

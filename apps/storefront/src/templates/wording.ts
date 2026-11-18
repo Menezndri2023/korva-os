@@ -1,10 +1,11 @@
 import type { BusinessModel, Locale } from "@korva/types";
 
 /**
- * The words of a public site that depend on the trade rather than on the template. Two templates
- * serve several trades — "salon" also dresses a guesthouse, "vitrine" an estate agency and an
- * association — and their own copy ("Prendre rendez-vous", "Nos services") reads wrong there.
- * Each template passes its usual words; the trade overrides only what differs.
+ * The words of a public site that depend on the trade rather than on the template. A template
+ * can serve several trades — "vitrine" dresses an association, and an owner may pick any
+ * template for any trade (a guesthouse on "salon", an agency on "vitrine", the defaults before
+ * "sejour" and "agence" existed) — and its own copy ("Prendre rendez-vous", "Nos services")
+ * reads wrong there. Each template passes its usual words; the trade overrides only what differs.
  */
 export interface SiteWording {
   /** Header link to the full catalogue. */

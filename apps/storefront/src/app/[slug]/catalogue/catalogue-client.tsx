@@ -43,6 +43,14 @@ const CATALOGUE_LABELS: Record<string, { title: [string, string]; empty: [string
     title: ["Nos services", "Our services"],
     empty: ["Aucun service ne correspond à votre recherche.", "No service matches your search."],
   },
+  sejour: {
+    title: ["Nos chambres", "Our rooms"],
+    empty: ["Aucune chambre ne correspond à votre recherche.", "No room matches your search."],
+  },
+  agence: {
+    title: ["Nos biens", "Our properties"],
+    empty: ["Aucun bien ne correspond à votre recherche.", "No property matches your search."],
+  },
   boutique: {
     title: ["Notre boutique", "Our shop"],
     empty: ["Aucun produit ne correspond à votre recherche.", "No product matches your search."],

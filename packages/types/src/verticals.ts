@@ -332,7 +332,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
         config: { title: "Qualifier le contact {{leadId}}" },
       },
     },
-    defaultStorefrontTemplate: "vitrine",
+    defaultStorefrontTemplate: "agence",
   },
   {
     key: "hospitality",
@@ -364,7 +364,7 @@ export const VERTICAL_TEMPLATES: VerticalTemplate[] = [
       { name: "Petit-déjeuner", type: "product" },
       { name: "Séjour deux nuits", type: "package" },
     ],
-    defaultStorefrontTemplate: "salon",
+    defaultStorefrontTemplate: "sejour",
   },
   {
     key: "fashion_retail",
