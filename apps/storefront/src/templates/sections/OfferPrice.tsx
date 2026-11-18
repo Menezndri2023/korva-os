@@ -10,11 +10,17 @@ import { useStorefrontLocale } from "@/lib/storefront-locale";
  * (OffersService), so no comparison is needed here. The struck price is announced as such for
  * screen readers, which do not convey `line-through`.
  */
-export function OfferPrice({ offer }: { offer: Pick<PublicOffer, "pricing" | "compareAtPrice"> }) {
+export function OfferPrice({
+  offer,
+}: {
+  offer: Pick<PublicOffer, "pricing" | "compareAtPrice"> & Pick<Partial<PublicOffer>, "freeAmount">;
+}) {
   const locale = useStorefrontLocale();
   const { amount, currency } = offer.pricing;
   return (
     <>
+      {/* A donation's price is its minimum: the customer chooses the rest. */}
+      {offer.freeAmount && <span className="font-normal">{locale === "en" ? "From " : "À partir de "}</span>}
       {offer.compareAtPrice != null && (
         <>
           <s className="mr-1.5 font-normal opacity-60" aria-hidden="true">

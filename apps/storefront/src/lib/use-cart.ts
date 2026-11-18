@@ -26,9 +26,9 @@ function savedStorageKey(slug: string): string {
   return `korva-storefront-saved:${slug}`;
 }
 
-/** Two lines are the same product when offer, variant and options all match. */
-export function lineKey(line: Pick<CartLine, "offerId" | "variantId" | "optionIds">): string {
-  return `${line.offerId}:${line.variantId ?? ""}:${optionKey(line.optionIds)}`;
+/** Two lines are the same product when offer, variant, options and chosen amount all match. */
+export function lineKey(line: Pick<CartLine, "offerId" | "variantId" | "optionIds" | "amount">): string {
+  return `${line.offerId}:${line.variantId ?? ""}:${optionKey(line.optionIds)}:${line.amount ?? ""}`;
 }
 
 /** Adds `line` to `lines`, merging its quantity into an identical line already there. */
@@ -148,12 +148,15 @@ export function useCart(slug: string, account?: CartAccount) {
       offer: { id: string; name: string; pricing: { amount: number } },
       variant?: { id: string; name: string; priceOverride?: number },
       options?: ChosenOptions,
+      /** A donation's chosen amount (Offer.freeAmount); replaces the price for display. */
+      amount?: number,
     ) => {
       const optionIds = options?.ids.length ? [...options.ids].sort() : undefined;
       const sameLine = (line: CartLine) =>
         line.offerId === offer.id &&
         line.variantId === variant?.id &&
-        optionKey(line.optionIds) === optionKey(optionIds);
+        optionKey(line.optionIds) === optionKey(optionIds) &&
+        line.amount === amount;
       setCart((prev) => {
         if (prev.some(sameLine)) {
           return prev.map((line) =>
@@ -168,7 +171,8 @@ export function useCart(slug: string, account?: CartAccount) {
             variantId: variant?.id,
             optionIds,
             name: options?.labels.length ? `${baseName} (${options.labels.join(", ")})` : baseName,
-            unitPrice: (variant?.priceOverride ?? offer.pricing.amount) + (options?.priceDelta ?? 0),
+            unitPrice: amount ?? (variant?.priceOverride ?? offer.pricing.amount) + (options?.priceDelta ?? 0),
+            amount,
             quantity: 1,
           },
         ];

@@ -189,6 +189,7 @@ export default function OfferDetailPage() {
       minNights: offer.minNights ?? null,
       bufferMinutes: offer.bufferMinutes ?? null,
       depositPercent: offer.depositPercent ?? null,
+      freeAmount: offer.freeAmount ?? false,
     });
   }
   function cancelEdit() {
@@ -549,6 +550,17 @@ export default function OfferDetailPage() {
             />
               {compareAtLocked && <PlanLock feature="compare_at_price" />}
             </div>
+            {!fields.duration && (
+              <label className="col-span-2 flex items-start gap-2 text-sm text-text">
+                <input type="checkbox" className="mt-0.5" {...register("freeAmount")} />
+                <span>
+                  {t("Montant libre — le client choisit combien il paie (don, participation)", "Pay what you want — the customer chooses the amount (donation, contribution)")}
+                  <span className="block text-xs text-text-muted">
+                    {t("Le prix indiqué devient le minimum accepté.", "The price above becomes the minimum accepted.")}
+                  </span>
+                </span>
+              </label>
+            )}
             {fields.reference && <Input placeholder={t("Référence (SKU)", "Reference (SKU)")} {...register("sku")} />}
             {fields.barcode && (
               <Input placeholder={t("Code-barres (EAN/UPC)", "Barcode (EAN/UPC)")} {...register("barcode")} />

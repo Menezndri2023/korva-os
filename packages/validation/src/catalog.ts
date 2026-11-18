@@ -100,6 +100,9 @@ export const createOfferSchema = z.object({
   compareAtPrice: z.number().positive().nullable().optional(),
   /** « Coup de cœur » on the public site (Pro and above). */
   featured: z.boolean().optional(),
+  /** The customer chooses the amount, pricing.amount being the minimum — see Offer.freeAmount.
+   *  Refused on a booking by OffersService (an update may change the type alone). */
+  freeAmount: z.boolean().optional(),
   bookingUnit: z.enum(BOOKING_UNITS).optional(),
   minNights: z.number().int().min(1).max(365).nullable().optional(),
   bufferMinutes: z.number().int().min(0).max(240).nullable().optional(),

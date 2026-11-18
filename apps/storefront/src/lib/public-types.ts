@@ -114,6 +114,9 @@ export interface PublicOffer {
   durationMinutes?: number;
   /** Price before a promotion, always higher than pricing.amount — see Offer.compareAtPrice. */
   compareAtPrice?: number;
+  /** The customer chooses the amount (a donation); pricing.amount is the minimum — see
+   *  Offer.freeAmount. */
+  freeAmount?: boolean;
   /** « Coup de cœur » — only sent on Pro and above. */
   featured?: boolean;
   /** Characteristics set by the business (matière, origine, équipements...) — Offer.attributes. */
@@ -189,6 +192,9 @@ export interface CartLine {
   optionIds?: string[];
   name: string;
   unitPrice: number;
+  /** The amount the customer chose, on a free-amount offer only (a donation). Part of the
+   *  line's identity, and the one amount the API takes from the client — within the minimum. */
+  amount?: number;
   quantity: number;
 }
 

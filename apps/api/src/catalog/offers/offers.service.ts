@@ -42,6 +42,20 @@ function assertCompareAtPriceHigher(
   }
 }
 
+/** A booking is priced by its slot or its nights; letting the customer name the amount there
+ *  would make the deposit and the stay total meaningless. */
+function assertFreeAmountAllowed(
+  type: string,
+  freeAmount: boolean | undefined,
+): void {
+  if (freeAmount && type === 'booking') {
+    throw new BadRequestException({
+      code: 'FREE_AMOUNT_NOT_FOR_BOOKING',
+      message: 'A booking cannot let the customer choose the amount',
+    });
+  }
+}
+
 /**
  * Applies an edited variant list onto the stored one WITHOUT reissuing ids.
  *
@@ -112,6 +126,7 @@ export class OffersService {
     input: CreateOfferInput,
   ): Promise<OfferDocument> {
     assertCompareAtPriceHigher(input.compareAtPrice, input.pricing.amount);
+    assertFreeAmountAllowed(input.type, input.freeAmount);
     if (input.variants.length > 0) {
       await this.entitlementsService.assertFeature(
         organizationId,
@@ -174,6 +189,7 @@ export class OffersService {
       durationMinutes: input.durationMinutes,
       compareAtPrice: input.compareAtPrice,
       featured: input.featured,
+      freeAmount: input.freeAmount,
       optionGroups: input.optionGroups,
       bookingUnit: input.bookingUnit,
       minNights: input.minNights,
@@ -298,6 +314,8 @@ export class OffersService {
       input.variants !== undefined ||
       input.compareAtPrice != null ||
       input.pricing !== undefined ||
+      input.type !== undefined ||
+      input.freeAmount === true ||
       (input.status !== undefined && input.status !== 'archived');
     const current = needsCurrent
       ? await this.getById(organizationId, id)
@@ -343,6 +361,10 @@ export class OffersService {
           ? current.compareAtPrice
           : input.compareAtPrice,
         input.pricing?.amount ?? current.pricing.amount,
+      );
+      assertFreeAmountAllowed(
+        input.type ?? current.type,
+        input.freeAmount ?? current.freeAmount,
       );
     }
 

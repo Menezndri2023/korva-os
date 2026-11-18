@@ -529,6 +529,22 @@ describe("CatalogPage — trade suggestions and currency", () => {
     );
   });
 
+  it("lets an association take donations at a free amount, the price being the minimum", async () => {
+    orgMock.current = { type: "association", currency: "XOF", businessModel: "association" };
+    postMock.mockResolvedValue({ id: "offer-12" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Don libre");
+    await user.click(screen.getByRole("checkbox", { name: /Montant libre/ }));
+    await user.click(screen.getByRole("button", { name: /créer l'offre/i }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith("/offers", expect.objectContaining({ freeAmount: true })),
+    );
+  });
+
   it("asks a quote-based business how its service is priced and where it works", async () => {
     orgMock.current = { type: "artisan", currency: "XOF", businessModel: "quotes" };
     postMock.mockResolvedValue({ id: "offer-11" });

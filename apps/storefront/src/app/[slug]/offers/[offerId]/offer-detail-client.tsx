@@ -69,6 +69,8 @@ export default function OfferDetailClient({
   const [imageFailed, setImageFailed] = useState(false);
   const [selectedVariantId, setSelectedVariantId] = useState("");
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
+  // A donation's amount, as typed; starts at the minimum the business set (Offer.freeAmount).
+  const [chosenAmount, setChosenAmount] = useState("");
 
   if (orgQuery.isLoading || (orgQuery.data && offerQuery.isLoading)) {
     return <DetailSkeleton slug={slug} />;
@@ -153,6 +155,11 @@ export default function OfferDetailClient({
     offer.variants.find((v) => v.id === selectedVariantId) ?? offer.variants[0];
   const optionGroups = offer.optionGroups ?? [];
   const missingOptions = missingRequiredGroups(optionGroups, selectedOptionIds);
+  const chosenAmountValue = chosenAmount.trim() === "" ? undefined : Number(chosenAmount);
+  const amountTooLow =
+    Boolean(offer.freeAmount) &&
+    chosenAmountValue !== undefined &&
+    (!Number.isFinite(chosenAmountValue) || chosenAmountValue < offer.pricing.amount);
 
   // The offer page wears the shop's theme like its home page — it is the page a link shared on
   // WhatsApp opens, and it used to be the one page of the site in neutral grey.
@@ -338,18 +345,45 @@ export default function OfferDetailClient({
                   {t("Réserver", "Book")}
                 </Button>
               )}
+              {offer.freeAmount && offer.type !== "booking" && commerceEnabled && (
+                <label className="flex flex-col gap-1 text-sm sm:mr-2">
+                  <span className={KT.textMuted}>
+                    {t("Montant (minimum ", "Amount (minimum ")}
+                    {formatOfferPrice(offer.pricing.amount, offer.pricing.currency, locale)})
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={offer.pricing.amount}
+                    step="any"
+                    aria-label={t("Montant que vous choisissez", "Amount you choose")}
+                    placeholder={String(offer.pricing.amount)}
+                    value={chosenAmount}
+                    onChange={(e) => setChosenAmount(e.target.value)}
+                    className={`min-h-11 w-full rounded-lg border px-3 sm:w-44 ${KT.border} ${KT.surface}`}
+                  />
+                  {amountTooLow && (
+                    <span className="text-xs text-destructive" role="alert">
+                      {t("Le montant doit être d'au moins ", "The amount must be at least ")}
+                      {formatOfferPrice(offer.pricing.amount, offer.pricing.currency, locale)}
+                    </span>
+                  )}
+                </label>
+              )}
               {offer.type !== "booking" && commerceEnabled && (
                 <Button
                   size="lg"
                   className={`w-full sm:w-auto ${KT.accentBg} ${KT.accentContrastText}`}
-                  disabled={missingOptions.length > 0}
+                  disabled={missingOptions.length > 0 || amountTooLow}
                   onClick={() => {
                     addToCart(
                       offer,
                       selectedVariant,
                       summarizeOptions(optionGroups, selectedOptionIds),
+                      offer.freeAmount ? (chosenAmountValue ?? offer.pricing.amount) : undefined,
                     );
                     setSelectedOptionIds([]);
+                    setChosenAmount("");
                   }}
                 >
                   {t("Ajouter au panier", "Add to basket")}

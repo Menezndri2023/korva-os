@@ -20,4 +20,9 @@ describe("OfferPrice", () => {
     expect(screen.getByText(/Prix avant promotion : 55,00\s€/)).toHaveClass("sr-only");
     expect(plain(container.textContent)).toContain("40,00 €");
   });
+
+  it("presents a donation's price as the minimum the customer starts from", () => {
+    const { container } = render(<OfferPrice offer={{ pricing, freeAmount: true }} />);
+    expect(plain(container.textContent)).toBe("À partir de 40,00 €");
+  });
 });

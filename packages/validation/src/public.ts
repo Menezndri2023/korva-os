@@ -103,6 +103,10 @@ const publicOrderLineItemSchema = z.object({
   /** Ids of the chosen OfferOptions. Checked and priced by the API against the stored offer. */
   optionIds: z.array(z.string().min(1).max(64)).max(50).optional(),
   quantity: z.number().positive(),
+  /** The amount the customer chose, for an offer with `freeAmount` only — refused on any other
+   *  offer by the API, which also enforces the offer's minimum. The upper bound is a typo guard,
+   *  in the largest currency unit in use (XOF). */
+  amount: z.number().positive().max(100_000_000).optional(),
 });
 // All fields optional at this layer, even though a "complete" address needs all four — a
 // storefront checkout form always submits its shippingAddress object once any field is
@@ -204,6 +208,8 @@ const customerBasketLineSchema = z.object({
   optionIds: z.array(z.string().max(64)).max(20).optional(),
   name: z.string().max(300),
   unitPrice: z.number().min(0),
+  /** A donation's chosen amount (Offer.freeAmount) — kept so it survives a device change. */
+  amount: z.number().positive().max(100_000_000).optional(),
   quantity: z.number().int().min(1).max(99),
 });
 

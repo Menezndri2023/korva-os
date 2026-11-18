@@ -172,6 +172,10 @@ export class Offer {
   @Prop()
   featured?: boolean;
 
+  /** See Offer.freeAmount in @korva/types. */
+  @Prop()
+  freeAmount?: boolean;
+
   /** See OfferOptionGroup in @korva/types. Stored as plain objects with client-generated ids;
    *  `default: undefined` so an offer without options stays without the key. */
   @Prop({ type: [Object], default: undefined })

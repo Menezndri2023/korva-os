@@ -684,6 +684,7 @@ export function CheckoutPanel({
         offerId: line.offerId,
         variantId: line.variantId,
         optionIds: line.optionIds,
+        amount: line.amount,
         quantity: line.quantity,
       })),
       currency,
@@ -706,6 +707,7 @@ export function CheckoutPanel({
         offerId: line.offerId,
         variantId: line.variantId,
         optionIds: line.optionIds,
+        amount: line.amount,
         quantity: line.quantity,
       })),
     );

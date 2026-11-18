@@ -55,6 +55,8 @@ export function pruneForType<T extends CreateOfferInput | UpdateOfferInput>(
       fields.duration && values.bookingUnit !== "night" ? values.bufferMinutes : gone,
     // A deposit secures a booking, a slot or a stay alike.
     depositPercent: fields.duration ? values.depositPercent : gone,
+    // A booking is priced by its slot or nights, never by the customer (the API refuses it).
+    freeAmount: fields.duration ? (clear ? false : undefined) : values.freeAmount,
     // Groups and options left without a name are dropped, then empty groups with them.
     optionGroups: fields.options
       ? (drafts.optionGroups ?? [])

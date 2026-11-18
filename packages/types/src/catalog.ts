@@ -132,6 +132,11 @@ export interface Offer {
   compareAtPrice?: number | null;
   /** Shown first and marked « Coup de cœur » on the public site (Pro and above). */
   featured?: boolean;
+  /** The customer chooses how much to pay — a donation, a pay-what-you-want ticket.
+   *  `pricing.amount` is then the MINIMUM the API accepts, shown as « à partir de ». The only
+   *  case where a storefront line carries its own amount; every other price is re-read from the
+   *  offer. Not for bookings, which are priced by their slot or nights. */
+  freeAmount?: boolean;
   /** Choices made when ordering — see OfferOptionGroup. Absent means none. */
   optionGroups?: OfferOptionGroup[];
   createdAt: string;

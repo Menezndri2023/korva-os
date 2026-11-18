@@ -126,6 +126,34 @@ const ORDER_CONFIRMATION_BODY_TEMPLATE = {
 /** Offer pages listed per site in the sitemap (a sitemap file holds 50 000 URLs). */
 const SITEMAP_OFFER_LIMIT = 500;
 
+/**
+ * The price of a line on an offer whose customer chooses the amount (Offer.freeAmount): what
+ * they chose, never below the offer's own price, which is the minimum the business set. No
+ * amount at all means they kept the minimum.
+ */
+function chosenFreeAmount(minimum: number, chosen: number | undefined): number {
+  if (chosen === undefined) return minimum;
+  if (chosen < minimum) {
+    throw new BadRequestException({
+      code: 'AMOUNT_BELOW_MINIMUM',
+      message: `The amount must be at least ${minimum}`,
+    });
+  }
+  return Math.round(chosen * 100) / 100;
+}
+
+/** Contributes nothing to a fixed price: it exists to refuse a customer-named amount on an
+ *  offer that does not allow one, rather than silently ignoring it. */
+function fixedPrice(chosen: number | undefined): 0 {
+  if (chosen !== undefined) {
+    throw new BadRequestException({
+      code: 'AMOUNT_NOT_ALLOWED',
+      message: 'This offer has a fixed price',
+    });
+  }
+  return 0;
+}
+
 @Injectable()
 export class PublicService {
   private readonly logger = new Logger(PublicService.name);
@@ -509,6 +537,7 @@ export class PublicService {
       variants: offer.variants,
       durationMinutes: offer.durationMinutes ?? undefined,
       compareAtPrice: offer.compareAtPrice ?? undefined,
+      freeAmount: offer.freeAmount ? true : undefined,
       attributes: offer.attributes,
       optionGroups: offer.optionGroups,
       bookingUnit: offer.bookingUnit ?? 'slot',
@@ -1253,8 +1282,11 @@ export class PublicService {
           ? `${baseName} (${options.labels.join(', ')})`
           : baseName,
         quantity: item.quantity,
-        unitPrice:
-          (variant?.priceOverride ?? offer.pricing.amount) + options.priceDelta,
+        unitPrice: offer.freeAmount
+          ? chosenFreeAmount(offer.pricing.amount, item.amount)
+          : fixedPrice(item.amount) +
+            (variant?.priceOverride ?? offer.pricing.amount) +
+            options.priceDelta,
         taxRate: offer.pricing.taxRate,
       };
     });
