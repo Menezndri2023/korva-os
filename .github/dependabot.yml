@@ -6,17 +6,18 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
+    # Major versions are migrations (mongoose 9, zod 4, typescript 7, eslint 10…), never a bot
+    # merge: 2026-08-23 left 15 major-bump PRs open and red for three months. They are planned
+    # by hand instead. Security fixes still arrive through the CI audit gate, which fails the
+    # build on any high advisory regardless of this setting.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
-      nestjs:
-        patterns:
-          - "@nestjs/*"
-      eslint-typescript-tooling:
-        patterns:
-          - "eslint*"
-          - "@typescript-eslint/*"
-          - "typescript-eslint"
-          - "typescript"
+      # One weekly PR for everything minor/patch, so a red one is one thing to read, not ten.
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "docker"
     directory: "/apps/api"
