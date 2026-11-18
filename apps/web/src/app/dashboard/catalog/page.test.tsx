@@ -506,6 +506,51 @@ describe("CatalogPage — trade suggestions and currency", () => {
     );
   });
 
+  it("asks a restaurant for a dish's allergens and diet, stored as characteristics", async () => {
+    orgMock.current = { type: "restaurant", currency: "XOF", businessModel: "restaurant" };
+    postMock.mockResolvedValue({ id: "offer-10" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Attiéké poisson");
+    await user.click(screen.getByRole("checkbox", { name: "Poisson" }));
+    await user.click(screen.getByRole("checkbox", { name: "Halal" }));
+    await user.selectOptions(screen.getByLabelText("Piment"), "Fort");
+    await user.click(screen.getByRole("button", { name: /créer l'offre/i }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({
+          attributes: { Allergènes: "Poisson", Régime: "Halal", Piment: "Fort" },
+        }),
+      ),
+    );
+  });
+
+  it("asks a quote-based business how its service is priced and where it works", async () => {
+    orgMock.current = { type: "artisan", currency: "XOF", businessModel: "quotes" };
+    postMock.mockResolvedValue({ id: "offer-11" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(await screen.findByRole("button", { name: "Nouvelle offre" }));
+    await user.type(screen.getByPlaceholderText("Nom"), "Pose de carrelage");
+    await user.selectOptions(screen.getByLabelText("Tarification"), "Au m²");
+    await user.type(screen.getByLabelText("Zone d'intervention"), "Abidjan et Bingerville");
+    await user.click(screen.getByRole("button", { name: /créer l'offre/i }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({
+          attributes: { Tarification: "Au m²", "Zone d'intervention": "Abidjan et Bingerville" },
+        }),
+      ),
+    );
+  });
+
   it("prices a new offer in the organization's own currency, not EUR", async () => {
     // The form's defaultValues hardcoded "EUR" and are evaluated once on mount, before
     // useActiveOrganization resolves — so every organization got euros, and an offer created in

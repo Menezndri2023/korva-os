@@ -230,6 +230,73 @@ export interface OfferFieldDefinition {
 }
 
 export const BUSINESS_MODEL_OFFER_FIELDS: Partial<Record<BusinessModel, readonly OfferFieldDefinition[]>> = {
+  // A dish. Allergens are what a customer most needs before ordering, and what a restaurant is
+  // asked for most often; the list is the 14 allergens EU law makes restaurants declare.
+  restaurant: [
+    {
+      label: "Allergènes",
+      kind: "checklist",
+      options: [
+        "Gluten",
+        "Crustacés",
+        "Œufs",
+        "Poisson",
+        "Arachides",
+        "Soja",
+        "Lait",
+        "Fruits à coque",
+        "Céleri",
+        "Moutarde",
+        "Sésame",
+        "Sulfites",
+        "Lupin",
+        "Mollusques",
+      ],
+    },
+    {
+      label: "Régime",
+      kind: "checklist",
+      options: ["Végétarien", "Végan", "Halal", "Sans gluten", "Sans porc"],
+    },
+    { label: "Piment", kind: "select", options: ["Doux", "Moyen", "Fort", "Très fort"] },
+    { label: "Portion", kind: "text" },
+    { label: "Temps de préparation (min)", kind: "number" },
+  ],
+  // A service by appointment. The duration, buffer and deposit are typed Offer fields already;
+  // these are what a customer asks before booking.
+  appointments: [
+    { label: "Lieu", kind: "select", options: ["Sur place", "À domicile", "Sur place ou à domicile", "En ligne"] },
+    { label: "Pour qui", kind: "select", options: ["Femme", "Homme", "Enfant", "Mixte"] },
+    { label: "Niveau", kind: "select", options: ["Tous niveaux", "Débutant", "Intermédiaire", "Avancé"] },
+    { label: "À prévoir", kind: "text" },
+  ],
+  training: [
+    { label: "Format", kind: "select", options: ["Présentiel", "En ligne", "Hybride"] },
+    { label: "Niveau", kind: "select", options: ["Débutant", "Intermédiaire", "Avancé", "Tous niveaux"] },
+    { label: "Durée totale", kind: "text" },
+    { label: "Prérequis", kind: "text" },
+    { label: "Places", kind: "number" },
+    { label: "Attestation", kind: "select", options: ["Attestation de fin de formation", "Certificat", "Aucune"] },
+    { label: "Langue", kind: "text" },
+  ],
+  // A service sold on quote: how the price is counted is the first thing a prospect asks, and
+  // the area served the first thing that rules them in or out.
+  quotes: [
+    {
+      label: "Tarification",
+      kind: "select",
+      options: ["Au forfait", "À l'heure", "À la journée", "Au m²", "Sur devis uniquement"],
+    },
+    { label: "Zone d'intervention", kind: "text" },
+    { label: "Délai indicatif", kind: "text" },
+    { label: "Déplacement", kind: "select", options: ["Inclus", "En supplément", "Sans objet"] },
+    { label: "Garantie", kind: "text" },
+  ],
+  association: [
+    { label: "Périodicité", kind: "select", options: ["Mensuelle", "Trimestrielle", "Annuelle", "Ponctuelle"] },
+    { label: "Avantages inclus", kind: "text" },
+    { label: "Public", kind: "text" },
+  ],
   lodging: [
     { label: "Capacité (personnes)", kind: "number" },
     { label: "Lits", kind: "text" },
