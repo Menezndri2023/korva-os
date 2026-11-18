@@ -25,7 +25,6 @@ import {
   CalendarDays,
   ChartColumn,
   ChefHat,
-  Gift,
   GraduationCap,
   HeartHandshake,
   LayoutDashboard,

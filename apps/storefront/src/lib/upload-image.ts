@@ -1,6 +1,5 @@
 /** Widths the API resizes uploads to (RESIZE_WIDTHS in apps/api uploads.controller.ts). */
-const API_WIDTHS = [160, 320, 480, 640, 960, 1280] as const;
-type Width = (typeof API_WIDTHS)[number];
+type Width = 160 | 320 | 480 | 640 | 960 | 1280;
 
 /**
  * `src`/`srcSet`/`sizes` for a photo the business uploaded to KORVA: the browser picks the

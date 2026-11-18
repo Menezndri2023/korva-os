@@ -9,7 +9,7 @@ import { unresolvedStorefrontMetadata } from "@/lib/organization-lookup";
 import { fetchOrganization } from "@/lib/fetch-organization";
 import { siteLocale, translator } from "@/lib/storefront-locale-core";
 import { shareImage, siteDescription, siteTitle } from "@/lib/seo-text";
-import type { PublicOffer, PublicOrganization } from "@/lib/public-types";
+import type { PublicOffer } from "@/lib/public-types";
 import { StorefrontOffline } from "./storefront-offline";
 
 

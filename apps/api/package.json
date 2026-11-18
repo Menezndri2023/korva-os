@@ -44,7 +44,7 @@
     "compression": "^1.8.1",
     "helmet": "^8.0.0",
     "ioredis": "^5.4.1",
-    "mongoose": "^8.8.3",
+    "mongoose": "^8.24.8",
     "otpauth": "^9.5.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

@@ -72,3 +72,11 @@ auditConfig:
     # one request carries at most a few tens of thousands of elements; the storefront and the
     # dashboard only run zod in the visitor's own browser. Drop when packages are on zod 4.
     - GHSA-mrhx-c7xc-m3w5
+    # picomatch ReDoS through single-branch repeated extglobs (2026-11). UNFIXABLE for now: the
+    # advisory names patched_versions ">=4.0.8" and 4.0.8 has never been published (4.0.7 is the
+    # latest release, 2026-11-18). Reachability: the ReDoS needs an attacker-written glob PATTERN,
+    # and every pattern in this tree is written by us — the only --prod path is
+    # packages/eslint-config > typescript-eslint > tinyglobby/fdir (lint-time file matching), the
+    # rest is jest/vite/next build tooling. No route passes request data to a glob. Drop when
+    # 4.0.8 ships (then add a "picomatch@4" override if a dependency still pins 4.0.7).
+    - GHSA-fc5q-39xc-vjpf
