@@ -276,6 +276,9 @@ export default function BookingsPage() {
                     <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-text">
                       {t(...BOOKING_STATUS_LABELS[booking.status])}
                     </span>
+                    {booking.cancelledBy === "customer" && (
+                      <span className="ml-1 text-xs text-text-muted">{t("par le client", "by the customer")}</span>
+                    )}
                   </td>
                   <td className="px-4 py-2">
                     {(booking.status === "pending" || booking.status === "confirmed") && (

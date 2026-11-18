@@ -15,7 +15,11 @@ import type {
   RescheduleBookingInput,
   UpdateBookingInput,
 } from '@korva/validation';
-import type { BookingPaymentStatus, Pagination } from '@korva/types';
+import type {
+  BookingCancelledBy,
+  BookingPaymentStatus,
+  Pagination,
+} from '@korva/types';
 import { BookingsRepository } from './bookings.repository';
 import { BookingDocument } from './schemas/booking.schema';
 import { AvailabilityService } from '../availability/availability.service';
@@ -384,10 +388,13 @@ export class BookingsService {
     return released;
   }
 
+  /** `cancelledBy` is recorded on the booking; omitted (an unpaid deposit releasing the slot)
+   *  it stays unset. */
   async cancel(
     organizationId: string,
     userId: string | undefined,
     id: string,
+    cancelledBy?: BookingCancelledBy,
   ): Promise<BookingDocument> {
     const booking = await this.getById(organizationId, id);
     if (booking.status === 'cancelled') {
@@ -405,6 +412,7 @@ export class BookingsService {
 
     const updated = await this.bookingsRepository.update(organizationId, id, {
       status: 'cancelled',
+      ...(cancelledBy ? { cancelledBy } : {}),
     });
     if (!updated) {
       throw new NotFoundException({
@@ -419,11 +427,12 @@ export class BookingsService {
       action: 'UPDATE',
       entity: 'booking',
       entityId: id,
-      metadata: { status: 'cancelled' },
+      metadata: { status: 'cancelled', cancelledBy },
     });
 
     await this.eventBus.publish(organizationId, 'booking.cancelled', {
       bookingId: id,
+      cancelledBy,
       resourceId: updated.resourceId.toString(),
       contactId: updated.contactId.toString(),
     });

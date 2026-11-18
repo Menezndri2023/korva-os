@@ -39,6 +39,7 @@ import { DocumentsModule } from '../documents/documents.module';
 import { ReviewsModule } from '../reviews/reviews.module';
 import { CustomerServiceModule } from '../customer-service/customer-service.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { BusinessAlertsModule } from '../business-alerts/business-alerts.module';
 
 /**
  * Top-level module (not nested under PublicModule) so it's independently testable/importable —
@@ -75,6 +76,7 @@ import { CustomerAccountsAdminController } from './customer-accounts-admin.contr
     ReviewsModule,
     CustomerServiceModule,
     SubscriptionsModule,
+    BusinessAlertsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

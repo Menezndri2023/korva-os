@@ -1,7 +1,15 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import type { BookingPaymentStatus, BookingStatus } from '@korva/types';
-import { BOOKING_PAYMENT_STATUSES, BOOKING_STATUSES } from '@korva/types';
+import type {
+  BookingCancelledBy,
+  BookingPaymentStatus,
+  BookingStatus,
+} from '@korva/types';
+import {
+  BOOKING_CANCELLED_BY,
+  BOOKING_PAYMENT_STATUSES,
+  BOOKING_STATUSES,
+} from '@korva/types';
 import { idToJson } from '../../../core/mongoose/schema-options';
 
 export type BookingDocument = HydratedDocument<Booking>;
@@ -81,6 +89,10 @@ export class Booking {
   /** See Booking.attended in @korva/types for the field-level rationale. */
   @Prop({ type: Boolean })
   attended?: boolean;
+
+  /** See Booking.cancelledBy in @korva/types. */
+  @Prop({ type: String, enum: BOOKING_CANCELLED_BY })
+  cancelledBy?: BookingCancelledBy;
 
   /**
    * Snapshot of resource.membershipId at booking-creation time — NOT a live join. A later staff

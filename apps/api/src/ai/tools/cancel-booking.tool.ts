@@ -37,6 +37,7 @@ export class CancelBookingTool implements AiTool<z.infer<typeof inputSchema>> {
       organizationId,
       userId,
       input.bookingId,
+      'business',
     );
     return { id: booking.id as string, status: booking.status };
   }

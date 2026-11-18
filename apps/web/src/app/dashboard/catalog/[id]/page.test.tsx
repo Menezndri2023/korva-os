@@ -178,6 +178,7 @@ describe("OfferDetailPage", () => {
         minNights: null,
         bufferMinutes: null,
         depositPercent: null,
+        cancellationHours: null,
         freeAmount: false,
         attributes: {},
         isBundle: false,

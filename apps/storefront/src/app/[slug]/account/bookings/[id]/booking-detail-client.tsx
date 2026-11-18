@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge, Button, Card } from "@korva/ui";
 import { downloadPdf, publicApiClient, PublicApiError } from "@/lib/public-api-client";
 import { formatOfferPrice } from "@/lib/offer-labels";
@@ -34,6 +34,8 @@ export default function BookingDetailClient({
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (hydrated && !isAuthenticated) {
@@ -51,6 +53,17 @@ export default function BookingDetailClient({
         ),
       ),
     enabled: hydrated && isAuthenticated,
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: () =>
+      authFetch((token) =>
+        publicApiClient.post(`/public/${slug}/account/bookings/${bookingId}/cancel`, {}, token),
+      ),
+    onSuccess: () => {
+      setConfirmingCancel(false);
+      void queryClient.invalidateQueries({ queryKey: ["customer-booking", slug, bookingId] });
+    },
   });
 
   const formatter = new Intl.DateTimeFormat(intlLocale(locale), { dateStyle: "full", timeStyle: "short" });
@@ -116,6 +129,63 @@ export default function BookingDetailClient({
               <span>{t("Montant", "Amount")}</span>
               <span>{formatOfferPrice(bookingQuery.data.pricing.amount, bookingQuery.data.pricing.currency, locale)}</span>
             </div>
+
+            {bookingQuery.data.cancellableUntil && (
+              <div className="space-y-2 border-t border-border pt-3">
+                <p className="text-xs text-text-muted">
+                  {t(
+                    `Annulation gratuite jusqu'au ${formatter.format(new Date(bookingQuery.data.cancellableUntil))}.`,
+                    `Free cancellation until ${formatter.format(new Date(bookingQuery.data.cancellableUntil))}.`,
+                  )}
+                </p>
+                {confirmingCancel ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-text">{t("Annuler cette réservation ?", "Cancel this booking?")}</span>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      loading={cancelMutation.isPending}
+                      onClick={() => cancelMutation.mutate()}
+                    >
+                      {t("Oui, annuler", "Yes, cancel")}
+                    </Button>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmingCancel(false)}>
+                      {t("Non, la garder", "No, keep it")}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmingCancel(true)}>
+                    {t("Annuler ma réservation", "Cancel my booking")}
+                  </Button>
+                )}
+                {cancelMutation.isError && (
+                  <p className="text-xs text-destructive">
+                    {cancelMutation.error instanceof PublicApiError
+                      ? cancelMutation.error.message
+                      : t("L'annulation n'a pas abouti.", "The cancellation failed.")}
+                  </p>
+                )}
+              </div>
+            )}
+            {!bookingQuery.data.cancellableUntil &&
+              bookingQuery.data.cancellationHours &&
+              (bookingQuery.data.status === "pending" || bookingQuery.data.status === "confirmed") && (
+                <p className="border-t border-border pt-3 text-xs text-text-muted">
+                  {t(
+                    `Le délai d'annulation gratuite (${bookingQuery.data.cancellationHours} h avant) est passé : pour annuler, contactez directement l'établissement.`,
+                    `The free cancellation period (${bookingQuery.data.cancellationHours} h before) is over: to cancel, contact the business directly.`,
+                  )}
+                </p>
+              )}
+            {bookingQuery.data.status === "cancelled" && bookingQuery.data.cancelledBy === "customer" && (
+              <p className="border-t border-border pt-3 text-xs text-text-muted">
+                {t(
+                  "Vous avez annulé cette réservation. Si vous aviez payé en ligne, l'établissement a été prévenu du remboursement.",
+                  "You cancelled this booking. If you paid online, the business has been told to refund you.",
+                )}
+              </p>
+            )}
 
             {bookingQuery.data.status === "completed" && bookingQuery.data.attended && (
               <div className="border-t border-border pt-3">

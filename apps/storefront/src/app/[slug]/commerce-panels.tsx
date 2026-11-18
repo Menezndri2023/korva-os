@@ -561,6 +561,14 @@ export function BookingPanel({
           error={!!errors.contact?.phone}
         />
 
+        {offer.cancellationHours ? (
+          <p className="text-xs text-text-muted">
+            {t(
+              `Annulation gratuite depuis votre espace client jusqu'à ${offer.cancellationHours} h avant le début.`,
+              `Free cancellation from your customer area up to ${offer.cancellationHours} h before the start.`,
+            )}
+          </p>
+        ) : null}
         {depositPercent > 0 && (
           <p className="rounded-md bg-surface-muted px-3 py-2 text-xs text-text-muted">
             {(() => {

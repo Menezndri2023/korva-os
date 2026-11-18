@@ -171,6 +171,16 @@ export default function BookingDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{t(...STATUS_LABELS[booking.status])}</Badge>
             <Badge>{t(...PAYMENT_STATUS_LABELS[booking.paymentStatus])}</Badge>
+            {booking.cancelledBy === "customer" && (
+              <Badge variant="destructive">
+                {booking.paymentStatus === "unpaid"
+                  ? t("Annulée par le client", "Cancelled by the customer")
+                  : t(
+                      "Annulée par le client — paiement en ligne à lui rembourser",
+                      "Cancelled by the customer — online payment to refund",
+                    )}
+              </Badge>
+            )}
             {(booking.status === "confirmed" || booking.status === "completed") && (
               <Button
                 variant="secondary"

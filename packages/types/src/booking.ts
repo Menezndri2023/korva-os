@@ -70,6 +70,12 @@ export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 export const BOOKING_PAYMENT_STATUSES = ["unpaid", "deposit_paid", "paid"] as const;
 export type BookingPaymentStatus = (typeof BOOKING_PAYMENT_STATUSES)[number];
 
+/** Who cancelled a booking — the customer from their account (within the offer's free
+ *  cancellation window) or the business. Absent on bookings cancelled before this was recorded,
+ *  and on those released automatically because their deposit was never paid. */
+export const BOOKING_CANCELLED_BY = ["customer", "business"] as const;
+export type BookingCancelledBy = (typeof BOOKING_CANCELLED_BY)[number];
+
 export interface BookingPricing {
   amount: number;
   currency: string;
@@ -102,6 +108,9 @@ export interface Booking {
    *  sharing one resource+time, and some attendees may be absent while the session still
    *  happened. Absent (undefined) until completed. */
   attended?: boolean;
+  /** See BookingCancelledBy. A customer cancellation of a booking whose deposit was paid tells
+   *  the business that deposit is to be refunded (refunds stay manual). */
+  cancelledBy?: BookingCancelledBy;
   /** Snapshot of the resource's assigned staff member at booking-creation time — see the schema
    *  field's own doc comment for why this is a snapshot, not a live join. */
   staffMembershipId?: string;

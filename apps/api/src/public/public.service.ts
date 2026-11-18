@@ -6,7 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { GiftCardsService } from '../finance/gift-cards/gift-cards.service';
-import { BusinessAlertsService } from '../business-alerts/business-alerts.service';
+import {
+  BusinessAlertsService,
+  customerLabel,
+} from '../business-alerts/business-alerts.service';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -543,6 +546,7 @@ export class PublicService {
       bookingUnit: offer.bookingUnit ?? 'slot',
       minNights: offer.minNights ?? undefined,
       depositPercent: offer.depositPercent ?? undefined,
+      cancellationHours: offer.cancellationHours ?? undefined,
     };
   }
 
@@ -1767,18 +1771,6 @@ export class PublicService {
         : {}),
     };
   }
-}
-
-/** How an alert names the customer: first name and e-mail when known. */
-function customerLabel(contact: {
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string | null;
-}): string {
-  const name = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
-  return name && contact.email
-    ? `${name} (${contact.email})`
-    : name || contact.email || 'Un client';
 }
 
 /** How long a customer has to pay a booking deposit before the slot is freed again. */

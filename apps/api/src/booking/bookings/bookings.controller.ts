@@ -119,7 +119,12 @@ export class BookingsController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
   ) {
-    return this.bookingsService.cancel(tenant.organizationId, user.userId, id);
+    return this.bookingsService.cancel(
+      tenant.organizationId,
+      user.userId,
+      id,
+      'business',
+    );
   }
 
   @RequirePermissions('bookings.update')

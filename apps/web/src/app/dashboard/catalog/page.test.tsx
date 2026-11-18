@@ -189,6 +189,30 @@ describe("CatalogPage — pagination", () => {
     );
   });
 
+  it("lets a booking offer set a free cancellation window, and only a booking", async () => {
+    postMock.mockResolvedValue({ ...offer, id: "offer-4" });
+    const user = userEvent.setup();
+    renderWithProviders(<CatalogPage />);
+
+    await user.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+    expect(
+      screen.queryByLabelText("Annulation gratuite jusqu'à (heures avant)"),
+    ).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByDisplayValue("Produit"), "booking");
+    await user.type(screen.getByPlaceholderText("Nom"), "Coupe femme");
+    await user.type(screen.getByLabelText("Durée de la prestation (minutes)"), "45");
+    await user.type(screen.getByLabelText("Annulation gratuite jusqu'à (heures avant)"), "24");
+    await user.click(screen.getByRole("button", { name: "Créer l'offre" }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith(
+        "/offers",
+        expect.objectContaining({ type: "booking", cancellationHours: 24 }),
+      ),
+    );
+  });
+
   it("shows product fields for a product and hides them for a booking", async () => {
     const user = userEvent.setup();
     renderWithProviders(<CatalogPage />);

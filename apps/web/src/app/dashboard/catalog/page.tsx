@@ -393,6 +393,29 @@ export default function CatalogPage() {
               </p>
             </div>
           )}
+          {fields.duration && (
+            <div className="col-span-2 space-y-1">
+              <Input
+                type="number"
+                min="1"
+                max="720"
+                aria-label={t("Annulation gratuite jusqu'à (heures avant)", "Free cancellation up to (hours before)")}
+                placeholder={t(
+                  "Annulation gratuite par le client jusqu'à … heures avant (optionnel, ex. 24)",
+                  "Free cancellation by the customer up to … hours before (optional, e.g. 24)",
+                )}
+                {...register("cancellationHours", {
+                  setValueAs: (v: string | number | null) => (v === "" || v == null ? undefined : Number(v)),
+                })}
+              />
+              <p className="text-xs text-text-muted">
+                {t(
+                  "Affiché sur votre site. Jusqu'à ce délai, le client annule lui-même depuis son espace client et vous êtes prévenu par e-mail (avec le montant à rembourser s'il a payé en ligne). Ensuite, il doit vous contacter. Vide : pas d'annulation en ligne.",
+                  "Shown on your site. Until then, the customer cancels from their customer area and you are e-mailed (with the amount to refund if they paid online). After that, they must contact you. Empty: no online cancellation.",
+                )}
+              </p>
+            </div>
+          )}
           {fields.duration && bookingUnit !== "night" && (
             <Input
               type="number"

@@ -126,6 +126,8 @@ export interface PublicOffer {
   minNights?: number;
   /** Share of the price paid online when booking — see Offer.depositPercent. */
   depositPercent?: number;
+  /** Free cancellation by the customer up to this many hours before — see Offer.cancellationHours. */
+  cancellationHours?: number;
   /** Choices made when ordering (cuisson, taille, suppléments) — see OfferOptionGroup. */
   optionGroups?: OfferOptionGroup[];
 }
@@ -302,6 +304,11 @@ export interface CustomerBookingDetail {
   attended?: boolean;
   notes?: string;
   offerName: string;
+  cancelledBy?: "customer" | "business";
+  /** The offer's free cancellation window, in hours before the start. */
+  cancellationHours?: number;
+  /** Set only while the customer may still cancel it themselves. */
+  cancellableUntil?: string;
 }
 
 /** Mirrors CustomerAuthService#listQuotes' mapped item shape. */

@@ -20,6 +20,14 @@ export type BusinessAlert =
       customer: string;
     }
   | { kind: 'booking'; offerName: string; startAt: Date; customer: string }
+  | {
+      kind: 'booking_cancelled';
+      offerName: string;
+      startAt: Date;
+      customer: string;
+      /** What the customer already paid online, which the business now owes back. */
+      refund?: { amount: number; currency: string };
+    }
   | { kind: 'request'; message: string; customer: string }
   | {
       kind: 'online_payment';
@@ -27,6 +35,18 @@ export type BusinessAlert =
       currency: string;
       invoiceNumber?: string;
     };
+
+/** How an alert names the customer: first name and e-mail when known. */
+export function customerLabel(contact: {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+}): string {
+  const name = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
+  return name && contact.email
+    ? `${name} (${contact.email})`
+    : name || contact.email || 'Un client';
+}
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
@@ -109,6 +129,33 @@ export class BusinessAlertsService {
               ],
               link: `${appUrl}/dashboard/bookings`,
             };
+          case 'booking_cancelled': {
+            const when = alert.startAt.toLocaleString(locale, {
+              dateStyle: 'full',
+              timeStyle: 'short',
+            });
+            return {
+              subject: t(
+                `Réservation annulée par le client — ${alert.offerName}`,
+                `Booking cancelled by the customer — ${alert.offerName}`,
+              ),
+              lines: [
+                t(
+                  `${escapeHtml(alert.customer)} a annulé sa réservation « ${escapeHtml(alert.offerName)} » du ${when}, dans le délai d'annulation gratuite. Le créneau est de nouveau libre.`,
+                  `${escapeHtml(alert.customer)} cancelled their booking “${escapeHtml(alert.offerName)}” on ${when}, within the free cancellation period. The slot is free again.`,
+                ),
+                ...(alert.refund
+                  ? [
+                      t(
+                        `<strong>À rembourser : ${money(alert.refund.amount, alert.refund.currency)}</strong>, déjà payés en ligne par le client.`,
+                        `<strong>To refund: ${money(alert.refund.amount, alert.refund.currency)}</strong>, already paid online by the customer.`,
+                      ),
+                    ]
+                  : []),
+              ],
+              link: `${appUrl}/dashboard/bookings`,
+            };
+          }
           case 'request':
             return {
               subject: t(

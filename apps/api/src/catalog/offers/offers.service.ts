@@ -195,6 +195,7 @@ export class OffersService {
       minNights: input.minNights,
       bufferMinutes: input.bufferMinutes,
       depositPercent: input.depositPercent,
+      cancellationHours: input.cancellationHours,
     });
 
     await this.auditService.record({

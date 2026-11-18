@@ -259,6 +259,16 @@ export class CustomerAuthController {
   }
 
   @UseGuards(CustomerAuthGuard)
+  @Post('bookings/:id/cancel')
+  cancelBooking(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+  ) {
+    return this.customerAuthService.cancelBooking(slug, req.user!, id);
+  }
+
+  @UseGuards(CustomerAuthGuard)
   @Get('bookings/:id/certificate')
   async getBookingCertificate(
     @Param('organizationSlug') slug: string,

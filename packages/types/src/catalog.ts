@@ -127,6 +127,11 @@ export interface Offer {
    *  against no-shows. Asked only when the business offers online payment; an unpaid deposit
    *  releases the slot after DEPOSIT_PAYMENT_WINDOW_MINUTES. Unset/null: no deposit. */
   depositPercent?: number | null;
+  /** Free cancellation: the customer may cancel a booking of this offer from their customer
+   *  area until this many hours before it starts (1–720). Past it, the button disappears and
+   *  they must contact the business, which keeps any deposit under its own policy. Unset/null:
+   *  no online cancellation — the older behaviour. Only meaningful for `booking` offers. */
+  cancellationHours?: number | null;
   /** Price before a promotion, shown struck through next to `pricing.amount`. Always higher than
    *  it (enforced by the API). Unset or null means no promotion is displayed. */
   compareAtPrice?: number | null;

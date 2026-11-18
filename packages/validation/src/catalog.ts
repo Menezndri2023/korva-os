@@ -107,6 +107,8 @@ export const createOfferSchema = z.object({
   minNights: z.number().int().min(1).max(365).nullable().optional(),
   bufferMinutes: z.number().int().min(0).max(240).nullable().optional(),
   depositPercent: z.number().int().min(1).max(100).nullable().optional(),
+  /** Free cancellation window, in hours before the start — see Offer.cancellationHours. */
+  cancellationHours: z.number().int().min(1).max(720).nullable().optional(),
   optionGroups: z.array(offerOptionGroupSchema).max(10).optional(),
 });
 export type CreateOfferInput = z.infer<typeof createOfferSchema>;

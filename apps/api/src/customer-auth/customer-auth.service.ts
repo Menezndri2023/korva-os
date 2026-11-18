@@ -58,6 +58,10 @@ import { hashToken } from '../identity/auth/token-hash.util';
 import { CustomerAccountDocument } from './schemas/customer-account.schema';
 import type { AuthenticatedCustomer } from './strategies/customer-jwt.strategy';
 import { EntitlementsService } from '../subscriptions/entitlements.service';
+import {
+  BusinessAlertsService,
+  customerLabel,
+} from '../business-alerts/business-alerts.service';
 import { orgLocale, translator } from '../shared/i18n';
 
 const MAX_FAILED_ATTEMPTS = 5;
@@ -102,6 +106,20 @@ function toPublicCustomer(
   };
 }
 
+/** Until when a booking can still be cancelled for free by its customer, or undefined when its
+ *  offer has no such policy or the booking is no longer open (already cancelled or completed). */
+function freeCancellationDeadline(
+  booking: { status: string; startAt: Date },
+  offer: { cancellationHours?: number | null },
+): Date | undefined {
+  const hours = offer.cancellationHours;
+  if (!hours) return undefined;
+  if (booking.status !== 'pending' && booking.status !== 'confirmed') {
+    return undefined;
+  }
+  return new Date(booking.startAt.getTime() - hours * 3_600_000);
+}
+
 /**
  * Auth/profile/order-history/booking-history for the storefront customer portal — a separate
  * identity system from staff auth (see CustomerAccount's class doc for why). Every method takes
@@ -123,6 +141,7 @@ export class CustomerAuthService {
     private readonly loyaltyService: LoyaltyService,
     private readonly ordersService: OrdersService,
     private readonly bookingsService: BookingsService,
+    private readonly businessAlerts: BusinessAlertsService,
     private readonly usersService: UsersService,
     private readonly invoicesService: InvoicesService,
     private readonly quotesService: QuotesService,
@@ -630,6 +649,7 @@ export class CustomerAuthService {
       booking.offerId.toString(),
     );
 
+    const deadline = freeCancellationDeadline(booking, offer);
     return {
       id: booking.id as string,
       status: booking.status,
@@ -639,7 +659,88 @@ export class CustomerAuthService {
       attended: booking.attended,
       notes: booking.notes,
       offerName: offer.name,
+      cancelledBy: booking.cancelledBy,
+      cancellationHours: offer.cancellationHours ?? undefined,
+      // Only while it is still open: past it, the page shows the policy, not a button.
+      cancellableUntil:
+        deadline && deadline.getTime() > Date.now() ? deadline : undefined,
     };
+  }
+
+  /**
+   * The customer cancels their own booking, within the offer's free cancellation window
+   * (Offer.cancellationHours) — never past it, and never on an offer with no such policy: the
+   * business then decides. Ownership is checked like every other "my booking" route.
+   */
+  async cancelBooking(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    bookingId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+    const organizationId = organization.id as string;
+
+    const booking = await this.bookingsService.getById(
+      organizationId,
+      bookingId,
+    );
+    this.assertOwnsBooking(booking, customer);
+    const offer = await this.offersService.getById(
+      organizationId,
+      booking.offerId.toString(),
+    );
+    if (booking.status !== 'pending' && booking.status !== 'confirmed') {
+      throw new BadRequestException({
+        code: 'BOOKING_NOT_CANCELLABLE',
+        message: `A ${booking.status} booking cannot be cancelled`,
+      });
+    }
+    const deadline = freeCancellationDeadline(booking, offer);
+    if (!deadline) {
+      throw new BadRequestException({
+        code: 'CANCELLATION_NOT_OFFERED',
+        message:
+          'This booking cannot be cancelled online — please contact the business',
+      });
+    }
+    if (Date.now() >= deadline.getTime()) {
+      throw new BadRequestException({
+        code: 'CANCELLATION_DEADLINE_PASSED',
+        message:
+          'The free cancellation period is over — please contact the business',
+      });
+    }
+
+    const cancelled = await this.bookingsService.cancel(
+      organizationId,
+      undefined,
+      bookingId,
+      'customer',
+    );
+
+    const contact = await this.contactsService.getById(
+      organizationId,
+      customer.contactId,
+    );
+    // Refunds stay manual: the alert says how much was paid online and is owed back.
+    const paid =
+      booking.paymentStatus === 'paid'
+        ? booking.pricing.amount
+        : booking.paymentStatus === 'deposit_paid'
+          ? booking.depositAmount
+          : undefined;
+    void this.businessAlerts.notify(organizationId, {
+      kind: 'booking_cancelled',
+      offerName: offer.name,
+      startAt: booking.startAt,
+      customer: customerLabel(contact),
+      refund: paid
+        ? { amount: paid, currency: booking.pricing.currency }
+        : undefined,
+    });
+
+    return { id: cancelled.id as string, status: cancelled.status };
   }
 
   async getBookingForCertificate(
