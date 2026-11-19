@@ -84,8 +84,36 @@ kind into `~/korva-backups` (0600 in a 0700 directory), skips what it already ha
 the one failure this script could otherwise introduce.
 
 It needs no new account, and it is the weakest form of off-host backup, because it only runs when
-somebody remembers to run it: a sleeping laptop copies nothing. Object storage with a scheduled
-push is the real answer once that account exists.
+somebody remembers to run it: a sleeping laptop copies nothing. `backup-offsite.sh` (below) is the
+scheduled push; this stays useful as a second, independent copy.
+
+## backup-offsite.sh and set-offsite.sh
+
+The nightly copy **off this host**, to a Cloudflare R2 bucket. `backup-all.sh` runs it after the
+two local backups and fails the night if it fails. It sends the newest `korva-*` and `uploads-*`
+archives with `rclone copyto` (never `sync`, which would mirror a deletion), checks that the size
+the bucket reports matches the local file, then deletes bucket copies older than 30 days
+(`KORVA_OFFSITE_RETAIN_DAYS`), and only after a good push.
+
+Configure it once, with a terminal:
+
+```
+ssh -t korva@13.140.174.3 '~/ops/set-offsite.sh'
+```
+
+It asks for the S3 endpoint (or the account ID), the Access Key ID, the Secret Access Key (not
+echoed) and the bucket, **proves them** by writing, reading back and deleting a probe object, and
+only then writes `~/ops/offsite.env` (0600). Use an R2 API token with *Object Read & Write* limited
+to that one bucket.
+
+```
+~/ops/backup-offsite.sh            # push now
+~/ops/backup-offsite.sh --list     # what the bucket holds
+~/ops/backup-offsite.sh --fetch korva-<stamp>.archive.gz   # into ~/backups, then verify-backup.sh it
+```
+
+Not encrypted client-side on purpose: the key would live on the very machine whose loss this
+covers. The bucket is private and R2 encrypts at rest.
 
 ## set-secret.sh
 
@@ -207,9 +235,9 @@ the grace period to expire.
 
 ## What is still NOT covered
 
-1. **Off-host copies depend on someone running `pull-backups.sh`.** The nightly cron writes only
-   to the VPS. Until a scheduled push to storage outside this machine exists, losing the VPS
-   loses everything written since the last manual pull.
+1. **Off-host copies are nightly, not continuous.** With `set-offsite.sh` done, losing the VPS
+   loses at most the day since 03:17 UTC — not everything. Without it, the archives exist only on
+   the VPS (`backup-all.sh` logs a WARNING every night).
 2. **Atlas is still the free M0 tier, which has no backups of its own.** M10 is the first tier
    with continuous backups and point-in-time restore — the difference between going back to
    14:32 today and going back to last night.

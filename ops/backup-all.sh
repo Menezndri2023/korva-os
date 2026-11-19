@@ -67,6 +67,20 @@ if ! "$HERE/backup-uploads.sh"; then
   STATUS=1
 fi
 
+# Off-site last: it sends what the two steps above just wrote. Attempted even after a local
+# failure — yesterday's good archive reaching the bucket is still worth having — and a failure
+# here fails the night, because a backup that never leaves this host is the gap it closes.
+log "=== off-site ==="
+if [[ -r "${KORVA_OFFSITE_ENV_FILE:-$HERE/offsite.env}" ]]; then
+  if ! "$HERE/backup-offsite.sh"; then
+    log "off-site copy FAILED"
+    STATUS=1
+  fi
+else
+  log "WARNING: off-site copy not configured (~/ops/set-offsite.sh) — these archives exist only"
+  log "         on this machine"
+fi
+
 if (( STATUS == 0 )); then
   log "=== nightly backup complete ==="
   ping_monitor "${KORVA_BACKUP_PING_URL:-}" "success"
