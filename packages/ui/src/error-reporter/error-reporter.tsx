@@ -18,8 +18,12 @@ export function reportClientError(
   error: unknown,
 ): void {
   try {
-    const message =
+    const text =
       error instanceof Error ? error.message : typeof error === "string" ? error : JSON.stringify(error);
+    // In production a server-rendering crash reaches the browser with a generic message; its
+    // digest is the only thing that matches it to the server's own log line.
+    const digest = (error as { digest?: unknown } | null)?.digest;
+    const message = typeof digest === "string" && text ? `${text} [digest ${digest}]` : text;
     if (!message || seen.has(message) || sent >= MAX_REPORTS_PER_PAGE) return;
     seen.add(message);
     sent += 1;

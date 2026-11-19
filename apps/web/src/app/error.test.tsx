@@ -8,22 +8,22 @@ describe("GlobalError (root)", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows a retry action and calls reset() when clicked", async () => {
+  it("shows a retry action and calls retry() when clicked", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const reset = vi.fn();
+    const retry = vi.fn();
     const user = userEvent.setup();
-    render(<GlobalError error={new Error("boom")} reset={reset} />);
+    render(<GlobalError error={new Error("boom")} retry={retry} />);
 
     expect(screen.getByRole("heading", { name: "Une erreur est survenue" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Réessayer" }));
 
-    expect(reset).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it("logs the error for diagnostics", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const error = new Error("boom");
-    render(<GlobalError error={error} reset={vi.fn()} />);
+    render(<GlobalError error={error} retry={vi.fn()} />);
 
     expect(errorSpy).toHaveBeenCalledWith(error);
   });

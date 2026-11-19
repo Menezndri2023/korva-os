@@ -5,10 +5,10 @@ import { Button, reportClientError } from "@korva/ui";
 
 export default function GlobalError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   useEffect(() => {
     console.error(error);
@@ -23,7 +23,7 @@ export default function GlobalError({
         <p className="text-sm text-text-muted">
           Quelque chose s&apos;est mal passé. Vous pouvez réessayer.
         </p>
-        <Button onClick={() => reset()}>Réessayer</Button>
+        <Button onClick={() => retry()}>Réessayer</Button>
       </div>
     </div>
   );

@@ -6,10 +6,10 @@ import { useT } from "@/lib/dashboard-locale";
 
 export default function DashboardError({
   error,
-  reset,
+  retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  retry: () => void;
 }) {
   const t = useT();
   useEffect(() => {
@@ -27,7 +27,7 @@ export default function DashboardError({
           "Something went wrong on this page. You can try again.",
         )}
       </p>
-      <Button className="mt-3" onClick={() => reset()}>
+      <Button className="mt-3" onClick={() => retry()}>
         {t("Réessayer", "Try again")}
       </Button>
     </Card>
