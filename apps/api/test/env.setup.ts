@@ -121,10 +121,42 @@ const TEST_RUN_REDIS_DB = 1 + Math.floor(Math.random() * 15);
  */
 const TEST_RUN_BULLMQ_PREFIX = `e2e_${process.pid}_${process.env.JEST_WORKER_ID ?? '0'}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 
+/**
+ * Per FILE, not per process (2026-11-18). The `??=` above pinned the first file's database name
+ * and BullMQ prefix for every later file of the same run, so ~90 spec files shared one database,
+ * each dropping it at start and end, and one keyspace of queues. Sequential, so no drop race —
+ * but whatever a file left behind leaked into the next: a job still queued when its app closed
+ * was consumed by the NEXT file's workers, writes landing after a drop reappeared in the next
+ * file's fresh database. A failure then looked like it belonged to the wrong spec, and only
+ * reproduced in the full run (see memory: "e2e shared database").
+ *
+ * So each file now mints its own — this module body runs once per file. A value the developer
+ * or CI set explicitly is still honoured: the marker records what THIS file derived, so the next
+ * file can tell its predecessor's derived value (replace it) from an explicit one (keep it).
+ */
+const DERIVED_MONGODB_URI = 'KORVA_E2E_DERIVED_MONGODB_URI';
+const DERIVED_BULLMQ_PREFIX = 'KORVA_E2E_DERIVED_BULLMQ_PREFIX';
+
+function derivePerFile(name: string, marker: string, value: string): void {
+  const current = process.env[name];
+  if (current === undefined || current === process.env[marker]) {
+    process.env[name] = value;
+    process.env[marker] = value;
+  }
+}
+
 process.env.NODE_ENV ??= 'test';
-process.env.MONGODB_URI ??= `mongodb://korva:korva@localhost:27017/${TEST_RUN_DB_NAME}?authSource=admin&replicaSet=rs0`;
+derivePerFile(
+  'MONGODB_URI',
+  DERIVED_MONGODB_URI,
+  `mongodb://korva:korva@localhost:27017/${TEST_RUN_DB_NAME}?authSource=admin&replicaSet=rs0`,
+);
 process.env.REDIS_URL ??= `redis://localhost:6380/${TEST_RUN_REDIS_DB}`;
-process.env.TEST_RUN_BULLMQ_PREFIX ??= TEST_RUN_BULLMQ_PREFIX;
+derivePerFile(
+  'TEST_RUN_BULLMQ_PREFIX',
+  DERIVED_BULLMQ_PREFIX,
+  TEST_RUN_BULLMQ_PREFIX,
+);
 process.env.JWT_SECRET ??= 'test-jwt-secret';
 process.env.JWT_REFRESH_SECRET ??= 'test-jwt-refresh-secret';
 process.env.CUSTOMER_JWT_SECRET ??= 'test-customer-jwt-secret';
