@@ -29,7 +29,7 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
   const router = useRouter();
   const { hydrated, isAuthenticated, authFetch } = useCustomerAuth(slug);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<"invoice" | "receipt" | null>(null);
 
   useEffect(() => {
     if (hydrated && !isAuthenticated) {
@@ -46,26 +46,26 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
     enabled: hydrated && isAuthenticated,
   });
 
-  async function handleDownloadInvoice() {
+  async function handleDownload(kind: "invoice" | "receipt") {
     setDownloadError(null);
-    setDownloading(true);
+    setDownloading(kind);
+    const number = orderQuery.data?.number ?? orderId;
     try {
       await authFetch((token) =>
-        downloadPdf(
-          `/public/${slug}/account/orders/${orderId}/invoice-pdf`,
-          token,
-          `facture-${orderQuery.data?.number ?? orderId}.pdf`,
-        ),
+        kind === "invoice"
+          ? downloadPdf(`/public/${slug}/account/orders/${orderId}/invoice-pdf`, token, `facture-${number}.pdf`)
+          : downloadPdf(`/public/${slug}/account/orders/${orderId}/donation-receipt`, token, `recu-don-${number}.pdf`),
       );
     } catch (error) {
       setDownloadError(
-        error instanceof PublicApiError ? error.message : t(
-          "Impossible de télécharger la facture.",
-          "The invoice could not be downloaded.",
-        ),
+        error instanceof PublicApiError
+          ? error.message
+          : kind === "invoice"
+            ? t("Impossible de télécharger la facture.", "The invoice could not be downloaded.")
+            : t("Impossible de télécharger le reçu de don.", "The donation receipt could not be downloaded."),
       );
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
 
@@ -83,7 +83,7 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
         <>
           <Card className="space-y-4 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-medium text-text">Commande {orderQuery.data.number}</h2>
+              <h2 className="font-medium text-text">{t("Commande", "Order")} {orderQuery.data.number}</h2>
               <Badge variant={orderQuery.data.status === "cancelled" ? "destructive" : "default"}>
                 {t(...ORDER_STATUS_LABELS[orderQuery.data.status])}
               </Badge>
@@ -114,16 +114,16 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
             <div className="space-y-1 text-right text-sm">
               {orderQuery.data.discountTotal > 0 && (
                 <p className="text-text-muted">
-                  Remise : -{formatOfferPrice(orderQuery.data.discountTotal, orderQuery.data.currency, locale)}
+                  {t("Remise :", "Discount:")} -{formatOfferPrice(orderQuery.data.discountTotal, orderQuery.data.currency, locale)}
                 </p>
               )}
               {orderQuery.data.shippingCost > 0 && (
                 <p className="text-text-muted">
-                  Livraison : {formatOfferPrice(orderQuery.data.shippingCost, orderQuery.data.currency, locale)}
+                  {t("Livraison :", "Delivery:")} {formatOfferPrice(orderQuery.data.shippingCost, orderQuery.data.currency, locale)}
                 </p>
               )}
               <p className="font-medium text-text">
-                Total : {formatOfferPrice(orderQuery.data.total, orderQuery.data.currency, locale)}
+                {t("Total :", "Total:")} {formatOfferPrice(orderQuery.data.total, orderQuery.data.currency, locale)}
               </p>
             </div>
 
@@ -139,11 +139,28 @@ export default function OrderDetailClient({ slug, orderId }: { slug: string; ord
               </div>
             )}
 
-            {orderQuery.data.hasInvoice && (
+            {(orderQuery.data.hasInvoice || orderQuery.data.hasDonationReceipt) && (
               <div className="border-t border-border pt-3">
-                <Button type="button" variant="secondary" size="sm" loading={downloading} onClick={() => void handleDownloadInvoice()}>
-                  {t("Télécharger la facture", "Download the invoice")}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {orderQuery.data.hasInvoice && (
+                    <Button type="button" variant="secondary" size="sm" loading={downloading === "invoice"} onClick={() => void handleDownload("invoice")}>
+                      {t("Télécharger la facture", "Download the invoice")}
+                    </Button>
+                  )}
+                  {orderQuery.data.hasDonationReceipt && (
+                    <Button type="button" variant="secondary" size="sm" loading={downloading === "receipt"} onClick={() => void handleDownload("receipt")}>
+                      {t("Télécharger le reçu de don", "Download the donation receipt")}
+                    </Button>
+                  )}
+                </div>
+                {orderQuery.data.hasDonationReceipt && (
+                  <p className="mt-2 text-xs text-text-muted">
+                    {t(
+                      "Le reçu confirme votre don ; ce n'est pas un reçu fiscal.",
+                      "The receipt confirms your gift; it is not a tax receipt.",
+                    )}
+                  </p>
+                )}
                 {downloadError && <p className="mt-2 text-xs text-destructive">{downloadError}</p>}
               </div>
             )}

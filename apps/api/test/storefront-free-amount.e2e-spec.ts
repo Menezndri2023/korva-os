@@ -5,6 +5,7 @@ import { Connection } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { putOrganizationOnPlan } from './support/plan-tier';
 
 /**
  * Donations and pay-what-you-want offers (Offer.freeAmount): the one storefront line whose amount
@@ -78,8 +79,12 @@ describe('Storefront free amount (e2e)', () => {
       req
         .set('Authorization', `Bearer ${accessToken}`)
         .set('X-Organization-Id', org.id);
+    // Finance (recording the cash gift, for the receipt test) starts at Starter.
+    await putOrganizationOnPlan(connection, org.id, 'starter');
     await auth(request(server).patch('/api/v1/organizations/me'))
-      .send({ enabledModules: ['catalog', 'commerce', 'crm', 'website'] })
+      .send({
+        enabledModules: ['catalog', 'commerce', 'crm', 'finance', 'website'],
+      })
       .expect(200);
 
     const create = async (body: Record<string, unknown>) =>
@@ -171,5 +176,60 @@ describe('Storefront free amount (e2e)', () => {
       .send({ type: 'booking' })
       .expect(400);
     expect(asError(edited.body).code).toBe('FREE_AMOUNT_NOT_FOR_BOOKING');
+  });
+
+  it('gives a donation receipt — non-fiscal — only once the gift is received', async () => {
+    const placed = await placeOrder([
+      { offerId: donationId, quantity: 1, amount: 20000 },
+      { offerId: membershipId, quantity: 1 },
+    ]).expect(201);
+    const orderId = asSuccess<{ id: string }>(placed.body).id;
+    const availability = () =>
+      auth(
+        request(server).get(
+          `/api/v1/orders/${orderId}/donation-receipt/availability`,
+        ),
+      ).expect(200);
+
+    expect(
+      asSuccess<{ available: boolean }>((await availability()).body).available,
+    ).toBe(false);
+    const early = await auth(
+      request(server).get(`/api/v1/orders/${orderId}/donation-receipt`),
+    ).expect(400);
+    expect(asError(early.body).code).toBe('DONATION_RECEIPT_NOT_AVAILABLE');
+
+    await auth(
+      request(server).post(`/api/v1/orders/${orderId}/confirm`),
+    ).expect(201);
+    const invoice = asSuccess<{ id: string; total: number }>(
+      (
+        await auth(
+          request(server).post(`/api/v1/orders/${orderId}/generate-invoice`),
+        ).expect(201)
+      ).body,
+    );
+    await auth(
+      request(server).post(`/api/v1/invoices/${invoice.id}/issue`),
+    ).expect(201);
+    await auth(request(server).post('/api/v1/payments'))
+      .send({ invoiceId: invoice.id, amount: invoice.total, method: 'cash' })
+      .expect(201);
+
+    expect(
+      asSuccess<{ available: boolean }>((await availability()).body).available,
+    ).toBe(true);
+    const pdf = await auth(
+      request(server).get(`/api/v1/orders/${orderId}/donation-receipt`),
+    )
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
   });
 });

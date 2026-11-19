@@ -55,6 +55,7 @@ import type { AuthenticatedCustomer } from './strategies/customer-jwt.strategy';
 import { DocumentRenderingService } from '../documents/rendering/document-rendering.service';
 import { buildInvoiceDocumentManifest } from '../documents/templates/invoice-document.template';
 import { buildCertificateDocumentManifest } from '../documents/templates/certificate-document.template';
+import { buildDonationReceiptDocumentManifest } from '../documents/templates/donation-receipt-document.template';
 
 /** Same brute-force-surface reasoning as AuthController's AUTH_THROTTLE, tightened slightly
  *  since this endpoint set has no HttpOnly-cookie layer of its own to lean on. */
@@ -244,6 +245,33 @@ export class CustomerAuthController {
     res.setHeader(
       'Content-Disposition',
       `inline; filename="${invoice.number}.pdf"`,
+    );
+    res.send(buffer);
+  }
+
+  @UseGuards(CustomerAuthGuard)
+  @Get('orders/:id/donation-receipt')
+  async getOrderDonationReceipt(
+    @Param('organizationSlug') slug: string,
+    @Param('id') id: string,
+    @Req() req: RequestWithCustomer,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { receipt, organization, contact } =
+      await this.customerAuthService.getOrderDonationReceipt(
+        slug,
+        req.user!,
+        id,
+      );
+    const buffer = await this.documentRenderingService.renderPdf(
+      buildDonationReceiptDocumentManifest(receipt, organization, contact),
+    );
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="recu-don-${receipt.number}.pdf"`,
     );
     res.send(buffer);
   }

@@ -10,6 +10,7 @@ import { addOrderItemSchema, type AddOrderItemInput } from "@korva/validation";
 import { FULFILLMENT_MODE_LABELS, FULFILLMENT_MODE_LABELS_EN, type Contact, type Offer, type Order, type Resource } from "@korva/types";
 import { Badge, Button, Card, Input } from "@korva/ui";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { DownloadButton } from "@/components/download-button";
 import { useActiveOrganization } from "@/lib/use-active-organization";
 import { useAuthReady } from "@/lib/use-auth-ready";
 import { formatCurrency } from "@/lib/analytics-format";
@@ -35,6 +36,12 @@ export default function OrderDetailPage() {
     queryKey: ["orders", id],
     queryFn: () => apiClient.get<Order>(`/orders/${id}`),
     enabled: authReady,
+  });
+  // Only an invoiced order can have been paid, so only then is the receipt worth asking about.
+  const donationReceiptQuery = useQuery({
+    queryKey: ["orders", id, "donation-receipt"],
+    queryFn: () => apiClient.get<{ available: boolean }>(`/orders/${id}/donation-receipt/availability`),
+    enabled: authReady && Boolean(orderQuery.data?.invoiceId),
   });
   const contactsQuery = useQuery({
     queryKey: ["contacts", ""],
@@ -199,6 +206,13 @@ export default function OrderDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{t(...STATUS_LABELS[order.status])}</Badge>
+            {donationReceiptQuery.data?.available && (
+              <DownloadButton
+                path={`/orders/${order.id}/donation-receipt`}
+                filename={`recu-don-${order.number}.pdf`}
+                label={t("Reçu de don (non fiscal)", "Donation receipt (not for tax)")}
+              />
+            )}
             {order.status === "open" && (
               <Button
                 variant="secondary"

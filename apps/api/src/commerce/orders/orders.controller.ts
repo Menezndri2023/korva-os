@@ -7,7 +7,9 @@ import {
   ParseIntPipe,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags } from '@nestjs/swagger';
 import {
   addOrderItemSchema,
@@ -26,6 +28,11 @@ import {
 import type { TenantContext } from '@korva/types';
 import type { AuthenticatedUser } from '../../core/tenant/request-context.types';
 import { OrdersService } from './orders.service';
+import { DonationReceiptService } from './donation-receipt.service';
+import { OrganizationsService } from '../../organizations/organizations.service';
+import { ContactsService } from '../../crm/contacts/contacts.service';
+import { DocumentRenderingService } from '../../documents/rendering/document-rendering.service';
+import { buildDonationReceiptDocumentManifest } from '../../documents/templates/donation-receipt-document.template';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -36,7 +43,13 @@ import { RequireModule } from '../../common/decorators/require-module.decorator'
 @RequireModule('commerce')
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly donationReceiptService: DonationReceiptService,
+    private readonly organizationsService: OrganizationsService,
+    private readonly contactsService: ContactsService,
+    private readonly documentRenderingService: DocumentRenderingService,
+  ) {}
 
   @RequirePermissions('orders.read')
   @Get()
@@ -193,5 +206,56 @@ export class OrdersController {
       user.userId,
       id,
     );
+  }
+
+  /** Whether the order's donation receipt can be downloaded yet (paid, not refunded, holds a gift). */
+  @RequirePermissions('orders.read')
+  @Get(':id/donation-receipt/availability')
+  async donationReceiptAvailability(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+  ): Promise<{ available: boolean }> {
+    const order = await this.ordersService.getById(tenant.organizationId, id);
+    return {
+      available: await this.donationReceiptService.isAvailable(
+        tenant.organizationId,
+        order,
+      ),
+    };
+  }
+
+  /**
+   * The association's copy of a donor's receipt — to send to a donor who gave without an
+   * account (the storefront offers the same PDF to a donor who has one).
+   */
+  @RequirePermissions('orders.read')
+  @Get(':id/donation-receipt')
+  async getDonationReceipt(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const order = await this.ordersService.getById(tenant.organizationId, id);
+    const receipt = await this.donationReceiptService.resolve(
+      tenant.organizationId,
+      order,
+    );
+    const [organization, contact] = await Promise.all([
+      this.organizationsService.getById(tenant.organizationId),
+      this.contactsService.getById(
+        tenant.organizationId,
+        order.contactId.toString(),
+      ),
+    ]);
+    const buffer = await this.documentRenderingService.renderPdf(
+      buildDonationReceiptDocumentManifest(receipt, organization, contact),
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="recu-don-${receipt.number}.pdf"`,
+    );
+    res.send(buffer);
   }
 }

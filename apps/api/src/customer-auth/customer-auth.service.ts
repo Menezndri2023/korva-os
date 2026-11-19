@@ -34,6 +34,7 @@ import { interpolate } from '../shared/template';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { OrganizationDocument } from '../organizations/schemas/organization.schema';
 import { ContactsService } from '../crm/contacts/contacts.service';
+import { DonationReceiptService } from '../commerce/orders/donation-receipt.service';
 import { OrdersService } from '../commerce/orders/orders.service';
 import { OrderDocument } from '../commerce/orders/schemas/order.schema';
 import { BookingsService } from '../booking/bookings/bookings.service';
@@ -140,6 +141,7 @@ export class CustomerAuthService {
     private readonly contactsService: ContactsService,
     private readonly loyaltyService: LoyaltyService,
     private readonly ordersService: OrdersService,
+    private readonly donationReceiptService: DonationReceiptService,
     private readonly bookingsService: BookingsService,
     private readonly businessAlerts: BusinessAlertsService,
     private readonly usersService: UsersService,
@@ -579,8 +581,36 @@ export class CustomerAuthService {
       total: order.total,
       currency: order.currency,
       hasInvoice: !!order.invoiceId,
+      hasDonationReceipt: await this.donationReceiptService.isAvailable(
+        organization.id as string,
+        order,
+      ),
       createdAt: (order as unknown as { createdAt: Date }).createdAt,
     };
+  }
+
+  /** The donor's own receipt for a gift on their order — same ownership checks as the invoice. */
+  async getOrderDonationReceipt(
+    slug: string,
+    customer: AuthenticatedCustomer,
+    orderId: string,
+  ) {
+    const organization = await this.resolveOrganization(slug);
+    this.assertSameOrganization(customer, organization);
+
+    const order = await this.ordersService.getById(
+      organization.id as string,
+      orderId,
+    );
+    this.assertOwnsOrder(order, customer);
+    const [receipt, contact] = await Promise.all([
+      this.donationReceiptService.resolve(organization.id as string, order),
+      this.contactsService.getById(
+        organization.id as string,
+        customer.contactId,
+      ),
+    ]);
+    return { receipt, organization, contact };
   }
 
   /**

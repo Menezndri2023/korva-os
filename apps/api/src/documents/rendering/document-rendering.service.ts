@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib';
 
 export interface DocumentTemplate {
-  documentType: 'invoice' | 'quote' | 'certificate' | 'statement';
+  documentType:
+    'invoice' | 'quote' | 'certificate' | 'statement' | 'donation_receipt';
   title: string;
   organizationHeader: { name: string; address?: string };
   metadata: { label: string; value: string }[];
@@ -12,7 +13,7 @@ export interface DocumentTemplate {
     rows: string[][];
     totals: { label: string; value: string }[];
   };
-  /** Certificate shape — centered prose, no table. */
+  /** Certificate shape — prose; drawn after the table when a template has both. */
   body?: { heading?: string; paragraphs: string[] };
   footer?: string;
 }
@@ -89,7 +90,10 @@ export class DocumentRenderingService {
         font,
         boldFont,
       });
-    } else if (template.body) {
+    }
+    // A donation receipt has both: the gifts, then the sentence attesting them.
+    if (template.body) {
+      if (template.table) cursorY -= LINE_HEIGHT;
       cursorY = drawBody(page, template.body, {
         x: MARGIN,
         y: cursorY,

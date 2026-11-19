@@ -270,6 +270,8 @@ export interface CustomerOrderDetail {
   total: number;
   currency: string;
   hasInvoice: boolean;
+  /** A paid, unrefunded order holding a gift (free-amount offer): its non-fiscal receipt. */
+  hasDonationReceipt?: boolean;
   createdAt: string;
 }
 

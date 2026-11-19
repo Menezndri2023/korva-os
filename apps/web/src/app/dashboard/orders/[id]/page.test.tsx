@@ -46,6 +46,7 @@ function mockGetByPath(path: string) {
   if (path.startsWith("/contacts")) return Promise.resolve([contact]);
   if (path.startsWith("/offers")) return Promise.resolve([]);
   if (path.startsWith("/resources")) return Promise.resolve([]);
+  if (path === "/orders/order-1/donation-receipt/availability") return Promise.resolve({ available: false });
   throw new Error(`unexpected GET ${path}`);
 }
 
@@ -127,6 +128,26 @@ describe("OrderDetailPage", () => {
     await screen.findByRole("heading", { name: "ORD-1" });
     expect(screen.queryByRole("button", { name: "Facturer" })).not.toBeInTheDocument();
     expect(screen.getByText("Générée")).toBeInTheDocument();
+  });
+
+  it("offers the donation receipt only once the API says the gift was received", async () => {
+    getMock.mockImplementation((path: string) => {
+      if (path === "/orders/order-1") {
+        return Promise.resolve({ ...order, status: "confirmed" as const, invoiceId: "invoice-1" });
+      }
+      if (path === "/orders/order-1/donation-receipt/availability") return Promise.resolve({ available: true });
+      return mockGetByPath(path);
+    });
+    renderWithProviders(<OrderDetailPage />);
+
+    expect(await screen.findByRole("button", { name: "Reçu de don (non fiscal)" })).toBeInTheDocument();
+  });
+
+  it("does not ask about a receipt for an order never invoiced", async () => {
+    renderWithProviders(<OrderDetailPage />);
+    await screen.findByRole("heading", { name: "ORD-1" });
+    expect(getMock).not.toHaveBeenCalledWith("/orders/order-1/donation-receipt/availability");
+    expect(screen.queryByRole("button", { name: "Reçu de don (non fiscal)" })).not.toBeInTheDocument();
   });
 
   it("shows the backend error message when an action fails", async () => {

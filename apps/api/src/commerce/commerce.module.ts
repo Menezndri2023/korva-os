@@ -17,6 +17,8 @@ import { CartsController } from './carts/carts.controller';
 import { OrdersRepository } from './orders/orders.repository';
 import { OrdersService } from './orders/orders.service';
 import { OrdersController } from './orders/orders.controller';
+import { DonationReceiptService } from './orders/donation-receipt.service';
+import { DocumentsModule } from '../documents/documents.module';
 
 import { FulfillmentsRepository } from './fulfillments/fulfillments.repository';
 import { FulfillmentsService } from './fulfillments/fulfillments.service';
@@ -87,6 +89,8 @@ import { ReviewsModule } from '../reviews/reviews.module';
     // ReviewRequestsService ("donnez votre avis" once an order is delivered). ReviewsModule only
     // imports CommunicationModule/CrmModule — no path back to CommerceModule.
     ReviewsModule,
+    // DocumentRenderingService, for the donation receipt PDF (OrdersController).
+    DocumentsModule,
     // A second, module-local JwtModule registration for KitchenGateway's own JwtService
     // injection — deliberately NOT exported (see this module's own `exports` array below), so
     // it can never collide with CustomerAuthModule's separately-registered JwtService (a
@@ -118,6 +122,7 @@ import { ReviewsModule } from '../reviews/reviews.module';
     CartsService,
     OrdersRepository,
     OrdersService,
+    DonationReceiptService,
     FulfillmentsRepository,
     FulfillmentsService,
     ReturnRequestsRepository,
@@ -131,6 +136,7 @@ import { ReviewsModule } from '../reviews/reviews.module';
   ],
   exports: [
     OrdersService,
+    DonationReceiptService,
     ReturnRequestsService,
     WishlistService,
     CartsService,
