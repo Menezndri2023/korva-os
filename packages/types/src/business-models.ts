@@ -333,3 +333,160 @@ export const BUSINESS_MODEL_OFFER_FIELDS: Partial<Record<BusinessModel, readonly
     { label: "Disponible à partir du", kind: "date" },
   ],
 };
+
+/**
+ * The English of every guided label and option above. Attributes are stored under the French
+ * label (the dashboard is French-first and an owner's own keys are free text), so an English site
+ * translates on display: offerAttributeText below. A storefront test fails when a label or option
+ * is added above without its English here.
+ */
+export const OFFER_FIELD_TEXT_EN: Readonly<Record<string, string>> = {
+  // restaurant
+  Allergènes: "Allergens",
+  Gluten: "Gluten",
+  Crustacés: "Crustaceans",
+  Œufs: "Eggs",
+  Poisson: "Fish",
+  Arachides: "Peanuts",
+  Soja: "Soy",
+  Lait: "Milk",
+  "Fruits à coque": "Tree nuts",
+  Céleri: "Celery",
+  Moutarde: "Mustard",
+  Sésame: "Sesame",
+  Sulfites: "Sulphites",
+  Lupin: "Lupin",
+  Mollusques: "Molluscs",
+  Régime: "Diet",
+  Végétarien: "Vegetarian",
+  Végan: "Vegan",
+  Halal: "Halal",
+  "Sans gluten": "Gluten-free",
+  "Sans porc": "No pork",
+  Piment: "Spice",
+  Doux: "Mild",
+  Moyen: "Medium",
+  Fort: "Hot",
+  "Très fort": "Very hot",
+  Portion: "Portion",
+  "Temps de préparation (min)": "Preparation time (min)",
+  // appointments
+  Lieu: "Where",
+  "Sur place": "On site",
+  "À domicile": "At your home",
+  "Sur place ou à domicile": "On site or at your home",
+  "En ligne": "Online",
+  "Pour qui": "For",
+  Femme: "Women",
+  Homme: "Men",
+  Enfant: "Children",
+  Mixte: "Everyone",
+  Niveau: "Level",
+  "Tous niveaux": "All levels",
+  Débutant: "Beginner",
+  Intermédiaire: "Intermediate",
+  Avancé: "Advanced",
+  "À prévoir": "What to bring",
+  // training
+  Format: "Format",
+  Présentiel: "In person",
+  Hybride: "Hybrid",
+  "Durée totale": "Total duration",
+  Prérequis: "Prerequisites",
+  Places: "Seats",
+  Attestation: "Certificate",
+  "Attestation de fin de formation": "Certificate of completion",
+  Certificat: "Certificate",
+  Aucune: "None",
+  Langue: "Language",
+  // quotes
+  Tarification: "Pricing",
+  "Au forfait": "Flat rate",
+  "À l'heure": "Hourly",
+  "À la journée": "Daily",
+  "Au m²": "Per m²",
+  "Sur devis uniquement": "On quote only",
+  "Zone d'intervention": "Area served",
+  "Délai indicatif": "Typical lead time",
+  Déplacement: "Travel",
+  Inclus: "Included",
+  "En supplément": "Extra",
+  "Sans objet": "Not applicable",
+  Garantie: "Warranty",
+  // association
+  Périodicité: "Frequency",
+  Mensuelle: "Monthly",
+  Trimestrielle: "Quarterly",
+  Annuelle: "Yearly",
+  Ponctuelle: "One-off",
+  "Avantages inclus": "Benefits included",
+  Public: "Who it is for",
+  // lodging
+  "Capacité (personnes)": "Sleeps",
+  Lits: "Beds",
+  "Superficie (m²)": "Size (m²)",
+  Équipements: "Amenities",
+  "Wi-Fi": "Wi-Fi",
+  Climatisation: "Air conditioning",
+  Ventilateur: "Fan",
+  "Salle de bain privée": "Private bathroom",
+  Télévision: "TV",
+  "Petit-déjeuner inclus": "Breakfast included",
+  Parking: "Parking",
+  Piscine: "Swimming pool",
+  "Cuisine équipée": "Equipped kitchen",
+  // real estate
+  Transaction: "Transaction",
+  Vente: "For sale",
+  Location: "To let",
+  "Type de bien": "Property type",
+  Appartement: "Apartment",
+  Maison: "House",
+  Villa: "Villa",
+  Studio: "Studio",
+  Terrain: "Land",
+  Bureau: "Office",
+  "Local commercial": "Commercial premises",
+  "Surface (m²)": "Floor area (m²)",
+  Pièces: "Rooms",
+  Chambres: "Bedrooms",
+  Quartier: "District",
+  Ville: "City",
+  "Charges mensuelles": "Monthly charges",
+  "Disponible à partir du": "Available from",
+};
+
+/** The kind of a guided label ("date" for "Disponible à partir du"…), whatever the trade. */
+export function offerFieldKind(label: string): OfferFieldDefinition["kind"] | undefined {
+  for (const fields of Object.values(BUSINESS_MODEL_OFFER_FIELDS)) {
+    const field = fields?.find((f) => f.label === label);
+    if (field) return field.kind;
+  }
+  return undefined;
+}
+
+/**
+ * One stored attribute as a site shows it. In English, a guided label and its options are
+ * translated — a checklist option by option; anything the owner typed is shown as typed.
+ */
+export function offerAttributeText(
+  key: string,
+  value: string,
+  locale: "fr" | "en",
+): { label: string; value: string } {
+  if (locale !== "en") return { label: key, value };
+  const en = (text: string) => OFFER_FIELD_TEXT_EN[text] ?? text;
+  const kind = offerFieldKind(key);
+  return {
+    label: en(key),
+    value:
+      kind === "checklist"
+        ? value
+            .split(", ")
+            .map((part) => en(part.trim()))
+            .join(", ")
+        : kind === "select"
+          ? en(value)
+          : value,
+  };
+}

@@ -23,6 +23,7 @@ import { WhatsAppButton } from "@/templates/sections/WhatsAppButton";
 import { whatsappLink } from "@/lib/contact";
 import { MessageCircle } from "lucide-react";
 import { Confirmation } from "@/templates/sections/Confirmation";
+import { OfferAttributes } from "@/templates/sections/OfferAttributes";
 import {
   missingRequiredGroups,
   OfferOptionsPicker,
@@ -261,16 +262,7 @@ export default function OfferDetailClient({
               <p className={`mt-4 whitespace-pre-line text-base leading-relaxed ${KT.textMuted}`}>{offer.description}</p>
             )}
 
-            {offer.attributes && Object.keys(offer.attributes).length > 0 && (
-              <dl className={`mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-2xl border p-4 text-sm ${KT.border} ${KT.surface}`}>
-                {Object.entries(offer.attributes).map(([key, value]) => (
-                  <div key={key} className="contents">
-                    <dt className={KT.textMuted}>{key}</dt>
-                    <dd className="font-medium">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
+            <OfferAttributes attributes={offer.attributes} />
 
             {optionGroups.length > 0 && offer.type !== "booking" && commerceEnabled && (
               <OfferOptionsPicker

@@ -1,37 +1,16 @@
-import type { Locale } from "@korva/types";
+import { OFFER_FIELD_TEXT_EN, type Locale } from "@korva/types";
 import type { PublicOffer } from "@/lib/public-types";
 
 /**
  * Reads the guided characteristics a guesthouse and an estate agency fill in
  * (BUSINESS_MODEL_OFFER_FIELDS in @korva/types). They are stored in Offer.attributes under their
  * French labels, so the "sejour" and "agence" templates read them here and phrase them in the
- * site's own language — the one place an English site does not show French keys.
+ * site's own language (OFFER_FIELD_TEXT_EN, shared with the offer page).
  */
-
-const VALUE_EN: Record<string, string> = {
-  Vente: "For sale",
-  Location: "To let",
-  Appartement: "Apartment",
-  Maison: "House",
-  Villa: "Villa",
-  Studio: "Studio",
-  Terrain: "Land",
-  Bureau: "Office",
-  "Local commercial": "Commercial premises",
-  "Wi-Fi": "Wi-Fi",
-  Climatisation: "Air conditioning",
-  Ventilateur: "Fan",
-  "Salle de bain privée": "Private bathroom",
-  Télévision: "TV",
-  "Petit-déjeuner inclus": "Breakfast included",
-  Parking: "Parking",
-  Piscine: "Swimming pool",
-  "Cuisine équipée": "Equipped kitchen",
-};
 
 /** A stored French option, in the site's language (unknown values are shown as typed). */
 export function optionLabel(value: string, locale: Locale): string {
-  return locale === "en" ? (VALUE_EN[value] ?? value) : value;
+  return locale === "en" ? (OFFER_FIELD_TEXT_EN[value] ?? value) : value;
 }
 
 function attribute(offer: PublicOffer, label: string): string | undefined {
