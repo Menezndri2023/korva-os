@@ -34,7 +34,10 @@ Le tableau de bord et les sites : `pnpm --filter web exec next start -p 3000` et
 ## 2. Remplir la base de démonstration
 
 Base vide d'abord (`korva_screens` uniquement), puis, depuis `apps/api`, avec la même
-`MONGODB_URI` réécrite : `CREDENTIALS_FILE=/chemin/creds.json pnpm seed:screenshots`.
+`MONGODB_URI` réécrite : `PLATFORM_ADMIN_EMAILS=admin@screens.korva.test CREDENTIALS_FILE=/chemin/creds.json pnpm seed:screenshots`.
+`PLATFORM_ADMIN_EMAILS` est nécessaire ici aussi, pas seulement pour l'API : la dernière étape crée
+l'administrateur par la commande d'exploitation, qui la relit ; sans elle, tout le reste est créé
+mais les identifiants ne sont jamais écrits, et il faut repartir d'une base vide.
 
 Une entreprise par métier : un salon et un hôtel en Pro, une boutique en Business avec deux
 établissements et le thème premium Jade + Prestige, un restaurant, une académie, une agence
