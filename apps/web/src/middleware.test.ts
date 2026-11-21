@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { middleware } from "./middleware";
+import { middleware, pageLanguage } from "./middleware";
 
 function directives(): Map<string, string> {
   const response = middleware(new NextRequest("http://localhost:3000/dashboard"));
@@ -36,5 +36,16 @@ describe("dashboard Content-Security-Policy", () => {
     expect(all.get("script-src")).not.toContain("https:");
     expect(all.get("frame-ancestors")).toBe("'none'");
     expect(all.get("object-src")).toBe("'none'");
+  });
+});
+
+describe("page language", () => {
+  it("is English under /en only", () => {
+    expect(pageLanguage("/en")).toBe("en");
+    expect(pageLanguage("/en/trades/restaurant")).toBe("en");
+    expect(pageLanguage("/")).toBe("fr");
+    expect(pageLanguage("/metiers/restaurant-maquis")).toBe("fr");
+    // A French path that merely starts with the letters "en".
+    expect(pageLanguage("/entreprise")).toBe("fr");
   });
 });

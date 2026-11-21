@@ -41,6 +41,11 @@ const storefrontOrigin = new URL(
  *  - unsafe-eval: dev-only. Next.js's webpack dev server (Fast Refresh/HMR) needs it; production
  *    builds never do, so it's never shipped.
  */
+/** "en" for the public English pages (/en, /en/…), "fr" for everything else. */
+export function pageLanguage(pathname: string): "fr" | "en" {
+  return pathname === "/en" || pathname.startsWith("/en/") ? "en" : "fr";
+}
+
 export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
 
@@ -64,6 +69,10 @@ export function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
+  // The public English pages live under /en: the root layout reads this to say <html lang="en">
+  // there. Search engines take the page's language from that attribute, and a French tag on
+  // an English page competes with its own French version instead of complementing it.
+  requestHeaders.set("x-korva-lang", pageLanguage(request.nextUrl.pathname));
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", csp);

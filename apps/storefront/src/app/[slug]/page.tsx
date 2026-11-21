@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import StorefrontClient from "./storefront-client";
 import { serverApi } from "@/lib/server-api";
-import { businessJsonLd, jsonLdHtml } from "@/lib/structured-data";
+import { homeJsonLd, jsonLdHtml } from "@/lib/structured-data";
 import { unresolvedStorefrontMetadata } from "@/lib/organization-lookup";
 import { fetchOrganization } from "@/lib/fetch-organization";
 import { siteLocale, translator } from "@/lib/storefront-locale-core";
@@ -148,11 +148,12 @@ export default async function StorefrontPage({ params }: StorefrontPageProps) {
   return (
     <>
       {organization && (
-        // What the business is, for search engines and AI assistants (see structured-data.ts).
+        // What the business is and sells, and its FAQ, for search engines and AI assistants
+        // (see structured-data.ts).
         <script
           type="application/ld+json"
           nonce={nonce}
-          dangerouslySetInnerHTML={{ __html: jsonLdHtml(businessJsonLd(organization, `${SITE_URL}/${slug}`)) }}
+          dangerouslySetInnerHTML={{ __html: jsonLdHtml(homeJsonLd(organization, `${SITE_URL}/${slug}`, offers)) }}
         />
       )}
       <StorefrontClient

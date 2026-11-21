@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing/landing-page";
 import { SignedInRedirect } from "@/components/landing/signed-in-redirect";
-import { BRAND_NAME, HOME_DESCRIPTION_EN, HOME_TITLE_EN } from "@/lib/brand";
+import { BRAND_KEYWORDS_EN, BRAND_NAME, HOME_DESCRIPTION_EN, HOME_TITLE_EN } from "@/lib/brand";
 
 export const metadata: Metadata = {
   title: { absolute: HOME_TITLE_EN },
   description: HOME_DESCRIPTION_EN,
+  keywords: BRAND_KEYWORDS_EN,
   alternates: { canonical: "/en", languages: { fr: "/", en: "/en", "x-default": "/" } },
   openGraph: {
     type: "website",

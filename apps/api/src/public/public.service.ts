@@ -312,6 +312,9 @@ export class PublicService {
       businessModel: organization.businessModel,
       currency: organization.currency,
       language: organization.language,
+      // Not a private detail: the country is already implied by the currency and the phone
+      // prefix. The storefront gives it to search engines as the address country.
+      country: organization.country,
       logo: organization.logo,
       brandColor: organization.brandColor,
       tagline: organization.tagline,

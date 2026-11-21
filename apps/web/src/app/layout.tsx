@@ -5,7 +5,7 @@ import Script from "next/script";
 import "./globals.css";
 import { ErrorReporter } from "@korva/ui";
 import { Providers } from "./providers";
-import { BRAND_NAME, HOME_DESCRIPTION_FR, HOME_TITLE_FR } from "@/lib/brand";
+import { BRAND_KEYWORDS_FR, BRAND_NAME, HOME_DESCRIPTION_FR, HOME_TITLE_FR, PUBLISHER } from "@/lib/brand";
 
 /**
  * Runs synchronously before the body ever paints — reads the visitor's stored theme choice (or
@@ -76,6 +76,9 @@ export const metadata: Metadata = {
   },
   description: HOME_DESCRIPTION_FR,
   applicationName: BRAND_NAME,
+  keywords: BRAND_KEYWORDS_FR,
+  creator: PUBLISHER.name,
+  publisher: PUBLISHER.name,
   // Google Search Console ownership of https://app.korvasuite.com (public, not a secret).
   verification: { google: "gcyX2n6EYn4ip0teMka5Xc27liad23u4i11hOGj5vQ8" },
   openGraph: {
@@ -102,10 +105,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const requestHeaders = await headers();
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
+  // Set by middleware.ts from the path: "en" under /en.
+  const lang = requestHeaders.get("x-korva-lang") === "en" ? "en" : "fr";
   return (
     <html
-      lang="fr"
+      lang={lang}
       className={`${figtree.variable} ${bricolage.variable} ${plexMono.variable} h-full antialiased`}
       // data-theme is set by THEME_INIT_SCRIPT below, outside React's own render — without this,
       // React would warn (or in dev, error) about a server/client attribute mismatch on <html>.

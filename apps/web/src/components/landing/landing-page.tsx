@@ -5,6 +5,7 @@ import {
   PLAN_NAMES,
   SIGNUP_TRIAL,
   businessModelText,
+  verticalText,
   type Locale,
 } from "@korva/types";
 import { KorvaWordmark } from "@/components/brand/korva-mark";
@@ -13,8 +14,18 @@ import { PlanLadder } from "./plan-ladder";
 import { PlatformReviews } from "./platform-reviews";
 import { TradePanel } from "./trade-panel";
 import { JsonLd } from "@/components/seo/json-ld";
-import { BRAND_ALTERNATE_NAMES, BRAND_NAME, BRAND_PROFILES, PUBLISHER } from "@/lib/brand";
+import {
+  AREA_SERVED,
+  BRAND_ALTERNATE_NAMES,
+  BRAND_KEYWORDS_EN,
+  BRAND_KEYWORDS_FR,
+  BRAND_NAME,
+  BRAND_PROFILES,
+  PUBLISHER,
+  TRADE_COUNT,
+} from "@/lib/brand";
 import { LanguageLink, PublicFooter } from "@/components/seo/trade-page";
+import { SEO_TRADES, tradePath } from "@/lib/seo-trades";
 import { KORVA_SUPPORT, PLAN_PRICES } from "@korva/types";
 
 /**
@@ -39,6 +50,27 @@ const TEXT = {
     plans: "Formules",
     signIn: "Se connecter",
     signUp: "Créer un compte",
+    kicker: (count: number) => `KORVA OS · logiciel de gestion et site internet pour ${count} métiers`,
+    tradesH2: (count: number) => `Les ${count} métiers pris en charge par KORVA OS`,
+    tradesLead:
+      "Chaque métier arrive avec ses outils, ses mots et son site. Choisissez le vôtre pour voir ce que KORVA OS fait pour lui.",
+    tradesAll: "Voir tous les métiers",
+    description:
+      "Logiciel de gestion et site internet pour les petites entreprises : clients, rendez-vous, commandes, stock, caisse, devis, factures et site internet, configurés pour le métier. Paiement Wave, Orange Money, MTN, Moov et carte bancaire.",
+    features: [
+      "Fiches clients et relances",
+      "Prise de rendez-vous et réservations en ligne",
+      "Commandes et boutique en ligne",
+      "Gestion de stock",
+      "Caisse avec QR code mobile money",
+      "Devis et factures",
+      "Relances automatiques des impayés",
+      "Site internet de l'entreprise",
+      "Paiement Wave, Orange Money, MTN, Moov et carte",
+      "Statistiques et export Excel",
+      "Plusieurs établissements",
+      "Assistant IA par métier",
+    ],
     h1: "Votre cahier, votre carnet de rendez-vous et votre caisse, au même endroit.",
     lead: "KORVA OS remplace les carnets, les tableurs et les commandes perdues dans les messages. Vous ouvrez un compte, vous dites votre métier, et tout est déjà en place.",
     cta: "Créer mon compte gratuit",
@@ -77,6 +109,27 @@ const TEXT = {
     plans: "Plans",
     signIn: "Sign in",
     signUp: "Create an account",
+    kicker: (count: number) => `KORVA OS · business software and website for ${count} trades`,
+    tradesH2: (count: number) => `The ${count} trades KORVA OS supports`,
+    tradesLead:
+      "Each trade comes with its own tools, words and website. Pick yours to see what KORVA OS does for it.",
+    tradesAll: "See every trade",
+    description:
+      "Business management software and website for small businesses: customers, appointments, orders, stock, till, quotes, invoices and a website, set up for the trade. Payments by Wave, Orange Money, MTN, Moov and card.",
+    features: [
+      "Customer records and follow-ups",
+      "Online appointments and bookings",
+      "Orders and online shop",
+      "Stock management",
+      "Till with mobile money QR code",
+      "Quotes and invoices",
+      "Automatic payment reminders",
+      "The business's own website",
+      "Wave, Orange Money, MTN, Moov and card payments",
+      "Statistics and Excel export",
+      "Several locations",
+      "AI assistant for each trade",
+    ],
     h1: "Your notebook, your appointment book and your till, in one place.",
     lead: "KORVA OS replaces notebooks, spreadsheets and orders lost in messages. Open an account, tell us your trade, and everything is already set up.",
     cta: "Create my free account",
@@ -140,6 +193,10 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
             name: BRAND_NAME,
             alternateName: BRAND_ALTERNATE_NAMES,
             url: "https://app.korvasuite.com",
+            description: t.description,
+            slogan: t.h1,
+            areaServed: AREA_SERVED,
+            knowsAbout: SEO_TRADES.map((trade) => verticalText(trade.template, locale).label),
             parentOrganization: {
               "@type": "Organization",
               name: PUBLISHER.name,
@@ -163,14 +220,20 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
             name: BRAND_NAME,
             alternateName: BRAND_ALTERNATE_NAMES,
             publisher: { "@id": "https://app.korvasuite.com/#organization" },
-            // The same markets llms.txt names: franc CFA countries, mobile money first.
-            areaServed: ["Côte d'Ivoire", "Sénégal", "Afrique de l'Ouest"],
+            // The same markets llms.txt names: West Africa first, international (lib/brand.ts).
+            areaServed: AREA_SERVED,
             applicationCategory: "BusinessApplication",
+            applicationSubCategory: en ? "Business management software" : "Logiciel de gestion",
             operatingSystem: "Web, Android, iOS (navigateur)",
-            url: "https://app.korvasuite.com",
-            inLanguage: "fr",
-            description:
-              "Logiciel de gestion pour petites entreprises : clients, rendez-vous, commandes, stock, caisse, factures et site internet. Paiement Wave, Orange Money, MTN, Moov et carte bancaire.",
+            url: `https://app.korvasuite.com${en ? "/en" : "/"}`,
+            inLanguage: ["fr", "en"],
+            description: t.description,
+            featureList: t.features,
+            keywords: (en ? BRAND_KEYWORDS_EN : BRAND_KEYWORDS_FR).join(", "),
+            audience: {
+              "@type": "BusinessAudience",
+              audienceType: en ? "Small businesses and independents" : "Petites entreprises et indépendants",
+            },
             offers: {
               "@type": "AggregateOffer",
               priceCurrency: "XOF",
@@ -178,6 +241,20 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
               highPrice: PLAN_PRICES.XOF.business,
               offerCount: 4,
             },
+          },
+          {
+            // The trades, each with its own page: what lets "logiciel de gestion restaurant" or
+            // "logiciel salon de coiffure" lead to KORVA, not only "korva".
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            name: t.tradesH2(TRADE_COUNT),
+            numberOfItems: SEO_TRADES.length,
+            itemListElement: SEO_TRADES.map((trade, index) => ({
+              "@type": "ListItem",
+              position: index + 1,
+              name: verticalText(trade.template, locale).label,
+              url: `https://app.korvasuite.com${tradePath(trade, locale)}`,
+            })),
           },
           {
             "@context": "https://schema.org",
@@ -232,7 +309,12 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
         </header>
 
         <div className="mx-auto max-w-6xl px-4 pt-10 pb-20 sm:px-8 sm:pt-16 sm:pb-28">
+          {/* The brand and what it is, inside the h1: the heading is the strongest on-page signal
+              of what a page is about, and the sentence below it never said "KORVA OS". */}
           <h1 className="max-w-3xl text-[2rem] font-semibold leading-[1.1] tracking-[-0.025em] sm:text-[2.75rem] lg:text-[3.25rem]">
+            <span className="mb-4 block text-sm font-medium tracking-normal text-primary sm:text-base">
+              {t.kicker(TRADE_COUNT)}
+            </span>
             {t.h1}
           </h1>
           <p className="mt-5 max-w-xl text-base leading-relaxed text-ink-muted sm:text-lg">
@@ -342,6 +424,40 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
             })}
           </dl>
         </div>
+      </section>
+
+      {/* ------------------------------------------------------------ the trades (paper) */}
+      {/* Links, not the hero's picker again: every trade's own page, named in the words its
+          owners search with. The footer lists them too, but a list under a heading that says
+          how many there are is what a reader — and a crawler — takes as the page's content. */}
+      <section id="metiers" className="mx-auto max-w-6xl px-4 py-16 sm:px-8 sm:py-20">
+        <h2 className="max-w-2xl text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+          {t.tradesH2(TRADE_COUNT)}
+        </h2>
+        <p className="mt-3 max-w-2xl text-[0.9375rem] leading-relaxed text-ink-soft">{t.tradesLead}</p>
+        <ul className="mt-10 grid gap-x-8 border-t border-ink sm:grid-cols-2 lg:grid-cols-3">
+          {SEO_TRADES.map((trade) => {
+            const words = verticalText(trade.template, locale);
+            return (
+              <li key={trade.slug} className="border-b border-rule">
+                <Link
+                  href={tradePath(trade, locale)}
+                  className="group block py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <span className="block font-semibold text-ink group-hover:underline">{words.label}</span>
+                  <span className="mt-1 block text-sm leading-snug text-ink-soft">
+                    {en ? trade.en.heading : trade.heading}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-6">
+          <Link href={en ? "/en/trades" : "/metiers"} className="text-sm font-semibold text-ink underline underline-offset-4 hover:text-primary">
+            {t.tradesAll}
+          </Link>
+        </p>
       </section>
 
       <PlatformReviews locale={locale} />

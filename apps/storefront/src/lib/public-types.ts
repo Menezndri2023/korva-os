@@ -30,6 +30,9 @@ export interface PublicOrganization {
   businessModel?: BusinessModel;
   currency: string;
   language: string;
+  /** ISO 3166 code ("CI", "SN"): the address country search engines read. Absent from an API
+   *  older than this field. */
+  country?: string;
   logo?: string;
   /** Hex color (e.g. "#1a73e8") — the org's custom accent, applied per `storefrontTheme.customAccentApplied`. */
   brandColor?: string;

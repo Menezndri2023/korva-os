@@ -3,7 +3,7 @@ import { siteTranslator } from "@/lib/fetch-organization";
 import { headers } from "next/headers";
 import OfferDetailClient from "./offer-detail-client";
 import { serverApi } from "@/lib/server-api";
-import { jsonLdHtml, offerJsonLd } from "@/lib/structured-data";
+import { jsonLdHtml, offerBreadcrumbJsonLd, offerJsonLd } from "@/lib/structured-data";
 import { clipText } from "@/lib/seo-text";
 import {
   classifyLookupFailure,
@@ -125,7 +125,16 @@ export default async function OfferDetailPage({ params }: OfferDetailPageProps) 
           type="application/ld+json"
           nonce={nonce}
           dangerouslySetInnerHTML={{
-            __html: jsonLdHtml(offerJsonLd(offer, lookup.organization, `${SITE_URL}/${slug}/offers/${offerId}`)),
+            __html: jsonLdHtml([
+              offerJsonLd(offer, lookup.organization, `${SITE_URL}/${slug}/offers/${offerId}`),
+              offerBreadcrumbJsonLd(
+                offer,
+                lookup.organization,
+                `${SITE_URL}/${slug}`,
+                // The same word in French and English.
+                "Catalogue",
+              ),
+            ]),
           }}
         />
       )}

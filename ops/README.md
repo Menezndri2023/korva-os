@@ -115,6 +115,20 @@ to that one bucket.
 Not encrypted client-side on purpose: the key would live on the very machine whose loss this
 covers. The bucket is private and R2 encrypts at rest.
 
+## indexnow.sh
+
+Submits every URL of both sitemaps (app.korvasuite.com and sites.korvasuite.com) to IndexNow, so
+Bing — the index ChatGPT search and Copilot answer from — hears about new business sites and
+offers at once instead of on its next crawl. No secret: the key is public by design and each host
+serves it at `/indexnow.txt` (`packages/types/src/seo.ts`). Run after a deploy that ships the key:
+
+```
+ssh korva@13.140.174.3 '~/ops/indexnow.sh --install-cron'
+```
+
+That submits now and every night at 04:41; log in `~/backups/indexnow.log`. A host whose
+`/indexnow.txt` does not answer the key is skipped and the run exits 1.
+
 ## set-secret.sh
 
 `~/ops/set-secret.sh SENTRY_DSN` — prompts for one value without echoing it, writes it, recreates

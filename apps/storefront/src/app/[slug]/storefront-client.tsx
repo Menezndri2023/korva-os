@@ -217,8 +217,11 @@ export default function StorefrontClient({
       {organization.poweredByKorva && (
         <p className="bg-[var(--kt-surface)] pb-5 text-center text-xs text-[var(--kt-text-muted)]">
           {t("Site propulsé par", "Website powered by")}{" "}
+          {/* Every free site links back to KORVA OS, under its full name: the anchor text is what
+              tells a search engine what the linked site is called. */}
           <a
-            href="https://app.korvasuite.com/"
+            href={t("https://app.korvasuite.com/", "https://app.korvasuite.com/en")}
+            title={t("KORVA OS, logiciel de gestion et site internet", "KORVA OS, business software and website")}
             className="inline-flex items-center gap-1 align-middle font-medium underline-offset-2 hover:underline"
           >
             {/* KORVA's cowrie, small: the credit carries the brand, not just its name. */}
@@ -226,7 +229,7 @@ export default function StorefrontClient({
               <ellipse cx="24" cy="24" rx="14" ry="19" fill="#f2a33a" />
               <path d="M24 8.5c-2.4 5-2.4 26 0 31" fill="none" stroke="#0f3b42" strokeWidth="5" strokeLinecap="round" />
             </svg>
-            KORVA
+            KORVA OS
           </a>
         </p>
       )}
