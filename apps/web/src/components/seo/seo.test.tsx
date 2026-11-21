@@ -68,6 +68,13 @@ describe("SEO", () => {
     const app = blocks.find((block: { "@type": string }) => block["@type"] === "SoftwareApplication");
     expect(app.areaServed).toEqual(expect.arrayContaining(["Côte d'Ivoire", "International"]));
     expect(app.keywords).toContain("KORVA OS");
+    const korva = blocks.find((block: { "@type": string }) => block["@type"] === "Organization");
+    expect(korva.parentOrganization).toMatchObject({
+      name: "VIT GLOBAL TECHNOLOGIES GROUP",
+      sameAs: expect.arrayContaining(["https://www.linkedin.com/company/vit-global-technologies-group/"]),
+    });
+    expect(app.creator.name).toBe("VIT GLOBAL TECHNOLOGIES GROUP");
+    expect(container.querySelector('footer a[href="https://www.linkedin.com/company/vit-global-technologies-group/"]')).not.toBeNull();
   });
 
   it("does the same in English", () => {

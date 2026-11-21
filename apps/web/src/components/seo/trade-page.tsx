@@ -229,6 +229,15 @@ export function PublicFooter({ locale = "fr" }: { locale?: Locale }) {
               {PUBLISHER.name}
             </a>
           </p>
+          {/* The group's profiles, visible: the structured data names them too, but a link a
+              reader can follow is what ties the two pages together for everyone. */}
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {PUBLISHER.links.map((link) => (
+              <a key={link.url} href={link.url} rel="noopener" target="_blank" className="hover:text-paper hover:underline">
+                {link.label}
+              </a>
+            ))}
+          </p>
         </div>
         <nav aria-label={t.footerTrades}>
           <p className="mb-3 text-sm font-semibold text-paper">{t.footerTrades}</p>

@@ -197,11 +197,15 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
             slogan: t.h1,
             areaServed: AREA_SERVED,
             knowsAbout: SEO_TRADES.map((trade) => verticalText(trade.template, locale).label),
+            // KORVA OS belongs to VIT GLOBAL TECHNOLOGIES GROUP: declared here, with the group's
+            // profiles, so a search for either can lead to the other.
             parentOrganization: {
               "@type": "Organization",
+              "@id": PUBLISHER.id,
               name: PUBLISHER.name,
               url: PUBLISHER.url,
-              sameAs: [PUBLISHER.url, ...PUBLISHER.profiles],
+              sameAs: [PUBLISHER.url, PUBLISHER.productPage, ...PUBLISHER.profiles],
+              brand: { "@type": "Brand", name: BRAND_NAME },
             },
             ...(BRAND_PROFILES.length ? { sameAs: BRAND_PROFILES } : {}),
             logo: "https://app.korvasuite.com/apple-icon.png",
@@ -220,6 +224,7 @@ export function LandingPage({ locale = "fr" }: { locale?: Locale }) {
             name: BRAND_NAME,
             alternateName: BRAND_ALTERNATE_NAMES,
             publisher: { "@id": "https://app.korvasuite.com/#organization" },
+            creator: { "@type": "Organization", "@id": PUBLISHER.id, name: PUBLISHER.name, url: PUBLISHER.url },
             // The same markets llms.txt names: West Africa first, international (lib/brand.ts).
             areaServed: AREA_SERVED,
             applicationCategory: "BusinessApplication",

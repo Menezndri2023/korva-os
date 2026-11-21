@@ -52,6 +52,7 @@ ${ARTICLES.map((article) => `- [${article.fr.title}](${base}${articlePath(articl
 - [Créer un compte gratuit](${base}/register)
 - [Tous les métiers](${base}/metiers)
 - [${PUBLISHER.name}, l'entreprise derrière KORVA OS](${PUBLISHER.productPage})
+${PUBLISHER.links.map((link) => `- [${PUBLISHER.name} sur ${link.label}](${link.url})`).join("\n")}
 
 ## In English
 

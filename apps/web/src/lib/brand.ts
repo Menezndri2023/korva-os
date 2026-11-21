@@ -93,10 +93,21 @@ export const PUBLISHER = {
   url: "https://vit-global.tech",
   /** The group's page about KORVA OS. */
   productPage: "https://vit-global.tech/fr/realisations/korva-os-gestion-entreprise",
-  /** The group's public profiles, given by the owner on 2026-11-09 (canonical www hosts). */
+  /** The group's identity in structured data: KORVA's Organization, SoftwareApplication and
+   *  the group's own site can all point at this one node. */
+  id: "https://vit-global.tech/#organization",
+  /** The group's public profiles, given by the owner on 2026-11-09 and 2026-11-21 (canonical
+   *  addresses: the Facebook "share" link the owner sent resolves to this same profile id). */
   profiles: [
     "https://www.facebook.com/profile.php?id=61596240321319",
+    "https://www.linkedin.com/company/vit-global-technologies-group/",
     "https://www.tiktok.com/@vitglobaltech",
+  ],
+  /** The same profiles, named, for the footer. */
+  links: [
+    { label: "Facebook", url: "https://www.facebook.com/profile.php?id=61596240321319" },
+    { label: "LinkedIn", url: "https://www.linkedin.com/company/vit-global-technologies-group/" },
+    { label: "TikTok", url: "https://www.tiktok.com/@vitglobaltech" },
   ],
 };
 
