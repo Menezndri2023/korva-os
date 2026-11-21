@@ -14,6 +14,7 @@ import { AuthShell, RegisterAside } from "@/components/landing/auth-shell";
 import { AUTH_TEXT } from "@/lib/auth-text";
 import { useLocale, withLang } from "@/lib/locale";
 import { rememberReferral } from "@/lib/referral";
+import { trackSignUp } from "@/lib/google-tag";
 
 interface RegisterResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
@@ -40,6 +41,7 @@ export default function RegisterPage() {
       apiClient.post<RegisterResponse>("/auth/register", data, { withOrganization: false }),
     onSuccess: (data) => {
       setSession(data);
+      trackSignUp();
       router.replace("/onboarding");
     },
   });

@@ -16,6 +16,7 @@ import { SEO_TRADES, tradePath, tradeWords, type SeoTrade } from "@/lib/seo-trad
 import { appUrl } from "@/lib/site-url";
 import { PUBLISHER } from "@/lib/brand";
 import { articlesIndexPath } from "@/lib/articles";
+import { CookieChoiceLink } from "@/lib/google-tag";
 import { JsonLd } from "./json-ld";
 
 const money = (amount: number, currency: "XOF" | "USD", locale: Locale) =>
@@ -219,6 +220,8 @@ export function PublicFooter({ locale = "fr" }: { locale?: Locale }) {
             >
               {locale === "en" ? "Online payment terms" : "Conditions du paiement en ligne"}
             </Link>
+            {" · "}
+            <CookieChoiceLink lang={locale} className="hover:text-paper hover:underline" />
           </p>
           {/* The product's other name, in visible text: someone searching "korva suite" or the
               domain should find these pages, not only the structured data (lib/brand.ts). */}

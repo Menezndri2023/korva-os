@@ -31,6 +31,13 @@ describe("dashboard Content-Security-Policy", () => {
     expect(directives().get("frame-src")).toContain("http://localhost:3001");
   });
 
+  it("lets KORVA's Google tag send its hits once the visitor accepted", () => {
+    const all = directives();
+    expect(all.get("connect-src")).toContain("https://*.google-analytics.com");
+    expect(all.get("connect-src")).toContain("https://www.googleadservices.com");
+    expect(all.get("frame-src")).toContain("https://td.doubleclick.net");
+  });
+
   it("still allows no third-party script and no framing of the dashboard itself", () => {
     const all = directives();
     expect(all.get("script-src")).not.toContain("https:");

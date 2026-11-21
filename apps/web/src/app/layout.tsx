@@ -5,6 +5,7 @@ import Script from "next/script";
 import "./globals.css";
 import { ErrorReporter } from "@korva/ui";
 import { Providers } from "./providers";
+import { GoogleTag } from "@/lib/google-tag";
 import { BRAND_KEYWORDS_FR, BRAND_NAME, HOME_DESCRIPTION_FR, HOME_TITLE_FR, PUBLISHER } from "@/lib/brand";
 
 /**
@@ -130,6 +131,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           app="web"
         />
         <Providers>{children}</Providers>
+        {/* Read at request time (this layout is force-dynamic), not inlined at build. */}
+        <GoogleTag
+          tagId={process.env.GOOGLE_TAG_ID}
+          signupConversion={process.env.GOOGLE_ADS_SIGNUP_SEND_TO}
+          lang={lang}
+        />
       </body>
     </html>
   );

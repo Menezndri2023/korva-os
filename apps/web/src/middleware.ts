@@ -15,6 +15,19 @@ const storefrontOrigin = new URL(
   process.env.NEXT_PUBLIC_STOREFRONT_URL ?? "http://localhost:3001",
 ).origin;
 
+/** Where KORVA's own Google tag (Ads + Analytics) sends its hits — Google's documented list. */
+const GOOGLE_CONNECT = [
+  "https://*.google-analytics.com",
+  "https://*.analytics.google.com",
+  "https://*.googletagmanager.com",
+  "https://*.g.doubleclick.net",
+  "https://www.google.com",
+  "https://google.com",
+  "https://www.googleadservices.com",
+  "https://googleads.g.doubleclick.net",
+].join(" ");
+const GOOGLE_FRAMES = "https://td.doubleclick.net https://www.googletagmanager.com";
+
 /**
  * Per-request nonce-based CSP, following Next.js's documented pattern
  * (https://nextjs.org/docs/app/guides/content-security-policy): Next's own inline
@@ -54,10 +67,12 @@ export function middleware(request: NextRequest) {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isProduction ? "" : " 'unsafe-eval'"}`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' data: blob: https: ${apiOrigin}`,
-    `frame-src 'self' ${storefrontOrigin}`,
+    // + Google Ads' conversion iframe (lib/google-tag.tsx, only after the visitor accepts).
+    `frame-src 'self' ${storefrontOrigin} ${GOOGLE_FRAMES}`,
     `font-src 'self'`,
     // + its WebSocket form: the kitchen screen's live feed was blocked until 2026-10-21.
-    `connect-src 'self' ${apiOrigin} ${apiSocketOrigin}`,
+    // + Google tag's measurement pings (gtag.js itself loads through 'strict-dynamic').
+    `connect-src 'self' ${apiOrigin} ${apiSocketOrigin} ${GOOGLE_CONNECT}`,
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,
