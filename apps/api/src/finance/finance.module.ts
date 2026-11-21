@@ -47,6 +47,7 @@ import { IntegrationsModule } from '../integrations/integrations.module';
 import { FlutterwaveWebhookController } from './payments/providers/flutterwave-webhook.controller';
 import { PaystackWebhookController } from './payments/providers/paystack-webhook.controller';
 import { GeniusPayWebhookController } from './payments/providers/geniuspay-webhook.controller';
+import { SasPayWebhookController } from './payments/providers/saspay-webhook.controller';
 
 import { ExpensesRepository } from './expenses/expenses.repository';
 import { ExpensesService } from './expenses/expenses.service';
@@ -164,6 +165,7 @@ import { EmailModule } from '../shared/email/email.module';
     FlutterwaveWebhookController,
     PaystackWebhookController,
     GeniusPayWebhookController,
+    SasPayWebhookController,
     WalletController,
     CounterPaymentsController,
   ],

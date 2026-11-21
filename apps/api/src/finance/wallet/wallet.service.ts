@@ -324,6 +324,7 @@ export class WalletService {
         const provider = await this.providerResolver.resolve({
           flow: 'commerce',
           organizationId,
+          provider: payment.provider,
         });
         costs = saleCostsInSaleCurrency(
           payment,

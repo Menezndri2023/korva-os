@@ -5,6 +5,7 @@ import { ManualPaymentProvider } from './manual-payment.provider';
 import { FlutterwaveProvider } from './flutterwave-payment.provider';
 import { PaystackProvider } from './paystack-payment.provider';
 import { GeniusPayProvider } from './geniuspay-payment.provider';
+import { SasPayProvider } from './saspay-payment.provider';
 
 /**
  * `secret` is the platform `IntegrationAccount`'s decrypted credential (see
@@ -45,6 +46,9 @@ export class PaymentProviderRegistry {
     // Mobile money (Wave, Orange Money, MTN, Moov) and cards in West/Central Africa. Its secret is
     // the "pk_… sk_…" pair — see geniuspay-payment.provider.ts.
     ['geniuspay', (secret) => new GeniusPayProvider(requireSecret(secret))],
+    // Mobile money in 18 countries, cards (in USD) and an API for withdrawals. Its secret is one
+    // sk_live_…/sk_test_… key, refused on the wrong host — see saspay-payment.provider.ts.
+    ['saspay', (secret) => new SasPayProvider(requireSecret(secret))],
     // Stage 2: ['charibaas', (secret) => new ChariBaaSProvider(requireSecret(secret))],
   ]);
 

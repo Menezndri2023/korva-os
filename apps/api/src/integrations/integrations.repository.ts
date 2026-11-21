@@ -195,19 +195,27 @@ export class IntegrationsRepository implements IntegrationAccountsReader {
     domain: IntegrationDomain;
     role: string;
     market: string | null;
+    provider?: string;
   }): Promise<IntegrationAccountRecord | null> {
     // isLive: after a key rotation the revoked row is still there, and an unfiltered findOne
     // returned it first — every payment then failed with "no active provider" (production,
-    // 2026-11-01). The partial unique index guarantees at most one live row.
-    const doc = await this.model
-      .findOne({
-        scope: 'platform',
-        domain: input.domain,
-        role: input.role,
-        market: input.market,
-        isLive: true,
-      })
-      .exec();
+    // 2026-11-01). The unique index allows one live row per PROVIDER, so two providers can both
+    // be live for one role during a switch (GeniusPay → SasPay, 2026-11-21): the active one wins,
+    // then the most recently changed — never whichever Mongo happens to return first.
+    const filter = {
+      scope: 'platform',
+      domain: input.domain,
+      role: input.role,
+      market: input.market,
+      isLive: true,
+      ...(input.provider ? { provider: input.provider } : {}),
+    };
+    const doc =
+      (await this.model
+        .findOne({ ...filter, status: 'active' })
+        .sort({ updatedAt: -1 })
+        .exec()) ??
+      (await this.model.findOne(filter).sort({ updatedAt: -1 }).exec());
     return doc ? toIntegrationAccountRecord(doc) : null;
   }
 

@@ -457,7 +457,7 @@ function RefundButton({ payment, onDone }: { payment: Payment; onDone: () => voi
       <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
         {t("Annuler", "Cancel")}
       </Button>
-      {payment.provider === "geniuspay" && (
+      {(payment.provider === "geniuspay" || payment.provider === "saspay") && (
         <p className="w-full text-xs text-text-muted">
           {t(
             "Paiement en ligne : le montant est retiré de votre Solde KORVA, et KORVA le renvoie au client.",

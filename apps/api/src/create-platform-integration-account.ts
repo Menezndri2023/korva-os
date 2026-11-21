@@ -40,7 +40,8 @@
  *     is ONE ACCOUNT PER COUNTRY you sell in — a tenant in a country with no account cannot be
  *     paid at all.
  *
- * Registered provider keys are `manual`, `flutterwave` and `paystack` (payment-provider.registry.ts).
+ * Registered provider keys are `manual`, `flutterwave`, `paystack`, `geniuspay` and `saspay`
+ * (payment-provider.registry.ts).
  * `manual` needs no secret and calls no API; the other two fail closed without one.
  *
  * IN PRODUCTION (dry run first — it writes nothing and validates the flags):
@@ -91,6 +92,11 @@ import { IntegrationsRepository } from './integrations/integrations.repository';
 import type { IntegrationDomain } from './integrations/integrations.types';
 import { PaymentProviderRegistry } from './finance/payments/providers/payment-provider.registry';
 import { parseGeniusPayCredential } from './finance/payments/providers/geniuspay-payment.provider';
+import {
+  assertKeyMatchesHost,
+  defaultSasPayBaseUrl,
+  parseSasPayCredential,
+} from './finance/payments/providers/saspay-payment.provider';
 
 interface ParsedArgs {
   domain: IntegrationDomain;
@@ -271,8 +277,19 @@ async function run() {
       (await readSecret(
         args.provider === 'geniuspay'
           ? 'Clés GeniusPay (pk_… puis sk_…, séparées par un espace) : '
-          : 'Clé secrète : ',
+          : args.provider === 'saspay'
+            ? 'Clé SasPay (sk_live_… ou sk_test_…) : '
+            : 'Clé secrète : ',
       )) || null;
+  }
+  // A SasPay key sent to the wrong host is refused here (sk_test_ on api.saspay.me moves REAL
+  // money), before anything is written.
+  if (args.provider === 'saspay' && args.secret) {
+    const key = parseSasPayCredential(args.secret);
+    assertKeyMatchesHost(key, defaultSasPayBaseUrl(key));
+    console.log(
+      `Clé reçue : ${key.startsWith('sk_live_') ? 'PRODUCTION (argent réel)' : 'TEST (sandbox-api.saspay.me)'} → ${defaultSasPayBaseUrl(key)}. Vérification…`,
+    );
   }
   // A malformed GeniusPay pair is refused here, before anything is written.
   if (args.provider === 'geniuspay' && args.secret) {
@@ -353,6 +370,25 @@ async function run() {
     if (args.activate) {
       const integrationsRepository = app.get(IntegrationsRepository);
       await integrationsRepository.updateStatus(created.id, 'active');
+      // One provider takes NEW payments per role and market. The one it replaces (GeniusPay when
+      // SasPay is activated) becomes 'disabled', not revoked: its key stays, so payments and
+      // withdrawals still open there keep being checked with it until they close.
+      const others = (
+        await integrationsService.listPlatformAccounts(args.domain)
+      ).filter(
+        (account) =>
+          account.id !== created.id &&
+          account.provider !== args.provider &&
+          account.role === args.role &&
+          (account.market ?? null) === args.market &&
+          account.status === 'active',
+      );
+      for (const other of others) {
+        await integrationsRepository.updateStatus(other.id, 'disabled');
+        console.log(
+          `Ancien compte ${other.provider} « ${other.role} » désactivé : plus aucun nouveau paiement, il répond encore pour ceux déjà ouverts.`,
+        );
+      }
     }
 
     console.log('\nCreated platform IntegrationAccount:');

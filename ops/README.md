@@ -329,3 +329,68 @@ son e-mail — à la demande, ou automatiquement (le balayage de réconciliation
 
 Le montant « Dû aux entreprises » de la page Reversements doit toujours rester couvert par le
 solde du portefeuille GeniusPay : le comparer chaque semaine.
+
+## Paiements : SasPay (remplaçant prévu de GeniusPay)
+
+SasPay (saspay.me, société Payix LLC) : mobile money dans 18 pays (en Côte d'Ivoire Wave, Orange,
+MTN, Moov), carte bancaire **débitée en dollars US**, et une **API de retraits** — les reversements
+aux entreprises peuvent partir tout seuls, ce que GeniusPay n'ouvre pas. L'adaptateur
+(`saspay-payment.provider.ts`) et le webhook `POST /api/v1/webhooks/saspay` sont prêts ; **rien
+n'est activé** tant que les étapes ci-dessous ne sont pas faites.
+
+**Le serveur appelé décide de l'environnement, pas la clé.** Une clé `sk_test_…` envoyée à
+`api.saspay.me` déplace de l'argent RÉEL (confirmé par le support SasPay). KORVA refuse donc toute
+clé qui ne correspond pas à son serveur : `sk_live_…` → `api.saspay.me`, `sk_test_…` →
+`sandbox-api.saspay.me` (choisi automatiquement d'après la clé).
+
+0. **Avant tout, par écrit** (contact@saspay.me) : modèle KORVA accepté (encaisser pour le compte
+   des entreprises, puis leur reverser), qui détient les fonds, retraits vers des numéros tiers
+   autorisés et activés, carte : devise, taux de change et montant réellement débité.
+1. **Essai sans argent réel** : créer un compte SANDBOX séparé (app.saspay.me → menu du compte →
+   Sandbox ; aucun KYC), y générer une clé `sk_test_…`. Numéros de test : le DERNIER chiffre décide
+   (0 succès, 1 échec, 2 solde insuffisant, 9 reste en attente). Montant minimum 200 F.
+2. **Réglages dans le tableau de bord SasPay (compte réel)** :
+   - Paramètres → Frais : mode par défaut **DEDUCTED** (le client paie le prix affiché, les frais
+     sont retenus sur ce que KORVA reçoit — comme GeniusPay), et cocher « Autoriser le choix du
+     mode de frais par l'API ». Sinon les clients paieraient les frais en plus du prix.
+   - Développeur → Clés API : une clé `LIVE`, scope `BOTH` (encaissement + retraits).
+   - Whitelist IP : ajouter l'IP du serveur (`13.140.174.3`) — sans elle, chaque retrait répond
+     `403 ip_not_whitelisted`. Les retraits doivent aussi être activés par SasPay (sinon
+     `403 payout_not_enabled`).
+3. **Enregistrement (comme GeniusPay, clé tapée sans s'afficher, testée avant activation)** :
+
+       ssh -t korva@<server> 'cd ~/korva-os && docker compose -f docker-compose.prod.yml \
+         --env-file .env.production run --rm --no-deps api node dist/create-platform-integration-account.js \
+         --domain payment --provider saspay --role subscription-billing --secret-prompt --apply --activate'
+
+   puis la même avec `--role merchant-of-record` (sans `--market`). **`--activate` désactive le
+   compte GeniusPay du même rôle** : plus aucun NOUVEAU paiement n'y part, mais il garde sa clé et
+   continue de répondre pour les paiements déjà ouverts chez lui. Sans `--activate`, rien ne change.
+4. **Webhook** : SasPay → Développeur → Webhooks, URL
+   `https://api.korvasuite.com/api/v1/webhooks/saspay`, événements `transaction.success`,
+   `transaction.failed` (et `transaction.cancelled`). Le secret de signature n'est affiché qu'une
+   fois :
+
+       cd ~/korva-os && printf 'SASPAY_WEBHOOK_SECRET=\nSASPAY_DEFAULT_COUNTRY=CI\n' >> .env.production
+       ~/ops/set-secret.sh SASPAY_WEBHOOK_SECRET
+
+   Puis bouton « tester » (`webhook.test`) dans SasPay. `SASPAY_DEFAULT_COUNTRY` présélectionne la
+   Côte d'Ivoire sur la page de paiement. `SASPAY_API_BASE_URL` n'est à poser que pour forcer un
+   autre serveur (jamais en production).
+5. **Premiers vrais paiements, petits montants** : un Wave, un Orange Money, une carte (noter le
+   montant réellement débité en dollars), un retrait vers votre propre numéro. Garder
+   `PAYOUT_APPROVAL=manual` jusqu'à ce que les retraits SasPay aient tourné quelques semaines.
+6. **Au moment de basculer pour de bon**, mettre à jour ce qui nomme GeniusPay : les tarifs
+   `PROVIDER_FEE_RATES` / `PROVIDER_PAYOUT_FEE_BASIS_POINTS` de `packages/types/src/wallet.ts`
+   (vrais taux : `GET /pricing/my-rates/` de SasPay), les textes des écrans (Solde, Paramètres,
+   tarifs, boutique) et les conditions du paiement en ligne — nouvelle
+   `ONLINE_PAYMENT_TERMS_VERSION`, puisque le prestataire nommé change.
+
+Après la bascule : vérifier le tableau de bord GeniusPay quelques jours (un paiement arrivé en
+retard y est encore suivi par KORVA tant que le compte GeniusPay est `disabled`, pas révoqué), et
+qu'aucun retrait GeniusPay n'est resté « en cours ». Une facture de formule dont le paiement était
+ouvert chez GeniusPay au moment de la bascule ne se vérifie plus : l'entreprise redemande un lien
+(il partira chez SasPay). Le « Dû aux entreprises » se compare
+désormais au solde SasPay **par pays** (un portefeuille par pays chez SasPay). Les paiements par
+carte arrivent dans un portefeuille en dollars : il faut un transfert entre portefeuilles (validé
+par SasPay) avant de pouvoir reverser cet argent en mobile money.

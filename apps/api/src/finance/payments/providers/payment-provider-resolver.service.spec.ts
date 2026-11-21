@@ -126,6 +126,49 @@ describe('PaymentProviderResolverService', () => {
     expect(provider).toBeInstanceOf(ManualPaymentProvider);
   });
 
+  describe('an existing payment after a provider switch', () => {
+    it('asks the provider it was made with, even once that account is disabled', async () => {
+      const findPlatformAccount = jest.fn().mockResolvedValue(
+        buildAccount({
+          provider: 'geniuspay',
+          status: 'disabled',
+          market: null,
+        }),
+      );
+      const { service } = buildService(
+        findPlatformAccount,
+        'CI',
+        jest.fn().mockResolvedValue('pk_live_a sk_live_b'),
+      );
+
+      const provider = await service.resolve({
+        flow: 'commerce',
+        organizationId: ORG_ID,
+        provider: 'geniuspay',
+      });
+
+      expect(findPlatformAccount).toHaveBeenCalledWith({
+        domain: 'payment',
+        role: 'merchant-of-record',
+        market: 'CI',
+        provider: 'geniuspay',
+      });
+      expect(provider.name).toBe('geniuspay');
+    });
+
+    it('never sends a NEW payment to a disabled account', async () => {
+      const findPlatformAccount = jest
+        .fn()
+        .mockResolvedValue(buildAccount({ status: 'disabled' }));
+      const { service } = buildService(findPlatformAccount);
+
+      await expectUnprocessableCode(
+        service.resolve({ flow: 'commerce', organizationId: ORG_ID }),
+        'PAYMENT_PROVIDER_NOT_CONFIGURED',
+      );
+    });
+  });
+
   it('throws a typed error when no active account exists for the market, never falling back silently', async () => {
     const findPlatformAccount = jest.fn().mockResolvedValue(null);
     const { service } = buildService(findPlatformAccount, 'MA');

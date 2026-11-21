@@ -109,6 +109,8 @@ export class PaymentsService {
     const resolved = await this.paymentProviderResolver.resolve({
       flow: 'commerce',
       organizationId,
+      // The gateway the payment was MADE with, even if new payments now go elsewhere.
+      provider: recordedProviderName,
     });
     if (resolved.name !== recordedProviderName) {
       throw new UnprocessableEntityException({

@@ -255,10 +255,45 @@ describe('IntegrationsRepository', () => {
         market: 'CI',
         // Never a rotated-out (revoked) row.
         isLive: true,
+        // Two providers can be live during a switch: the active one is asked for first.
+        status: 'active',
       });
       expect(record).not.toBeNull();
       expect(record).not.toHaveProperty('secretEncrypted');
       expect(JSON.stringify(record)).not.toContain('super-secret-ciphertext');
+    });
+
+    it('falls back to a non-active live row, and filters by provider when asked', async () => {
+      const { repository, model } = buildRepository();
+      const doc = makeDoc({
+        scope: 'platform',
+        organizationId: null,
+        domain: 'payment',
+        role: 'merchant-of-record',
+        market: null,
+        provider: 'geniuspay',
+        status: 'disabled',
+      });
+      model.findOne
+        .mockReturnValueOnce(makeQuery(null))
+        .mockReturnValueOnce(makeQuery(doc));
+
+      const record = await repository.findPlatformAccount({
+        domain: 'payment',
+        role: 'merchant-of-record',
+        market: null,
+        provider: 'geniuspay',
+      });
+
+      expect(model.findOne).toHaveBeenLastCalledWith({
+        scope: 'platform',
+        domain: 'payment',
+        role: 'merchant-of-record',
+        market: null,
+        isLive: true,
+        provider: 'geniuspay',
+      });
+      expect(record?.status).toBe('disabled');
     });
 
     it('returns null when no matching platform account exists', async () => {

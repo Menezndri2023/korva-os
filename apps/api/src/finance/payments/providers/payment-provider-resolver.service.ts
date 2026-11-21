@@ -18,6 +18,14 @@ export type PaymentResolutionFlow = 'subscription' | 'commerce';
 export interface ResolvePaymentProviderInput {
   flow: PaymentResolutionFlow;
   organizationId: string;
+  /**
+   * For something that ALREADY exists at a provider (a payment to check, its fees to read): the
+   * provider it was made with. After a switch (GeniusPay → SasPay) the old provider's account is
+   * `disabled` — no new payment goes to it — but a payment still open there must be asked THERE,
+   * never at the new provider, which has never heard of it. Omitted = the provider new payments
+   * go to.
+   */
+  provider?: string;
 }
 
 /**
@@ -69,24 +77,30 @@ export class PaymentProviderResolverService {
       market = organization.country;
     }
 
+    // An existing payment's provider may be retired ('disabled') and still answer about it.
+    const usable = (status: string | undefined) =>
+      status === 'active' ||
+      (input.provider !== undefined && status === 'disabled');
     let account = await this.integrationAccountsReader.findPlatformAccount({
       domain: 'payment',
       role,
       market,
+      ...(input.provider ? { provider: input.provider } : {}),
     });
     // A merchant-of-record account registered WITHOUT a market serves every country that has no
     // account of its own — one GeniusPay account for all of KORVA (the owner's choice,
     // 2026-10-28). A country-specific account, active, still wins, so a market can later be
     // given a different provider without touching the others.
-    if (market !== null && (!account || account.status !== 'active')) {
+    if (market !== null && (!account || !usable(account.status))) {
       account = await this.integrationAccountsReader.findPlatformAccount({
         domain: 'payment',
         role,
         market: null,
+        ...(input.provider ? { provider: input.provider } : {}),
       });
     }
 
-    if (!account || account.status !== 'active') {
+    if (!account || !usable(account.status)) {
       throw new UnprocessableEntityException({
         code: 'PAYMENT_PROVIDER_NOT_CONFIGURED',
         message:

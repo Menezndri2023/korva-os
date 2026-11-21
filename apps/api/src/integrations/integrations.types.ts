@@ -55,6 +55,8 @@ export interface IntegrationAccountsReader {
     domain: IntegrationDomain;
     role: string;
     market: string | null;
+    /** Only this provider's account — to reach the provider an EXISTING payment was made with. */
+    provider?: string;
   }): Promise<IntegrationAccountRecord | null>;
 
   findTenantAccount(input: {
