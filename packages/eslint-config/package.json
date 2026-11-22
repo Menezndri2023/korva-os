@@ -8,6 +8,6 @@
   ],
   "dependencies": {
     "eslint-config-prettier": "^9.1.0",
-    "typescript-eslint": "^8.15.0"
+    "typescript-eslint": "^8.73.0"
   }
 }
