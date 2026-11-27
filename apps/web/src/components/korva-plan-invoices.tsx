@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { SubscriptionInvoice, WalletSummary } from "@korva/types";
 import { Badge, Button, Notice } from "@korva/ui";
+import { DownloadButton } from "@/components/download-button";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/analytics-format";
 import { useAuthReady } from "@/lib/use-auth-ready";
@@ -147,7 +148,16 @@ export function KorvaPlanInvoices() {
                       )}
                   </span>
                 </span>
-                <Badge variant={status.variant}>{t(...status.label)}</Badge>
+                <span className="flex items-center gap-2">
+                  {invoice.status !== "void" && (
+                    <DownloadButton
+                      path={`/subscriptions/invoices/${invoice.id}/pdf`}
+                      filename={`KORVA-${invoice.number}.pdf`}
+                      label={t("Facture PDF", "PDF invoice")}
+                    />
+                  )}
+                  <Badge variant={status.variant}>{t(...status.label)}</Badge>
+                </span>
               </div>
               {invoice.status === "open" && (
                 <div className="flex flex-wrap gap-2">

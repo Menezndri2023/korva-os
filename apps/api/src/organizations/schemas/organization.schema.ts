@@ -39,6 +39,12 @@ export class Organization {
   @Prop()
   legalName?: string;
 
+  /** The business's legal identifiers as it wants them printed on its invoices and quotes —
+   *  "RCCM CI-ABJ-2024-A-1234 · NCC 2412345 A", "ICE 001234567000089", "SIRET 123 456 789 00012".
+   *  Free text: every country has its own, and getting the format right is the business's call. */
+  @Prop()
+  legalIdentifiers?: string;
+
   /** Free-form on purpose — organizations must not be limited to a fixed set of business types. */
   @Prop({ required: true })
   type!: string;

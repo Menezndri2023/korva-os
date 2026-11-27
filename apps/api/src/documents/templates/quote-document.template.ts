@@ -3,6 +3,7 @@ import type { QuoteDocument } from '../../finance/quotes/schemas/quote.schema';
 import type { OrganizationDocument } from '../../organizations/schemas/organization.schema';
 import type { ContactDocument } from '../../crm/contacts/schemas/contact.schema';
 import { documentWords } from './document-words';
+import { organizationIssuer } from './document-issuer';
 
 export function buildQuoteDocumentManifest(
   quote: QuoteDocument,
@@ -19,7 +20,7 @@ export function buildQuoteDocumentManifest(
   return {
     documentType: 'quote',
     title: t(`Devis ${quote.number}`, `Quote ${quote.number}`),
-    organizationHeader: { name: organization.name },
+    organizationHeader: organizationIssuer(organization),
     metadata: [
       { label: t('Client', 'Customer'), value: contactName },
       { label: t('Statut', 'Status'), value: status(quote.status) },

@@ -99,6 +99,8 @@ export interface Organization {
   name: string;
   slug: string;
   legalName?: string;
+  /** Printed under the business's name on its invoices and quotes (RCCM, NCC, ICE, SIRET…). */
+  legalIdentifiers?: string;
   type: string;
   /** Type of activity — see business-models.ts. Absent for an organization created before it
    *  existed whose trade could not be recognised; every reader then keeps the older behaviour. */

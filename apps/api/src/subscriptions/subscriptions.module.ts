@@ -41,6 +41,7 @@ import { CountersModule } from '../core/counters/counters.module';
 // IntegrationAccount credentials. A leaf module, so no cycle.
 import { CredentialEncryptionModule } from '../shared/crypto/credential-encryption.module';
 
+import { DocumentsModule } from '../documents/documents.module';
 @Module({
   imports: [
     MongooseModule.forFeature([
@@ -58,6 +59,7 @@ import { CredentialEncryptionModule } from '../shared/crypto/credential-encrypti
     AuditModule,
     CountersModule,
     CredentialEncryptionModule,
+    DocumentsModule,
   ],
   controllers: [SubscriptionsController],
   providers: [

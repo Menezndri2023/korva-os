@@ -63,7 +63,11 @@ site_css=""
 for sheet in $(grep -oE '/_next/static/[^"]+\.css' <<<"$site_html" | sort -u); do
   site_css+="$(curl -s --max-time 20 "${SITES}${sheet}")"
 done
-check "Site stylesheet defines the shared button colour" 'grep -q "\.bg-primary{" <<<"$site_css"'
+# A primary Button fills with bg-action since 2026-10-31 (it was bg-primary before, which this
+# check kept looking for, so it failed on a healthy site); the site must also re-point that colour
+# at the business's own accent, or every shop's buttons wear KORVA's petrol.
+check "Site stylesheet defines the shared button colour" 'grep -q "\.bg-action{" <<<"$site_css"'
+check "Site buttons wear the business's accent, not KORVA's" 'grep -q -- "--color-action:var(--kt-accent" <<<"$site_css"'
 
 echo "Email DNS"
 # Read over DNS-over-HTTPS: works from networks where plain port-53 DNS is blocked.

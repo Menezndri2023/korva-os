@@ -3,6 +3,7 @@ import type { InvoiceDocument } from '../../finance/invoices/schemas/invoice.sch
 import type { OrganizationDocument } from '../../organizations/schemas/organization.schema';
 import type { ContactDocument } from '../../crm/contacts/schemas/contact.schema';
 import { documentWords } from './document-words';
+import { organizationIssuer } from './document-issuer';
 
 export function buildInvoiceDocumentManifest(
   invoice: InvoiceDocument,
@@ -19,7 +20,7 @@ export function buildInvoiceDocumentManifest(
   return {
     documentType: 'invoice',
     title: t(`Facture ${invoice.number}`, `Invoice ${invoice.number}`),
-    organizationHeader: { name: organization.name },
+    organizationHeader: organizationIssuer(organization),
     metadata: [
       { label: t('Client', 'Customer'), value: contactName },
       { label: t('Statut', 'Status'), value: status(invoice.status) },

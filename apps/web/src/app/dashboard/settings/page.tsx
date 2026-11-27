@@ -438,6 +438,7 @@ export default function SettingsPage() {
     resetOrgForm({
       name: organization.name,
       legalName: organization.legalName,
+      legalIdentifiers: organization.legalIdentifiers,
       type: organization.type,
       businessModel: organization.businessModel,
       country: organization.country,
@@ -718,6 +719,10 @@ export default function SettingsPage() {
                 <dd className="mt-0.5">{organization?.legalName ?? "—"}</dd>
               </div>
               <div>
+                <dt className="text-text-muted">{t("Identifiants légaux", "Legal identifiers")}</dt>
+                <dd className="mt-0.5">{organization?.legalIdentifiers ?? "—"}</dd>
+              </div>
+              <div>
                 <dt className="text-text-muted">{t("Secteur", "Line of business")}</dt>
                 <dd className="mt-0.5">{organization?.type ?? "—"}</dd>
               </div>
@@ -873,6 +878,17 @@ export default function SettingsPage() {
                   {t("Raison sociale", "Legal name")}
                 </label>
                 <Input id="org-legal-name" className="w-full" {...registerOrg("legalName")} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-legal-identifiers">
+                  {t("Identifiants légaux (sur vos factures et devis)", "Legal identifiers (on your invoices and quotes)")}
+                </label>
+                <Input
+                  id="org-legal-identifiers"
+                  className="w-full"
+                  placeholder={t("ex : RCCM CI-ABJ-2024-A-1234 · NCC 2412345 A", "e.g. RCCM CI-ABJ-2024-A-1234 · NCC 2412345 A")}
+                  {...registerOrg("legalIdentifiers")}
+                />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-text" htmlFor="org-type">

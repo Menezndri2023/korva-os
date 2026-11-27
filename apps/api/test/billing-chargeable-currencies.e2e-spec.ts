@@ -223,4 +223,41 @@ describe('Billing — chargeable currencies (e2e)', () => {
       'free',
     );
   });
+
+  it('hands the business a PDF invoice from VIT GLOBAL for a 1-year plan, and no one else', async () => {
+    const { accessToken, organizationId } = await setupOrg(
+      'invoice-pdf-xof@korva.test',
+      'CI',
+      'XOF',
+    );
+    await request(server)
+      .post('/api/v1/subscriptions/change-plan')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .send({ planKey: 'starter', interval: 'year' })
+      .expect(201);
+    const list = await request(server)
+      .get('/api/v1/subscriptions/invoices')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .expect(200);
+    const [invoice] = asSuccess<{ id: string; amount: number }[]>(list.body);
+    // 10 months of 9 900 F: the yearly price.
+    expect(invoice!.amount).toBe(99000);
+
+    const pdf = await request(server)
+      .get(`/api/v1/subscriptions/invoices/${invoice!.id}/pdf`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('X-Organization-Id', organizationId)
+      .buffer(true)
+      .expect(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+
+    const other = await setupOrg('invoice-pdf-other@korva.test', 'CI', 'XOF');
+    await request(server)
+      .get(`/api/v1/subscriptions/invoices/${invoice!.id}/pdf`)
+      .set('Authorization', `Bearer ${other.accessToken}`)
+      .set('X-Organization-Id', other.organizationId)
+      .expect(404);
+  });
 });

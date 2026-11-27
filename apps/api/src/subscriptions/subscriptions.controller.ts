@@ -3,10 +3,16 @@ import {
   Controller,
   Get,
   HttpCode,
+  NotFoundException,
+  Param,
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import type { Response } from 'express';
+import type { Model } from 'mongoose';
 import { ApiTags } from '@nestjs/swagger';
 import {
   changePlanSchema,
@@ -29,6 +35,12 @@ import { CurrentTenant } from '../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SkipTenant } from '../common/decorators/skip-tenant.decorator';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import { DocumentRenderingService } from '../documents/rendering/document-rendering.service';
+import { buildKorvaSubscriptionInvoiceManifest } from '../documents/templates/korva-subscription-invoice.template';
+import {
+  Organization,
+  type OrganizationDocument,
+} from '../organizations/schemas/organization.schema';
 
 @ApiTags('subscriptions')
 @Controller()
@@ -38,6 +50,10 @@ export class SubscriptionsController {
     private readonly subscriptionsService: SubscriptionsService,
     private readonly entitlementsService: EntitlementsService,
     private readonly subscriptionInvoicesRepository: SubscriptionInvoicesRepository,
+    private readonly documentRenderingService: DocumentRenderingService,
+    // Registered in SubscriptionsModule already (see its own comment about the cycle).
+    @InjectModel(Organization.name)
+    private readonly organizationModel: Model<OrganizationDocument>,
   ) {}
 
   /**
@@ -79,6 +95,50 @@ export class SubscriptionsController {
     return this.subscriptionInvoicesRepository.listForOrganization(
       tenant.organizationId,
     );
+  }
+
+  /**
+   * The KORVA invoice as a PDF issued by VIT GLOBAL TECHNOLOGIES GROUP — what a business gives its
+   * accountant for the subscription it paid. Scoped to the caller's organization: another
+   * tenant's invoice id reads as not found.
+   */
+  @RequirePermissions('settings.manage')
+  @Get('subscriptions/invoices/:id/pdf')
+  async getInvoicePdf(
+    @CurrentTenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const invoice = await this.subscriptionInvoicesRepository.findOwnedById(
+      tenant.organizationId,
+      id,
+    );
+    if (!invoice) {
+      throw new NotFoundException({
+        code: 'SUBSCRIPTION_INVOICE_NOT_FOUND',
+        message: 'Invoice not found',
+      });
+    }
+    const [plan, organization] = await Promise.all([
+      this.plansService.getById(invoice.planId.toString()),
+      this.organizationModel.findById(tenant.organizationId).exec(),
+    ]);
+    if (!organization) {
+      throw new NotFoundException({
+        code: 'ORGANIZATION_NOT_FOUND',
+        message: 'Organization not found',
+      });
+    }
+    const buffer = await this.documentRenderingService.renderPdf(
+      buildKorvaSubscriptionInvoiceManifest(invoice, plan, organization),
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="KORVA-${invoice.number}.pdf"`,
+    );
+    res.send(buffer);
   }
 
   @RequirePermissions('settings.manage')

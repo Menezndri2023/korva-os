@@ -94,6 +94,7 @@ export const HERO_SLIDES_MAX = 4;
 
 export const updateOrganizationSchema = createOrganizationSchema.partial().extend({
   legalName: z.string().max(200).optional(),
+  legalIdentifiers: z.string().trim().max(200).optional(),
   logo: z.string().url().optional(),
   brandColor: hexColorSchema.optional(),
   /** Short pitch shown under the org name in the public storefront hero. */

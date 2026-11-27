@@ -3,6 +3,7 @@ import type { OrganizationDocument } from '../../organizations/schemas/organizat
 import type { ContactDocument } from '../../crm/contacts/schemas/contact.schema';
 import type { DonationReceiptData } from '../../commerce/orders/donation-receipt.service';
 import { documentWords } from './document-words';
+import { organizationIssuer } from './document-issuer';
 
 /**
  * An acknowledgement that a gift was received — explicitly not a tax receipt (see
@@ -30,10 +31,7 @@ export function buildDonationReceiptDocumentManifest(
       `Reçu de don n° ${receipt.number}`,
       `Donation receipt no. ${receipt.number}`,
     ),
-    organizationHeader: {
-      name: organization.name,
-      address: organization.contactAddress || undefined,
-    },
+    organizationHeader: organizationIssuer(organization),
     metadata: [
       { label: t('Donateur', 'Donor'), value: donorName },
       { label: t('Reçu le', 'Received on'), value: day },

@@ -5,7 +5,9 @@ export interface DocumentTemplate {
   documentType:
     'invoice' | 'quote' | 'certificate' | 'statement' | 'donation_receipt';
   title: string;
-  organizationHeader: { name: string; address?: string };
+  /** The issuer. `lines` are extra grey lines under the address — phone, legal identifiers
+   *  (RCCM, NCC, ICE…): what makes an invoice an invoice rather than a receipt. */
+  organizationHeader: { name: string; address?: string; lines?: string[] };
   metadata: { label: string; value: string }[];
   /** Invoice/quote shape — a line-item table plus a totals block. */
   table?: {
@@ -54,14 +56,16 @@ export class DocumentRenderingService {
       font: boldFont,
       size: HEADING_SIZE,
     });
-    if (template.organizationHeader.address) {
-      cursorY = drawText(page, template.organizationHeader.address, {
-        x: MARGIN,
-        y: cursorY,
-        font,
-        size: BODY_SIZE,
-        color: rgb(0.4, 0.4, 0.4),
-      });
+    for (const line of headerLines(template)) {
+      for (const wrapped of wrapText(line, font, BODY_SIZE, CONTENT_WIDTH)) {
+        cursorY = drawText(page, wrapped, {
+          x: MARGIN,
+          y: cursorY,
+          font,
+          size: BODY_SIZE,
+          color: rgb(0.4, 0.4, 0.4),
+        });
+      }
     }
     cursorY -= LINE_HEIGHT / 2;
 
@@ -103,12 +107,21 @@ export class DocumentRenderingService {
     }
 
     if (template.footer) {
-      drawText(page, template.footer, {
-        x: MARGIN,
-        y: MARGIN / 2,
+      // Wrapped, bottom-up: a long footer (an invoice's notes) used to run off the page edge.
+      const lines = wrapText(
+        template.footer,
         font,
-        size: BODY_SIZE - 1,
-        color: rgb(0.5, 0.5, 0.5),
+        BODY_SIZE - 1,
+        CONTENT_WIDTH,
+      );
+      lines.forEach((line, i) => {
+        drawText(page, line, {
+          x: MARGIN,
+          y: MARGIN / 2 + (lines.length - 1 - i) * (LINE_HEIGHT - 4),
+          font,
+          size: BODY_SIZE - 1,
+          color: rgb(0.5, 0.5, 0.5),
+        });
       });
     }
 
@@ -163,6 +176,9 @@ function pdfSafeTemplate(
       name: safe(template.organizationHeader.name),
       ...(template.organizationHeader.address
         ? { address: safe(template.organizationHeader.address) }
+        : {}),
+      ...(template.organizationHeader.lines
+        ? { lines: template.organizationHeader.lines.map(safe) }
         : {}),
     },
     metadata: template.metadata.map((entry) => ({
@@ -225,11 +241,11 @@ function drawTable(
   options: { x: number; y: number; font: PDFFont; boldFont: PDFFont },
 ): number {
   let y = options.y;
-  const columnWidth = CONTENT_WIDTH / table.columns.length;
+  const { starts, widths } = columnLayout(table.columns.length);
 
   table.columns.forEach((column, i) => {
-    page.drawText(column, {
-      x: options.x + i * columnWidth,
+    page.drawText(fitText(column, options.boldFont, BODY_SIZE, widths[i]!), {
+      x: options.x + starts[i]!,
       y,
       font: options.boldFont,
       size: BODY_SIZE,
@@ -244,15 +260,23 @@ function drawTable(
   });
 
   for (const row of table.rows) {
-    row.forEach((cell, i) => {
-      page.drawText(cell, {
-        x: options.x + i * columnWidth,
-        y,
-        font: options.font,
-        size: BODY_SIZE,
+    // Each cell wraps inside its own column; the row is as tall as its tallest cell. An invoice
+    // line is printed whole — never cut — because it is what the customer is paying for.
+    const cells = row.map((cell, i) =>
+      wrapText(cell, options.font, BODY_SIZE, widths[i]! - 8),
+    );
+    const height = Math.max(1, ...cells.map((lines) => lines.length));
+    cells.forEach((lines, i) => {
+      lines.forEach((line, lineIndex) => {
+        page.drawText(line, {
+          x: options.x + starts[i]!,
+          y: y - lineIndex * (LINE_HEIGHT - 3),
+          font: options.font,
+          size: BODY_SIZE,
+        });
       });
     });
-    y -= LINE_HEIGHT;
+    y -= LINE_HEIGHT + (height - 1) * (LINE_HEIGHT - 3);
   }
 
   y -= LINE_HEIGHT / 2;
@@ -333,11 +357,67 @@ function wrapText(
 /** Rough line-count estimate to size the page — generous on purpose (a little blank space at
  *  the bottom costs nothing; running out of page height would clip content, which is the
  *  failure mode worth avoiding). */
+/** The grey lines under the issuer's name: its address, then any extra line (wrapped when drawn). */
+function headerLines(template: DocumentTemplate): string[] {
+  return [
+    template.organizationHeader.address,
+    ...(template.organizationHeader.lines ?? []),
+  ].filter((line): line is string => Boolean(line && line.trim()));
+}
+
+/** Column positions: with three columns or more the first one — the description — gets 40 % of
+ *  the width, the others share the rest. Equal columns made "Abonnement KORVA OS Starter (1 an)"
+ *  or any real product name run over the quantity column. */
+function columnLayout(count: number): { starts: number[]; widths: number[] } {
+  const widths =
+    count >= 3
+      ? [
+          CONTENT_WIDTH * 0.4,
+          ...Array<number>(count - 1).fill((CONTENT_WIDTH * 0.6) / (count - 1)),
+        ]
+      : Array<number>(count).fill(CONTENT_WIDTH / count);
+  const starts = widths.map((_, i) =>
+    widths.slice(0, i).reduce((sum, width) => sum + width, 0),
+  );
+  return { starts, widths };
+}
+
+/** Cuts a cell to its column, with "..." — the renderer draws one line per row. */
+function fitText(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number,
+): string {
+  const room = maxWidth - 8;
+  if (font.widthOfTextAtSize(text, size) <= room) return text;
+  let cut = text;
+  while (cut.length > 1 && font.widthOfTextAtSize(`${cut}...`, size) > room) {
+    cut = cut.slice(0, -1);
+  }
+  return `${cut.trimEnd()}...`;
+}
+
 function estimateHeight(template: DocumentTemplate): number {
-  let lines = 6; // header + title + spacing
+  // header + title + spacing, each header line counted as up to two once wrapped
+  let lines =
+    6 +
+    headerLines(template).reduce(
+      (sum, line) => sum + Math.ceil(line.length / 95),
+      0,
+    );
+  if (template.footer) lines += Math.ceil(template.footer.length / 105);
   lines += template.metadata.length;
   if (template.table) {
-    lines += 2 + template.table.rows.length + template.table.totals.length;
+    lines += 2 + template.table.totals.length;
+    // A wrapped cell takes several lines: the first column holds ~40 characters a line, the
+    // others ~20 — counted generously.
+    for (const row of template.table.rows) {
+      lines += Math.max(
+        1,
+        ...row.map((cell, i) => Math.ceil(cell.length / (i === 0 ? 38 : 18))),
+      );
+    }
   }
   if (template.body) {
     lines += 2;
