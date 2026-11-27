@@ -108,8 +108,12 @@ export async function middleware(request: NextRequest) {
     const slug = await resolveCustomDomain(hostHeader);
     if (slug) {
       const rewrittenUrl = request.nextUrl.clone();
-      rewrittenUrl.pathname =
-        rewrittenUrl.pathname === "/" ? `/${slug}` : `/${slug}${rewrittenUrl.pathname}`;
+      const path = rewrittenUrl.pathname;
+      // The site's own links are written /<slug>/... (they work unchanged on the shared host),
+      // so a visitor clicking one on a custom domain arrives with the slug already there.
+      // Prefixing it again sent every click after the home page to /<slug>/<slug>/... — a 404.
+      const alreadyPrefixed = path === `/${slug}` || path.startsWith(`/${slug}/`);
+      rewrittenUrl.pathname = alreadyPrefixed ? path : path === "/" ? `/${slug}` : `/${slug}${path}`;
       const response = NextResponse.rewrite(rewrittenUrl, {
         request: { headers: requestHeaders },
       });

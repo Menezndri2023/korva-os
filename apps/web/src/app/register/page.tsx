@@ -15,6 +15,7 @@ import { AUTH_TEXT } from "@/lib/auth-text";
 import { useLocale, withLang } from "@/lib/locale";
 import { rememberReferral } from "@/lib/referral";
 import { trackSignUp } from "@/lib/google-tag";
+import { LEGAL_PATHS, LEGAL_TITLES } from "@/lib/legal-paths";
 
 interface RegisterResponse {
   user: { id: string; email: string; firstName?: string; lastName?: string };
@@ -136,6 +137,19 @@ export default function RegisterPage() {
         <Button type="submit" loading={mutation.isPending} size="lg" className="w-full">
           {mutation.isPending ? t.registerPending : t.registerButton}
         </Button>
+        {/* What a business agrees to by creating its account — the terms are a contract only if
+            they were shown before the click (Conditions générales, article 1). */}
+        <p className="text-center text-xs leading-relaxed text-text-muted">
+          {locale === "en" ? "By creating your account, you accept the " : "En créant votre compte, vous acceptez les "}
+          <Link href={LEGAL_PATHS.terms[locale]} target="_blank" className="underline underline-offset-2 hover:text-text">
+            {LEGAL_TITLES.terms[locale].toLowerCase()}
+          </Link>
+          {locale === "en" ? " and the " : " et la "}
+          <Link href={LEGAL_PATHS.privacy[locale]} target="_blank" className="underline underline-offset-2 hover:text-text">
+            {LEGAL_TITLES.privacy[locale].toLowerCase()}
+          </Link>
+          .
+        </p>
       </form>
     </AuthShell>
   );

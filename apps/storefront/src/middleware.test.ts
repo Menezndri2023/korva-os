@@ -51,6 +51,18 @@ describe("middleware — custom domain rewrite (Phase E3)", () => {
     expect(rewritten.pathname).toBe("/boutique-a");
   });
 
+  it("does not double the slug when a site link already carries it (/:slug/catalogue)", async () => {
+    mockResolveDomain({ success: true, data: { slug: "boutique-a" } });
+    const { middleware } = await import("./middleware");
+
+    for (const path of ["/boutique-a/catalogue", "/boutique-a"]) {
+      const response = await middleware(
+        new NextRequest(`http://www.masociete.com${path}`, { headers: { host: "www.masociete.com" } }),
+      );
+      expect(new URL(response.headers.get("x-middleware-rewrite") ?? "").pathname).toBe(path);
+    }
+  });
+
   it("does not rewrite a request on the platform's own shared host", async () => {
     mockResolveDomain({ success: true, data: { slug: "should-not-be-used" } });
     const { middleware } = await import("./middleware");

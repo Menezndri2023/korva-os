@@ -51,6 +51,12 @@ describe("RegisterPage (migrated to @korva/ui Button/Input in F2-B.4)", () => {
     replaceMock.mockReset();
   });
 
+  it("shows the terms and the privacy policy before the account is created", () => {
+    renderWithProviders(<RegisterPage />);
+    expect(screen.getByRole("link", { name: "conditions générales" })).toHaveAttribute("href", "/conditions/generales");
+    expect(screen.getByRole("link", { name: "politique de confidentialité" })).toHaveAttribute("href", "/confidentialite");
+  });
+
   it("renders the form fields and submit button", () => {
     renderWithProviders(<RegisterPage />);
     expect(screen.getByLabelText("Prénom")).toBeInTheDocument();
