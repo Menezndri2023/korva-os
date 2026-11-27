@@ -3,6 +3,9 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Counter, CounterDocument } from './schemas/counter.schema';
 
+/** The counter owner for VIT GLOBAL's own invoice sequence: not an organization. */
+export const KORVA_INVOICE_COUNTER_OWNER = '000000000000000000000000';
+
 @Injectable()
 export class CountersService {
   constructor(
@@ -20,6 +23,21 @@ export class CountersService {
       )
       .exec();
     return counter.seq;
+  }
+
+  /**
+   * The number of KORVA's own next invoice to a business, issued by VIT GLOBAL TECHNOLOGIES
+   * GROUP. ONE sequence for the issuer, continuous and chronological, as Moroccan invoicing rules
+   * require — until 2026-11-27 each business had its own ABO-0001, so two businesses could hold
+   * VIT GLOBAL invoices with the same number. Held by a fixed platform id, never a tenant's.
+   */
+  nextKorvaInvoiceNumber(): Promise<string> {
+    return this.nextFormatted(
+      KORVA_INVOICE_COUNTER_OWNER,
+      'korva-invoice',
+      'VG',
+      6,
+    );
   }
 
   async nextFormatted(

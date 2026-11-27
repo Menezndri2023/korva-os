@@ -684,11 +684,7 @@ export class SubscriptionsService {
       subscriptionId: existing._id,
       planId: plan._id,
       kind: 'plan_change',
-      number: await this.countersService.nextFormatted(
-        organizationId,
-        'subscription-invoice',
-        'ABO',
-      ),
+      number: await this.countersService.nextKorvaInvoiceNumber(),
       periodStart: now,
       periodEnd: addPlanInterval(now, interval),
       amount,

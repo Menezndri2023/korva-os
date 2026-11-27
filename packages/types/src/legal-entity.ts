@@ -30,8 +30,8 @@ export const LEGAL_ENTITY = {
     en: "Programming, consulting and other IT activities",
   },
   hosting: {
-    fr: "Contabo GmbH (serveurs) et MongoDB, Inc. (base de données MongoDB Atlas)",
-    en: "Contabo GmbH (servers) and MongoDB, Inc. (MongoDB Atlas database)",
+    fr: "Contabo GmbH, Aschauer Straße 32a, 81549 Munich, Allemagne (serveurs situés en France) ; MongoDB, Inc. (base de données MongoDB Atlas, hébergée à Paris)",
+    en: "Contabo GmbH, Aschauer Straße 32a, 81549 Munich, Germany (servers located in France); MongoDB, Inc. (MongoDB Atlas database, hosted in Paris)",
   },
 } as const;
 

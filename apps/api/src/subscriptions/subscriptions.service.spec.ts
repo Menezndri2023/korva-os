@@ -91,7 +91,10 @@ describe('SubscriptionsService.changePlan — enabledModules synchronization', (
       // guard never fires and these tests keep asserting what they were written for.
       { get: () => undefined } as never,
       {} as never,
-      { nextFormatted: jest.fn().mockResolvedValue('ABO-0001') } as never,
+      {
+        nextFormatted: jest.fn().mockResolvedValue('ABO-0001'),
+        nextKorvaInvoiceNumber: jest.fn().mockResolvedValue('VG-000001'),
+      } as never,
     );
 
     return { service, update };
@@ -240,7 +243,10 @@ describe('SubscriptionsService.changePlan — proration', () => {
       // guard never fires and these tests keep asserting what they were written for.
       { get: () => undefined } as never,
       {} as never,
-      { nextFormatted: jest.fn().mockResolvedValue('ABO-0001') } as never,
+      {
+        nextFormatted: jest.fn().mockResolvedValue('ABO-0001'),
+        nextKorvaInvoiceNumber: jest.fn().mockResolvedValue('VG-000001'),
+      } as never,
     );
 
     return { service, update };
@@ -339,7 +345,10 @@ describe('SubscriptionsService.cancel / reactivate', () => {
       // guard never fires and these tests keep asserting what they were written for.
       { get: () => undefined } as never,
       {} as never,
-      { nextFormatted: jest.fn().mockResolvedValue('ABO-0001') } as never,
+      {
+        nextFormatted: jest.fn().mockResolvedValue('ABO-0001'),
+        nextKorvaInvoiceNumber: jest.fn().mockResolvedValue('VG-000001'),
+      } as never,
     );
 
     return {
@@ -488,7 +497,10 @@ describe('SubscriptionsService — 6-month and yearly plans', () => {
       { countSeatsForOrganization: jest.fn().mockResolvedValue(1) } as never,
       { get: () => undefined } as never,
       invoices as never,
-      { nextFormatted: jest.fn().mockResolvedValue('ABO-0001') } as never,
+      {
+        nextFormatted: jest.fn().mockResolvedValue('ABO-0001'),
+        nextKorvaInvoiceNumber: jest.fn().mockResolvedValue('VG-000001'),
+      } as never,
     );
     return { service, update, issueForPeriod, getByKey };
   }

@@ -244,7 +244,10 @@ describe('SubscriptionsService — product overrides stay within the plan', () =
       // guard never fires and these tests keep asserting what they were written for.
       { get: () => undefined } as never,
       {} as never,
-      { nextFormatted: jest.fn().mockResolvedValue('ABO-0001') } as never,
+      {
+        nextFormatted: jest.fn().mockResolvedValue('ABO-0001'),
+        nextKorvaInvoiceNumber: jest.fn().mockResolvedValue('VG-000001'),
+      } as never,
     );
     return { service, update };
   }

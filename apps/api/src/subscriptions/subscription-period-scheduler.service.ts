@@ -359,11 +359,7 @@ export class SubscriptionPeriodSchedulerService
       organizationId: candidate.organizationId,
       subscriptionId: candidate._id,
       planId: candidate.planId,
-      number: await this.countersService.nextFormatted(
-        organizationId,
-        'subscription-invoice',
-        'ABO',
-      ),
+      number: await this.countersService.nextKorvaInvoiceNumber(),
       periodStart: newPeriodStart,
       periodEnd: newPeriodEnd,
       amount,

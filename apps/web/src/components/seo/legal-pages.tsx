@@ -568,10 +568,11 @@ function sectionsFor(page: LegalPage, locale: Locale): Section[] {
                 )}
               </p>
               <ul className="list-disc space-y-1 pl-6">
-                <li>{t("Contabo GmbH (Allemagne) : serveurs ;", "Contabo GmbH (Germany): servers;")}</li>
-                <li>{t("MongoDB, Inc. (États-Unis) : base de données MongoDB Atlas ;", "MongoDB, Inc. (United States): MongoDB Atlas database;")}</li>
+                <li>{t("Contabo GmbH : serveurs de l'application, situés en France ;", "Contabo GmbH: application servers, located in France;")}</li>
+                <li>{t("MongoDB, Inc. : base de données MongoDB Atlas, hébergée à Paris (France) ;", "MongoDB, Inc.: MongoDB Atlas database, hosted in Paris (France);")}</li>
+                <li>{t("Cloudflare, Inc. (États-Unis) : copie de sauvegarde quotidienne, hors de nos serveurs ;", "Cloudflare, Inc. (United States): daily backup copy, off our servers;")}</li>
                 <li>{t("Resend (États-Unis) : envoi des e-mails ;", "Resend (United States): sending e-mails;")}</li>
-                <li>{t("Sentry (États-Unis) : détection des erreurs ;", "Sentry (United States): error detection;")}</li>
+                <li>{t("Sentry : détection des erreurs, données hébergées en Allemagne ;", "Sentry: error detection, data hosted in Germany;")}</li>
                 <li>{t("Google : l'assistant KORVA IA (Gemini), quand vous l'utilisez ;", "Google: the KORVA AI assistant (Gemini), when you use it;")}</li>
                 <li>{t("nos prestataires de paiement, pour les paiements que vous faites ou recevez.", "our payment providers, for the payments you make or receive.")}</li>
               </ul>

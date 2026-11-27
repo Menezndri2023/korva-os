@@ -170,6 +170,7 @@ async function buildHarness(
     plans as unknown as PlansRepository,
     {
       nextFormatted: jest.fn().mockResolvedValue('ABO-0001'),
+      nextKorvaInvoiceNumber: jest.fn().mockResolvedValue('VG-000001'),
     } as unknown as CountersService,
     audit as unknown as AuditService,
     {
@@ -226,7 +227,8 @@ describe('SubscriptionPeriodSchedulerService — renewal billing', () => {
     }>(h.invoices.issueForPeriod);
     expect(issued.amount).toBe(2900);
     expect(issued.currency).toBe('EUR');
-    expect(issued.number).toBe('ABO-0001');
+    // VIT GLOBAL's single invoice sequence, never a per-business counter.
+    expect(issued.number).toBe('VG-000001');
     // The invoice covers the period the renewal is about to grant: it starts where the old one
     // ended and runs one month, never "now"-anchored.
     expect(issued.periodStart.toISOString()).toBe('2026-02-01T00:00:00.000Z');
