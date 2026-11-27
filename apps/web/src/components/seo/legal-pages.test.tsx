@@ -13,6 +13,9 @@ describe("LegalPageView", () => {
     expect(text).toContain("VIT GLOBAL TECHNOLOGIES GROUP SARLAU");
     expect(text).toContain("RC 742851, Tribunal de commerce de Casablanca");
     expect(text).toContain("004013219000041");
+    // IF and TP as on the DGI identification bulletin of 2026-08-06.
+    expect(text).toContain("73292932");
+    expect(text).toContain("33304467");
     expect(text).toContain("20 000 MAD");
     expect(text).toContain(KORVA_SUPPORT.email);
   });

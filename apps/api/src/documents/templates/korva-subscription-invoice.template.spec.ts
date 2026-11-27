@@ -25,6 +25,7 @@ describe('KORVA subscription invoice', () => {
       legalName: 'Freeworld SARL',
       contactAddress: 'Cocody, Abidjan',
       legalIdentifiers: 'RCCM CI-ABJ-2024-A-1234',
+      country: 'CI',
       language: 'fr',
     });
 
@@ -44,10 +45,45 @@ describe('KORVA subscription invoice', () => {
     expect(manifest.table?.rows[0]?.[0]).toBe('Abonnement Starter (1 an)');
   });
 
+  it('prints the IF the DGI requires, and no VAT for a business abroad, with the exemption', () => {
+    const manifest = buildKorvaSubscriptionInvoiceManifest(invoice, plan, {
+      name: 'Freeworld',
+      country: 'CI',
+      language: 'fr',
+    });
+    expect(manifest.organizationHeader.lines?.[0]).toContain(
+      `IF ${LEGAL_ENTITY.if}`,
+    );
+    expect(manifest.table?.totals.map((total) => total.label)).toEqual([
+      'Total HT',
+      'Total à payer',
+    ]);
+    expect(manifest.footer).toContain('article 92-I-1°');
+  });
+
+  it('breaks a Moroccan business’s price down into excl. VAT, 20 % VAT and incl. VAT', () => {
+    const manifest = buildKorvaSubscriptionInvoiceManifest(
+      { ...(invoice as object), amount: 1990, currency: 'MAD' } as never,
+      plan,
+      { name: 'Atlas Café', country: 'MA', language: 'fr' },
+    );
+    const totals = manifest.table!.totals;
+    expect(totals.map((total) => total.label)).toEqual([
+      'Total HT',
+      'TVA 20 %',
+      'Total TTC',
+    ]);
+    // 1 990 incl. VAT = 1 658,33 excl. + 331,67 VAT, to the cent.
+    expect(totals[0]!.value).toMatch(/1\s?658,33/);
+    expect(totals[1]!.value).toMatch(/331,67/);
+    expect(manifest.footer).not.toContain('92-I-1°');
+  });
+
   it('renders to a real PDF, accents and all', async () => {
     const buffer = await new DocumentRenderingService().renderPdf(
       buildKorvaSubscriptionInvoiceManifest(invoice, plan, {
         name: 'Épicerie Ébène',
+        country: 'SN',
         language: 'fr',
       }),
     );

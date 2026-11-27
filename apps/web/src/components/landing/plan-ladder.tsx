@@ -167,7 +167,7 @@ function countryName(code: string, fallback: string, locale: Locale): string {
 const TEXT = {
   fr: {
     pricesFor: "Vos prix pour",
-    billed: (currency: string) => `Facturé en ${currency}, sans engagement.`,
+    billed: (currency: string) => `Facturé en ${currency}${currency === "MAD" ? ", TVA comprise" : ""}, sans engagement.`,
     period: "Durée de paiement",
     intervalBadge: { month: "", half_year: "−10 %", year: "2 mois offerts" } as Record<PlanInterval, string>,
     perMonthEquivalent: (price: string) => `soit ${price} par mois`,
@@ -187,7 +187,7 @@ const TEXT = {
   },
   en: {
     pricesFor: "Your prices for",
-    billed: (currency: string) => `Billed in ${currency}, no commitment.`,
+    billed: (currency: string) => `Billed in ${currency}${currency === "MAD" ? ", VAT included" : ""}, no commitment.`,
     period: "Billing period",
     intervalBadge: { month: "", half_year: "−10%", year: "2 months free" } as Record<PlanInterval, string>,
     perMonthEquivalent: (price: string) => `i.e. ${price} a month`,

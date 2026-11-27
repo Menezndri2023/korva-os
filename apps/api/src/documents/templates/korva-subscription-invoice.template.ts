@@ -1,6 +1,8 @@
 import {
   KORVA_SUPPORT,
+  KORVA_VAT,
   LEGAL_ENTITY,
+  splitVatIncluded,
   PLAN_INTERVAL_LABELS,
   normalizePlanInterval,
 } from '@korva/types';
@@ -16,21 +18,30 @@ import { documentWords } from './document-words';
  * office), and the business as the customer. Until 2026-11-27 a business paying KORVA had only a
  * line on its Settings screen, nothing it could hand its accountant.
  *
- * No VAT line on purpose: whether VIT GLOBAL charges Moroccan VAT, and how a service sold to a
- * business abroad is treated, is for the company's accountant to settle — printing a rate KORVA
- * does not actually apply would be worse than printing none. See the audit of 2026-11-27.
+ * VAT (KORVA_VAT, confirmed by the owner on 2026-11-27): a business established in Morocco pays
+ * 20 % included in the price, broken down here as excl. VAT / VAT / incl. VAT; a business abroad
+ * is invoiced without VAT, as an export of services, with the exemption printed. The IF is on
+ * every invoice, as the DGI bulletin requires.
  */
 export function buildKorvaSubscriptionInvoiceManifest(
   invoice: SubscriptionInvoiceDocument,
   plan: PlanDocument,
   organization: Pick<
     OrganizationDocument,
-    'name' | 'legalName' | 'contactAddress' | 'legalIdentifiers' | 'language'
+    | 'name'
+    | 'legalName'
+    | 'contactAddress'
+    | 'legalIdentifiers'
+    | 'language'
+    | 'country'
   >,
 ): DocumentTemplate {
   const { t, date, money } = documentWords(organization.language);
   const interval = normalizePlanInterval(plan.interval);
   const en = organization.language === 'en';
+  const domestic =
+    organization.country?.toUpperCase() === KORVA_VAT.domesticCountry;
+  const vat = splitVatIncluded(invoice.amount, KORVA_VAT.rate);
   const customer = [
     organization.legalName?.trim() || organization.name,
     organization.contactAddress?.trim(),
@@ -52,7 +63,7 @@ export function buildKorvaSubscriptionInvoiceManifest(
       name: `${LEGAL_ENTITY.name} ${LEGAL_ENTITY.form}`,
       address: LEGAL_ENTITY.address,
       lines: [
-        `RC ${LEGAL_ENTITY.rc} (${LEGAL_ENTITY.rcCourt}) · ICE ${LEGAL_ENTITY.ice} · ${t('Capital', 'Share capital')} ${LEGAL_ENTITY.capital}`,
+        `RC ${LEGAL_ENTITY.rc} (${LEGAL_ENTITY.rcCourt}) · IF ${LEGAL_ENTITY.if} · ICE ${LEGAL_ENTITY.ice} · TP ${LEGAL_ENTITY.tp} · ${t('Capital', 'Share capital')} ${LEGAL_ENTITY.capital}`,
         t(
           'Éditeur de KORVA OS · korvasuite.com',
           'Publisher of KORVA OS · korvasuite.com',
@@ -81,16 +92,38 @@ export function buildKorvaSubscriptionInvoiceManifest(
           money(invoice.amount, invoice.currency),
         ],
       ],
-      totals: [
-        {
-          label: t('Total à payer', 'Total due'),
-          value: money(invoice.amount, invoice.currency),
-        },
-      ],
+      totals: domestic
+        ? [
+            {
+              label: t('Total HT', 'Total excl. VAT'),
+              value: money(vat.net, invoice.currency),
+            },
+            {
+              label: t(`TVA ${KORVA_VAT.rate} %`, `VAT ${KORVA_VAT.rate}%`),
+              value: money(vat.vat, invoice.currency),
+            },
+            {
+              label: t('Total TTC', 'Total incl. VAT'),
+              value: money(invoice.amount, invoice.currency),
+            },
+          ]
+        : [
+            {
+              label: t('Total HT', 'Total excl. VAT'),
+              value: money(invoice.amount, invoice.currency),
+            },
+            {
+              label: t('Total à payer', 'Total due'),
+              value: money(invoice.amount, invoice.currency),
+            },
+          ],
     },
-    footer: t(
-      `Abonnement payé d'avance pour la période indiquée. Conditions : korvasuite.com/conditions/generales. Contact : ${KORVA_SUPPORT.email}.`,
-      `Subscription paid in advance for the period shown. Terms: korvasuite.com/en/terms. Contact: ${KORVA_SUPPORT.email}.`,
-    ),
+    footer: [
+      ...(domestic ? [] : [KORVA_VAT.exportExemption[en ? 'en' : 'fr']]),
+      t(
+        `Abonnement payé d'avance pour la période indiquée. Conditions : korvasuite.com/conditions/generales. Contact : ${KORVA_SUPPORT.email}.`,
+        `Subscription paid in advance for the period shown. Terms: korvasuite.com/en/terms. Contact: ${KORVA_SUPPORT.email}.`,
+      ),
+    ].join(' '),
   };
 }

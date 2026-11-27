@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { KORVA_SUPPORT, SIGNUP_TRIAL, type Locale } from "@korva/types";
+import { KORVA_SUPPORT, KORVA_VAT, SIGNUP_TRIAL, type Locale } from "@korva/types";
 import { LEGAL_ENTITY, PUBLISHER } from "@/lib/brand";
 import { LEGAL_PATHS, LEGAL_TITLES, type LegalPage } from "@/lib/legal-paths";
 import { ONLINE_PAYMENT_TERMS_PATH } from "./online-payment-terms";
+import { PlanLadder } from "@/components/landing/plan-ladder";
 import { PublicFooter, PublicHeader } from "./trade-page";
 
 /**
@@ -38,6 +39,8 @@ function CompanyCard({ locale }: { locale: Locale }) {
     [en ? "Registered office" : "Siège social", LEGAL_ENTITY.address],
     [en ? "Trade register" : "Registre du commerce", `RC ${LEGAL_ENTITY.rc}, ${LEGAL_ENTITY.rcCourt}`],
     ["ICE", LEGAL_ENTITY.ice],
+    [en ? "Tax identifier (IF)" : "Identifiant fiscal (IF)", LEGAL_ENTITY.if],
+    [en ? "Business tax (TP)" : "Taxe professionnelle (TP)", LEGAL_ENTITY.tp],
     [en ? "Manager" : "Gérant", LEGAL_ENTITY.manager],
     [en ? "E-mail" : "E-mail", <Mail key="mail" />],
     [
@@ -70,6 +73,106 @@ function sectionsFor(page: LegalPage, locale: Locale): Section[] {
   const company = `${LEGAL_ENTITY.name} ${LEGAL_ENTITY.form}`;
 
   switch (page) {
+    case "pricing":
+      return [
+        {
+          title: t("Les formules", "The plans"),
+          body: (
+            <>
+              <p>
+                {t(
+                  "Choisissez votre pays pour voir vos prix. Vous payez au mois, pour 6 mois (10 % de remise) ou pour un an (deux mois offerts), sans engagement : vous résiliez quand vous voulez.",
+                  "Pick your country to see your prices. You pay monthly, for 6 months (10% off) or for a year (two months free), with no commitment: you cancel whenever you like.",
+                )}
+              </p>
+              <PlanLadder locale={locale} />
+            </>
+          ),
+        },
+        {
+          title: t("TVA et factures", "VAT and invoices"),
+          body: (
+            <p>
+              {t(
+                `Chaque paiement donne une facture PDF émise par ${company}, à télécharger dans Paramètres > Abonnement. Au Maroc, les prix comprennent la TVA de ${KORVA_VAT.rate} %, détaillée sur la facture. Hors du Maroc, l'abonnement est facturé sans TVA marocaine (exportation de services).`,
+                `Every payment comes with a PDF invoice issued by ${company}, in Settings > Subscription. In Morocco, prices include ${KORVA_VAT.rate}% VAT, shown on the invoice. Outside Morocco, the subscription is invoiced without Moroccan VAT (export of services).`,
+              )}
+            </p>
+          ),
+        },
+        {
+          title: t("Payer", "Paying"),
+          body: (
+            <p>
+              {t(
+                "Le paiement se fait sur la page sécurisée de notre prestataire de paiement ; les moyens disponibles dans votre pays (mobile money, carte bancaire) s'affichent au moment de payer. KORVA ne voit ni ne conserve votre numéro de carte. Remboursements et résiliation : ",
+                "You pay on our payment provider's secure page; the methods available in your country (mobile money, bank card) are shown when you pay. KORVA never sees or stores your card number. Refunds and cancellation: ",
+              )}
+              {link("refunds")}.
+            </p>
+          ),
+        },
+      ];
+
+    case "about":
+      return [
+        {
+          title: "KORVA OS",
+          body: (
+            <p>
+              {t(
+                "KORVA OS est le logiciel de gestion et le site internet des petites entreprises : clients, ventes, rendez-vous, caisse, stock, factures et paiement en ligne par mobile money ou carte, dans un seul compte. Il est conçu d'abord pour l'Afrique francophone et utilisable partout, en français et en anglais.",
+                "KORVA OS is the management software and website for small businesses: customers, sales, appointments, till, stock, invoices and online payment by mobile money or card, in one account. It is built first for French-speaking Africa and usable anywhere, in French and English.",
+              )}
+            </p>
+          ),
+        },
+        {
+          title: t("L'entreprise derrière KORVA", "The company behind KORVA"),
+          body: (
+            <>
+              <p>
+                {t(
+                  `KORVA OS est conçu, développé et vendu par ${company}, groupe technologique basé à Casablanca qui conseille entreprises et institutions en Afrique, au Maghreb et à l'international en solutions digitales, infrastructures informatiques et stratégies d'innovation.`,
+                  `KORVA OS is designed, built and sold by ${company}, a technology group based in Casablanca that advises businesses and institutions in Africa, the Maghreb and internationally on digital solutions, IT infrastructure and innovation strategy.`,
+                )}
+              </p>
+              <p>
+                {t(
+                  `Le groupe est dirigé par son fondateur, ${LEGAL_ENTITY.manager}, ivoirien, entre Casablanca et Abidjan : KORVA est pensé par quelqu'un qui connaît les commerçants des deux rives.`,
+                  `The group is led by its founder, ${LEGAL_ENTITY.manager}, an Ivorian working between Casablanca and Abidjan: KORVA is designed by someone who knows the shopkeepers on both sides.`,
+                )}
+              </p>
+              <p>
+                <a href={PUBLISHER.url} className="underline underline-offset-4">vit-global.tech</a>
+                {PUBLISHER.links.map((profile) => (
+                  <span key={profile.url}>
+                    {" · "}
+                    <a href={profile.url} rel="noopener" target="_blank" className="underline underline-offset-4">
+                      {profile.label}
+                    </a>
+                  </span>
+                ))}
+              </p>
+            </>
+          ),
+        },
+        {
+          title: t("Nos engagements", "What we commit to"),
+          body: (
+            <ul className="list-disc space-y-1 pl-6">
+              <li>{t("Une personne vous répond, par e-mail ou WhatsApp, en français ou en anglais.", "A person answers you, by e-mail or WhatsApp, in French or English.")}</li>
+              <li>{t("Vos données vous appartiennent ; elles sont sauvegardées chaque nuit, avec une copie hors de notre serveur.", "Your data is yours; it is backed up every night, with a copy off our server.")}</li>
+              <li>{t("Des prix publics, pays par pays, sans engagement, et une facture pour chaque paiement.", "Public prices, country by country, no commitment, and an invoice for every payment.")}</li>
+            </ul>
+          ),
+        },
+        {
+          title: t("Nous joindre", "Reach us"),
+          body: <CompanyCard locale={locale} />,
+        },
+      ];
+
     case "notice":
       return [
         {
@@ -200,6 +303,12 @@ function sectionsFor(page: LegalPage, locale: Locale): Section[] {
                 {t(
                   ", pays par pays, dans la devise du pays de votre entreprise. Le prix est celui affiché au moment du paiement.",
                   ", country by country, in the currency of your business's country. The price is the one shown when you pay.",
+                )}
+              </p>
+              <p>
+                {t(
+                  `Pour une entreprise établie au Maroc, les prix s'entendent TVA de ${KORVA_VAT.rate} % comprise, détaillée sur chaque facture. Pour une entreprise établie hors du Maroc, l'abonnement est facturé sans TVA marocaine, au titre de l'exportation de services.`,
+                  `For a business established in Morocco, prices include ${KORVA_VAT.rate}% VAT, shown on each invoice. For a business established outside Morocco, the subscription is invoiced without Moroccan VAT, as an export of services.`,
                 )}
               </p>
               <p>
@@ -517,10 +626,11 @@ export function LegalPageView({ page, locale }: { page: LegalPage; locale: Local
   return (
     <div className="bg-paper text-ink" lang={locale}>
       <PublicHeader locale={locale} otherLanguageHref={LEGAL_PATHS[page][en ? "fr" : "en"]} />
-      <main className="mx-auto max-w-3xl space-y-8 px-4 py-12 sm:px-8">
+      {/* The pricing page holds four plan cards side by side: it needs the landing's width. */}
+      <main className={`mx-auto ${page === "pricing" ? "max-w-6xl" : "max-w-3xl"} space-y-8 px-4 py-12 sm:px-8`}>
         <header className="space-y-2">
           <h1 className="font-display text-3xl font-bold sm:text-4xl">{LEGAL_TITLES[page][locale]}</h1>
-          {page !== "contact" && (
+          {page !== "contact" && page !== "about" && page !== "pricing" && (
             <p className="text-sm text-ink-soft">{en ? `Version of ${version}` : `Version du ${version}`}</p>
           )}
         </header>

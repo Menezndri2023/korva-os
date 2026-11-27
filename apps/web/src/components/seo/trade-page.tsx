@@ -183,7 +183,7 @@ export function PublicHeader({ locale = "fr", otherLanguageHref }: { locale?: Lo
           <Link href={articlesIndexPath(locale)} className="hidden rounded-md px-3 py-2 text-sm text-ink-muted hover:text-paper md:inline-block">
             {t.guides}
           </Link>
-          <Link href={en ? "/en#formules" : "/#formules"} className="hidden rounded-md px-3 py-2 text-sm text-ink-muted hover:text-paper sm:inline-block">
+          <Link href={en ? "/en/pricing" : "/tarifs"} className="hidden rounded-md px-3 py-2 text-sm text-ink-muted hover:text-paper sm:inline-block">
             {t.plans}
           </Link>
           <LanguageLink locale={locale} href={otherLanguageHref} />
