@@ -17,6 +17,7 @@ import { appUrl } from "@/lib/site-url";
 import { PUBLISHER } from "@/lib/brand";
 import { articlesIndexPath } from "@/lib/articles";
 import { CookieChoiceLink } from "@/lib/google-tag";
+import { LEGAL_PAGES, LEGAL_PATHS, LEGAL_TITLES } from "@/lib/legal-paths";
 import { JsonLd } from "./json-ld";
 
 const money = (amount: number, currency: "XOF" | "USD", locale: Locale) =>
@@ -213,14 +214,20 @@ export function PublicFooter({ locale = "fr" }: { locale?: Locale }) {
             <p className="text-sm font-semibold">KORVA OS</p>
           </div>
           <p className="max-w-xs text-sm">{t.footerLead}</p>
-          <p className="text-sm">
+          {/* What a payment provider's compliance review and a careful customer look for: who
+              sells, the terms, refunds, privacy and a way to reach a person — on every page. */}
+          <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+            {LEGAL_PAGES.map((page) => (
+              <Link key={page} href={LEGAL_PATHS[page][locale]} className="hover:text-paper hover:underline">
+                {LEGAL_TITLES[page][locale]}
+              </Link>
+            ))}
             <Link
               href={locale === "en" ? "/en/terms/online-payment" : "/conditions/paiement-en-ligne"}
               className="hover:text-paper hover:underline"
             >
               {locale === "en" ? "Online payment terms" : "Conditions du paiement en ligne"}
             </Link>
-            {" · "}
             <CookieChoiceLink lang={locale} className="hover:text-paper hover:underline" />
           </p>
           {/* The product's other name, in visible text: someone searching "korva suite" or the
