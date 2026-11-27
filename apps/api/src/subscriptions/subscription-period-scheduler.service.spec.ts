@@ -104,7 +104,11 @@ interface Harness {
 
 async function buildHarness(
   options: {
-    plan?: { priceAmount: number; priceCurrency: string } | null;
+    plan?: {
+      priceAmount: number;
+      priceCurrency: string;
+      interval?: string;
+    } | null;
     latestInvoice?: unknown;
     candidates?: SubscriptionDocument[];
     issueResult?: unknown;
@@ -234,6 +238,34 @@ describe('SubscriptionPeriodSchedulerService — renewal billing', () => {
     expect(h.subscriptions.renewIfEligible).toHaveBeenCalledTimes(1);
     expect(h.subscriptions.markPastDueIfEligible).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['half_year', '2026-08-01T00:00:00.000Z'],
+    ['year', '2027-02-01T00:00:00.000Z'],
+  ])(
+    'a %s plan is invoiced and renewed for its own length, not one month',
+    async (interval, expectedEnd) => {
+      const h = await buildHarness({
+        plan: { priceAmount: 99000, priceCurrency: 'XOF', interval },
+      });
+
+      await h.runSweep();
+
+      const issued = firstCallArg<{ periodStart: Date; periodEnd: Date }>(
+        h.invoices.issueForPeriod,
+      );
+      expect(issued.periodStart.toISOString()).toBe('2026-02-01T00:00:00.000Z');
+      expect(issued.periodEnd.toISOString()).toBe(expectedEnd);
+      // The subscription's own period moves by the same length as the invoice it was billed.
+      const renewArgs = h.subscriptions.renewIfEligible.mock.calls[0] as [
+        string,
+        string,
+        Date,
+        Date,
+      ];
+      expect(renewArgs[3].toISOString()).toBe(expectedEnd);
+    },
+  );
 
   it('SUBSCRIPTION_INVOICE_GRACE_DAYS overrides the default grace window', async () => {
     const h = await buildHarness({

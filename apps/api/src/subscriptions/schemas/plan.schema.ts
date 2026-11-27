@@ -46,4 +46,9 @@ export const PlanSchema = SchemaFactory.createForClass(Plan);
  * tier does not exist" look identical to the tenant — which is the correct behavior: you only
  * sell where you have decided on a price.
  */
-PlanSchema.index({ key: 1, priceCurrency: 1 }, { unique: true });
+/*
+ * Since 2026-11-27 the duration is part of the identity too: Pro in XOF exists monthly, for
+ * 6 months and for a year, three documents with three prices. Migration 0018 drops the old
+ * { key, priceCurrency } index — production runs autoIndex off — and creates this one.
+ */
+PlanSchema.index({ key: 1, priceCurrency: 1, interval: 1 }, { unique: true });

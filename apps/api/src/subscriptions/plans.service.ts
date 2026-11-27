@@ -4,9 +4,11 @@ import {
   PLAN_KEYS,
   PLAN_LIMITS,
   PLAN_NAMES,
-  PLAN_PRICES,
+  PLAN_INTERVAL_ORDER,
   SUPPORTED_BILLING_CURRENCIES,
   modulesForPlan,
+  planPrice,
+  type PlanInterval,
 } from '@korva/types';
 import { PlansRepository } from './plans.repository';
 import { PlanDocument } from './schemas/plan.schema';
@@ -32,15 +34,21 @@ const FALLBACK_BILLING_CURRENCY = 'EUR';
  * and Canada could not buy anything at all.
  */
 const DEFAULT_PLANS = PLAN_KEYS.flatMap((key) =>
-  SUPPORTED_BILLING_CURRENCIES.map((currency) => ({
-    key,
-    name: PLAN_NAMES[key],
-    priceAmount: PLAN_PRICES[currency][key],
-    priceCurrency: currency,
-    interval: 'month' as const,
-    modules: modulesForPlan(key),
-    limits: PLAN_LIMITS[key],
-  })),
+  SUPPORTED_BILLING_CURRENCIES.flatMap((currency) =>
+    // Free has nothing to prepay: it exists once, monthly. Every paid tier is also sold for
+    // 6 months and for a year (billing-intervals.ts).
+    (key === 'free' ? (['month'] as PlanInterval[]) : PLAN_INTERVAL_ORDER).map(
+      (interval) => ({
+        key,
+        name: PLAN_NAMES[key],
+        priceAmount: planPrice(currency, key, interval),
+        priceCurrency: currency,
+        interval,
+        modules: modulesForPlan(key),
+        limits: PLAN_LIMITS[key],
+      }),
+    ),
+  ),
 );
 
 @Injectable()
@@ -86,6 +94,7 @@ export class PlansService {
         plan.key,
         plan.priceCurrency,
         plan,
+        plan.interval,
       );
     }
     this.seeded = true;
@@ -109,18 +118,23 @@ export class PlansService {
    * than one, and picking arbitrarily would sell someone a plan in a currency their PSP cannot
    * charge.
    */
-  async getByKey(key: string, currency?: string): Promise<PlanDocument> {
+  async getByKey(
+    key: string,
+    currency?: string,
+    interval: PlanInterval = 'month',
+  ): Promise<PlanDocument> {
     await this.ensureSeeded();
     const priceCurrency = currency ?? this.defaultCurrency();
     const plan = await this.plansRepository.findByKeyAndCurrency(
       key,
       priceCurrency,
+      interval,
     );
     if (!plan) {
       throw new NotFoundException({
         code: 'PLAN_NOT_FOUND',
-        message: `Plan "${key}" is not available in ${priceCurrency}`,
-        details: { key, currency: priceCurrency },
+        message: `Plan "${key}" is not available in ${priceCurrency} for this duration`,
+        details: { key, currency: priceCurrency, interval },
       });
     }
     return plan;

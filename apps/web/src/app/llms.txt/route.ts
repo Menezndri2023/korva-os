@@ -35,7 +35,7 @@ Pays et zones : ${AREA_SERVED.join(", ")}.
 - Solde KORVA : l'argent des ventes en ligne, retiré vers le mobile money de l'entreprise.
 - Statistiques, exports Excel, clôture de caisse, plusieurs établissements, assistant IA.
 
-## Formules (prix en zone franc CFA, par mois)
+## Formules (prix en zone franc CFA, par mois ; 6 mois : -10 %, 1 an : deux mois offerts)
 - Gratuit : 0 F CFA, ${PLAN_LIMITS.free.seats} utilisateur, commission ${commissionPercentLabel("free")} sur les ventes en ligne.
 - Starter : ${xof(PLAN_PRICES.XOF.starter)}, ${PLAN_LIMITS.starter.seats} utilisateurs, nom de domaine personnel, espace client, factures.
 - Pro : ${xof(PLAN_PRICES.XOF.pro)}, ${PLAN_LIMITS.pro.seats} utilisateurs, statistiques avancées, export Excel, clôture de caisse, relances de paiement, thèmes premium.

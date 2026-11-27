@@ -16,13 +16,19 @@ import {
   PLAN_FEATURE_LABELS,
   PLAN_FEATURE_LABELS_EN,
   PLAN_FEATURE_MIN_PLAN,
-  PLAN_PRICES,
+  PLAN_INTERVAL_LABELS,
+  PLAN_INTERVAL_MONTHS,
+  PLAN_INTERVAL_ORDER,
+  PLAN_INTERVAL_PER,
   commissionPercentLabel,
+  planIntervalSaving,
+  planPrice,
   SIGNUP_TRIAL,
   countryFromTimeZone,
   currencyForCountry,
   type Locale,
   type PlanFeature,
+  type PlanInterval,
   type PlanKey,
 } from "@korva/types";
 import { landingText } from "@/lib/landing-content";
@@ -161,7 +167,11 @@ function countryName(code: string, fallback: string, locale: Locale): string {
 const TEXT = {
   fr: {
     pricesFor: "Vos prix pour",
-    billed: (currency: string) => `Facturé en ${currency}, par mois, sans engagement.`,
+    billed: (currency: string) => `Facturé en ${currency}, sans engagement.`,
+    period: "Durée de paiement",
+    intervalBadge: { month: "", half_year: "−10 %", year: "2 mois offerts" } as Record<PlanInterval, string>,
+    perMonthEquivalent: (price: string) => `soit ${price} par mois`,
+    saving: (amount: string) => `Vous économisez ${amount}`,
     shownPlan: "Formule affichée",
     trial: (days: number) => `${days} jours offerts`,
     everything: (name: string) => `Tout ce que contient la formule ${name}`,
@@ -169,7 +179,6 @@ const TEXT = {
     cta: "Commencer gratuitement",
     ctaNote: (days: number, name: string) =>
       `${days} jours de formule ${name} offerts à l'inscription, sans carte bancaire. Vous changez de formule quand vous voulez, et vos données restent les vôtres.`,
-    perMonth: "/ mois",
     ctaFree: "Commencer gratuitement",
     ctaTrial: "Essayer 14 jours",
     ctaPlan: (name: string) => `Choisir ${name}`,
@@ -178,7 +187,11 @@ const TEXT = {
   },
   en: {
     pricesFor: "Your prices for",
-    billed: (currency: string) => `Billed in ${currency}, monthly, no commitment.`,
+    billed: (currency: string) => `Billed in ${currency}, no commitment.`,
+    period: "Billing period",
+    intervalBadge: { month: "", half_year: "−10%", year: "2 months free" } as Record<PlanInterval, string>,
+    perMonthEquivalent: (price: string) => `i.e. ${price} a month`,
+    saving: (amount: string) => `You save ${amount}`,
     shownPlan: "Plan shown",
     trial: (days: number) => `${days} days free`,
     everything: (name: string) => `Everything in the ${name} plan`,
@@ -186,7 +199,6 @@ const TEXT = {
     cta: "Start for free",
     ctaNote: (days: number, name: string) =>
       `${days} days of the ${name} plan free when you sign up, no credit card. Change plans whenever you like; your data stays yours.`,
-    perMonth: "/ month",
     ctaFree: "Start for free",
     ctaTrial: "Try it for 14 days",
     ctaPlan: (name: string) => `Choose ${name}`,
@@ -207,6 +219,8 @@ export function PlanLadder({ locale = "fr" }: { locale?: Locale }) {
   // null until the visitor picks a country themselves, so detection keeps working on first
   // paint and is then overridden for good once they choose.
   const [chosenCountry, setChosenCountry] = useState<string | null>(null);
+  // Monthly by default: the lowest number a visitor sees first, and the one every plan starts at.
+  const [interval, setChosenInterval] = useState<PlanInterval>("month");
   const countryCode = chosenCountry ?? detectedCountry;
 
   const currency = currencyForCountry(countryCode);
@@ -235,14 +249,42 @@ export function PlanLadder({ locale = "fr" }: { locale?: Locale }) {
         </p>
       </div>
 
+      {/* Pay for 1 month, 6 months or a year — the same prices the dashboard sells
+          (planPrice, billing-intervals.ts). */}
+      <div role="radiogroup" aria-label={t.period} className="mt-4 inline-flex flex-wrap gap-1 rounded-full border border-rule p-1">
+        {PLAN_INTERVAL_ORDER.map((candidate) => (
+          <button
+            key={candidate}
+            type="button"
+            role="radio"
+            aria-checked={candidate === interval}
+            onClick={() => setChosenInterval(candidate)}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
+              candidate === interval ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            {PLAN_INTERVAL_LABELS[locale][candidate]}
+            {t.intervalBadge[candidate] && (
+              <span className={`ml-1.5 text-xs ${candidate === interval ? "text-paper/80" : "text-success"}`}>
+                {t.intervalBadge[candidate]}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {/* Four cards side by side (two on a tablet, one under the other on a phone): the price,
           who it is for, its five strongest lines and one button each — the full list folds away
           under "Tout le détail". The long ruled ladder this replaces was a wall of ticks nobody
           could compare. */}
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {PLAN_KEYS.map((plan) => {
-          const price = PLAN_PRICES[currency][plan];
           const isEntry = plan === "free";
+          // Free has no longer version: it stays "0 / mois" whatever the duration picked.
+          const shownInterval: PlanInterval = isEntry ? "month" : interval;
+          const price = planPrice(currency, plan, shownInterval);
+          const months = PLAN_INTERVAL_MONTHS[shownInterval];
+          const saving = planIntervalSaving(currency, plan, shownInterval);
           const highlighted = plan === SIGNUP_TRIAL.plan;
           const ai = aiLine(plan, locale);
           const lines: { text: string; strong?: boolean }[] = [
@@ -282,8 +324,14 @@ export function PlanLadder({ locale = "fr" }: { locale?: Locale }) {
               {/* Mono: the four prices line up across the cards. */}
               <p className="mt-2 font-mono text-3xl tabular-nums text-ink">
                 {format.display(isEntry ? 0 : price)}
-                <span className="ml-1 font-sans text-sm text-ink-soft">{t.perMonth}</span>
+                <span className="ml-1 font-sans text-sm text-ink-soft">{PLAN_INTERVAL_PER[locale][shownInterval]}</span>
               </p>
+              {months > 1 && (
+                <p className="mt-1 text-sm text-ink-soft">
+                  {t.perMonthEquivalent(format.display(Math.round(price / months)))}
+                  {saving > 0 && <span className="block font-medium text-success">{t.saving(format.display(saving))}</span>}
+                </p>
+              )}
               <p className="mt-1.5 min-h-10 text-sm leading-snug text-ink-soft">{content.planAudience[plan]}</p>
               <Link
                 href={locale === "en" ? "/register?lang=en" : "/register"}

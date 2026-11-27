@@ -17,9 +17,10 @@ describe("LegalPageView", () => {
     expect(text).toContain(KORVA_SUPPORT.email);
   });
 
-  it("states the cancellation rule the code applies (end of the paid month)", () => {
+  it("states the cancellation rule the code applies (end of the paid period, no pro rata)", () => {
     render(<LegalPageView page="refunds" locale="fr" />);
-    expect(screen.getByText(/prend effet à la fin du mois déjà payé/)).toBeInTheDocument();
+    expect(screen.getByText(/prend effet à la fin de la période déjà payée/)).toBeInTheDocument();
+    expect(screen.getByText(/pas de remboursement au prorata/)).toBeInTheDocument();
   });
 
   it.each(LEGAL_PAGES)("renders %s in both languages", (page) => {

@@ -1,9 +1,11 @@
 import { z } from "zod";
-import { PLAN_KEYS } from "@korva/types";
+import { PLAN_INTERVALS, PLAN_KEYS } from "@korva/types";
 
-/** KORVA administration — assigning a plan after collecting its payment outside the platform. */
+/** KORVA administration — assigning a plan after collecting its payment outside the platform,
+ *  for the duration that was paid (1 month unless said otherwise). */
 export const assignPlanSchema = z.object({
   planKey: z.enum(PLAN_KEYS),
+  interval: z.enum(PLAN_INTERVALS).optional().default("month"),
 });
 export type AssignPlanInput = z.infer<typeof assignPlanSchema>;
 

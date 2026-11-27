@@ -1,7 +1,9 @@
 import type { KorvaModule } from "./organization.ts";
 import type { KorvaProduct } from "./products.ts";
 
-export const PLAN_INTERVALS = ["month", "year"] as const;
+/** How long one paid period of a plan lasts: 1, 6 or 12 months — see billing-intervals.ts for
+ *  the length and the discount of each. Each (tier, currency, interval) is its own Plan document. */
+export const PLAN_INTERVALS = ["month", "half_year", "year"] as const;
 export type PlanInterval = (typeof PLAN_INTERVALS)[number];
 
 /** -1 in a limit means unlimited. */

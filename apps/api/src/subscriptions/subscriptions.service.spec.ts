@@ -1,4 +1,4 @@
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import type { SubscriptionsRepository } from './subscriptions.repository';
@@ -427,5 +427,182 @@ describe('SubscriptionsService.cancel / reactivate', () => {
     await expect(service.reactivate(ORG_ID, USER_ID)).rejects.toBeInstanceOf(
       ConflictException,
     );
+  });
+});
+
+describe('SubscriptionsService — 6-month and yearly plans', () => {
+  const ORG_ID = new Types.ObjectId().toString();
+  const USER_ID = 'user-1';
+  const DAY = 86_400_000;
+
+  const monthsLater = (from: Date, months: number) => {
+    const result = new Date(from);
+    result.setUTCMonth(result.getUTCMonth() + months);
+    return result;
+  };
+
+  function buildService(options: {
+    target: Record<string, unknown>;
+    current: Record<string, unknown>;
+    existing: Record<string, unknown>;
+    paidCovering?: Record<string, unknown> | null;
+  }) {
+    const getByKey = jest.fn().mockResolvedValue(options.target);
+    const plansService = {
+      getByKey,
+      getById: jest.fn().mockResolvedValue(options.current),
+    } as unknown as PlansService;
+    const update = jest
+      .fn<Promise<{ id: string }>, [string, Record<string, unknown>]>()
+      .mockResolvedValue({ id: 'sub-1' });
+    const subscriptionsRepository = {
+      update,
+      findForOrganization: jest.fn().mockResolvedValue(options.existing),
+    } as unknown as SubscriptionsRepository;
+    const exec = jest.fn().mockResolvedValue(null);
+    const organizationModel = {
+      findById: jest
+        .fn()
+        .mockReturnValue({ exec, select: jest.fn().mockReturnValue({ exec }) }),
+    } as unknown as Model<OrganizationDocument>;
+    const issueForPeriod = jest
+      .fn<Promise<Record<string, unknown>>, [Record<string, unknown>]>()
+      .mockImplementation((data: Record<string, unknown>) =>
+        Promise.resolve({ ...data, number: 'ABO-0001' }),
+      );
+    const invoices = {
+      findPaidCovering: jest
+        .fn()
+        .mockResolvedValue(options.paidCovering ?? null),
+      voidOpenPlanChanges: jest.fn().mockResolvedValue(0),
+      issueForPeriod,
+    };
+    const service = new SubscriptionsService(
+      subscriptionsRepository,
+      plansService,
+      {
+        record: jest.fn().mockResolvedValue(undefined),
+      } as unknown as AuditService,
+      organizationModel,
+      { publish: jest.fn() } as unknown as EventBusService,
+      { countSeatsForOrganization: jest.fn().mockResolvedValue(1) } as never,
+      { get: () => undefined } as never,
+      invoices as never,
+      { nextFormatted: jest.fn().mockResolvedValue('ABO-0001') } as never,
+    );
+    return { service, update, issueForPeriod, getByKey };
+  }
+
+  const subscriptionId = new Types.ObjectId();
+  const starterMonthly = {
+    _id: new Types.ObjectId(),
+    key: 'starter',
+    name: 'Starter',
+    modules: [],
+    priceAmount: 9900,
+    priceCurrency: 'XOF',
+    interval: 'month',
+  };
+  const proYearly = {
+    _id: new Types.ObjectId(),
+    key: 'pro',
+    name: 'Pro',
+    modules: [],
+    priceAmount: 249000,
+    priceCurrency: 'XOF',
+    interval: 'year',
+  };
+
+  it('a yearly plan is asked for by duration, and its invoice covers twelve months', async () => {
+    const now = new Date();
+    const { service, issueForPeriod, getByKey } = buildService({
+      target: proYearly,
+      current: starterMonthly,
+      existing: {
+        _id: subscriptionId,
+        id: subscriptionId.toString(),
+        planId: starterMonthly._id,
+        status: 'active',
+        currentPeriodStart: new Date(now.getTime() - 10 * DAY),
+        currentPeriodEnd: new Date(now.getTime() + 20 * DAY),
+      },
+    });
+
+    const result = await service.requestPlanChange(
+      ORG_ID,
+      USER_ID,
+      'pro',
+      'year',
+    );
+
+    expect(getByKey).toHaveBeenCalledWith('pro', undefined, 'year');
+    expect(result).toMatchObject({ paymentRequired: true });
+    const issued = issueForPeriod.mock.calls[0]![0] as unknown as {
+      amount: number;
+      periodStart: Date;
+      periodEnd: Date;
+    };
+    expect(issued.amount).toBe(249000);
+    expect(issued.periodEnd.getTime()).toBe(
+      monthsLater(issued.periodStart, 12).getTime(),
+    );
+  });
+
+  it('opening a paid yearly plan starts a twelve-month period, with no proration against a monthly one', async () => {
+    const now = new Date();
+    const { service, update } = buildService({
+      target: proYearly,
+      current: starterMonthly,
+      existing: {
+        planId: starterMonthly._id,
+        currentPeriodStart: new Date(now.getTime() - 10 * DAY),
+        currentPeriodEnd: new Date(now.getTime() + 20 * DAY),
+      },
+    });
+
+    await service.changePlan(ORG_ID, USER_ID, 'pro', { prepaid: true }, 'year');
+
+    const data = update.mock
+      .calls[0]![1] as unknown as Partial<Subscription> & {
+      currentPeriodStart: Date;
+      currentPeriodEnd: Date;
+    };
+    expect(data.currentPeriodEnd.getTime()).toBe(
+      monthsLater(data.currentPeriodStart, 12).getTime(),
+    );
+    expect(data.prorationAmount).toBeNull();
+  });
+
+  it('refuses to throw away a prepaid year: a cheaper plan waits for the paid period to end', async () => {
+    const now = new Date();
+    const periodStart = new Date(now.getTime() - 30 * DAY);
+    const periodEnd = monthsLater(periodStart, 12);
+    const { service, issueForPeriod, update } = buildService({
+      target: starterMonthly,
+      current: proYearly,
+      existing: {
+        _id: subscriptionId,
+        id: subscriptionId.toString(),
+        planId: proYearly._id,
+        status: 'active',
+        currentPeriodStart: periodStart,
+        currentPeriodEnd: periodEnd,
+      },
+      paidCovering: {
+        planId: proYearly._id,
+        currency: 'XOF',
+        amount: 249000,
+        periodStart,
+        periodEnd,
+      },
+    });
+
+    await expect(
+      service.requestPlanChange(ORG_ID, USER_ID, 'starter', 'month'),
+    ).rejects.toMatchObject({
+      response: { code: 'PREPAID_PERIOD_RUNNING' },
+    });
+    expect(issueForPeriod).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 });

@@ -40,8 +40,11 @@ import { SubscriptionBillingService } from '../subscription-billing/subscription
 import { AuditService } from '../audit/audit.service';
 import {
   BUSINESS_MODEL_DEFINITIONS,
+  PLAN_INTERVAL_MONTHS,
+  normalizePlanInterval,
   type BusinessModel,
   type KorvaAiSystemStatus,
+  type PlanInterval,
   type PrimaryChannel,
 } from '@korva/types';
 import {
@@ -76,6 +79,7 @@ interface PlanRow {
   name: string;
   priceAmount: number;
   priceCurrency: string;
+  interval?: string;
 }
 
 interface SubscriptionRow {
@@ -237,6 +241,7 @@ export class PlatformAdminService {
             name: 1,
             priceAmount: 1,
             priceCurrency: 1,
+            interval: 1,
             modules: 1,
             limits: 1,
           },
@@ -248,6 +253,7 @@ export class PlatformAdminService {
       name: string;
       priceAmount: number;
       priceCurrency: string;
+      interval?: string;
       modules: string[];
       limits?: Record<string, number>;
     }[];
@@ -265,6 +271,7 @@ export class PlatformAdminService {
       name: plan.name,
       priceAmount: plan.priceAmount,
       priceCurrency: plan.priceCurrency,
+      interval: normalizePlanInterval(plan.interval),
       modules: plan.modules,
       limits: plan.limits ?? {},
       subscribers:
@@ -694,7 +701,15 @@ export class PlatformAdminService {
     const plans = await this.collection('plans')
       .find(
         {},
-        { projection: { key: 1, name: 1, priceAmount: 1, priceCurrency: 1 } },
+        {
+          projection: {
+            key: 1,
+            name: 1,
+            priceAmount: 1,
+            priceCurrency: 1,
+            interval: 1,
+          },
+        },
       )
       .toArray();
     return new Map(
@@ -747,8 +762,15 @@ export class PlatformAdminService {
       if (!plan || subscription.status === 'canceled') continue;
       byPlan[plan.key] = (byPlan[plan.key] ?? 0) + 1;
       if (plan.priceAmount > 0 && subscription.status === 'active') {
+        // A monthly figure: a yearly plan counts for a twelfth of its price, a 6-month one for a
+        // sixth — otherwise one yearly customer would read as twelve months of revenue at once.
+        const monthly =
+          plan.priceAmount /
+          PLAN_INTERVAL_MONTHS[normalizePlanInterval(plan.interval)];
         revenueByCurrency[plan.priceCurrency] =
-          (revenueByCurrency[plan.priceCurrency] ?? 0) + plan.priceAmount;
+          Math.round(
+            ((revenueByCurrency[plan.priceCurrency] ?? 0) + monthly) * 100,
+          ) / 100;
       }
     }
 
@@ -830,6 +852,7 @@ export class PlatformAdminService {
           planKey: plan?.key ?? 'inconnu',
           planName: plan?.name ?? '—',
           priceAmount: plan?.priceAmount ?? 0,
+          interval: normalizePlanInterval(plan?.interval),
           priceCurrency: plan?.priceCurrency ?? '',
           status: row.status,
           currentPeriodEnd: row.currentPeriodEnd,
@@ -960,6 +983,7 @@ export class PlatformAdminService {
             planKey: plan?.key ?? null,
             planName: plan?.name ?? null,
             priceAmount: plan?.priceAmount ?? 0,
+            interval: normalizePlanInterval(plan?.interval),
             priceCurrency: plan?.priceCurrency ?? null,
             status: subscription.status,
             currentPeriodEnd: subscription.currentPeriodEnd,
@@ -983,7 +1007,12 @@ export class PlatformAdminService {
     };
   }
 
-  assignPlan(organizationId: string, adminUserId: string, planKey: string) {
+  assignPlan(
+    organizationId: string,
+    adminUserId: string,
+    planKey: string,
+    interval: PlanInterval = 'month',
+  ) {
     return this.subscriptionsService.changePlan(
       organizationId,
       adminUserId,
@@ -991,6 +1020,7 @@ export class PlatformAdminService {
       {
         manualPayment: true,
       },
+      interval,
     );
   }
 

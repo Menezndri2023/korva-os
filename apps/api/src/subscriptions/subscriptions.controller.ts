@@ -92,6 +92,7 @@ export class SubscriptionsController {
       tenant.organizationId,
       user.userId,
       body.planKey,
+      body.interval,
     );
   }
 

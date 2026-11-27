@@ -91,7 +91,12 @@ export class PlatformAdminController {
     @CurrentPlatformAdmin() admin: PlatformAdminIdentity,
     @Body(new ZodValidationPipe(assignPlanSchema)) body: AssignPlanInput,
   ) {
-    return this.adminService.assignPlan(id, admin.id, body.planKey);
+    return this.adminService.assignPlan(
+      id,
+      admin.id,
+      body.planKey,
+      body.interval,
+    );
   }
 
   @Post('organizations/:id/trial')

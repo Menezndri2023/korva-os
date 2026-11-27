@@ -1,8 +1,11 @@
 import { z } from "zod";
-import { KORVA_PRODUCTS, SUPPORTED_BILLING_CURRENCIES } from "@korva/types";
+import { KORVA_PRODUCTS, PLAN_INTERVALS, SUPPORTED_BILLING_CURRENCIES } from "@korva/types";
 
+/** `interval`: pay for 1 month (the default, what every client sent before it existed), 6 months
+ *  or a year at once. */
 export const changePlanSchema = z.object({
   planKey: z.string().min(1),
+  interval: z.enum(PLAN_INTERVALS).optional().default("month"),
 });
 export type ChangePlanInput = z.infer<typeof changePlanSchema>;
 

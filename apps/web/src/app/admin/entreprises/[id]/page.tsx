@@ -5,7 +5,18 @@ import { useState, useSyncExternalStore } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { BUSINESS_MODEL_DEFINITIONS, PLAN_KEYS, PLAN_NAMES, type PlanKey, type WalletSummary } from "@korva/types";
+import {
+  BUSINESS_MODEL_DEFINITIONS,
+  PLAN_INTERVAL_LABELS,
+  PLAN_INTERVAL_ORDER,
+  PLAN_INTERVAL_PER,
+  PLAN_KEYS,
+  PLAN_NAMES,
+  normalizePlanInterval,
+  type PlanInterval,
+  type PlanKey,
+  type WalletSummary,
+} from "@korva/types";
 import {
   Badge,
   Button,
@@ -219,7 +230,11 @@ export default function AdminShopPage() {
                 <Field label="Formule">
                   {subscription.planName ?? "—"}
                   {subscription.priceAmount > 0 && subscription.priceCurrency && (
-                    <span className="text-text-muted"> · {formatMoney(subscription.priceAmount, subscription.priceCurrency)}/mois</span>
+                    <span className="text-text-muted">
+                      {" · "}
+                      {formatMoney(subscription.priceAmount, subscription.priceCurrency)}{" "}
+                      {PLAN_INTERVAL_PER.fr[normalizePlanInterval(subscription.interval)]}
+                    </span>
                   )}
                 </Field>
                 <Field label="Statut">
@@ -565,17 +580,22 @@ function AssignPlan({
   onDone: () => void;
 }) {
   const [planKey, setPlanKey] = useState<PlanKey>("starter");
+  const [interval, setChosenInterval] = useState<PlanInterval>("month");
   const mutation = useMutation({
     mutationFn: () =>
-      adminApi.post(`/platform/organizations/${organizationId}/plan`, { planKey }),
+      adminApi.post(
+        `/platform/organizations/${organizationId}/plan`,
+        // Monthly is the API default: sent only when another duration was paid for.
+        interval === "month" ? { planKey } : { planKey, interval },
+      ),
     onSuccess: onDone,
   });
   return (
     <Card className="p-6">
       <h2 className="text-lg font-semibold">Attribuer une formule</h2>
       <p className="mt-1 text-sm text-text-muted">
-        Après un paiement reçu hors plateforme (Mobile Money, espèces, virement). La période d&apos;un
-        mois démarre aujourd&apos;hui.
+        Après un paiement reçu hors plateforme (Mobile Money, espèces, virement). La période payée
+        (1 mois, 6 mois ou 1 an) démarre aujourd&apos;hui.
       </p>
       <div className="mt-4 flex gap-2">
         <Select aria-label="Formule" value={planKey} onChange={(event) => setPlanKey(event.target.value as PlanKey)} className="flex-1">
@@ -586,10 +606,27 @@ function AssignPlan({
             </option>
           ))}
         </Select>
+        <Select
+          aria-label="Durée payée"
+          value={interval}
+          onChange={(event) => setChosenInterval(event.target.value as PlanInterval)}
+          className="w-32"
+        >
+          {PLAN_INTERVAL_ORDER.map((candidate) => (
+            <option key={candidate} value={candidate}>
+              {PLAN_INTERVAL_LABELS.fr[candidate]}
+            </option>
+          ))}
+        </Select>
         <Button
           loading={mutation.isPending}
           onClick={() => {
-            if (window.confirm(`Passer ce commerce en formule ${PLAN_NAMES[planKey]} ?`)) mutation.mutate();
+            if (
+              window.confirm(
+                `Passer ce commerce en formule ${PLAN_NAMES[planKey]} (${PLAN_INTERVAL_LABELS.fr[interval].toLowerCase()}) ?`,
+              )
+            )
+              mutation.mutate();
           }}
         >
           Attribuer

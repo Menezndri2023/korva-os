@@ -97,7 +97,10 @@ function parseArgs(argv: string[]): ParsedArgs {
   if (!key) throw new Error('--key is required');
 
   const interval = get('--interval');
-  if (interval !== undefined && !(PLAN_INTERVALS as readonly string[]).includes(interval)) {
+  if (
+    interval !== undefined &&
+    !(PLAN_INTERVALS as readonly string[]).includes(interval)
+  ) {
     throw new Error(`--interval must be one of: ${PLAN_INTERVALS.join(', ')}`);
   }
   const price = get('--price');
@@ -134,16 +137,22 @@ async function run() {
     }
     const currency = args.currency;
 
+    // The duration is part of the identity too (one document per key, currency AND interval);
+    // omitted, it names the monthly plan, the only one that existed before half-year and yearly.
+    const interval = args.interval ?? 'month';
     const plansRepository = app.get(PlansRepository);
     const existing = await plansRepository.findByKeyAndCurrency(
       args.key,
       currency,
+      interval,
     );
 
     console.log(
-      `${args.apply ? 'APPLY' : 'DRY RUN'} — plan "${args.key}" in ${currency}`,
+      `${args.apply ? 'APPLY' : 'DRY RUN'} — plan "${args.key}" in ${currency}, ${interval}`,
     );
-    console.log(`  mode: ${existing ? 'UPDATE existing plan' : 'CREATE new plan'}`);
+    console.log(
+      `  mode: ${existing ? 'UPDATE existing plan' : 'CREATE new plan'}`,
+    );
 
     if (!existing) {
       if (
@@ -170,17 +179,24 @@ async function run() {
     console.log('  fields:', JSON.stringify(fields, null, 2));
 
     if (!args.apply) {
-      console.log('\nDry run only — nothing written. Pass --apply to write this plan.');
+      console.log(
+        '\nDry run only — nothing written. Pass --apply to write this plan.',
+      );
       return;
     }
 
     const result = existing
-      ? await plansRepository.updateByKeyAndCurrency(args.key, currency, fields)
+      ? await plansRepository.updateByKeyAndCurrency(
+          args.key,
+          currency,
+          fields,
+          interval,
+        )
       : await plansRepository.create({
           key: args.key,
           name: args.name!,
           priceAmount: args.price!,
-          priceCurrency: args.currency!,
+          priceCurrency: args.currency,
           interval: args.interval!,
           modules: args.modules!,
           limits: args.limits ?? {},

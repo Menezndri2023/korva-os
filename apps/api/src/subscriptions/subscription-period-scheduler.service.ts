@@ -7,6 +7,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
+import {
+  addPlanInterval,
+  normalizePlanInterval,
+  type PlanInterval,
+} from '@korva/types';
 import { SubscriptionsRepository } from './subscriptions.repository';
 import { SubscriptionInvoicesRepository } from './subscription-invoices.repository';
 import { PlansRepository } from './plans.repository';
@@ -44,12 +49,6 @@ interface RenewalOutcome {
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setUTCDate(result.getUTCDate() + days);
-  return result;
-}
-
-function addOneMonth(date: Date): Date {
-  const result = new Date(date);
-  result.setUTCMonth(result.getUTCMonth() + 1);
   return result;
 }
 
@@ -268,8 +267,15 @@ export class SubscriptionPeriodSchedulerService
     // Free plan: no money is owed, so there is nothing to invoice and nothing that could fail
     // to be paid. Advance the period and stay 'active', exactly as before this method ever
     // knew about invoices.
+    // The next period is as long as the plan's own duration: 1, 6 or 12 months.
+    const interval = normalizePlanInterval(plan.interval);
+
     if (plan.priceAmount <= 0) {
-      const renewed = await this.renewPeriod(candidate, organizationId);
+      const renewed = await this.renewPeriod(
+        candidate,
+        organizationId,
+        interval,
+      );
       return { renewed, invoiced: false, pastDue: false };
     }
 
@@ -308,7 +314,7 @@ export class SubscriptionPeriodSchedulerService
     // Advance from the period's own end (not "now") so a late-running sweep never shortens or
     // drifts the next period — matches changePlan()'s one-month convention.
     const newPeriodStart = candidate.currentPeriodEnd;
-    const newPeriodEnd = addOneMonth(candidate.currentPeriodEnd);
+    const newPeriodEnd = addPlanInterval(candidate.currentPeriodEnd, interval);
     const issuedAt = new Date();
 
     // A mid-period changePlan() stores the price delta for the overlap it created
@@ -335,7 +341,11 @@ export class SubscriptionPeriodSchedulerService
     // invoice would hand the tenant a checkout link for nothing, so this takes the same path a
     // free plan does: advance the period, issue nothing, and still consume the proration.
     if (amount === 0) {
-      const renewed = await this.renewPeriod(candidate, organizationId);
+      const renewed = await this.renewPeriod(
+        candidate,
+        organizationId,
+        interval,
+      );
       await this.consumeProration(candidate, organizationId, proration, {
         reason: 'subscription_period_fully_covered_by_credit',
         planAmount: plan.priceAmount,
@@ -387,7 +397,7 @@ export class SubscriptionPeriodSchedulerService
     // for the next sweep to apply.
     await this.consumeProration(candidate, organizationId, proration, null);
 
-    const renewed = await this.renewPeriod(candidate, organizationId);
+    const renewed = await this.renewPeriod(candidate, organizationId, interval);
     return { renewed, invoiced: invoice !== null, pastDue: false };
   }
 
@@ -424,9 +434,10 @@ export class SubscriptionPeriodSchedulerService
   private async renewPeriod(
     candidate: SubscriptionDocument,
     organizationId: string,
+    interval: PlanInterval,
   ): Promise<boolean> {
     const newPeriodStart = candidate.currentPeriodEnd;
-    const newPeriodEnd = addOneMonth(candidate.currentPeriodEnd);
+    const newPeriodEnd = addPlanInterval(candidate.currentPeriodEnd, interval);
 
     const updated = await this.subscriptionsRepository.renewIfEligible(
       organizationId,

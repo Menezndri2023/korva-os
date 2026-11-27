@@ -52,6 +52,23 @@ describe("PlanLadder", () => {
     expect(within(trial).getByRole("link", { name: "Essayer 14 jours" })).toHaveAttribute("href", "/register");
   });
 
+  it("sells 6 months and a year at the approved discount, free staying free", async () => {
+    render(<PlanLadder />);
+    await userEvent.selectOptions(screen.getByLabelText("Vos prix pour"), "CI");
+    await userEvent.click(screen.getByRole("radio", { name: /1 an/ }));
+
+    const starter = screen.getByRole("heading", { level: 3, name: new RegExp(`^${PLAN_NAMES.starter}`) }).closest("article")!;
+    // 10 months for a year: 9 900 x 10, and two months (19 800) saved.
+    expect(starter.textContent).toMatch(/99\s000 FCFA\/ an/);
+    expect(starter.textContent).toMatch(/Vous économisez 19\s800 FCFA/);
+    const free = screen.getByRole("heading", { level: 3, name: new RegExp(`^${PLAN_NAMES.free}`) }).closest("article")!;
+    expect(free.textContent).toMatch(/0 FCFA\/ mois/);
+
+    await userEvent.click(screen.getByRole("radio", { name: /6 mois/ }));
+    // 9 900 x 6 at -10 %.
+    expect(starter.textContent).toMatch(/53\s460 FCFA\/ 6 mois/);
+  });
+
   it("keeps the full list of each plan one tap away", async () => {
     render(<PlanLadder />);
     const free = screen.getByRole("heading", { level: 3, name: new RegExp(`^${PLAN_NAMES.free}`) }).closest("article")!;

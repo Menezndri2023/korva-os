@@ -5,6 +5,7 @@ import { LoyaltySettings } from "@/components/loyalty";
 import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { KorvaPlanInvoices } from "@/components/korva-plan-invoices";
+import { PlanPicker } from "@/components/plan-picker";
 import { OtherToolsSettings } from "@/components/other-tools-settings";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +37,8 @@ import {
   type StorefrontFontPairingKey,
   type StorefrontPaletteKey,
   type StorefrontTemplateKey,
+  PLAN_INTERVAL_PER,
+  normalizePlanInterval,
 } from "@korva/types";
 import type {
   Locale,
@@ -54,6 +57,7 @@ import type {
   KorvaProduct,
   Organization,
   Plan,
+  PlanInterval,
   PlanKey,
   SubscriptionSummary,
   TeamMember,
@@ -373,8 +377,8 @@ export default function SettingsPage() {
   // A paid plan opens once paid: the answer is then the invoice to settle, shown in
   // KorvaPlanInvoices right below the plans.
   const changePlanMutation = useMutation({
-    mutationFn: (planKey: string) =>
-      apiClient.post<{ paymentRequired?: boolean }>("/subscriptions/change-plan", { planKey }),
+    mutationFn: ({ planKey, interval }: { planKey: string; interval: PlanInterval }) =>
+      apiClient.post<{ paymentRequired?: boolean }>("/subscriptions/change-plan", { planKey, interval }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["subscriptions"] }),
   });
 
@@ -1430,7 +1434,15 @@ export default function SettingsPage() {
                     )}
                   </p>
                   <p className="text-xs text-text-muted">
-                    {subscription.plan.priceAmount} {subscription.plan.priceCurrency} / {subscription.plan.interval === "month" ? "mois" : "an"}
+                    {formatCurrency(subscription.plan.priceAmount, subscription.plan.priceCurrency, locale)}{" "}
+                    {PLAN_INTERVAL_PER[locale][normalizePlanInterval(subscription.plan.interval)]}
+                    {subscription.plan.priceAmount > 0 && (
+                      <>
+                        {" · "}
+                        {t("payé jusqu'au", "paid until")}{" "}
+                        {new Date(subscription.subscription.currentPeriodEnd).toLocaleDateString(intlLocale(locale))}
+                      </>
+                    )}
                   </p>
                 </div>
                 <Badge variant="success">
@@ -1469,9 +1481,14 @@ export default function SettingsPage() {
               )}
               {changePlanMutation.isError && (
                 <p className="text-xs text-destructive">
-                  {changePlanMutation.error instanceof ApiError
-                    ? changePlanMutation.error.message
-                    : t("Erreur", "Error")}
+                  {changePlanMutation.error instanceof ApiError && changePlanMutation.error.code === "PREPAID_PERIOD_RUNNING"
+                    ? t(
+                        `Votre formule est payée jusqu'au ${new Date(subscription.subscription.currentPeriodEnd).toLocaleDateString(intlLocale(locale))} : vous pourrez changer à cette date, sans rien perdre de ce que vous avez payé.`,
+                        `Your plan is paid until ${new Date(subscription.subscription.currentPeriodEnd).toLocaleDateString(intlLocale(locale))}: you can change then, without losing anything you paid for.`,
+                      )
+                    : changePlanMutation.error instanceof ApiError
+                      ? changePlanMutation.error.message
+                      : t("Erreur", "Error")}
                 </p>
               )}
 
@@ -1490,25 +1507,15 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2 border-t border-border pt-4 sm:grid-cols-4">
-                {plans?.map((plan) => (
-                  <div key={plan.id} className="rounded-md border border-border p-3 text-xs">
-                    <p className="font-medium">{plan.name}</p>
-                    <p className="mt-0.5 text-text-muted">
-                      {plan.priceAmount} {plan.priceCurrency}/mois
-                    </p>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="mt-2 w-full disabled:cursor-default"
-                      onClick={() => changePlanMutation.mutate(plan.key)}
-                      disabled={plan.key === subscription.plan.key || changePlanMutation.isPending}
-                    >
-                      {plan.key === subscription.plan.key ? t("Plan actuel", "Current plan") : t("Choisir", "Choose")}
-                    </Button>
-                  </div>
-                ))}
-              </div>
+              {plans && (
+                <PlanPicker
+                  plans={plans}
+                  currentPlanId={subscription.plan.id}
+                  onChoose={(planKey, interval) => changePlanMutation.mutate({ planKey, interval })}
+                  pending={changePlanMutation.isPending}
+                  locale={locale}
+                />
+              )}
 
               <KorvaPlanInvoices />
             </div>

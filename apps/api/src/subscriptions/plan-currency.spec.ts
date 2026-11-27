@@ -5,6 +5,7 @@ import {
   PLAN_KEYS,
   PLAN_PRICES,
   SUPPORTED_BILLING_CURRENCIES,
+  planPrice,
 } from '@korva/types';
 import { PlansService } from './plans.service';
 import type { PlansRepository } from './plans.repository';
@@ -16,16 +17,27 @@ import type { PlansRepository } from './plans.repository';
 function buildPlansService(
   options: { defaultCurrency?: string; found?: unknown } = {},
 ) {
-  const seeded: { key: string; currency: string; amount: number }[] = [];
+  const seeded: {
+    key: string;
+    currency: string;
+    amount: number;
+    interval: string;
+  }[] = [];
   const plansRepository = {
     upsertByKeyAndCurrency: jest
       .fn()
       .mockImplementation(
-        (key: string, priceCurrency: string, data: { priceAmount: number }) => {
+        (
+          key: string,
+          priceCurrency: string,
+          data: { priceAmount: number },
+          interval: string,
+        ) => {
           seeded.push({
             key,
             currency: priceCurrency,
             amount: data.priceAmount,
+            interval,
           });
           return Promise.resolve({ key, priceCurrency });
         },
@@ -84,7 +96,7 @@ describe('PlansService — multi-currency catalog', () => {
 
     for (const key of PLAN_KEYS) {
       const currencies = h.seeded
-        .filter((p) => p.key === key)
+        .filter((p) => p.key === key && p.interval === 'month')
         .map((p) => p.currency)
         .sort();
       expect(currencies).toEqual([...SUPPORTED_BILLING_CURRENCIES].sort());
@@ -99,10 +111,11 @@ describe('PlansService — multi-currency catalog', () => {
     // The point of asserting this rather than a few literals: a price must come from
     // PLAN_PRICES, which is set per market. Deriving MAD or XOF from EUR at an exchange rate
     // would price KORVA out of its primary market (29 EUR is 19 023 XOF — see plan-tiers.ts).
-    expect(h.seeded.length).toBe(
+    const monthly = h.seeded.filter((p) => p.interval === 'month');
+    expect(monthly.length).toBe(
       PLAN_KEYS.length * SUPPORTED_BILLING_CURRENCIES.length,
     );
-    for (const seeded of h.seeded) {
+    for (const seeded of monthly) {
       const expected =
         PLAN_PRICES[seeded.currency as keyof typeof PLAN_PRICES][
           seeded.key as (typeof PLAN_KEYS)[number]
@@ -121,11 +134,37 @@ describe('PlansService — multi-currency catalog', () => {
     // without a currency (the GET /plans route is @SkipTenant) — covered by the test below.
     for (const key of PLAN_KEYS) {
       const currencies = h.seeded
-        .filter((p) => p.key === key)
+        .filter((p) => p.key === key && p.interval === 'month')
         .map((p) => p.currency)
         .sort();
       expect(currencies).toEqual([...SUPPORTED_BILLING_CURRENCIES].sort());
     }
+  });
+
+  it('also sells every PAID tier for 6 months and for a year, at the owner-approved discount', async () => {
+    const h = buildPlansService();
+
+    await h.service.list();
+
+    for (const interval of ['half_year', 'year']) {
+      const long = h.seeded.filter((p) => p.interval === interval);
+      // Free has nothing to prepay, so it exists monthly only.
+      expect(long.some((p) => p.key === 'free')).toBe(false);
+      expect(long.length).toBe(
+        (PLAN_KEYS.length - 1) * SUPPORTED_BILLING_CURRENCIES.length,
+      );
+    }
+    const starterXof = (interval: string) =>
+      h.seeded.find(
+        (p) =>
+          p.key === 'starter' &&
+          p.currency === 'XOF' &&
+          p.interval === interval,
+      )?.amount;
+    // The figures the owner approved: 6 months at -10 %, a year = 10 months.
+    expect(starterXof('half_year')).toBe(53460);
+    expect(starterXof('year')).toBe(99000);
+    expect(starterXof('year')).toBe(planPrice('XOF', 'starter', 'year'));
   });
 
   it('lists only the plans priced in the requested currency', async () => {

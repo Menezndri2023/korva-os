@@ -46,6 +46,8 @@ interface OrganizationPayload {
 interface PlanPayload {
   id: string;
   key: string;
+  interval: string;
+  priceAmount: number;
   modules: string[];
   limits: Record<string, number>;
 }
@@ -164,12 +166,22 @@ describe('Subscriptions module (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       const plans = asSuccess<PlanPayload[]>(res.body);
-      expect(plans.map((p) => p.key).sort()).toEqual([
+      const monthly = plans.filter((p) => p.interval === 'month');
+      expect(monthly.map((p) => p.key).sort()).toEqual([
         'business',
         'free',
         'pro',
         'starter',
       ]);
+      // Every PAID tier is also sold for 6 months and for a year; free exists monthly only.
+      for (const interval of ['half_year', 'year']) {
+        expect(
+          plans
+            .filter((p) => p.interval === interval)
+            .map((p) => p.key)
+            .sort(),
+        ).toEqual(['business', 'pro', 'starter']);
+      }
     });
 
     it('every seeded plan grants the "website" module', async () => {

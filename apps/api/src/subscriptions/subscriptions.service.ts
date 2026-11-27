@@ -9,14 +9,16 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import type { KorvaProduct } from '@korva/types';
+import type { KorvaProduct, PlanInterval } from '@korva/types';
 import {
   BUSINESS_MODEL_DEFINITIONS,
   KORVA_PRODUCTS,
   PRODUCT_MODULES,
   REFERRAL_REWARD,
   SIGNUP_TRIAL,
+  addPlanInterval,
   isCurrencyChargeable,
+  normalizePlanInterval,
   planHasFeature,
   planMeetsMinimum,
   parseChargeableCurrencies,
@@ -36,12 +38,6 @@ import { MembershipsService } from '../identity/memberships/memberships.service'
 import { SubscriptionInvoicesRepository } from './subscription-invoices.repository';
 import type { SubscriptionInvoiceDocument } from './schemas/subscription-invoice.schema';
 import { CountersService } from '../core/counters/counters.service';
-
-function addOneMonth(date: Date): Date {
-  const result = new Date(date);
-  result.setUTCMonth(result.getUTCMonth() + 1);
-  return result;
-}
 
 /**
  * Fair-share proration for a mid-period plan change: the fraction of the CURRENT period still
@@ -174,7 +170,10 @@ export class SubscriptionsService {
       planId: plan._id,
       status: 'active',
       currentPeriodStart: now,
-      currentPeriodEnd: addOneMonth(now),
+      currentPeriodEnd: addPlanInterval(
+        now,
+        normalizePlanInterval(plan.interval),
+      ),
     });
   }
 
@@ -412,13 +411,16 @@ export class SubscriptionsService {
     userId: string | undefined,
     planKey: string,
     options: { manualPayment?: boolean; prepaid?: boolean } = {},
+    interval: PlanInterval = 'month',
   ): Promise<SubscriptionDocument> {
     // Resolved in the organization's own currency: a tier the platform prices in EUR but not in
     // this tenant's currency is simply not sellable to them, and PLAN_NOT_FOUND says so rather
-    // than quietly billing them in a currency their provider cannot charge.
+    // than quietly billing them in a currency their provider cannot charge. The duration (1, 6
+    // or 12 months) is part of the plan too: it is what the period below is as long as.
     const plan = await this.plansService.getByKey(
       planKey,
       await this.organizationCurrency(organizationId),
+      interval,
     );
 
     // Refused here, before an invoice exists, rather than at the hosted checkout. Flow A resolves
@@ -509,10 +511,14 @@ export class SubscriptionsService {
       : undefined;
     // A prepaid change was priced net of the unused paid period when its invoice was issued:
     // carrying a proration on top would count that credit twice.
+    // Only between plans of the same duration: a price per month and a price per year are not
+    // comparable, and their difference is not what the remaining days are worth.
     if (
       !options.prepaid &&
       existing &&
       previousPlan &&
+      normalizePlanInterval(previousPlan.interval) ===
+        normalizePlanInterval(plan.interval) &&
       existing.currentPeriodEnd.getTime() > now.getTime()
     ) {
       prorationAmount = computeProration(
@@ -531,7 +537,10 @@ export class SubscriptionsService {
       planId: plan._id,
       status: 'active',
       currentPeriodStart: now,
-      currentPeriodEnd: addOneMonth(now),
+      currentPeriodEnd: addPlanInterval(
+        now,
+        normalizePlanInterval(plan.interval),
+      ),
       // Choosing a new plan is an active intent to keep the subscription — any pending
       // cancel-at-period-end request no longer applies to the (freshly extended) period.
       cancelAtPeriodEnd: false,
@@ -555,6 +564,7 @@ export class SubscriptionsService {
       entityId: updated.id as string,
       metadata: {
         plan: planKey,
+        interval: normalizePlanInterval(plan.interval),
         prorationAmount,
         prorationCurrency,
         ...(options.manualPayment
@@ -586,6 +596,7 @@ export class SubscriptionsService {
     organizationId: string,
     userId: string,
     planKey: string,
+    interval: PlanInterval = 'month',
   ): Promise<
     | SubscriptionDocument
     | { paymentRequired: true; invoice: SubscriptionInvoiceDocument }
@@ -593,9 +604,10 @@ export class SubscriptionsService {
     const plan = await this.plansService.getByKey(
       planKey,
       await this.organizationCurrency(organizationId),
+      interval,
     );
     if (plan.priceAmount <= 0) {
-      return this.changePlan(organizationId, userId, planKey);
+      return this.changePlan(organizationId, userId, planKey, {}, interval);
     }
 
     const chargeable = parseChargeableCurrencies(
@@ -636,12 +648,31 @@ export class SubscriptionsService {
       plan.priceCurrency,
       now,
     );
+    // A 6-month or yearly period already paid is worth more than a cheaper plan's price: switching
+    // now would throw the rest of it away (nothing is refunded pro rata). The business keeps what
+    // it paid for, and changes once that period ends — or cancels, which takes effect then too.
+    if (credit > plan.priceAmount) {
+      const current = await this.plansService.getById(
+        existing.planId.toString(),
+      );
+      if (normalizePlanInterval(current.interval) !== 'month') {
+        throw new ConflictException({
+          code: 'PREPAID_PERIOD_RUNNING',
+          message: `Your ${current.name} plan is paid until ${existing.currentPeriodEnd.toISOString().slice(0, 10)}. You can change plan once that period ends.`,
+          details: {
+            paidUntil: existing.currentPeriodEnd,
+            credit,
+            planPrice: plan.priceAmount,
+          },
+        });
+      }
+    }
     const amount = Math.max(
       0,
       Math.round((plan.priceAmount - credit) * 100) / 100,
     );
     if (amount === 0) {
-      return this.changePlan(organizationId, userId, planKey);
+      return this.changePlan(organizationId, userId, planKey, {}, interval);
     }
 
     // One pending change at a time: picking another plan replaces the unpaid one.
@@ -659,7 +690,7 @@ export class SubscriptionsService {
         'ABO',
       ),
       periodStart: now,
-      periodEnd: addOneMonth(now),
+      periodEnd: addPlanInterval(now, interval),
       amount,
       currency: plan.priceCurrency,
       issuedAt: now,
@@ -681,6 +712,7 @@ export class SubscriptionsService {
       metadata: {
         reason: 'plan_change_payment_required',
         plan: planKey,
+        interval,
         invoiceNumber: invoice.number,
         amount,
         credit,
@@ -701,6 +733,7 @@ export class SubscriptionsService {
       {
         prepaid: true,
       },
+      normalizePlanInterval(plan.interval),
     );
   }
 

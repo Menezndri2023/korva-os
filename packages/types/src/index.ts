@@ -21,6 +21,7 @@ export * from "./action-center.ts";
 export * from "./verticals.ts";
 export * from "./business-models.ts";
 export * from "./plan-tiers.ts";
+export * from "./billing-intervals.ts";
 export * from "./storefront-themes.ts";
 export * from "./webhook-subscriptions.ts";
 export * from "./reviews.ts";

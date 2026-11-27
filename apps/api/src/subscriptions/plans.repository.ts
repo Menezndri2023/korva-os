@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import type { PlanInterval } from '@korva/types';
 import { Plan, PlanDocument } from './schemas/plan.schema';
 
 @Injectable()
@@ -9,14 +10,17 @@ export class PlansRepository {
     @InjectModel(Plan.name) private readonly planModel: Model<PlanDocument>,
   ) {}
 
+  /** A plan is identified by its tier, its currency AND its duration (1, 6 or 12 months):
+   *  "Pro in XOF" is three documents since half-year and yearly billing exist. */
   upsertByKeyAndCurrency(
     key: string,
     priceCurrency: string,
     data: Partial<Plan>,
+    interval: PlanInterval = 'month',
   ): Promise<PlanDocument> {
     return this.planModel
       .findOneAndUpdate(
-        { key, priceCurrency },
+        { key, priceCurrency, interval },
         { $setOnInsert: data },
         { upsert: true, new: true },
       )
@@ -35,8 +39,9 @@ export class PlansRepository {
   findByKeyAndCurrency(
     key: string,
     priceCurrency: string,
+    interval: PlanInterval = 'month',
   ): Promise<PlanDocument | null> {
-    return this.planModel.findOne({ key, priceCurrency }).exec();
+    return this.planModel.findOne({ key, priceCurrency, interval }).exec();
   }
 
   findById(id: string): Promise<PlanDocument | null> {
@@ -59,10 +64,11 @@ export class PlansRepository {
     key: string,
     priceCurrency: string,
     updates: Partial<Plan>,
+    interval: PlanInterval = 'month',
   ): Promise<PlanDocument | null> {
     return this.planModel
       .findOneAndUpdate(
-        { key, priceCurrency },
+        { key, priceCurrency, interval },
         { $set: updates },
         { new: true },
       )

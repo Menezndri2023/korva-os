@@ -162,6 +162,7 @@ export interface PlatformSubscriptionRow {
   planName: string;
   priceAmount: number;
   priceCurrency: string;
+  interval?: string;
   status: string;
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
@@ -201,6 +202,7 @@ export interface PlatformOrganization {
     planName: string | null;
     priceAmount: number;
     priceCurrency: string | null;
+    interval?: string;
     status: string;
     currentPeriodEnd: string;
     cancelAtPeriodEnd: boolean;
@@ -267,6 +269,7 @@ export interface PlatformPlanRow {
   name: string;
   priceAmount: number;
   priceCurrency: string;
+  interval?: string;
   modules: string[];
   limits: Record<string, number>;
   subscribers: number;

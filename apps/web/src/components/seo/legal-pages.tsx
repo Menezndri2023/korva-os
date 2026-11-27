@@ -217,8 +217,8 @@ function sectionsFor(page: LegalPage, locale: Locale): Section[] {
             <ul className="list-disc space-y-1 pl-6">
               <li>
                 {t(
-                  "Un abonnement se paie d'avance, pour un mois. Une formule payante s'ouvre dès que son paiement est reçu.",
-                  "A subscription is paid in advance, for one month. A paid plan opens as soon as its payment is received.",
+                  "Un abonnement se paie d'avance, au choix pour 1 mois, 6 mois (10 % de remise) ou 1 an (deux mois offerts). Une formule payante s'ouvre dès que son paiement est reçu, pour la durée payée.",
+                  "A subscription is paid in advance, for 1 month, 6 months (10% off) or 1 year (two months free), as you choose. A paid plan opens as soon as its payment is received, for the period paid.",
                 )}
               </li>
               <li>
@@ -229,8 +229,8 @@ function sectionsFor(page: LegalPage, locale: Locale): Section[] {
               </li>
               <li>
                 {t(
-                  "Chaque mois, une facture est émise et reste disponible dans Paramètres > Abonnement.",
-                  "Each month an invoice is issued and stays available in Settings > Subscription.",
+                  "À chaque nouvelle période, une facture est émise et reste disponible dans Paramètres > Abonnement.",
+                  "For each new period an invoice is issued and stays available in Settings > Subscription.",
                 )}
               </li>
               <li>
@@ -341,8 +341,8 @@ function sectionsFor(page: LegalPage, locale: Locale): Section[] {
               </li>
               <li>
                 {t(
-                  "La résiliation prend effet à la fin du mois déjà payé : vous gardez votre formule jusque-là, et vous pouvez revenir sur votre décision avant cette date.",
-                  "Cancellation takes effect at the end of the month already paid: you keep your plan until then, and you can change your mind before that date.",
+                  "La résiliation prend effet à la fin de la période déjà payée (1 mois, 6 mois ou 1 an) : vous gardez votre formule jusque-là, et vous pouvez revenir sur votre décision avant cette date.",
+                  "Cancellation takes effect at the end of the period already paid (1 month, 6 months or 1 year): you keep your plan until then, and you can change your mind before that date.",
                 )}
               </li>
               <li>
@@ -360,8 +360,8 @@ function sectionsFor(page: LegalPage, locale: Locale): Section[] {
             <>
               <p>
                 {t(
-                  "Un mois commencé n'est pas remboursé, puisque vous gardez l'accès jusqu'à sa fin. L'essai gratuit permet de tout essayer avant de payer.",
-                  "A month that has started is not refunded, since you keep access until it ends. The free trial lets you try everything before paying.",
+                  "Une période commencée n'est pas remboursée, même en partie, puisque vous gardez l'accès jusqu'à sa fin. C'est aussi vrai pour une période de 6 mois ou d'un an : il n'y a pas de remboursement au prorata des mois restants. L'essai gratuit permet de tout essayer avant de payer.",
+                  "A period that has started is not refunded, even partly, since you keep access until it ends. This also applies to a 6-month or yearly period: there is no pro rata refund of the remaining months. The free trial lets you try everything before paying.",
                 )}
               </p>
               <p>{t("Nous remboursons en revanche :", "We do refund:")}</p>
@@ -369,15 +369,15 @@ function sectionsFor(page: LegalPage, locale: Locale): Section[] {
                 <li>{t("un paiement en double ou une erreur de facturation de notre part ;", "a duplicate payment or a billing error on our side;")}</li>
                 <li>
                   {t(
-                    "un mois payé pendant lequel le service a été indisponible pendant une longue durée par notre faute, au prorata des jours perdus.",
-                    "a paid month during which the service was unavailable for a long time through our fault, in proportion to the days lost.",
+                    "une période payée pendant laquelle le service a été indisponible pendant une longue durée par notre faute, au prorata des jours perdus.",
+                    "a paid period during which the service was unavailable for a long time through our fault, in proportion to the days lost.",
                   )}
                 </li>
               </ul>
               <p>
                 {t(
-                  "En passant à une formule supérieure en cours de mois, ce qui reste de votre mois déjà payé est déduit du prix de la nouvelle formule.",
-                  "When you move to a higher plan during the month, what remains of the month you already paid is deducted from the new plan's price.",
+                  "En passant à une formule supérieure ou à une durée plus longue en cours de période, ce qui reste de votre période déjà payée est déduit du prix de la nouvelle. Une période de 6 mois ou d'un an déjà payée ne peut pas être échangée contre une formule moins chère avant sa fin : vous la gardez jusqu'au bout, puis vous choisissez.",
+                  "When you move to a higher plan or a longer period mid-period, what remains of the period you already paid is deducted from the new price. A 6-month or yearly period already paid cannot be swapped for a cheaper plan before it ends: you keep it to the end, then choose.",
                 )}
               </p>
             </>

@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Card, PageHeader } from "@korva/ui";
+import { PLAN_INTERVAL_PER, normalizePlanInterval } from "@korva/types";
 import { formatMoney, type PlatformPlanRow, adminApi } from "@/lib/platform-admin";
 
 function limitText(value: number | undefined): string {
@@ -37,7 +38,7 @@ export default function AdminPlansPage() {
               <thead className="border-y border-border bg-surface-muted text-left text-xs font-medium text-text-muted">
                 <tr>
                   <th className="px-6 py-2.5">Formule</th>
-                  <th className="px-6 py-2.5">Prix / mois</th>
+                  <th className="px-6 py-2.5">Prix</th>
                   <th className="px-6 py-2.5">Utilisateurs</th>
                   <th className="px-6 py-2.5">Offres</th>
                   <th className="px-6 py-2.5">Équipe réservable</th>
@@ -49,9 +50,12 @@ export default function AdminPlansPage() {
                 {data!
                   .filter((plan) => plan.priceCurrency === currency)
                   .map((plan) => (
-                    <tr key={`${plan.key}-${currency}`}>
+                    <tr key={`${plan.key}-${currency}-${plan.interval ?? "month"}`}>
                       <td className="px-6 py-3 font-medium">{plan.name}</td>
-                      <td className="px-6 py-3 tabular-nums">{formatMoney(plan.priceAmount, plan.priceCurrency)}</td>
+                      <td className="px-6 py-3 tabular-nums">
+                        {formatMoney(plan.priceAmount, plan.priceCurrency)}{" "}
+                        <span className="text-text-muted">{PLAN_INTERVAL_PER.fr[normalizePlanInterval(plan.interval)]}</span>
+                      </td>
                       <td className="px-6 py-3">{limitText(plan.limits.seats)}</td>
                       <td className="px-6 py-3">{limitText(plan.limits.offers)}</td>
                       <td className="px-6 py-3">{limitText(plan.limits.bookable_staff)}</td>
